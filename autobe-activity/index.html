@@ -1,1 +1,75 @@
-autobe-activity/index.html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>AutoBE — Mobile Modpack Tool</title>
+  <meta
+    name="description"
+    content="Merge Minecraft Bedrock behavior and resource packs into one working modpack — entirely on your device." />
+  <link rel="icon" href="data:," />
+  <meta name="author" content="StoneByte" />
+  <meta name="theme-color" content="#7C3AED" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+
+  <meta property="og:title" content="AutoBE — Mobile Modpack Tool" />
+  <meta property="og:description" content="Merge Bedrock addons into one modpack. On-device, no PC needed." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://cdn.aippy.ai/asset/96b93ca9650943c09e03b1f675001ac0.png?x-oss-process=style/p" />
+
+  <!-- IMPORTANT: DO NOT REMOVE THIS META TAG OR THIS COMMENT!  START 👇 -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@aippyai" />
+  <meta name="twitter:image" content="https://cdn.aippy.ai/asset/96b93ca9650943c09e03b1f675001ac0.png?x-oss-process=style/p" />
+  <!-- IMPORTANT: DO NOT REMOVE THIS META TAG OR THIS COMMENT!  END 👆 -->
+  <style>
+    /* Disable pinch zoom on iOS - touch-action: manipulation prevents double-tap and pinch zoom */
+    html,
+    body {
+      touch-action: manipulation;
+      background-color: #07050F;
+      margin: 0;
+      padding: 0;
+      overscroll-behavior: none;
+    }
+
+    #root {
+      height: 100vh;
+      height: 100dvh;
+    }
+
+    /* Disable text selection and iOS long-press callout */
+    * {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Inputs must stay selectable/editable on mobile */
+    input,
+    textarea,
+    [contenteditable] {
+      -webkit-user-select: text;
+      user-select: text;
+    }
+  </style>
+  <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT!  START 👇 -->
+  <!-- Inspector script for iframe editing mode -->
+  <script crossorigin src="https://cdn.aippy.ai/static/asset-interceptor.js" data-no-bundle></script>
+  <script crossorigin src="https://cdn.aippy.ai/static/inspector.js" data-no-bundle></script>
+  <!-- Inspector script end -->
+  <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT!  END 👆 -->
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
+</html>
