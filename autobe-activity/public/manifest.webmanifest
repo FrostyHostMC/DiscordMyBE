@@ -1,0 +1,34 @@
+{
+  "name": "AutoBE — Mobile Modpack Tool",
+  "short_name": "AutoBE",
+  "description": "Merge Minecraft Bedrock behavior and resource packs into one modpack, entirely on your device.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07050F",
+  "theme_color": "#7C3AED",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "./",
+      "accept": {
+        "application/zip": [".mcpack", ".mcaddon", ".zip"]
+      }
+    }
+  ]
+}
