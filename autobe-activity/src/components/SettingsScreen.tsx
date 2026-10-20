@@ -1,8 +1,6 @@
 import React from 'react';
 import { AppSettings } from '@/utils/settings';
-import { VerificationState } from '@/types/modpack';
-import { maskDeviceId } from '@/utils/deviceFingerprint';
-import { APP_VERSION, compareSemver } from '@/utils/verification';
+import { APP_VERSION } from '@/config/appVersion';
 
 interface SettingsScreenProps {
   settings: AppSettings;
@@ -14,9 +12,7 @@ interface SettingsScreenProps {
   onOpenListMaker: () => void;
   onExportCodebase: () => void;
   onClearData: () => void;
-  onResetVerification: () => void;
   exporting?: boolean;
-  verification: VerificationState | null;
 }
 
 interface RowProps {
@@ -80,13 +76,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onOpenListMaker,
   onExportCodebase,
   onClearData,
-  onResetVerification,
-  exporting,
-  verification
+  exporting
 }) => {
-  const updateAvailable =
-    verification?.latestVersion && compareSemver(APP_VERSION, verification.latestVersion) < 0;
-
   return (
     <div className="flex flex-col h-full bg-[#07050F] text-white select-none px-5 pt-3 pb-24 overflow-y-auto">
       <h1 className="text-xl font-bold text-white mb-4">Settings</h1>
@@ -165,56 +156,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         />
       </div>
 
-      {/* Device / verification */}
-      <div className="space-y-2 mb-6">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-purple-300">
-          Device &amp; Verification
-        </h2>
-
-        <Row
-          icon={<span>🆔</span>}
-          title="Device ID"
-          subtitle={
-            <span className="font-mono text-[10px]">{maskDeviceId(verification?.deviceId || '')}</span>
-          }
-          trailing={
-            <span
-              className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                verification?.status === 'verified'
-                  ? 'bg-emerald-950/50 border-emerald-500/40 text-emerald-300'
-                  : 'bg-amber-950/50 border-amber-500/40 text-amber-300'
-              }`}
-            >
-              {verification?.status === 'verified' ? '✓ verified' : 'local'}
-            </span>
-          }
-        />
-
-        {updateAvailable && (
-          <Row
-            icon={<span>⬆️</span>}
-            title="Update available"
-            subtitle={`You have v${APP_VERSION}, latest is v${verification?.latestVersion}`}
-          />
-        )}
-
-        <button
-          type="button"
-          onClick={onResetVerification}
-          className="w-full p-3.5 rounded-2xl bg-[#0D091A] border border-purple-500/20 text-left active:scale-[0.99]"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-bold text-white">Reset Device Verification</div>
-              <div className="text-[11px] text-zinc-400">
-                Clears this device&apos;s activation and returns you to the key screen
-              </div>
-            </div>
-            <Chevron />
-          </div>
-        </button>
-      </div>
-
       {/* Tools */}
       <div className="space-y-2 mb-6">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-purple-300">
@@ -286,7 +227,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           subtitle={
             <span className="font-mono text-[10px]">
               v{APP_VERSION}
-              {verification?.latestVersion ? ` · latest v${verification.latestVersion}` : ''}
             </span>
           }
         />
@@ -328,8 +268,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         Reset &amp; Clear All Local Data
       </button>
       <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed text-center">
-        Removes every imported addon, merged modpack, saved setting and cached verification from
-        this device. Demo addons will not be restored.
+        Removes every imported addon, merged modpack and saved setting from this device. Demo addons will not be restored.
       </p>
     </div>
   );
