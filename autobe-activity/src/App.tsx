@@ -7,8 +7,7 @@ import {
   MergedOutput,
   ConflictItem,
   TabType,
-  ScreenType,
-  VerificationState
+  ScreenType
 } from '@/types/modpack';
 import { INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
 import { buildDemoPacksWithContent } from '@/utils/demoPackFactory';
@@ -35,19 +34,11 @@ import {
   clearDemoSeedFlag
 } from '@/utils/settings';
 import { validatePacks, applySubpackChoice, CompatibilityReport } from '@/utils/packValidator';
-import {
-  runVerification,
-  hasAcceptedTos,
-  acceptTos,
-  forgetThisDevice,
-  REQUIRE_TOS_ACCEPTANCE
-} from '@/utils/verification';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 
 import { AppHeader } from '@/components/AppHeader';
 import { BottomNav } from '@/components/BottomNav';
 import { SplashScreen } from '@/components/SplashScreen';
-import { ActivationScreen } from '@/components/ActivationScreen';
 import { HomeScreen } from '@/components/HomeScreen';
 import { AddPacksScreen } from '@/components/AddPacksScreen';
 import { CompatibilityScreen } from '@/components/CompatibilityScreen';
@@ -74,9 +65,6 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('home');
   const [splashProgress, setSplashProgress] = useState(0);
   const [dataLoaded, setDataLoaded] = useState(false);
-
-  // Verification gate
-  const [verification, setVerification] = useState<VerificationState | null>(null);
 
   // Data
   const [installedPacks, setInstalledPacks] = useState<AddonPack[]>([]);
@@ -187,138 +175,14 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // --- Verification (port of the Python `_check_activation`) ---------------
+  // --- Splash completion --------------------------------------------------
 
-  const doVerify = useCallback(async () => {
-    try {
-      const result = await runVerification();
-      setVerification(result);
-      return result;
-    } catch (err) {
-      console.error('[AutoBE] Verification error:', describeError(err));
-      const fallback: VerificationState = {
-        deviceId: 'unknown',
-        status: 'verified',
-        reason: 'Verification could not run; continuing in offline mode.'
-      };
-      setVerification(fallback);
-      return fallback;
-    }
-  }, []);
-
-  // --- Splash completion -> verification ---------------------------------
-
-  const handleFinishSplash = useCallback(async () => {
+  const handleFinishSplash = useCallback(() => {
     if (!dataLoaded) return;
     triggerHaptic(60);
     handleSoundTap();
-
-    const state = await doVerify();
-
-    // Anything other than a clean pass routes to the activation gate.
-    // `denied` / `update_required` render there as hard failures with no
-    // key field, so a blocked device can never reach the app.
-    if (state.status !== 'verified') {
-      if (settings.soundEnabled) playError().catch(() => {});
-      setScreen('activation');
-      return;
-    }
-
-    // Terms gate, mirroring the Python TOS window shown before unlock.
-    if (REQUIRE_TOS_ACCEPTANCE && !hasAcceptedTos()) {
-      const ok = window.confirm(
-        'AutoBE — Terms of Use\n\n' +
-          'AutoBE is an unofficial, community-made tool and is not affiliated with Mojang or Microsoft.\n\n' +
-          '• AutoBE processes your files entirely on your device.\n' +
-          '• You are responsible for the licences of the addons you merge.\n' +
-          '• Merging addons may disable Xbox achievements.\n\n' +
-          'Tap OK to accept and continue.'
-      );
-      if (ok) acceptTos();
-      else {
-        showToast('You must accept the Terms of Use to use AutoBE.');
-        return;
-      }
-    }
-
     setScreen('main');
-  }, [
-    dataLoaded,
-    triggerHaptic,
-    handleSoundTap,
-    doVerify,
-    showToast,
-    settings.soundEnabled,
-    playError
-  ]);
-
-  /** Called by the activation screen once a key is accepted. */
-  const handleActivated = useCallback(async () => {
-    if (settings.soundEnabled) playSuccess().catch(() => {});
-    const state = await doVerify();
-
-    if (state.status !== 'verified') {
-      showToast('Activation recorded, but verification did not pass. Try again.');
-      return;
-    }
-
-    // Terms are accepted on the activation screen checkbox, but keep the
-    // prompt for anyone who arrives already holding a valid key.
-    if (REQUIRE_TOS_ACCEPTANCE && !hasAcceptedTos()) {
-      acceptTos();
-    }
-
-    triggerHaptic(120);
-    showToast('Activation successful — welcome to AutoBE!');
-    setCurrentTab('home');
-    setScreen('main');
-  }, [doVerify, settings.soundEnabled, playSuccess, showToast, triggerHaptic]);
-
-  /** Settings -> Reset Device Verification: clears the record and re-gates. */
-  const handleResetVerification = useCallback(async () => {
-    if (
-      !window.confirm(
-        'Clear this device\'s activation?\n\n' +
-          'You will be returned to the activation screen and need a valid key to continue.'
-      )
-    ) {
-      return;
-    }
-    forgetThisDevice();
-    const state = await doVerify();
-    if (state.status !== 'verified') {
-      showToast('Activation cleared. Enter a key to continue.');
-      setScreen('activation');
-    } else {
-      showToast('Verification cleared.');
-    }
-  }, [doVerify, showToast]);
-
-  /**
-   * Re-check when the app comes back to the foreground.
-   *
-   * Catches a device that was blocked (or whose cached verification expired)
-   * while the tab sat in the background, instead of leaving a stale unlocked
-   * session alive indefinitely.
-   */
-  useEffect(() => {
-    const onVisible = () => {
-      if (document.visibilityState !== 'visible') return;
-      if (screen === 'splash' || screen === 'activation') return;
-      doVerify().then((state) => {
-        if (state.status !== 'verified') {
-          setScreen('activation');
-          showToast(
-            state.status === 'denied'
-              ? 'This device is no longer permitted to run AutoBE.'
-              : 'Please re-activate to continue.'
-          );
-        }
-      });
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [doVerify, screen, showToast]);
+  }, [dataLoaded, triggerHaptic, handleSoundTap]);
 
   // --- Selection ----------------------------------------------------------
 
@@ -656,7 +520,7 @@ export const App: React.FC = () => {
   );
 
   const handleClearData = useCallback(async () => {
-    if (!window.confirm('Remove every addon, modpack, setting and cached verification from this device?')) {
+    if (!window.confirm('Remove every imported addon, modpack and saved setting from this device?')) {
       return;
     }
     triggerHaptic(90);
@@ -672,11 +536,8 @@ export const App: React.FC = () => {
     setConflicts([]);
     setCompatReport(null);
     setPendingPacks([]);
-    setVerification(null);
-    // Keep the user inside the app; verification state is simply recomputed.
-    await doVerify();
     showToast('All local AutoBE data cleared.');
-  }, [triggerHaptic, showToast, doVerify]);
+  }, [triggerHaptic, showToast]);
 
   const handleExportCodebase = useCallback(async () => {
     if (exporting) return;
@@ -736,15 +597,6 @@ export const App: React.FC = () => {
         />
       )}
 
-      {screen === 'activation' && verification && (
-        <ActivationScreen
-          state={verification}
-          onActivated={handleActivated}
-          onRetry={async () => {
-            await doVerify();
-          }}
-        />
-      )}
 
       {screen === 'add_packs' && (
         <AddPacksScreen
@@ -938,9 +790,7 @@ export const App: React.FC = () => {
                 onOpenListMaker={() => setScreen('list_maker')}
                 onExportCodebase={handleExportCodebase}
                 onClearData={handleClearData}
-                onResetVerification={handleResetVerification}
                 exporting={exporting}
-                verification={verification}
               />
             )}
           </div>
