@@ -115,7 +115,6 @@ export type TabType = 'home' | 'library' | 'mypacks' | 'settings';
 export type ScreenType =
   | 'splash'
   | 'main'
-  | 'activation'
   | 'add_packs'
   | 'compatibility'
   | 'subpack'
@@ -130,14 +129,3 @@ export type ScreenType =
   | 'tos'
   | 'privacy';
 
-/** Mirrors the Python `_detect_spoofing` / `_check_activation` verification pipeline. */
-export interface VerificationState {
-  /** SHA-256 of the device fingerprint. Never the raw fingerprint itself. */
-  deviceId: string;
-  status: 'checking' | 'unverified' | 'verified' | 'denied' | 'offline_ok' | 'update_required';
-  reason?: string;
-  minVersion?: string;
-  latestVersion?: string;
-  /** Populated once the device has been authorised (mirrors `_save_verified_hwid`). */
-  verifiedAt?: number;
-}
