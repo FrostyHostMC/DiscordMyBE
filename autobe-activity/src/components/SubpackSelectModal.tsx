@@ -17,22 +17,31 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
   onConfirm,
   onCancel
 }) => {
-  const [selections, setSelections] = useState<Record<string, string>>({});
+  const [selections, setSelections] = useState<Record<string, number>>({});
 
   // Debug: log selections when they change
   console.log('[SubpackSelect] Current selections:', selections);
+  console.log('[SubpackSelect] Packs:', packs.map(p => ({ id: p.id, name: p.name, subpacks: p.subpacks })));
 
   const confirm = () => {
     // Validate that all packs have a selection
-    const missing = packs.filter(p => !selections[p.id]);
+    const missing = packs.filter(p => selections[p.id] === undefined);
     if (missing.length > 0) {
       alert(`Please select a variant for ${missing.length} pack(s) before continuing.`);
       return;
     }
-    onConfirm(selections);
+    // Convert indices back to folder names for the parent
+    const folderSelections: Record<string, string> = {};
+    for (const p of packs) {
+      const idx = selections[p.id];
+      if (idx !== undefined && p.subpacks && p.subpacks[idx]) {
+        folderSelections[p.id] = p.subpacks[idx].folder;
+      }
+    }
+    onConfirm(folderSelections);
   };
 
-  const allSelected = packs.every(p => selections[p.id]);
+  const allSelected = packs.every(p => selections[p.id] !== undefined);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -66,22 +75,25 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
             >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                {!selections[p.id] && (
+                {selections[p.id] === undefined && (
                   <span className="text-[10px] text-amber-400 font-medium">Select one</span>
                 )}
               </div>
               <div className="space-y-1.5">
-                {((p.subpacks || []).filter((sp, idx, arr) =>
-                  arr.findIndex(s => s.folder === sp.folder) === idx
-                )).map((sp, idx) => {
-                  const active = selections[p.id] === sp.folder;
+                {(p.subpacks || []).map((sp, idx) => {
+                  const active = selections[p.id] === idx;
+                  console.log(`[SubpackSelect] Button render: pack=${p.id}, idx=${idx}, folder=${sp.folder}, selected=${selections[p.id]}, active=${active}`);
                   return (
                     <button
                       key={`${p.id}-${sp.folder}-${idx}`}
                       type="button"
                       onClick={() => {
-                        console.log('[SubpackSelect] Selected:', p.id, sp.folder, sp.name);
-                        setSelections((prev) => ({ ...prev, [p.id]: sp.folder }));
+                        console.log('[SubpackSelect] Clicked:', p.id, idx, sp.folder, sp.name);
+                        setSelections((prev) => {
+                          const newState = { ...prev, [p.id]: idx };
+                          console.log('[SubpackSelect] New state:', newState);
+                          return newState;
+                        });
                       }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors ${
                         active
