@@ -5,6 +5,8 @@ import App from '@/App.tsx';
 import { describeError } from '@/utils/errorLog';
 import './index.css';
 
+const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
+
 type GateState = 'checking' | 'allowed' | 'denied';
 
 function AccessGate() {
@@ -30,20 +32,8 @@ function AccessGate() {
         deny('AutoBE only works inside Discord. Launch it from your Discord server Activity.');
         return;
       }
-
-      // Fetch Discord Client ID from backend (instead of build-time env var)
-      let clientId: string;
-      try {
-        updateMessage('Initializing Discord connection…');
-        const configResponse = await fetch('/api/config');
-        const configData = await configResponse.json();
-        clientId = configData.DISCORD_CLIENT_ID;
-        if (!clientId) {
-          throw new Error('Discord Client ID not configured on server');
-        }
-      } catch (error) {
-        deny('Failed to initialize Discord connection. Please contact the administrator.');
-        console.error('[AutoBE] Failed to fetch Discord config:', error);
+      if (!clientId) {
+        deny('The Discord Application ID is missing. Set VITE_DISCORD_CLIENT_ID in Cloudflare Pages and redeploy.');
         return;
       }
 
