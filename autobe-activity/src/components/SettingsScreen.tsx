@@ -181,7 +181,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     setPatchLog([]);
   };
 
-  const handleExportCodebase = async () => {
+  const handleExportCodebase = async (password: string) => {
     if (codebaseState === 'working') return;
     setCodebaseState('working');
     setCodebaseResult(null);
@@ -190,7 +190,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       setCodebaseUrl(null);
     }
     try {
-      const result = await buildCodebaseArchive();
+      const result = await buildCodebaseArchive(password);
       downloadBlob(result.blob, result.fileName);
       setCodebaseUrl(createPersistentDownload(result.blob, result.fileName).url);
       setCodebaseResult(result);
