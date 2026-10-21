@@ -538,11 +538,30 @@ export const App: React.FC = () => {
   // Delete pack from library
   const handleDeletePack = async (id: string) => {
     triggerHaptic(50);
+    console.log('[Delete Pack] Deleting pack:', id);
     await deletePackFromDB(id);
     const updated = await getAllPacksFromDB();
     setInstalledPacks(updated);
     setSelectedPackIds((prev) => prev.filter((x) => x !== id));
     showToast('Pack removed from workspace');
+  };
+
+  // Delete selected packs
+  const handleDeleteSelectedPacks = async (ids: string[]) => {
+    triggerHaptic(50);
+    console.log('[Delete Selected] Deleting packs:', ids);
+    try {
+      for (const id of ids) {
+        await deletePackFromDB(id);
+      }
+      const updated = await getAllPacksFromDB();
+      setInstalledPacks(updated);
+      setSelectedPackIds([]);
+      showToast(`${ids.length} pack(s) removed from workspace`);
+    } catch (err) {
+      console.error('[Delete Selected] Error:', err);
+      showToast('Failed to delete some packs');
+    }
   };
 
   // Delete all packs
@@ -969,6 +988,7 @@ export const App: React.FC = () => {
                     onStartMergeFlow={handleStartMergeFlow}
                     onImportPacks={handleImportPacks}
                     onDeletePack={handleDeletePack}
+                    onDeleteSelectedPacks={handleDeleteSelectedPacks}
                     onNavigateTab={navigateTab}
                   />
                 )}
