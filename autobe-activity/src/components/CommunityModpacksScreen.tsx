@@ -97,7 +97,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             <p className="text-sm text-[#AAA3BB]">Loading community modpacks...</p>
           </div>
         ) : error ? (
-        ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Globe className="w-12 h-12 text-[#30263F] mb-3" />
             <p className="text-sm font-semibold text-white">Failed to load</p>
