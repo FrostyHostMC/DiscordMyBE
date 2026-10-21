@@ -497,6 +497,15 @@ export const App: React.FC = () => {
     showToast('Pack removed from workspace');
   };
 
+  // Delete all packs
+  const handleDeleteAllPacks = async () => {
+    triggerHaptic(50);
+    await clearAllDB();
+    setInstalledPacks([]);
+    setSelectedPackIds([]);
+    showToast('All packs removed from workspace');
+  };
+
   // Delete merged modpack
   const handleDeleteModpack = async (id: string) => {
     triggerHaptic(50);
@@ -595,6 +604,7 @@ export const App: React.FC = () => {
           onTogglePack={handleTogglePack}
           onSelectAll={handleSelectAll}
           onClearSelection={handleClearSelection}
+          onDeleteAll={handleDeleteAllPacks}
           onContinue={handleStartMergeFlow}
           onImportPacks={handleImportPacks}
           onBack={() => setScreen('main')}

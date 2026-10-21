@@ -7,7 +7,8 @@ import {
   FolderOpen,
   ArrowLeft,
   ArrowRight,
-  Package
+  Package,
+  Trash2
 } from 'lucide-react';
 import { AddonPack } from '@/types/modpack';
 import { parseAddonArchive } from '@/utils/addonParser';
@@ -18,6 +19,7 @@ interface AddPacksScreenProps {
   onTogglePack: (id: string) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
+  onDeleteAll: () => void;
   onContinue: () => void;
   onImportPacks: (newPacks: AddonPack[]) => void;
   onBack: () => void;
@@ -29,6 +31,7 @@ export const AddPacksScreen: React.FC<AddPacksScreenProps> = ({
   onTogglePack,
   onSelectAll,
   onClearSelection,
+  onDeleteAll,
   onContinue,
   onImportPacks,
   onBack
@@ -116,13 +119,25 @@ export const AddPacksScreen: React.FC<AddPacksScreenProps> = ({
         </div>
 
         {activeTab === 'installed' && installedPacks.length > 0 && (
-          <button
-            type="button"
-            onClick={allSelected ? onClearSelection : onSelectAll}
-            className="text-xs font-semibold text-[#A855F7] hover:text-[#C9A9FF] active:scale-95 transition-all"
-          >
-            {allSelected ? 'Deselect All' : 'Select All'}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={allSelected ? onClearSelection : onSelectAll}
+              className="text-xs font-semibold text-[#A855F7] hover:text-[#C9A9FF] active:scale-95 transition-all"
+            >
+              {allSelected ? 'Deselect All' : 'Select All'}
+            </button>
+            {allSelected && (
+              <button
+                type="button"
+                onClick={onDeleteAll}
+                className="text-xs font-semibold text-red-400 hover:text-red-300 active:scale-95 transition-all flex items-center gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Delete All
+              </button>
+            )}
+          </div>
         )}
       </div>
 
