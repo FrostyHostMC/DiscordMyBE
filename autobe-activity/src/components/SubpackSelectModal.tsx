@@ -19,6 +19,9 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
 }) => {
   const [selections, setSelections] = useState<Record<string, string>>({});
 
+  // Debug: log selections when they change
+  console.log('[SubpackSelect] Current selections:', selections);
+
   const confirm = () => {
     // Validate that all packs have a selection
     const missing = packs.filter(p => !selections[p.id]);
@@ -68,13 +71,18 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
                 )}
               </div>
               <div className="space-y-1.5">
-                {(p.subpacks || []).map((sp) => {
+                {((p.subpacks || []).filter((sp, idx, arr) =>
+                  arr.findIndex(s => s.folder === sp.folder) === idx
+                )).map((sp, idx) => {
                   const active = selections[p.id] === sp.folder;
                   return (
                     <button
-                      key={sp.folder}
+                      key={`${p.id}-${sp.folder}-${idx}`}
                       type="button"
-                      onClick={() => setSelections((prev) => ({ ...prev, [p.id]: sp.folder }))}
+                      onClick={() => {
+                        console.log('[SubpackSelect] Selected:', p.id, sp.folder, sp.name);
+                        setSelections((prev) => ({ ...prev, [p.id]: sp.folder }));
+                      }}
                       className={`w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors ${
                         active
                           ? 'bg-[#762BFF] border-[#A855F7] text-white font-bold'
