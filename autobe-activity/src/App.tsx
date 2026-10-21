@@ -604,6 +604,9 @@ export const App: React.FC = () => {
   const handlePublishModpack = async () => {
     if (!justCompletedModpack) return;
 
+    console.log('[Publish] Starting publish for modpack:', justCompletedModpack.name);
+    console.log('[Publish] Has outputBlob:', !!justCompletedModpack.outputBlob);
+
     triggerHaptic(50);
     setIsPublishing(true);
 
@@ -611,17 +614,23 @@ export const App: React.FC = () => {
       // Get the blob
       const blob = justCompletedModpack.outputBlob;
       if (!blob) {
-        throw new Error('Modpack blob is missing');
+        console.error('[Publish] Blob is missing - cannot publish');
+        throw new Error('Modpack blob is missing. Please merge again before publishing.');
       }
+
+      console.log('[Publish] Blob size:', blob.size, 'type:', blob.type);
 
       // Upload to Discord CDN to get a public URL
       const accessToken = sessionStorage.getItem('discord_access_token');
       const applicationId = sessionStorage.getItem('discord_application_id');
 
+      console.log('[Publish] Has Discord auth:', !!accessToken, !!applicationId);
+
       if (!accessToken || !applicationId) {
         throw new Error('Not authenticated with Discord');
       }
 
+      console.log('[Publish] Uploading to Discord CDN...');
       const file = new File([await blob.arrayBuffer()], justCompletedModpack.outputFileName, { type: blob.type });
       const body = new FormData();
       body.append('file', file);
@@ -637,14 +646,20 @@ export const App: React.FC = () => {
         }
       );
 
+      console.log('[Publish] Discord CDN response status:', attachmentResponse.status);
+
       if (!attachmentResponse.ok) {
-        throw new Error('Failed to upload to Discord CDN');
+        const errorText = await attachmentResponse.text();
+        console.error('[Publish] Discord CDN upload failed:', errorText);
+        throw new Error(`Failed to upload to Discord CDN: ${errorText}`);
       }
 
       const attachmentJson = await attachmentResponse.json();
       const blobUrl = attachmentJson.attachment.url;
+      console.log('[Publish] Blob URL:', blobUrl);
 
       // Get Discord user info for author name
+      console.log('[Publish] Fetching Discord user info...');
       const userResponse = await fetch('https://discord.com/api/users/@me', {
         headers: {
           Authorization: `Bearer ${accessToken}`,
@@ -652,14 +667,18 @@ export const App: React.FC = () => {
       });
 
       if (!userResponse.ok) {
+        const errorText = await userResponse.text();
+        console.error('[Publish] User info fetch failed:', errorText);
         throw new Error('Failed to get Discord user info');
       }
 
       const userData = await userResponse.json();
       const authorName = userData.global_name || userData.username || 'Anonymous';
       const authorId = userData.id;
+      console.log('[Publish] Author:', authorName, 'ID:', authorId);
 
       // Publish to community API
+      console.log('[Publish] Publishing to community API...');
       const publishResponse = await fetch('/api/community-modpacks', {
         method: 'POST',
         headers: {
@@ -680,11 +699,15 @@ export const App: React.FC = () => {
         }),
       });
 
+      console.log('[Publish] Community API response status:', publishResponse.status);
+
       if (!publishResponse.ok) {
         const error = await publishResponse.json();
+        console.error('[Publish] Community API error:', error);
         throw new Error(error.error || 'Failed to publish modpack');
       }
 
+      console.log('[Publish] Successfully published!');
       showToast('Modpack published to community!');
       if (soundTweak) playSuccess().catch(() => {});
     } catch (e: unknown) {
