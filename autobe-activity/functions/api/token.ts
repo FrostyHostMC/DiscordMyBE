@@ -35,7 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     client_secret: env.DISCORD_CLIENT_SECRET,
     grant_type: 'authorization_code',
     code: body.code,
-    redirect_uri: 'https://127.0.0.1',
+    redirect_uri: 'https://127.0.0.1/',
   });
 
   let response: Response;
