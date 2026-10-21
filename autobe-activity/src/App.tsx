@@ -465,6 +465,11 @@ export const App: React.FC = () => {
     handleSoundTap();
     if (!modpack) return;
 
+    console.log('[Download] Starting download for modpack:', modpack.name, 'id:', modpack.id);
+    console.log('[Download] Modpack has outputBlob:', !!modpack.outputBlob);
+    console.log('[Download] justCompletedModpack exists:', !!justCompletedModpack);
+    console.log('[Download] justCompletedModpack has outputBlob:', !!justCompletedModpack?.outputBlob);
+
     let blob = modpack.outputBlob;
     // If loading from DB and blob is missing, check fresh merge
     if (!blob && justCompletedModpack?.outputBlob && modpack.id === justCompletedModpack.id) {
@@ -478,12 +483,15 @@ export const App: React.FC = () => {
       return;
     }
 
+    console.log('[Download] Blob size:', blob.size, 'type:', blob.type);
     const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
 
     try {
       // Try Discord native sharing first (bypasses iframe sandbox)
+      console.log('[Download] Attempting Discord CDN upload...');
       const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
       const result = await tryShareViaDiscord(blob, fileName);
+      console.log('[Download] Discord share result:', result);
 
       if (result.success) {
         showToast('Opening file for download...');
@@ -494,11 +502,10 @@ export const App: React.FC = () => {
         return;
       }
 
-      // If Discord sharing fails, show manual save panel with error
-      showToast('Discord upload failed. Try the manual save option.');
-      const { showManualSavePanel } = await import('@/utils/download');
-      const lastCdnUrl = sessionStorage.getItem('last_download_url');
-      showManualSavePanel(blob, fileName, lastCdnUrl || undefined);
+      // If Discord sharing fails, try the standard download with all fallbacks
+      console.log('[Download] Discord share failed, trying standard download...');
+      const { downloadBlob } = await import('@/utils/download');
+      await downloadBlob(blob, fileName);
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
       showToast(`Download failed: ${describeError(e)}`);
