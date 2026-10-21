@@ -191,15 +191,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
     try {
       const result = await buildCodebaseArchive(password);
-      // downloadBlob will try automatic download, and if blocked (in Discord),
-      // it will show the manual save panel with share sheet option
-      await downloadBlob(result.blob, result.fileName);
       const persistent = createPersistentDownload(result.blob, result.fileName);
       setCodebaseUrl(persistent.url);
       setCodebaseResult(result);
       setCodebaseState('done');
       await playSyncChime();
       setTimeout(() => setCodebaseState('idle'), 10000);
+      // Download happens in background without blocking the UI
+      void downloadBlob(result.blob, result.fileName);
     } catch (e) {
       console.error('[Aippy] Codebase export failed:', e);
       setCodebaseState('error');
