@@ -14,7 +14,18 @@ const json = (body: unknown, status = 200) =>
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_CLIENT_SECRET) {
-    return json({ error: 'Discord OAuth is not configured on the server.' }, 500);
+    console.error('[AutoBE] OAuth binding check:', {
+      hasClientId: Boolean(env.DISCORD_CLIENT_ID),
+      hasClientSecret: Boolean(env.DISCORD_CLIENT_SECRET),
+    });
+
+    return json({
+      error: 'Discord OAuth is not configured on the server.',
+      diagnostics: {
+        hasClientId: Boolean(env.DISCORD_CLIENT_ID),
+        hasClientSecret: Boolean(env.DISCORD_CLIENT_SECRET),
+      },
+    }, 500);
   }
 
   let body: { code?: unknown };
