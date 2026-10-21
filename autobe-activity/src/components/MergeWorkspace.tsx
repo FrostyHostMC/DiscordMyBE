@@ -494,6 +494,20 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               : 'Select All'}
           </button>
 
+          {selectedPackIds.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Delete ${selectedPackIds.length} selected pack(s)?`)) {
+                  selectedPackIds.forEach(id => onDeletePack(id));
+                }
+              }}
+              className="text-xs font-semibold text-red-400 hover:text-red-300 px-2 py-1"
+            >
+              Delete All
+            </button>
+          )}
+
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
