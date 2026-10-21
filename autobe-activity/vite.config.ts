@@ -59,5 +59,6 @@ export default defineConfig(({ mode }) => ({
     assetsInlineLimit: 8192,
     sourcemap: mode === 'development',
     minify: mode === 'production',
+    copyPublicDir: true, // Ensure public folder is copied to dist
   },
 }));

@@ -22,15 +22,8 @@ export async function buildCodebaseArchive(
   password: string,
   appVersion = 'v2.3.0'
 ): Promise<CodebaseExportResult> {
-  // Step 1: Download the pre-generated archive
-  // Try assets/ first (where vite-plugin-singlefile puts non-inlined files), then dist root, then public
-  let archiveResponse = await fetch('/assets/codebase-archive.zip');
-  if (!archiveResponse.ok) {
-    archiveResponse = await fetch('/codebase-archive.zip');
-  }
-  if (!archiveResponse.ok) {
-    archiveResponse = await fetch('/codebase-archive.zip?dev=1');
-  }
+  // Step 1: Download the pre-generated archive from public folder
+  const archiveResponse = await fetch('/codebase-archive.zip');
   if (!archiveResponse.ok) {
     throw new Error(`Failed to download codebase archive: ${archiveResponse.status}`);
   }
@@ -38,12 +31,9 @@ export async function buildCodebaseArchive(
   const archiveBlob = await archiveResponse.blob();
 
   // Step 2: Download metadata to get file count
-  let metadataResponse = await fetch('/assets/codebase-archive.json');
+  const metadataResponse = await fetch('/codebase-archive.json');
   if (!metadataResponse.ok) {
-    metadataResponse = await fetch('/codebase-archive.json');
-  }
-  if (!metadataResponse.ok) {
-    metadataResponse = await fetch('/codebase-archive.json?dev=1');
+    throw new Error(`Failed to download codebase metadata: ${metadataResponse.status}`);
   }
   let fileCount = 0;
   if (metadataResponse.ok) {

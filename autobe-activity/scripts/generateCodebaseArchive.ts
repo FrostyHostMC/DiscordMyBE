@@ -150,21 +150,26 @@ async function generateArchive(): Promise<void> {
   // Generate ZIP blob (NOT encrypted yet - encryption happens on client side)
   const zipBuffer = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
 
-  // Write to dist folder
+  // Write to public folder (so it's served as a static asset in both dev and production)
+  const publicDir = join(PROJECT_ROOT, 'public');
+  if (!existsSync(publicDir)) {
+    await fs.mkdir(publicDir, { recursive: true });
+  }
+
+  const outputPath = join(publicDir, 'codebase-archive.zip');
+  await fs.writeFile(outputPath, zipBuffer);
+
+  // Also write to dist folder for reference (though public is the source of truth)
   const distDir = join(PROJECT_ROOT, 'dist');
   if (!existsSync(distDir)) {
     await fs.mkdir(distDir, { recursive: true });
   }
-
-  const outputPath = join(distDir, 'codebase-archive.zip');
-
-  await fs.writeFile(outputPath, zipBuffer);
+  await fs.writeFile(join(distDir, 'codebase-archive.zip'), zipBuffer);
 
   // Generate SHA-256 hash for integrity verification
   const hash = createHash('sha256').update(zipBuffer).digest('hex');
 
-  // Write metadata file to dist (for client-side verification)
-  const metadataPath = join(distDir, 'codebase-archive.json');
+  // Write metadata file to public folder (for client-side verification)
   const packageJson = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf-8'));
   const metadata = {
     version: packageJson.version,
@@ -175,14 +180,11 @@ async function generateArchive(): Promise<void> {
     encrypted: false // Archive is not encrypted at build time; encryption happens on download
   };
 
+  const metadataPath = join(publicDir, 'codebase-archive.json');
   await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
 
-  // Also write metadata to public folder for dev mode access
-  const publicDir = join(PROJECT_ROOT, 'public');
-  if (existsSync(publicDir)) {
-    const publicMetadataPath = join(publicDir, 'codebase-archive.json');
-    await fs.writeFile(publicMetadataPath, JSON.stringify(metadata, null, 2));
-  }
+  // Also write metadata to dist folder
+  await fs.writeFile(join(distDir, 'codebase-archive.json'), JSON.stringify(metadata, null, 2));
 
   console.log(`✅ Archive generated: ${outputPath}`);
   console.log(`   Files: ${metadata.fileCount}`);
