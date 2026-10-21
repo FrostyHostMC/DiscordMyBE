@@ -350,9 +350,13 @@ export const App: React.FC = () => {
     const withSubpacks = packsToMerge.filter(
       (p) => p.subpacks && p.subpacks.length > 0 && p.fileBlob
     );
-    if (withSubpacks.length > 0) {
+    // Deduplicate by pack ID to avoid showing the same pack multiple times
+    const uniqueWithSubpacks = Array.from(
+      new Map(withSubpacks.map(p => [p.id, p])).values()
+    );
+    if (uniqueWithSubpacks.length > 0) {
       pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride };
-      setSubpackPromptPacks(withSubpacks);
+      setSubpackPromptPacks(uniqueWithSubpacks);
       return;
     }
 
