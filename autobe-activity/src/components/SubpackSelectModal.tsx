@@ -17,17 +17,19 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
   onConfirm,
   onCancel
 }) => {
-  const [selections, setSelections] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const p of packs) {
-      if (p.subpacks && p.subpacks.length > 0) init[p.id] = p.subpacks[0].folder;
-    }
-    return init;
-  });
+  const [selections, setSelections] = useState<Record<string, string>>({});
 
   const confirm = () => {
+    // Validate that all packs have a selection
+    const missing = packs.filter(p => !selections[p.id]);
+    if (missing.length > 0) {
+      alert(`Please select a variant for ${missing.length} pack(s) before continuing.`);
+      return;
+    }
     onConfirm(selections);
   };
+
+  const allSelected = packs.every(p => selections[p.id]);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -59,7 +61,12 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
               key={p.id}
               className="rounded-xl bg-[#15111F] border border-[#30263F] p-3"
             >
-              <p className="text-xs font-semibold text-white truncate mb-2">{p.name}</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-white truncate">{p.name}</p>
+                {!selections[p.id] && (
+                  <span className="text-[10px] text-amber-400 font-medium">Select one</span>
+                )}
+              </div>
               <div className="space-y-1.5">
                 {(p.subpacks || []).map((sp) => {
                   const active = selections[p.id] === sp.folder;
@@ -102,7 +109,12 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
           <button
             type="button"
             onClick={confirm}
-            className="flex-1 px-4 py-2.5 rounded-xl bg-[#762BFF] text-xs font-bold text-white hover:bg-[#8A4DFF] active:scale-[0.98]"
+            disabled={!allSelected}
+            className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-bold active:scale-[0.98] transition-colors ${
+              allSelected
+                ? 'bg-[#762BFF] text-white hover:bg-[#8A4DFF]'
+                : 'bg-[#30263F] text-[#AAA3BB] cursor-not-allowed'
+            }`}
           >
             Continue Merge
           </button>
