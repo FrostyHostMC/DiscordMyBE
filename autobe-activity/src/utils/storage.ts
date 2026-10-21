@@ -79,7 +79,14 @@ export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
   try {
     const db = await openDB();
     const tx = db.transaction(STORE_MODPACKS, 'readwrite');
-    tx.objectStore(STORE_MODPACKS).put(modpack);
+    // IndexedDB cannot store Blobs, so strip them before saving
+    // The blob will be kept in memory (justCompletedModpack) for the current session
+    const modpackWithoutBlob = {
+      ...modpack,
+      outputBlob: undefined,
+      outputs: modpack.outputs?.map(out => ({ ...out, blob: undefined })) || []
+    };
+    tx.objectStore(STORE_MODPACKS).put(modpackWithoutBlob);
     return new Promise((res, rej) => {
       tx.oncomplete = () => res();
       tx.onerror = () => rej(tx.error);
