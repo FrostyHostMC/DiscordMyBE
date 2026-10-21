@@ -11,8 +11,6 @@ import {
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 
-// Community modpacks screen with D1 database integration
-
 interface CommunityModpacksScreenProps {
   onBack: () => void;
   onDownload: (modpack: CommunityModpack) => void;
