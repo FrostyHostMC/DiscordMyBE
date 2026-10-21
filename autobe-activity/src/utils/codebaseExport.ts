@@ -86,10 +86,20 @@ export async function buildCodebaseArchive(
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
-  return {
+  const result = {
     blob: archiveBlob,
     fileName: `autobe_codebase_${stamp}.zip`,
     fileCount,
     encrypted: false
   };
+
+  // In Discord Activities, direct downloads are blocked. Create a persistent URL
+  // that can be opened in a new tab or used via the manual save panel.
+  const url = URL.createObjectURL(archiveBlob);
+  setTimeout(() => URL.revokeObjectURL(url), 600_000); // Keep alive for 10 minutes
+
+  // Store the URL on the result for the UI to use
+  (result as any).downloadUrl = url;
+
+  return result;
 }
