@@ -34,12 +34,15 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       const response = await fetch('/api/community-modpacks');
       const data = await response.json();
 
+      console.log('Community modpacks response:', data);
+
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch community modpacks');
       }
 
       setModpacks(data.modpacks || []);
     } catch (err) {
+      console.error('Failed to fetch community modpacks:', err);
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
       setLoading(false);
