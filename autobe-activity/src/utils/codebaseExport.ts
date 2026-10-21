@@ -23,22 +23,65 @@ export async function buildCodebaseArchive(
   appVersion = 'v2.3.0'
 ): Promise<CodebaseExportResult> {
   // Step 1: Download the pre-generated archive from public folder
-  const archiveResponse = await fetch('/codebase-archive.zip');
-  if (!archiveResponse.ok) {
-    throw new Error(`Failed to download codebase archive: ${archiveResponse.status}`);
+  // Try multiple paths in case of routing issues
+  const archivePaths = [
+    '/codebase-archive.zip',
+    '/public/codebase-archive.zip',
+    window.location.origin + '/codebase-archive.zip'
+  ];
+
+  let archiveResponse: Response | null = null;
+  let lastError: Error | null = null;
+
+  for (const path of archivePaths) {
+    try {
+      archiveResponse = await fetch(path);
+      if (archiveResponse.ok) {
+        console.log(`[CodebaseExport] Successfully fetched archive from: ${path}`);
+        break;
+      }
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      console.warn(`[CodebaseExport] Failed to fetch from ${path}:`, e);
+    }
+  }
+
+  if (!archiveResponse || !archiveResponse.ok) {
+    const errorMsg = lastError ? lastError.message : `Failed to download codebase archive (tried ${archivePaths.length} paths)`;
+    console.error('[CodebaseExport] Archive fetch failed:', errorMsg);
+    throw new Error(errorMsg);
   }
 
   const archiveBlob = await archiveResponse.blob();
 
   // Step 2: Download metadata to get file count
-  const metadataResponse = await fetch('/codebase-archive.json');
-  if (!metadataResponse.ok) {
-    throw new Error(`Failed to download codebase metadata: ${metadataResponse.status}`);
+  const metadataPaths = [
+    '/codebase-archive.json',
+    '/public/codebase-archive.json',
+    window.location.origin + '/codebase-archive.json'
+  ];
+
+  let metadataResponse: Response | null = null;
+  for (const path of metadataPaths) {
+    try {
+      metadataResponse = await fetch(path);
+      if (metadataResponse.ok) break;
+    } catch (e) {
+      console.warn(`[CodebaseExport] Failed to fetch metadata from ${path}:`, e);
+    }
   }
+
   let fileCount = 0;
-  if (metadataResponse.ok) {
-    const metadata = await metadataResponse.json();
-    fileCount = metadata.fileCount || 0;
+  if (metadataResponse && metadataResponse.ok) {
+    try {
+      const metadata = await metadataResponse.json();
+      fileCount = metadata.fileCount || 0;
+      console.log(`[CodebaseExport] Metadata loaded: ${fileCount} files`);
+    } catch (e) {
+      console.warn('[CodebaseExport] Failed to parse metadata:', e);
+    }
+  } else {
+    console.warn('[CodebaseExport] Could not fetch metadata, using file count from archive');
   }
 
   // Step 3: Read the unencrypted archive

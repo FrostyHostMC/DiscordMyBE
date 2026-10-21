@@ -43,3 +43,5 @@ temp_extract/
 # Generated files (except codebase archive which is built and deployed)
 scripts/.testMerge.mjs
 scripts/.testVerify.mjs
+public/codebase-archive.*
+dist/codebase-archive.*
