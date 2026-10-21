@@ -32,7 +32,6 @@ function AccessGate() {
       }
 
       // Fetch Discord Client ID from backend (instead of build-time env var)
-      // This allows using Cloudflare Secrets instead of build-time environment variables
       let clientId: string;
       try {
         updateMessage('Initializing Discord connection…');
