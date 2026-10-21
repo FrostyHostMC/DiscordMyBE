@@ -33,7 +33,7 @@ export async function onRequestPost(context: Context) {
       'INSERT INTO community_modpacks (id, name, description, author, author_id, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
 
-    stmt.bind(
+    const result = stmt.bind(
       id,
       data.name,
       data.description,
@@ -48,16 +48,7 @@ export async function onRequestPost(context: Context) {
       data.blob_url,
       data.file_name,
       JSON.stringify(data.included_packs || [])
-    );
-
-    const result = stmt.run();
-
-    if (!result.success) {
-      return new Response(JSON.stringify({ error: 'Failed to save modpack', details: result }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    ).run();
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,
@@ -103,14 +94,7 @@ export async function onRequestGet(context: Context) {
     const stmt = env.DB.prepare('SELECT * FROM community_modpacks ORDER BY created_at DESC');
     const result = stmt.all();
 
-    if (!result.success) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch modpacks', details: result }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    return new Response(JSON.stringify({ modpacks: result.results }), {
+    return new Response(JSON.stringify({ modpacks: result.results || [] }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -152,17 +136,16 @@ export async function onRequestDelete(context: Context) {
 
     // Verify the user is the author
     const stmt = env.DB.prepare('SELECT author_id FROM community_modpacks WHERE id = ?');
-    stmt.bind(id);
-    const result = stmt.first();
+    const result = stmt.bind(id).first();
 
-    if (!result || !result.success) {
+    if (!result) {
       return new Response(JSON.stringify({ error: 'Modpack not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    if (result.results.author_id !== authorId) {
+    if (result.author_id !== authorId) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
@@ -171,15 +154,7 @@ export async function onRequestDelete(context: Context) {
 
     // Delete the modpack
     const deleteStmt = env.DB.prepare('DELETE FROM community_modpacks WHERE id = ?');
-    deleteStmt.bind(id);
-    const deleteResult = deleteStmt.run();
-
-    if (!deleteResult.success) {
-      return new Response(JSON.stringify({ error: 'Failed to delete modpack', details: deleteResult }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
+    deleteStmt.bind(id).run();
 
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
