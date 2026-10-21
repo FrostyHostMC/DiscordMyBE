@@ -31,6 +31,7 @@ import { scanScriptRuntimeConflicts, conflictsToReport } from '@/utils/scriptCon
 import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
+import { mergeLogger } from '@/utils/mergeLogger';
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -277,6 +278,7 @@ export const App: React.FC = () => {
     confList: ConflictItem[] = [],
     modpackNameOverride?: string
   ) => {
+    mergeLogger.info('Starting merge execution', `Packs: ${packsToMerge.length}, Name: ${modpackNameOverride || 'default'}`);
     setScreen('merging');
     setMergeProgress(10);
     setMergeStep('Reading addons & manifests');
@@ -286,6 +288,8 @@ export const App: React.FC = () => {
         modpackNameOverride ||
         `AutoBE_Modpack_${new Date().toLocaleDateString().replace(/\//g, '-')}`;
 
+      mergeLogger.info('Executing merge', `Name: ${mergedName}, Packs: ${packsToMerge.map(p => p.name).join(', ')}`);
+
       const result = await executeMergePacks(packsToMerge, {
         modpackName: mergedName,
         conflicts: confList,
@@ -294,8 +298,15 @@ export const App: React.FC = () => {
         onProgress: (step, pct) => {
           setMergeStep(step);
           setMergeProgress(pct);
+          mergeLogger.info(`Merge progress: ${step}`, `${pct}%`);
         }
       });
+
+      if (!result || !result.outputBlob) {
+        throw new Error('Merge completed but no output blob was generated');
+      }
+
+      mergeLogger.success('Merge completed successfully', result.outputFileName, packsToMerge.length, packsToMerge.map(p => p.name));
 
       // Save to IndexedDB
       await saveModpackToDB(result);
@@ -309,6 +320,7 @@ export const App: React.FC = () => {
     } catch (err) {
       const msg = describeError(err);
       console.error('[Aippy] Merge error:', msg);
+      mergeLogger.error('Merge failed', msg);
       showToast(`Merge failed: ${msg}`);
       if (soundTweak) playError().catch(() => {});
       setScreen('main');
