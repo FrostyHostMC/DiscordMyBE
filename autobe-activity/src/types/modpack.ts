@@ -71,12 +71,35 @@ export type TabType =
   | 'bp_library'
   | 'rp_library'
   | 'library'
+  | 'community'
   | 'conflicts_tool'
   | 'dependencies_tool'
   | 'history_tool'
   | 'logs_tool'
   | 'settings'
   | 'about';
+
+export interface CommunityModpack {
+  id: string;
+  name: string;
+  description: string;
+  author: string;
+  author_id: string;
+  version: string;
+  total_packs: number;
+  size: number;
+  icon_data_url?: string;
+  created_at: number;
+  downloads: number;
+  blob_url: string;
+  file_name: string;
+  included_packs: Array<{
+    name: string;
+    type: string;
+    version: string;
+    icon_data_url?: string;
+  }>;
+}
 
 export interface MergeSessionConfig {
   name: string;
@@ -106,6 +129,7 @@ export type ScreenType =
   | 'merging'
   | 'merge_complete'
   | 'modpack_details'
+  | 'community'
   | 'about'
   | 'pack_extract'
   | 'list_maker'

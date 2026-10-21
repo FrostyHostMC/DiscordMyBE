@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layers, Wrench, Boxes, LayoutGrid, Settings } from 'lucide-react';
+import { Layers, Wrench, Boxes, LayoutGrid, Settings, Globe } from 'lucide-react';
 import { TabType } from '@/types/modpack';
 
 interface BottomNavProps {
@@ -25,6 +25,11 @@ export const BottomNav: React.FC<BottomNavProps> = ({ currentTab, onChangeTab })
       id: 'mypacks',
       label: 'Projects',
       icon: <Boxes className="w-5 h-5" />
+    },
+    {
+      id: 'community',
+      label: 'Community',
+      icon: <Globe className="w-5 h-5" />
     },
     {
       id: 'library',

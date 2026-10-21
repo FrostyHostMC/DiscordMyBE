@@ -21,7 +21,8 @@ import {
   X,
   Menu,
   ChevronRight,
-  UploadCloud
+  UploadCloud,
+  Globe
 } from 'lucide-react';
 import { TabType } from '@/types/modpack';
 
@@ -52,6 +53,12 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'bp_library', label: 'Behavior Packs', icon: <ScrollText {...iconProps} /> },
       { id: 'rp_library', label: 'Resource Packs', icon: <Palette {...iconProps} /> },
       { id: 'library', label: 'Import History', icon: <LayoutGrid {...iconProps} /> }
+    ]
+  },
+  {
+    label: 'COMMUNITY',
+    items: [
+      { id: 'community', label: 'Community Modpacks', icon: <Globe {...iconProps} /> }
     ]
   },
   {

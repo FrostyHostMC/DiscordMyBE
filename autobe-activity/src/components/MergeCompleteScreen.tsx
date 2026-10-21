@@ -10,7 +10,9 @@ import {
   FileArchive,
   Layers,
   ScrollText,
-  Palette
+  Palette,
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { MergedModpack, MergedOutput } from '@/types/modpack';
 
@@ -22,6 +24,8 @@ interface MergeCompleteScreenProps {
   onDownloadOutput: (output: MergedOutput) => void;
   onDone: () => void;
   onRename: (newName: string) => void;
+  onPublish?: () => void;
+  isPublishing?: boolean;
 }
 
 export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
@@ -31,7 +35,9 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
   onShare,
   onDownloadOutput,
   onDone,
-  onRename
+  onRename,
+  onPublish,
+  isPublishing = false
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(modpack.name);
@@ -241,6 +247,27 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <Download className="w-4 h-4" />
           <span>Install to Minecraft (.mcaddon)</span>
         </button>
+
+        {onPublish && (
+          <button
+            type="button"
+            onClick={onPublish}
+            disabled={isPublishing}
+            className="py-3 px-4 rounded-xl font-semibold text-xs bg-[#10B981] hover:bg-[#059669] text-white border border-[#34D399]/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPublishing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Publishing...</span>
+              </>
+            ) : (
+              <>
+                <Globe className="w-4 h-4" />
+                <span>Publish to Community</span>
+              </>
+            )}
+          </button>
+        )}
 
         <button
           type="button"

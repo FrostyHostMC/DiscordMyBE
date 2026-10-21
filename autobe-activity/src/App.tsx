@@ -11,7 +11,8 @@ import {
   ConflictItem,
   TabType,
   ScreenType,
-  MergeSessionConfig
+  MergeSessionConfig,
+  CommunityModpack
 } from '@/types/modpack';
 import { INITIAL_DEMO_PACKS, INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
 import {
@@ -52,6 +53,7 @@ import { ListMaker } from '@/components/ListMaker';
 import { LegalScreen } from '@/components/LegalScreen';
 import { SplashScreen } from '@/components/SplashScreen';
 import { SubpackSelectModal } from '@/components/SubpackSelectModal';
+import { CommunityModpacksScreen } from '@/components/CommunityModpacksScreen';
 
 const tweaks = aippyTweaks(tweaksConfig);
 
@@ -506,6 +508,127 @@ export const App: React.FC = () => {
     showToast('All packs removed from workspace');
   };
 
+  // Download community modpack
+  const handleDownloadCommunityModpack = async (modpack: CommunityModpack) => {
+    triggerHaptic(50);
+    handleSoundTap();
+
+    try {
+      // Fetch the blob from the CDN URL
+      const response = await fetch(modpack.blob_url);
+      if (!response.ok) {
+        throw new Error('Failed to download modpack');
+      }
+      const blob = await response.blob();
+
+      // Use the same download handler as regular modpacks
+      await downloadBlob(blob, modpack.file_name);
+      showToast(`${modpack.name} download started!`);
+    } catch (e: unknown) {
+      console.error('[Aippy] Community modpack download failed:', e);
+      showToast(`Download failed: ${describeError(e)}`);
+      if (soundTweak) playError().catch(() => {});
+    }
+  };
+
+  // Publish modpack to community
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handlePublishModpack = async () => {
+    if (!justCompletedModpack) return;
+
+    triggerHaptic(50);
+    setIsPublishing(true);
+
+    try {
+      // Get the blob
+      const blob = justCompletedModpack.outputBlob;
+      if (!blob) {
+        throw new Error('Modpack blob is missing');
+      }
+
+      // Upload to Discord CDN to get a public URL
+      const accessToken = sessionStorage.getItem('discord_access_token');
+      const applicationId = sessionStorage.getItem('discord_application_id');
+
+      if (!accessToken || !applicationId) {
+        throw new Error('Not authenticated with Discord');
+      }
+
+      const file = new File([await blob.arrayBuffer()], justCompletedModpack.outputFileName, { type: blob.type });
+      const body = new FormData();
+      body.append('file', file);
+
+      const attachmentResponse = await fetch(
+        `https://discord.com/api/applications/${applicationId}/attachment`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body,
+        }
+      );
+
+      if (!attachmentResponse.ok) {
+        throw new Error('Failed to upload to Discord CDN');
+      }
+
+      const attachmentJson = await attachmentResponse.json();
+      const blobUrl = attachmentJson.attachment.url;
+
+      // Get Discord user info for author name
+      const userResponse = await fetch('https://discord.com/api/users/@me', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!userResponse.ok) {
+        throw new Error('Failed to get Discord user info');
+      }
+
+      const userData = await userResponse.json();
+      const authorName = userData.global_name || userData.username || 'Anonymous';
+      const authorId = userData.id;
+
+      // Publish to community API
+      const publishResponse = await fetch('/api/community-modpacks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: justCompletedModpack.name,
+          description: justCompletedModpack.description || 'Custom Minecraft Bedrock modpack',
+          author: authorName,
+          author_id: authorId,
+          version: justCompletedModpack.version,
+          total_packs: justCompletedModpack.totalPacks,
+          size: justCompletedModpack.size,
+          icon_data_url: justCompletedModpack.iconDataUrl,
+          blob_url: blobUrl,
+          file_name: justCompletedModpack.outputFileName,
+          included_packs: justCompletedModpack.includedPacks,
+        }),
+      });
+
+      if (!publishResponse.ok) {
+        const error = await publishResponse.json();
+        throw new Error(error.error || 'Failed to publish modpack');
+      }
+
+      showToast('Modpack published to community!');
+      if (soundTweak) playSuccess().catch(() => {});
+    } catch (e: unknown) {
+      console.error('[Aippy] Publish failed:', e);
+      showToast(`Publish failed: ${describeError(e)}`);
+      if (soundTweak) playError().catch(() => {});
+    } finally {
+      setIsPublishing(false);
+    }
+  };
+
   // Delete merged modpack
   const handleDeleteModpack = async (id: string) => {
     triggerHaptic(50);
@@ -673,6 +796,8 @@ export const App: React.FC = () => {
               outputFileName: `${newName.replace(/\s+/g, '_')}.mcaddon`
             });
           }}
+          onPublish={handlePublishModpack}
+          isPublishing={isPublishing}
         />
       )}
 
@@ -704,6 +829,13 @@ export const App: React.FC = () => {
 
       {screen === 'privacy' && (
         <LegalScreen type="privacy" onBack={() => setScreen('main')} />
+      )}
+
+      {screen === 'community' && (
+        <CommunityModpacksScreen
+          onBack={() => setScreen('main')}
+          onDownload={handleDownloadCommunityModpack}
+        />
       )}
 
       {/* Main Studio Viewport */}
@@ -847,6 +979,14 @@ export const App: React.FC = () => {
                     }}
                     onDeletePack={handleDeletePack}
                     onStartCreate={startCreate}
+                  />
+                )}
+
+                {/* 5. Community Modpacks */}
+                {currentTab === 'community' && (
+                  <CommunityModpacksScreen
+                    onBack={() => navigateTab('overview')}
+                    onDownload={handleDownloadCommunityModpack}
                   />
                 )}
 

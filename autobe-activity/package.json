@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@aippy/vite-plugins": "0.3.0",
+    "@cloudflare/workers-types": "^4.20241218.2",
     "@eslint/js": "^10.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
