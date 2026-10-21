@@ -431,6 +431,9 @@ export function createPersistentDownload(
   return { url, fileName };
 }
 
+/** Export manual save panel for direct use in Discord Activities. */
+export { showManualSavePanel };
+
 export async function downloadBlob(blob: Blob, fileName: string): Promise<void> {
   const file = blobToFile(blob, fileName);
 

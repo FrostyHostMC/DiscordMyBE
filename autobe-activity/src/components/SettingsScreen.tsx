@@ -191,10 +191,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
     try {
       const result = await buildCodebaseArchive(password);
+      const persistent = createPersistentDownload(result.blob, result.fileName);
+      setCodebaseUrl(persistent.url);
       setCodebaseResult(result);
       setCodebaseState('done');
       await playSyncChime();
       setTimeout(() => setCodebaseState('idle'), 10000);
+      // Force show manual save panel in Discord since downloads are blocked
+      const { showManualSavePanel } = await import('../utils/download');
+      showManualSavePanel(result.blob, result.fileName);
     } catch (e) {
       console.error('[Aippy] Codebase export failed:', e);
       setCodebaseState('error');
@@ -496,17 +501,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <div className="text-[11px] text-[#AAA3BB]">
                     {codebaseResult.fileCount} application files & directories packaged successfully.
                   </div>
-                  <div className="text-[10px] text-[#F59E0B] mt-2">
-                    ⚠️ Discord Activities on desktop block file downloads. Get the source code from:
-                  </div>
-                  <a
-                    href="https://github.com/FrostyHostMC/DiscordMyBE"
-                    target="_blank"
-                    rel="noopener"
-                    className="block text-center mt-2 py-2 rounded-lg bg-[#762BFF] text-[11px] font-bold text-white active:scale-[0.98] transition-transform"
-                  >
-                    � Download from GitHub Repository
-                  </a>
+                  {codebaseUrl && (
+                    <a
+                      href={codebaseUrl}
+                      download={codebaseResult.fileName}
+                      className="block text-center mt-2 py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/50 text-[11px] font-bold text-[#A855F7] active:scale-[0.98] transition-transform"
+                    >
+                      Download didn't complete? Tap here to save codebase zip again
+                    </a>
+                  )}
                 </div>
               )}
             </div>
