@@ -500,8 +500,12 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <button
               type="button"
               onClick={() => {
+                console.log('[Delete All Button] Clicked, selectedPackIds:', selectedPackIds);
                 if (confirm(`Delete ${selectedPackIds.length} selected pack(s)?`)) {
+                  console.log('[Delete All Button] Confirmed, calling onDeleteSelectedPacks');
                   onDeleteSelectedPacks(selectedPackIds);
+                } else {
+                  console.log('[Delete All Button] Cancelled by user');
                 }
               }}
               className="text-xs font-semibold text-red-400 hover:text-red-300 px-2 py-1"
