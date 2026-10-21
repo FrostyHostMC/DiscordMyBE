@@ -1,11 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Lock, X, KeyRound, ShieldCheck, AlertCircle } from 'lucide-react';
-import { CODEBASE_PASSWORD } from '@/utils/codebaseExport';
 
 interface CodebasePasswordModalProps {
   open: boolean;
   onClose: () => void;
-  onUnlock: () => void;
+  onUnlock: (password: string) => void;
 }
 
 export const CodebasePasswordModal: React.FC<CodebasePasswordModalProps> = ({
@@ -31,12 +30,12 @@ export const CodebasePasswordModal: React.FC<CodebasePasswordModalProps> = ({
   };
 
   const submit = () => {
-    if (value === CODEBASE_PASSWORD) {
-      onUnlock();
-      handleClose();
-    } else {
+    if (value.length === 0) {
       setError(true);
+      return;
     }
+    onUnlock(value);
+    handleClose();
   };
 
   return (
@@ -68,9 +67,9 @@ export const CodebasePasswordModal: React.FC<CodebasePasswordModalProps> = ({
             <Lock className="w-5 h-5" />
           </span>
           <div>
-            <div className="text-sm font-bold text-white">Protected Export</div>
+            <div className="text-sm font-bold text-white">Encrypt Codebase Export</div>
             <div className="text-[11px] text-[#AAA3BB] mt-0.5">
-              Enter the codebase password to package all app files & folders.
+              Enter a password to encrypt the codebase archive with AES-256. You'll need this password to extract the files.
             </div>
           </div>
         </div>
@@ -102,7 +101,7 @@ export const CodebasePasswordModal: React.FC<CodebasePasswordModalProps> = ({
         {error && (
           <div className="flex items-center gap-1.5 text-[11px] font-semibold text-red-400">
             <AlertCircle className="w-3.5 h-3.5" />
-            <span>Incorrect password. Access denied.</span>
+            <span>Password cannot be empty.</span>
           </div>
         )}
 
@@ -113,11 +112,11 @@ export const CodebasePasswordModal: React.FC<CodebasePasswordModalProps> = ({
           className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#762BFF] text-white text-xs font-bold border border-[#A855F7] hover:brightness-110 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(118,43,255,0.35)]"
         >
           <ShieldCheck className="w-4 h-4" />
-          Unlock & Package Codebase
+          Encrypt & Download Codebase
         </button>
 
         <p className="text-[10px] text-[#716885] text-center leading-relaxed">
-          The resulting archive is AES-256 encrypted with this same password.
+          The archive will be AES-256 encrypted. You must remember this password to extract the files.
         </p>
       </div>
     </div>

@@ -9,11 +9,14 @@ export interface CodebaseExportResult {
 }
 
 /**
- * Downloads the pre-generated codebase archive from the dist folder,
+ * Downloads the pre-generated codebase archive,
  * then re-encrypts it with the user's password using AES-256 encryption.
  *
  * The archive is generated at build time by scripts/generateCodebaseArchive.ts
  * and contains the complete project source code.
+ *
+ * In development mode, the archive is fetched from /public/codebase-archive.zip.
+ * In production, it's fetched from /codebase-archive.zip (served from dist/).
  */
 export async function buildCodebaseArchive(
   password: string,
