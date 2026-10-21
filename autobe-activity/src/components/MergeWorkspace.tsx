@@ -549,7 +549,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       {selectedBP.length} / {behaviorPacks.length}
                     </span>
                   </div>
-                  <span className="text-[10px] text-[#AAA3BB] font-mono">Limit: 100</span>
                 </div>
 
                 <div className="space-y-2">
@@ -577,7 +576,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       {selectedRP.length} / {resourcePacks.length}
                     </span>
                   </div>
-                  <span className="text-[10px] text-[#AAA3BB] font-mono">Limit: 100</span>
                 </div>
 
                 <div className="space-y-2">
