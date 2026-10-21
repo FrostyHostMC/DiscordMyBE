@@ -5,6 +5,9 @@ pages_build_output_dir = "dist"
 [vars]
 VITE_DISCORD_CLIENT_ID = "1471599214717829120"
 
+# Discord environment variables
+# These are configured in Cloudflare Pages Secrets for runtime access
+
 [[d1_databases]]
 binding = "DB"
 database_name = "autobe-community-modpacks"
