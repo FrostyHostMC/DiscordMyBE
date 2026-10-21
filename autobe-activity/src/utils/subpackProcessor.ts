@@ -11,7 +11,38 @@ import { sanitizeJsonString } from './addonParser';
 export async function applySubpackSelection(blob: Blob, folderName: string): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
   const out = new JSZip();
-  const prefix = `subpacks/${folderName}/`;
+
+  // Discover the subpack folders that physically exist in the archive so we can
+  // resolve the manifest-declared folder name even when its casing / spacing
+  // does not exactly match the zip paths (a very common addon quirk).
+  const subpackDirs = new Set<string>();
+  for (const path of Object.keys(zip.files)) {
+    const m = path.toLowerCase().match(/^subpacks\/([^/]+)\//);
+    if (m) subpackDirs.add(m[1]);
+  }
+
+  let resolved = folderName.trim();
+  const wantedLower = resolved.toLowerCase();
+  if (!subpackDirs.has(wantedLower)) {
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const fuzzy =
+      [...subpackDirs].find((d) => norm(d) === norm(folderName)) ||
+      [...subpackDirs].find((d) => norm(d).startsWith(norm(folderName)));
+    if (fuzzy) {
+      resolved = fuzzy;
+    } else if (subpackDirs.size > 0) {
+      console.warn(
+        `[Aippy] Subpack "${folderName}" not found in archive; available: ${[...subpackDirs].join(', ')} — using the first available variant.`
+      );
+      resolved = [...subpackDirs][0];
+    } else {
+      console.warn('[Aippy] No subpacks/ folders found in archive; skipping variant extraction.');
+    }
+  }
+
+  const prefix = `subpacks/${resolved}/`;
+  const prefixLower = prefix.toLowerCase();
+
   for (const [path, f] of Object.entries(zip.files)) {
     if (f.dir) continue;
     const lower = path.toLowerCase();
@@ -26,7 +57,8 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
       continue;
     }
     if (lower.startsWith('subpacks/')) {
-      if (lower.startsWith(prefix)) {
+      // Only the chosen variant is kept; everything else under subpacks/ is dropped.
+      if (prefixLower && lower.startsWith(prefixLower)) {
         out.file(path.slice(prefix.length), await f.async('uint8array'));
       }
       continue;

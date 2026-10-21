@@ -165,6 +165,11 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     // Skip every manifest (root AND nested copies from subfolders) and macOS junk.
     const base = lower.substring(lower.lastIndexOf('/') + 1);
     if (base === 'manifest.json' || lower.includes('__macosx')) continue;
+    // Safety net: subpack variant folders must never leak into the merged output.
+    // The user-selected variant is extracted to the archive root beforehand
+    // (applySubpackSelection), so anything left under subpacks/ is an unselected
+    // variant and is excluded to avoid duplicate/merged variant content.
+    if (lower.startsWith('subpacks/')) continue;
     const outPath = pathTransform ? pathTransform(path) : path;
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {

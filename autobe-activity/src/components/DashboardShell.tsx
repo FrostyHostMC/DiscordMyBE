@@ -261,7 +261,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   };
 
   return (
-    <header className="flex items-center justify-between px-3 sm:px-5 py-2.5 bg-[#100D18] border-b border-[#30263F]/70 shrink-0 z-20">
+    <header className="flex items-center justify-between px-3 sm:px-5 pt-[max(3rem,env(safe-area-inset-top))] pb-2.5 md:pt-2.5 bg-[#100D18] border-b border-[#30263F]/70 shrink-0 z-20">
       {/* Left: Mobile Nav toggle + Breadcrumb */}
       <div className="flex items-center gap-2.5 min-w-0">
         <button

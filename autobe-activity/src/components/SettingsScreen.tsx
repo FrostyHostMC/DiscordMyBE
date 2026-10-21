@@ -181,7 +181,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     setPatchLog([]);
   };
 
-  const handleExportCodebase = async (password: string) => {
+  const handleExportCodebase = async () => {
     if (codebaseState === 'working') return;
     setCodebaseState('working');
     setCodebaseResult(null);
@@ -190,7 +190,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       setCodebaseUrl(null);
     }
     try {
-      const result = await buildCodebaseArchive(password);
+      const result = await buildCodebaseArchive();
       downloadBlob(result.blob, result.fileName);
       setCodebaseUrl(createPersistentDownload(result.blob, result.fileName).url);
       setCodebaseResult(result);
@@ -480,6 +480,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       ? 'Export Failed — Tap to Retry'
                       : 'Download Entire App Codebase (ZIP)'}
               </button>
+
+              {codebaseState === 'working' && (
+                <div className="w-full h-1.5 rounded-full bg-[#2A2440] overflow-hidden">
+                  <div
+                    className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#762BFF] to-[#A855F7]"
+                    style={{ animation: 'dl-slide 1.1s ease-in-out infinite' }}
+                  />
+                </div>
+              )}
 
               {codebaseState === 'done' && codebaseResult && (
                 <div className="rounded-lg bg-[#08070D] border border-[#762BFF]/40 p-3 space-y-1.5">

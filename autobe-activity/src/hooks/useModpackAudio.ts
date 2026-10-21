@@ -3,11 +3,26 @@ import { useAudioContext } from '@aippy/runtime/audio';
 import * as Tone from 'tone';
 import { describeError } from '@/utils/errorLog';
 
+/**
+ * Minecraft-style block SFX (synthesized with Tone.js — no audio files).
+ * - playClick     -> soft wooden block PLACE
+ * - playSuccess   -> wooden block PLACE
+ * - playSyncChime -> wooden block PLACE
+ * - playError     -> block BREAK (granular crumble)
+ */
 export function useModpackAudio() {
   const { getAudioContext, unlock } = useAudioContext();
-  const synthRef = useRef<Tone.Synth | null>(null);
-  const chimeRef = useRef<Tone.PolySynth | null>(null);
-  const thudRef = useRef<Tone.MembraneSynth | null>(null);
+  const placeRef = useRef<{
+    knock: Tone.NoiseSynth;
+    knockFilter: Tone.Filter;
+    thud: Tone.MembraneSynth;
+  } | null>(null);
+  const breakRef = useRef<{
+    impact: Tone.NoiseSynth;
+    impactFilter: Tone.Filter;
+    crumble: Tone.NoiseSynth;
+    crumbleFilter: Tone.Filter;
+  } | null>(null);
   const initPromiseRef = useRef<Promise<boolean> | null>(null);
 
   const initTone = useCallback(async (): Promise<boolean> => {
@@ -24,26 +39,33 @@ export function useModpackAudio() {
           try { await Tone.start(); } catch { return false; }
         }
         if (Tone.getContext().state !== 'running') return false;
-        if (!synthRef.current) {
-          synthRef.current = new Tone.Synth({
-            oscillator: { type: 'sine' },
-            envelope: { attack: 0.005, decay: 0.05, sustain: 0, release: 0.04 }
+        if (!placeRef.current) {
+          const knockFilter = new Tone.Filter(900, 'bandpass').toDestination();
+          const knock = new Tone.NoiseSynth({
+            noise: { type: 'pink' },
+            envelope: { attack: 0.001, decay: 0.06, sustain: 0 },
+            volume: -16,
+          }).connect(knockFilter);
+          const thud = new Tone.MembraneSynth({
+            pitchDecay: 0.02, octaves: 4,
+            envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
           }).toDestination();
-          synthRef.current.volume.value = -8;
+          placeRef.current = { knock, knockFilter, thud };
         }
-        if (!chimeRef.current) {
-          chimeRef.current = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: 'triangle' },
-            envelope: { attack: 0.02, decay: 0.25, sustain: 0.1, release: 0.4 }
-          }).toDestination();
-          chimeRef.current.volume.value = -6;
-        }
-        if (!thudRef.current) {
-          thudRef.current = new Tone.MembraneSynth({
-            pitchDecay: 0.08, octaves: 2,
-            envelope: { attack: 0.001, decay: 0.2, sustain: 0.01, release: 0.15 }
-          }).toDestination();
-          thudRef.current.volume.value = -5;
+        if (!breakRef.current) {
+          const impactFilter = new Tone.Filter(1800, 'bandpass').toDestination();
+          const impact = new Tone.NoiseSynth({
+            noise: { type: 'white' },
+            envelope: { attack: 0.001, decay: 0.08, sustain: 0 },
+            volume: -12,
+          }).connect(impactFilter);
+          const crumbleFilter = new Tone.Filter(600, 'lowpass').toDestination();
+          const crumble = new Tone.NoiseSynth({
+            noise: { type: 'brown' },
+            envelope: { attack: 0.002, decay: 0.2, sustain: 0 },
+            volume: -14,
+          }).connect(crumbleFilter);
+          breakRef.current = { impact, impactFilter, crumble, crumbleFilter };
         }
         return true;
       } catch (e) {
@@ -54,28 +76,50 @@ export function useModpackAudio() {
     return initPromiseRef.current;
   }, [getAudioContext, unlock]);
 
+  /** Soft wooden block place — used for button clicks. */
   const playClick = useCallback(async () => {
-    if (!(await initTone()) || !synthRef.current) return;
-    try { synthRef.current.triggerAttackRelease('C6', '32n'); } catch { /* ignore */ }
-  }, [initTone]);
-
-  const playSuccess = useCallback(async () => {
-    if (!(await initTone()) || !chimeRef.current) return;
+    if (!(await initTone()) || !placeRef.current) return;
     try {
+      const { knock, thud } = placeRef.current;
       const now = Tone.now();
-      chimeRef.current.triggerAttackRelease(['E5', 'G#5'], '8n', now);
-      chimeRef.current.triggerAttackRelease(['B5', 'E6'], '4n', now + 0.1);
+      knock.triggerAttackRelease('64n', now, 0.6);
+      thud.triggerAttackRelease('E3', '64n', now + 0.005, 0.6);
     } catch { /* ignore */ }
   }, [initTone]);
 
-  const playSyncChime = useCallback(async () => {
-    if (!(await initTone()) || !chimeRef.current) return;
-    try { chimeRef.current.triggerAttackRelease(['F#5', 'A#5', 'C#6'], '8n', Tone.now()); } catch { /* ignore */ }
+  /** Wooden block place — success feedback. */
+  const playSuccess = useCallback(async () => {
+    if (!(await initTone()) || !placeRef.current) return;
+    try {
+      const { knock, thud } = placeRef.current;
+      const now = Tone.now();
+      knock.triggerAttackRelease('16n', now);
+      thud.triggerAttackRelease('A2', '32n', now + 0.005);
+    } catch { /* ignore */ }
   }, [initTone]);
 
+  /** Wooden block place — sync/save feedback. */
+  const playSyncChime = useCallback(async () => {
+    if (!(await initTone()) || !placeRef.current) return;
+    try {
+      const { knock, thud } = placeRef.current;
+      const now = Tone.now();
+      knock.triggerAttackRelease('16n', now);
+      thud.triggerAttackRelease('C3', '32n', now + 0.005);
+    } catch { /* ignore */ }
+  }, [initTone]);
+
+  /** Block break — error/failure feedback. */
   const playError = useCallback(async () => {
-    if (!(await initTone()) || !thudRef.current) return;
-    try { thudRef.current.triggerAttackRelease('A1', '16n'); } catch { /* ignore */ }
+    if (!(await initTone()) || !breakRef.current) return;
+    try {
+      const { impact, crumble } = breakRef.current;
+      const now = Tone.now();
+      impact.triggerAttackRelease('16n', now);
+      crumble.triggerAttackRelease('64n', now + 0.02);
+      crumble.triggerAttackRelease('64n', now + 0.08);
+      crumble.triggerAttackRelease('32n', now + 0.13);
+    } catch { /* ignore */ }
   }, [initTone]);
 
   return { playClick, playSuccess, playError, playSyncChime };

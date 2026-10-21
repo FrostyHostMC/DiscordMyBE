@@ -383,8 +383,13 @@ export const App: React.FC = () => {
       showToast('This output file is not available for download.');
       return;
     }
-    downloadBlob(output.blob, output.fileName);
-    showToast(`${output.fileName} downloaded!`);
+    downloadBlob(output.blob, output.fileName)
+      .then(() => showToast(`${output.fileName} download started!`))
+      .catch((e: unknown) => {
+        console.error('[Aippy] Download failed:', e);
+        showToast(`Download failed: ${describeError(e)}`);
+        if (soundTweak) playError().catch(() => {});
+      });
   };
 
   // Download combined .mcaddon
@@ -395,8 +400,15 @@ export const App: React.FC = () => {
     const blob =
       modpack.outputBlob ||
       new Blob(['StoneByte Bedrock Modpack'], { type: 'application/octet-stream' });
-    downloadBlob(blob, modpack.outputFileName || 'StoneByte_Modpack.mcaddon');
-    showToast('Modpack downloaded! Tap the file to import directly into Minecraft.');
+    downloadBlob(blob, modpack.outputFileName || 'StoneByte_Modpack.mcaddon')
+      .then(() =>
+        showToast('Modpack save started! Use the system sheet to save or open in Minecraft.')
+      )
+      .catch((e: unknown) => {
+        console.error('[Aippy] Download failed:', e);
+        showToast(`Download failed: ${describeError(e)}`);
+        if (soundTweak) playError().catch(() => {});
+      });
   };
 
   // Web Share API
