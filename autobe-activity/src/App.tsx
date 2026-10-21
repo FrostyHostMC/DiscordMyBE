@@ -404,7 +404,7 @@ export const App: React.FC = () => {
       const discordSuccess = await tryShareViaDiscord(blob, output.fileName);
 
       if (discordSuccess) {
-        showToast(`${output.fileName} shared via Discord! Select a channel to download.`);
+        showToast('Opening file for download...');
         return;
       }
 
@@ -444,7 +444,7 @@ export const App: React.FC = () => {
       const discordSuccess = await tryShareViaDiscord(blob, fileName);
 
       if (discordSuccess) {
-        showToast('Modpack shared via Discord! Select a channel to download.');
+        showToast('Opening file for download...');
         return;
       }
 

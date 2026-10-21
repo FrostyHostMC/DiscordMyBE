@@ -7,8 +7,11 @@ export interface CodebaseExportResult {
 }
 
 /**
- * Upload a file to Discord's CDN and open the native share dialog.
+ * Upload a file to Discord's CDN and open it via Discord SDK.
  * This bypasses iframe sandbox restrictions in Discord Activities.
+ *
+ * For Web/Desktop: Uses openShareMomentDialog (native Discord share)
+ * For Mobile: Uses openExternalLink (opens in external browser)
  */
 export async function shareViaDiscordCDN(
   blob: Blob,
@@ -45,8 +48,17 @@ export async function shareViaDiscordCDN(
   const discordSdk = new DiscordSDK(applicationId);
   await discordSdk.ready();
 
-  // Open Discord's native share dialog
-  await discordSdk.commands.openShareMomentDialog({ mediaUrl });
+  // Check platform behavior - openShareMomentDialog only works on Web/Desktop
+  const platformBehaviors = await discordSdk.commands.getPlatformBehaviors();
+  const isMobile = platformBehaviors.platform === 'ios' || platformBehaviors.platform === 'android';
+
+  if (isMobile) {
+    // Mobile: Open in external browser where downloads work
+    await discordSdk.commands.openExternalLink({ url: mediaUrl });
+  } else {
+    // Web/Desktop: Use native Discord share dialog
+    await discordSdk.commands.openShareMomentDialog({ mediaUrl });
+  }
 }
 
 /**
