@@ -498,8 +498,20 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (confirm(`Delete ${selectedPackIds.length} selected pack(s)?`)) {
-                  selectedPackIds.forEach(id => onDeletePack(id));
+                if (confirm(`Delete ${selectedPackIds.length} selected pack(s)? This may take a moment...`)) {
+                  // Use setTimeout to allow UI to update before starting deletion
+                  setTimeout(async () => {
+                    try {
+                      for (const id of selectedPackIds) {
+                        onDeletePack(id);
+                        // Small delay to prevent UI freezing
+                        await new Promise(resolve => setTimeout(resolve, 10));
+                      }
+                    } catch (err) {
+                      console.error('[Delete All] Error:', err);
+                      alert('Failed to delete some packs. Check console for details.');
+                    }
+                  }, 100);
                 }
               }}
               className="text-xs font-semibold text-red-400 hover:text-red-300 px-2 py-1"
