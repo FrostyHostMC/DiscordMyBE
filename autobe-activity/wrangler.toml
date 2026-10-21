@@ -4,4 +4,4 @@ compatibility_date = "2024-01-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "autobe-community-modpacks"
-database_id = "YOUR_DATABASE_ID" # You'll get this after creating the D1 database
+database_id = "87c441f7-ef60-4478-a337-57cc02dcabbb"
