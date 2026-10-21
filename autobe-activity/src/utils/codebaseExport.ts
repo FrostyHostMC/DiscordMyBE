@@ -1,6 +1,4 @@
-// Codebase export: downloads the pre-generated codebase archive and encrypts it with the user's password.
-import { ZipReader, BlobReader, BlobWriter, ZipWriter } from '@zip.js/zip.js';
-
+// Codebase export: downloads the pre-generated codebase archive.
 export interface CodebaseExportResult {
   blob: Blob;
   fileName: string;
@@ -9,14 +7,13 @@ export interface CodebaseExportResult {
 }
 
 /**
- * Downloads the pre-generated codebase archive,
- * then re-encrypts it with the user's password using AES-256 encryption.
+ * Downloads the pre-generated codebase archive.
  *
  * The archive is generated at build time by scripts/generateCodebaseArchive.ts
  * and contains the complete project source code.
  *
- * In development mode, the archive is fetched from /public/codebase-archive.zip.
- * In production, it's fetched from /codebase-archive.zip (served from dist/).
+ * Note: Client-side re-encryption with @zip.js/zip.js has compatibility issues
+ * in Discord Activities. The archive is downloaded unencrypted for now.
  */
 export async function buildCodebaseArchive(
   password: string,
@@ -81,47 +78,18 @@ export async function buildCodebaseArchive(
       console.warn('[CodebaseExport] Failed to parse metadata:', e);
     }
   } else {
-    console.warn('[CodebaseExport] Could not fetch metadata, using file count from archive');
+    console.warn('[CodebaseExport] Could not fetch metadata');
   }
 
-  // Step 3: Read the unencrypted archive
-  const zipReader = new ZipReader(new BlobReader(archiveBlob));
-  const entries = await zipReader.getEntries();
-
-  // Step 4: Create a new encrypted archive
-  const encryptedZipWriter = new ZipWriter({
-    password,
-    encryptionMethod: 'AES' // Use AES-256 encryption
-  });
-
-  // Step 5: Copy all entries from the unencrypted archive to the encrypted one
-  for (const entry of entries) {
-    if (!entry.directory) {
-      // Read the entry data as a blob
-      const data = await entry.getData(new BlobWriter());
-      // Add it to the encrypted archive
-      await encryptedZipWriter.add(entry.filename, new BlobReader(data));
-    } else {
-      // Add directory entries (skip directories as they're implicit in zip)
-      continue;
-    }
-  }
-
-  // Step 6: Close the zip reader
-  await zipReader.close();
-
-  // Step 7: Generate the encrypted blob
-  const encryptedBlob = await encryptedZipWriter.close();
-
-  if (!encryptedBlob || encryptedBlob.size === 0) {
-    throw new Error('Encrypted archive generation produced an empty file.');
+  if (!archiveBlob || archiveBlob.size === 0) {
+    throw new Error('Archive download produced an empty file.');
   }
 
   const stamp = new Date().toISOString().slice(0, 10);
   return {
-    blob: encryptedBlob,
+    blob: archiveBlob,
     fileName: `autobe_codebase_${stamp}.zip`,
     fileCount,
-    encrypted: true
+    encrypted: false
   };
 }
