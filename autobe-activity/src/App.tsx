@@ -379,28 +379,43 @@ export const App: React.FC = () => {
   const handleDownloadOutput = async (output: MergedOutput) => {
     triggerHaptic(50);
     handleSoundTap();
-    if (!output.blob) {
-      showToast('This output file is not available for download.');
+    console.log('[Aippy] Download output:', output);
+
+    // If blob is missing (common after loading from IndexedDB), regenerate it
+    let blob = output.blob;
+    if (!blob && justCompletedModpack?.outputs) {
+      // Try to get it from the freshly completed modpack
+      const freshOutput = justCompletedModpack.outputs.find(o => o.id === output.id);
+      if (freshOutput?.blob) {
+        blob = freshOutput.blob;
+        console.log('[Aippy] Using blob from fresh merge:', output.fileName);
+      }
+    }
+
+    if (!blob) {
+      console.error('[Aippy] Output blob is missing for:', output.fileName);
+      showToast('This output file is not available for download. Please merge again.');
       return;
     }
 
-    // Try Discord native sharing first (bypasses iframe sandbox)
-    const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-    const discordSuccess = await tryShareViaDiscord(output.blob, output.fileName);
+    try {
+      // Try Discord native sharing first (bypasses iframe sandbox)
+      const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
+      const discordSuccess = await tryShareViaDiscord(blob, output.fileName);
 
-    if (discordSuccess) {
-      showToast(`${output.fileName} shared via Discord! Select a channel to download.`);
-      return;
+      if (discordSuccess) {
+        showToast(`${output.fileName} shared via Discord! Select a channel to download.`);
+        return;
+      }
+
+      // Fallback to regular download
+      await downloadBlob(blob, output.fileName);
+      showToast(`${output.fileName} download started!`);
+    } catch (e: unknown) {
+      console.error('[Aippy] Download failed:', e);
+      showToast(`Download failed: ${describeError(e)}`);
+      if (soundTweak) playError().catch(() => {});
     }
-
-    // Fallback to regular download
-    downloadBlob(output.blob, output.fileName)
-      .then(() => showToast(`${output.fileName} download started!`))
-      .catch((e: unknown) => {
-        console.error('[Aippy] Download failed:', e);
-        showToast(`Download failed: ${describeError(e)}`);
-        if (soundTweak) playError().catch(() => {});
-      });
   };
 
   // Download combined .mcaddon
@@ -408,30 +423,39 @@ export const App: React.FC = () => {
     triggerHaptic(60);
     handleSoundTap();
     if (!modpack) return;
-    const blob =
-      modpack.outputBlob ||
-      new Blob(['StoneByte Bedrock Modpack'], { type: 'application/octet-stream' });
-    const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
 
-    // Try Discord native sharing first (bypasses iframe sandbox)
-    const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-    const discordSuccess = await tryShareViaDiscord(blob, fileName);
+    let blob = modpack.outputBlob;
+    // If loading from DB and blob is missing, check fresh merge
+    if (!blob && justCompletedModpack?.outputBlob && modpack.id === justCompletedModpack.id) {
+      blob = justCompletedModpack.outputBlob;
+      console.log('[Aippy] Using outputBlob from fresh merge');
+    }
 
-    if (discordSuccess) {
-      showToast('Modpack shared via Discord! Select a channel to download.');
+    if (!blob) {
+      showToast('Modpack file not available. Please merge again.');
       return;
     }
 
-    // Fallback to regular download
-    downloadBlob(blob, fileName)
-      .then(() =>
-        showToast('Modpack save started! Use the system sheet to save or open in Minecraft.')
-      )
-      .catch((e: unknown) => {
-        console.error('[Aippy] Download failed:', e);
-        showToast(`Download failed: ${describeError(e)}`);
-        if (soundTweak) playError().catch(() => {});
-      });
+    const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
+
+    try {
+      // Try Discord native sharing first (bypasses iframe sandbox)
+      const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
+      const discordSuccess = await tryShareViaDiscord(blob, fileName);
+
+      if (discordSuccess) {
+        showToast('Modpack shared via Discord! Select a channel to download.');
+        return;
+      }
+
+      // Fallback to regular download
+      await downloadBlob(blob, fileName);
+      showToast('Modpack save started! Use the system sheet to save or open in Minecraft.');
+    } catch (e: unknown) {
+      console.error('[Aippy] Download failed:', e);
+      showToast(`Download failed: ${describeError(e)}`);
+      if (soundTweak) playError().catch(() => {});
+    }
   };
 
   // Web Share API
