@@ -45,3 +45,6 @@ scripts/.testMerge.mjs
 scripts/.testVerify.mjs
 public/codebase-archive.*
 dist/codebase-archive.*
+
+# Wrangler local state
+.wrangler/
