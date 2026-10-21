@@ -1,0 +1,6 @@
+{
+  "content": [
+    "./src/**/*.{ts,tsx}"
+  ],
+  "plugins": []
+}
