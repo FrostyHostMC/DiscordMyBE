@@ -19,11 +19,14 @@ export async function shareViaDiscordCDN(
   accessToken: string,
   applicationId: string
 ): Promise<{ success: boolean; cdnUrl?: string }> {
+  console.log('[Aippy] Starting Discord CDN upload for:', fileName);
+
   // Upload to Discord's attachment API
   const file = new File([await blob.arrayBuffer()], fileName, { type: blob.type });
   const body = new FormData();
   body.append('file', file);
 
+  console.log('[Aippy] Uploading to Discord attachment API...');
   const attachmentResponse = await fetch(
     `https://discord.com/api/applications/${applicationId}/attachment`,
     {
@@ -37,11 +40,13 @@ export async function shareViaDiscordCDN(
 
   if (!attachmentResponse.ok) {
     const error = await attachmentResponse.text();
+    console.error('[Aippy] Discord CDN upload failed:', error);
     throw new Error(`Failed to upload to Discord CDN: ${error}`);
   }
 
   const attachmentJson = await attachmentResponse.json();
   const mediaUrl = attachmentJson.attachment.url;
+  console.log('[Aippy] Discord CDN upload successful:', mediaUrl);
 
   // Dynamically import Discord SDK
   const { DiscordSDK } = await import('@discord/embedded-app-sdk');
@@ -52,11 +57,15 @@ export async function shareViaDiscordCDN(
   const platformBehaviors = await discordSdk.commands.getPlatformBehaviors();
   const isMobile = platformBehaviors.platform === 'ios' || platformBehaviors.platform === 'android';
 
+  console.log('[Aippy] Platform:', platformBehaviors.platform, 'isMobile:', isMobile);
+
   if (isMobile) {
     // Mobile: Open in external browser where downloads work
+    console.log('[Aippy] Opening external link for mobile...');
     await discordSdk.commands.openExternalLink({ url: mediaUrl });
   } else {
     // Web/Desktop: Use native Discord share dialog
+    console.log('[Aippy] Opening share moment dialog for desktop...');
     await discordSdk.commands.openShareMomentDialog({ mediaUrl });
   }
 

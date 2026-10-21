@@ -415,12 +415,18 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Fallback to regular download
-      await downloadBlob(blob, output.fileName);
-      showToast(`${output.fileName} download started!`);
+      // If Discord sharing fails, show manual save panel
+      showToast('Discord upload failed. Try the manual save option.');
+      const { showManualSavePanel } = await import('@/utils/download');
+      const lastCdnUrl = sessionStorage.getItem('last_download_url');
+      showManualSavePanel(blob, output.fileName, lastCdnUrl || undefined);
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
       showToast(`Download failed: ${describeError(e)}`);
+      // Show manual save panel as last resort
+      const { showManualSavePanel } = await import('@/utils/download');
+      const lastCdnUrl = sessionStorage.getItem('last_download_url');
+      showManualSavePanel(blob, output.fileName, lastCdnUrl || undefined);
       if (soundTweak) playError().catch(() => {});
     }
   };
@@ -439,8 +445,26 @@ export const App: React.FC = () => {
     }
 
     if (!blob) {
-      showToast('Modpack file not available. Please merge again.');
-      return;
+      console.error('[Aippy] Modpack blob is missing, trying to regenerate...');
+      showToast('Regenerating modpack file...');
+      try {
+        // Try to regenerate the modpack from its included packs
+        const packsToMerge = modpack.includedPacks
+          .map((packRef) => installedPacks.find((p) => p.id === packRef.uuid))
+          .filter((p): p is AddonPack => !!p);
+
+        if (packsToMerge.length === 0) {
+          throw new Error('Cannot regenerate: original packs not found');
+        }
+
+        const mergeResult = await executeMergePacks(packsToMerge, modpack.config);
+        blob = mergeResult.outputBlob;
+        console.log('[Aippy] Successfully regenerated modpack blob');
+      } catch (e) {
+        console.error('[Aippy] Failed to regenerate modpack:', e);
+        showToast('Modpack file not available. Please merge again.');
+        return;
+      }
     }
 
     const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
@@ -459,12 +483,18 @@ export const App: React.FC = () => {
         return;
       }
 
-      // Fallback to regular download
-      await downloadBlob(blob, fileName);
-      showToast('Modpack save started! Use the system sheet to save or open in Minecraft.');
+      // If Discord sharing fails, show manual save panel with error
+      showToast('Discord upload failed. Try the manual save option.');
+      const { showManualSavePanel } = await import('@/utils/download');
+      const lastCdnUrl = sessionStorage.getItem('last_download_url');
+      showManualSavePanel(blob, fileName, lastCdnUrl || undefined);
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
       showToast(`Download failed: ${describeError(e)}`);
+      // Show manual save panel as last resort
+      const { showManualSavePanel } = await import('@/utils/download');
+      const lastCdnUrl = sessionStorage.getItem('last_download_url');
+      showManualSavePanel(blob, fileName, lastCdnUrl || undefined);
       if (soundTweak) playError().catch(() => {});
     }
   };
