@@ -193,7 +193,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       const result = await buildCodebaseArchive(password);
       // downloadBlob will try automatic download, and if blocked (in Discord),
       // it will show the manual save panel with share sheet option
-      downloadBlob(result.blob, result.fileName);
+      await downloadBlob(result.blob, result.fileName);
       const persistent = createPersistentDownload(result.blob, result.fileName);
       setCodebaseUrl(persistent.url);
       setCodebaseResult(result);
