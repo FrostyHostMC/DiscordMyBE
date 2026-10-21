@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
     viteSingleFile({
       useRecommendedBuildConfig: true,
       removeViteModuleLoader: true,
-      deleteInlinedFiles: true
+      deleteInlinedFiles: false // Keep codebase-archive.zip for download
     }),
     // asset preload for aippy app (scans source files)
     aippyPreloadPlugin({
