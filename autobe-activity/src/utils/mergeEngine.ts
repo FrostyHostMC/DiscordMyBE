@@ -173,7 +173,13 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const outPath = pathTransform ? pathTransform(path) : path;
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
-        const parsed = JSON.parse(sanitizeJsonString(await fileObj.async('text')));
+        let text = await fileObj.async('text');
+        // Filter out comment lines (AutoBE.py behavior)
+        const lines = text.split('\n');
+        const filtered = lines.filter(line => !line.trim().startsWith('//'));
+        text = filtered.join('\n');
+        
+        const parsed = JSON.parse(sanitizeJsonString(text));
         if (Array.isArray(parsed)) {
           const list = accum.jsonLists.get(lower) || [];
           list.push(...parsed);
