@@ -97,15 +97,13 @@ export async function buildCodebaseArchive(
   // Step 5: Copy all entries from the unencrypted archive to the encrypted one
   for (const entry of entries) {
     if (!entry.directory) {
+      // Read the entry data as a blob
       const data = await entry.getData(new BlobWriter());
-      await encryptedZipWriter.add(entry.filename, new BlobWriter(), {
-        data: new Blob([data])
-      });
+      // Add it to the encrypted archive
+      await encryptedZipWriter.add(entry.filename, new BlobReader(data));
     } else {
-      // Add directory entries
-      await encryptedZipWriter.add(entry.filename, new BlobWriter(), {
-        data: new Blob([])
-      });
+      // Add directory entries (skip directories as they're implicit in zip)
+      continue;
     }
   }
 
