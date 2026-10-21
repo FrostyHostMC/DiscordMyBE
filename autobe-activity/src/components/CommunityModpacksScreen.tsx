@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 
+// Community modpacks screen with D1 database integration
+
 interface CommunityModpacksScreenProps {
   onBack: () => void;
   onDownload: (modpack: CommunityModpack) => void;
@@ -96,6 +98,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             <Loader2 className="w-8 h-8 text-[#762BFF] animate-spin mb-3" />
             <p className="text-sm text-[#AAA3BB]">Loading community modpacks...</p>
           </div>
+        ) : error ? (
         ) : error ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Globe className="w-12 h-12 text-[#30263F] mb-3" />
