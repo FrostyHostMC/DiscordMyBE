@@ -88,6 +88,10 @@ function AccessGate() {
           return;
         }
 
+        // Store credentials for Discord SDK features (file sharing, etc.)
+        sessionStorage.setItem('discord_access_token', tokenData.access_token);
+        sessionStorage.setItem('discord_application_id', clientId);
+
         if (!cancelled) setState('allowed');
       } catch (error) {
         const detail = describeError(error);

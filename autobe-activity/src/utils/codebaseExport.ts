@@ -7,6 +7,70 @@ export interface CodebaseExportResult {
 }
 
 /**
+ * Upload a file to Discord's CDN and open the native share dialog.
+ * This bypasses iframe sandbox restrictions in Discord Activities.
+ */
+export async function shareViaDiscordCDN(
+  blob: Blob,
+  fileName: string,
+  accessToken: string,
+  applicationId: string
+): Promise<void> {
+  // Upload to Discord's attachment API
+  const file = new File([await blob.arrayBuffer()], fileName, { type: blob.type });
+  const body = new FormData();
+  body.append('file', file);
+
+  const attachmentResponse = await fetch(
+    `https://discord.com/api/applications/${applicationId}/attachment`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body,
+    }
+  );
+
+  if (!attachmentResponse.ok) {
+    const error = await attachmentResponse.text();
+    throw new Error(`Failed to upload to Discord CDN: ${error}`);
+  }
+
+  const attachmentJson = await attachmentResponse.json();
+  const mediaUrl = attachmentJson.attachment.url;
+
+  // Dynamically import Discord SDK
+  const { DiscordSDK } = await import('@discord/embedded-app-sdk');
+  const discordSdk = new DiscordSDK(applicationId);
+  await discordSdk.ready();
+
+  // Open Discord's native share dialog
+  await discordSdk.commands.openShareMomentDialog({ mediaUrl });
+}
+
+/**
+ * Helper to share any file via Discord CDN with automatic credential lookup.
+ * Returns true if Discord sharing succeeded, false if it failed (caller should fallback).
+ */
+export async function tryShareViaDiscord(blob: Blob, fileName: string): Promise<boolean> {
+  const accessToken = sessionStorage.getItem('discord_access_token');
+  const applicationId = sessionStorage.getItem('discord_application_id');
+
+  if (!accessToken || !applicationId) {
+    return false;
+  }
+
+  try {
+    await shareViaDiscordCDN(blob, fileName, accessToken, applicationId);
+    return true;
+  } catch (error) {
+    console.warn('[Aippy] Discord CDN share failed:', error);
+    return false;
+  }
+}
+
+/**
  * Downloads the pre-generated codebase archive.
  *
  * The archive is generated at build time by scripts/generateCodebaseArchive.ts

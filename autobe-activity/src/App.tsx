@@ -376,13 +376,24 @@ export const App: React.FC = () => {
   };
 
   // Download individual .mcpack
-  const handleDownloadOutput = (output: MergedOutput) => {
+  const handleDownloadOutput = async (output: MergedOutput) => {
     triggerHaptic(50);
     handleSoundTap();
     if (!output.blob) {
       showToast('This output file is not available for download.');
       return;
     }
+
+    // Try Discord native sharing first (bypasses iframe sandbox)
+    const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
+    const discordSuccess = await tryShareViaDiscord(output.blob, output.fileName);
+
+    if (discordSuccess) {
+      showToast(`${output.fileName} shared via Discord! Select a channel to download.`);
+      return;
+    }
+
+    // Fallback to regular download
     downloadBlob(output.blob, output.fileName)
       .then(() => showToast(`${output.fileName} download started!`))
       .catch((e: unknown) => {
@@ -393,14 +404,26 @@ export const App: React.FC = () => {
   };
 
   // Download combined .mcaddon
-  const handleInstallToMinecraft = (modpack: MergedModpack | null = justCompletedModpack) => {
+  const handleInstallToMinecraft = async (modpack: MergedModpack | null = justCompletedModpack) => {
     triggerHaptic(60);
     handleSoundTap();
     if (!modpack) return;
     const blob =
       modpack.outputBlob ||
       new Blob(['StoneByte Bedrock Modpack'], { type: 'application/octet-stream' });
-    downloadBlob(blob, modpack.outputFileName || 'StoneByte_Modpack.mcaddon')
+    const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
+
+    // Try Discord native sharing first (bypasses iframe sandbox)
+    const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
+    const discordSuccess = await tryShareViaDiscord(blob, fileName);
+
+    if (discordSuccess) {
+      showToast('Modpack shared via Discord! Select a channel to download.');
+      return;
+    }
+
+    // Fallback to regular download
+    downloadBlob(blob, fileName)
       .then(() =>
         showToast('Modpack save started! Use the system sheet to save or open in Minecraft.')
       )

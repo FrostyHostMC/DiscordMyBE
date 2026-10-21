@@ -196,10 +196,26 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       setCodebaseResult(result);
       setCodebaseState('done');
       await playSyncChime();
-      setTimeout(() => setCodebaseState('idle'), 10000);
-      // Force show manual save panel in Discord since downloads are blocked
+
+      // Try Discord native sharing first (bypasses iframe sandbox)
+      const accessToken = sessionStorage.getItem('discord_access_token');
+      const applicationId = sessionStorage.getItem('discord_application_id');
+
+      if (accessToken && applicationId) {
+        try {
+          const { shareViaDiscordCDN } = await import('../utils/codebaseExport');
+          await shareViaDiscordCDN(result.blob, result.fileName, accessToken, applicationId);
+          setTimeout(() => setCodebaseState('idle'), 10000);
+          return;
+        } catch (discordError) {
+          console.warn('[Aippy] Discord CDN share failed, falling back to manual panel:', discordError);
+        }
+      }
+
+      // Fallback to manual save panel if Discord sharing fails
       const { showManualSavePanel } = await import('../utils/download');
       showManualSavePanel(result.blob, result.fileName);
+      setTimeout(() => setCodebaseState('idle'), 10000);
     } catch (e) {
       console.error('[Aippy] Codebase export failed:', e);
       setCodebaseState('error');
