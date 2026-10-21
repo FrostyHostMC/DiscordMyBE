@@ -21,11 +21,11 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
 
   // Debug: log selections when they change
   console.log('[SubpackSelect] Current selections:', selections);
-  console.log('[SubpackSelect] Packs:', packs.map(p => ({ id: p.id, name: p.name, subpacks: p.subpacks })));
+  console.log('[SubpackSelect] Packs:', packs.map(p => ({ id: p.id, uuid: p.uuid, type: p.type, name: p.name, subpacks: p.subpacks })));
 
   const confirm = () => {
     // Validate that all packs have a selection
-    const missing = packs.filter(p => selections[p.id] === undefined);
+    const missing = packs.filter(p => selections[`${p.uuid}_${p.type}`] === undefined);
     if (missing.length > 0) {
       alert(`Please select a variant for ${missing.length} pack(s) before continuing.`);
       return;
@@ -33,15 +33,16 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
     // Convert indices back to folder names for the parent
     const folderSelections: Record<string, string> = {};
     for (const p of packs) {
-      const idx = selections[p.id];
+      const key = `${p.uuid}_${p.type}`;
+      const idx = selections[key];
       if (idx !== undefined && p.subpacks && p.subpacks[idx]) {
-        folderSelections[p.id] = p.subpacks[idx].folder;
+        folderSelections[key] = p.subpacks[idx].folder;
       }
     }
     onConfirm(folderSelections);
   };
 
-  const allSelected = packs.every(p => selections[p.id] !== undefined);
+  const allSelected = packs.every(p => selections[`${p.uuid}_${p.type}`] !== undefined);
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
@@ -68,47 +69,44 @@ export const SubpackSelectModal: React.FC<SubpackSelectModalProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-2 space-y-3">
-          {packs.map((p) => (
-            <div
-              key={p.id}
-              className="rounded-xl bg-[#15111F] border border-[#30263F] p-3"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-white truncate">{p.name}</p>
-                {selections[p.id] === undefined && (
-                  <span className="text-[10px] text-amber-400 font-medium">Select one</span>
-                )}
+          {packs.map((p) => {
+            const key = `${p.uuid}_${p.type}`;
+            return (
+              <div
+                key={key}
+                className="rounded-xl bg-[#15111F] border border-[#30263F] p-3"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-white truncate">{p.name}</p>
+                  {selections[key] === undefined && (
+                    <span className="text-[10px] text-amber-400 font-medium">Select one</span>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  {(p.subpacks || []).map((sp, idx) => {
+                    const active = selections[key] === idx;
+                    return (
+                      <button
+                        key={`${key}-${sp.folder}-${idx}`}
+                        type="button"
+                        onClick={() => {
+                          setSelections((prev) => ({ ...prev, [key]: idx }));
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors ${
+                          active
+                            ? 'bg-[#762BFF] border-[#A855F7] text-white font-bold'
+                            : 'bg-[#0A0A12] border-[#30263F] text-[#AAA3BB] hover:border-[#762BFF]/60'
+                        }`}
+                      >
+                        {sp.name}
+                        <span className="block text-[10px] opacity-70 font-mono">{sp.folder}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                {(p.subpacks || []).map((sp, idx) => {
-                  const active = selections[p.id] === idx;
-                  console.log(`[SubpackSelect] Button render: pack=${p.id}, idx=${idx}, folder=${sp.folder}, selected=${selections[p.id]}, active=${active}`);
-                  return (
-                    <button
-                      key={`${p.id}-${sp.folder}-${idx}`}
-                      type="button"
-                      onClick={() => {
-                        console.log('[SubpackSelect] Clicked:', p.id, idx, sp.folder, sp.name);
-                        setSelections((prev) => {
-                          const newState = { ...prev, [p.id]: idx };
-                          console.log('[SubpackSelect] New state:', newState);
-                          return newState;
-                        });
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-xs border transition-colors ${
-                        active
-                          ? 'bg-[#762BFF] border-[#A855F7] text-white font-bold'
-                          : 'bg-[#0A0A12] border-[#30263F] text-[#AAA3BB] hover:border-[#762BFF]/60'
-                      }`}
-                    >
-                      {sp.name}
-                      <span className="block text-[10px] opacity-70 font-mono">{sp.folder}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
           <div className="flex items-start gap-2 text-[10px] text-[#716885] pb-1">
             <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-400" />
             <span>

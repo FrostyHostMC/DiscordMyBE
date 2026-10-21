@@ -211,9 +211,9 @@ export const App: React.FC = () => {
     triggerHaptic(80);
     if (soundTweak) playSuccess().catch(() => {});
     
-    // Filter out packs that already exist (by UUID or name)
-    const existing = new Map(installedPacks.map(p => [p.uuid || p.name, p]));
-    const trulyNew = newPacks.filter(p => !existing.has(p.uuid || p.name));
+    // Filter out packs that already exist (by UUID + type to handle BP/RP halves with same UUID)
+    const existing = new Map(installedPacks.map(p => [`${p.uuid}_${p.type}`, p]));
+    const trulyNew = newPacks.filter(p => !existing.has(`${p.uuid}_${p.type}`));
     
     for (const p of trulyNew) {
       await savePackToDB(p);
@@ -360,9 +360,9 @@ export const App: React.FC = () => {
     const withSubpacks = packsToMerge.filter(
       (p) => p.subpacks && p.subpacks.length > 0 && p.fileBlob
     );
-    // Deduplicate by manifest UUID (not internal ID) to handle re-imports of same pack
+    // Deduplicate by UUID + type (not internal ID) to handle BP/RP halves with same UUID
     const uniqueWithSubpacks = Array.from(
-      new Map(withSubpacks.map(p => [p.uuid || p.name, p])).values()
+      new Map(withSubpacks.map(p => [`${p.uuid}_${p.type}`, p])).values()
     );
     if (uniqueWithSubpacks.length > 0) {
       pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride };
@@ -381,7 +381,9 @@ export const App: React.FC = () => {
 
     const processed: AddonPack[] = [];
     for (const p of pending.packs) {
-      const variant = selections[p.id];
+      // Look up selection by UUID+type (same key used for deduplication)
+      const key = `${p.uuid}_${p.type}`;
+      const variant = selections[key];
       if (variant && p.fileBlob) {
         try {
           processed.push(await applySubpackToPack(p, variant));
