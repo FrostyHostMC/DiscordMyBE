@@ -191,8 +191,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     }
     try {
       const result = await buildCodebaseArchive(password);
-      // In Discord Activities, automatic downloads are blocked
-      // Always show the manual save panel with the persistent URL
+      // downloadBlob will try automatic download, and if blocked (in Discord),
+      // it will show the manual save panel with share sheet option
+      downloadBlob(result.blob, result.fileName);
       const persistent = createPersistentDownload(result.blob, result.fileName);
       setCodebaseUrl(persistent.url);
       setCodebaseResult(result);
@@ -501,23 +502,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     {codebaseResult.fileCount} application files & directories packaged successfully.
                   </div>
                   {codebaseUrl && (
-                    <div className="space-y-2 mt-2">
-                      <a
-                        href={codebaseUrl}
-                        target="_blank"
-                        rel="noopener"
-                        className="block text-center py-2 rounded-lg bg-[#762BFF] text-[11px] font-bold text-white active:scale-[0.98] transition-transform"
-                      >
-                        ↗ Open in new tab to download
-                      </a>
-                      <a
-                        href={codebaseUrl}
-                        download={codebaseResult.fileName}
-                        className="block text-center py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/50 text-[11px] font-bold text-[#A855F7] active:scale-[0.98] transition-transform"
-                      >
-                        ⬇ Direct download (may be blocked)
-                      </a>
-                    </div>
+                    <a
+                      href={codebaseUrl}
+                      download={codebaseResult.fileName}
+                      className="block text-center mt-2 py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/50 text-[11px] font-bold text-[#A855F7] active:scale-[0.98] transition-transform"
+                    >
+                      Download didn't complete? Tap here to save codebase zip again
+                    </a>
                   )}
                 </div>
               )}
