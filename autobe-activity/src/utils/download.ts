@@ -307,6 +307,39 @@ function showManualSavePanel(blob: Blob, fileName: string): void {
     'font-size:12px;font-weight:600;color:#A855F7;margin-bottom:12px;word-break:break-all;';
   name.textContent = fileName;
 
+  // Copyable link section
+  const linkSection = document.createElement('div');
+  linkSection.style.cssText = 'margin-bottom:14px;';
+
+  const linkLabel = document.createElement('div');
+  linkLabel.style.cssText = 'font-size:11px;color:#AAA3BB;margin-bottom:6px;';
+  linkLabel.textContent = 'Or copy this link and open it in your browser:';
+
+  const linkInput = document.createElement('input');
+  linkInput.type = 'text';
+  linkInput.value = url;
+  linkInput.readOnly = true;
+  linkInput.style.cssText =
+    'width:100%;padding:10px;border-radius:8px;border:1px solid #2A2440;background:#1C1730;color:#F7F5FC;font-size:11px;font-family:monospace;word-break:break-all;margin-bottom:8px;';
+
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button';
+  copyBtn.style.cssText =
+    'display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;border-radius:8px;border:1px solid #762BFF;background:#1C1730;color:#A855F7;font-size:12px;font-weight:600;cursor:pointer;';
+  copyBtn.textContent = '📋 Copy link';
+  copyBtn.onclick = () => {
+    linkInput.select();
+    document.execCommand('copy');
+    copyBtn.textContent = '✅ Copied!';
+    setTimeout(() => {
+      copyBtn.textContent = '📋 Copy link';
+    }, 2000);
+  };
+
+  linkSection.appendChild(linkLabel);
+  linkSection.appendChild(linkInput);
+  linkSection.appendChild(copyBtn);
+
   const primary = document.createElement('a');
   primary.href = url;
   primary.download = fileName;
@@ -412,6 +445,7 @@ function showManualSavePanel(blob: Blob, fileName: string): void {
   holder.appendChild(title);
   holder.appendChild(subtitle);
   holder.appendChild(name);
+  holder.appendChild(linkSection);
   holder.appendChild(primary);
   holder.appendChild(shareBtn);
   holder.appendChild(pickerBtn);
