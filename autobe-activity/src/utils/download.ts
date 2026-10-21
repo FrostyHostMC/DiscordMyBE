@@ -275,13 +275,16 @@ function playBlockBreak(): void {
  * it to open/save, or long-press → "Save to Files" / "Share" on mobile.
  * The object URL stays valid for 10 minutes, then is released.
  */
-function showManualSavePanel(blob: Blob, fileName: string): void {
+function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): void {
   if (typeof document === 'undefined') return;
   // Avoid stacking duplicate panels.
   document.getElementById('autobe-save-panel')?.remove();
 
-  const url = URL.createObjectURL(blob);
-  setTimeout(() => URL.revokeObjectURL(url), 600_000);
+  // Use CDN URL if available (works everywhere), otherwise use blob URL
+  const url = cdnUrl || sessionStorage.getItem('last_download_url') || URL.createObjectURL(blob);
+  if (!cdnUrl && !sessionStorage.getItem('last_download_url')) {
+    setTimeout(() => URL.revokeObjectURL(url), 600_000);
+  }
 
   const backdrop = document.createElement('div');
   backdrop.id = 'autobe-save-panel';
@@ -313,7 +316,7 @@ function showManualSavePanel(blob: Blob, fileName: string): void {
 
   const linkLabel = document.createElement('div');
   linkLabel.style.cssText = 'font-size:11px;color:#AAA3BB;margin-bottom:6px;';
-  linkLabel.textContent = 'Or copy this link and open it in your browser:';
+  linkLabel.textContent = cdnUrl ? 'Copy this Discord CDN link (works in any browser):' : 'Or copy this link and open it in your browser:';
 
   const linkInput = document.createElement('input');
   linkInput.type = 'text';
@@ -470,6 +473,7 @@ export { showManualSavePanel };
 
 export async function downloadBlob(blob: Blob, fileName: string): Promise<void> {
   const file = blobToFile(blob, fileName);
+  const cdnUrl = sessionStorage.getItem('last_download_url');
 
   setDownloadStage('preparing', fileName);
 
@@ -479,7 +483,7 @@ export async function downloadBlob(blob: Blob, fileName: string): Promise<void> 
   // FRESH user gesture and therefore actually permitted.
   if (!hasFreshUserGesture()) {
     playBlockBreak();
-    showManualSavePanel(blob, fileName);
+    showManualSavePanel(blob, fileName, cdnUrl || undefined);
     setDownloadStage('blocked', fileName);
     // Resolve instead of throwing — the manual panel IS the fix here, and a
     // thrown error becomes an unhandled promise rejection for `void` callers.
@@ -505,7 +509,7 @@ export async function downloadBlob(blob: Blob, fileName: string): Promise<void> 
       }
       // Permission denied (activation lost / host blocked) → manual panel.
       playBlockBreak();
-      showManualSavePanel(blob, fileName);
+      showManualSavePanel(blob, fileName, cdnUrl || undefined);
       setDownloadStage('blocked', fileName);
       // Resolve: the manual panel is the fix, and throwing would surface as
       // an unhandled promise rejection for callers that use `void`.
@@ -539,7 +543,7 @@ export async function downloadBlob(blob: Blob, fileName: string): Promise<void> 
     // Everything blocked — show the manual save panel so the user always
     // has a way to get the file, then report the block.
     playBlockBreak();
-    showManualSavePanel(blob, fileName);
+    showManualSavePanel(blob, fileName, cdnUrl || undefined);
     setDownloadStage('blocked', fileName);
     return;
   }
@@ -550,7 +554,7 @@ export async function downloadBlob(blob: Blob, fileName: string): Promise<void> 
     // Anchors report "clicked", not "saved" — on iOS a silent block is common.
     // Keep the manual panel one tap away instead of lying about success.
     if (isIOS()) {
-      showManualSavePanel(blob, fileName);
+      showManualSavePanel(blob, fileName, cdnUrl || undefined);
       setDownloadStage('saving', fileName);
       return;
     }
@@ -558,8 +562,8 @@ export async function downloadBlob(blob: Blob, fileName: string): Promise<void> 
     return;
   }
 
+  // Everything failed — manual panel is the last resort.
   playBlockBreak();
-  showManualSavePanel(blob, fileName);
-  setDownloadStage('blocked', fileName);
-  return;
+  showManualSavePanel(blob, fileName, cdnUrl || undefined);
+  setDownloadStage('error', fileName);
 }

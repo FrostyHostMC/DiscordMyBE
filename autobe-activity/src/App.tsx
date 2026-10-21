@@ -401,10 +401,15 @@ export const App: React.FC = () => {
     try {
       // Try Discord native sharing first (bypasses iframe sandbox)
       const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-      const discordSuccess = await tryShareViaDiscord(blob, output.fileName);
+      const result = await tryShareViaDiscord(blob, output.fileName);
 
-      if (discordSuccess) {
+      if (result.success) {
         showToast('Opening file for download...');
+        if (result.cdnUrl) {
+          // Store CDN URL in case user needs to copy it
+          sessionStorage.setItem('last_download_url', result.cdnUrl);
+          sessionStorage.setItem('last_download_name', output.fileName);
+        }
         return;
       }
 
@@ -441,10 +446,14 @@ export const App: React.FC = () => {
     try {
       // Try Discord native sharing first (bypasses iframe sandbox)
       const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-      const discordSuccess = await tryShareViaDiscord(blob, fileName);
+      const result = await tryShareViaDiscord(blob, fileName);
 
-      if (discordSuccess) {
+      if (result.success) {
         showToast('Opening file for download...');
+        if (result.cdnUrl) {
+          sessionStorage.setItem('last_download_url', result.cdnUrl);
+          sessionStorage.setItem('last_download_name', fileName);
+        }
         return;
       }
 

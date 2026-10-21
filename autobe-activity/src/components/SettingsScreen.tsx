@@ -204,7 +204,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (accessToken && applicationId) {
         try {
           const { shareViaDiscordCDN } = await import('../utils/codebaseExport');
-          await shareViaDiscordCDN(result.blob, result.fileName, accessToken, applicationId);
+          const { cdnUrl } = await shareViaDiscordCDN(result.blob, result.fileName, accessToken, applicationId);
           setTimeout(() => setCodebaseState('idle'), 10000);
           return;
         } catch (discordError) {
@@ -214,7 +214,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       // Fallback to manual save panel if Discord sharing fails
       const { showManualSavePanel } = await import('../utils/download');
-      showManualSavePanel(result.blob, result.fileName);
+      const lastCdnUrl = sessionStorage.getItem('last_download_url');
+      showManualSavePanel(result.blob, result.fileName, lastCdnUrl || undefined);
       setTimeout(() => setCodebaseState('idle'), 10000);
     } catch (e) {
       console.error('[Aippy] Codebase export failed:', e);

@@ -18,7 +18,7 @@ export async function shareViaDiscordCDN(
   fileName: string,
   accessToken: string,
   applicationId: string
-): Promise<void> {
+): Promise<{ success: boolean; cdnUrl?: string }> {
   // Upload to Discord's attachment API
   const file = new File([await blob.arrayBuffer()], fileName, { type: blob.type });
   const body = new FormData();
@@ -59,26 +59,28 @@ export async function shareViaDiscordCDN(
     // Web/Desktop: Use native Discord share dialog
     await discordSdk.commands.openShareMomentDialog({ mediaUrl });
   }
+
+  return { success: true, cdnUrl: mediaUrl };
 }
 
 /**
  * Helper to share any file via Discord CDN with automatic credential lookup.
- * Returns true if Discord sharing succeeded, false if it failed (caller should fallback).
+ * Returns success status and CDN URL if available.
  */
-export async function tryShareViaDiscord(blob: Blob, fileName: string): Promise<boolean> {
+export async function tryShareViaDiscord(blob: Blob, fileName: string): Promise<{ success: boolean; cdnUrl?: string }> {
   const accessToken = sessionStorage.getItem('discord_access_token');
   const applicationId = sessionStorage.getItem('discord_application_id');
 
   if (!accessToken || !applicationId) {
-    return false;
+    return { success: false };
   }
 
   try {
-    await shareViaDiscordCDN(blob, fileName, accessToken, applicationId);
-    return true;
+    const result = await shareViaDiscordCDN(blob, fileName, accessToken, applicationId);
+    return result;
   } catch (error) {
     console.warn('[Aippy] Discord CDN share failed:', error);
-    return false;
+    return { success: false };
   }
 }
 
