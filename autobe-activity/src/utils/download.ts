@@ -278,7 +278,7 @@ function playBlockBreak(): void {
 function showManualSavePanel(blob: Blob, fileName: string): void {
   if (typeof document === 'undefined') return;
   // Avoid stacking duplicate panels.
-  if (document.getElementById('autobe-save-panel')) return;
+  document.getElementById('autobe-save-panel')?.remove();
 
   const url = URL.createObjectURL(blob);
   setTimeout(() => URL.revokeObjectURL(url), 600_000);
@@ -341,6 +341,42 @@ function showManualSavePanel(blob: Blob, fileName: string): void {
     }
   };
 
+  const pickerBtn = document.createElement('button');
+  pickerBtn.type = 'button';
+  pickerBtn.style.cssText =
+    'display:block;width:100%;padding:12px;border-radius:10px;border:1px solid #2A2440;background:#1C1730;color:#D9D3E8;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;';
+  pickerBtn.textContent = '📁 Choose save location';
+  pickerBtn.onclick = async () => {
+    const pickerWindow = window as Window & {
+      showSaveFilePicker?: (options: { suggestedName: string }) => Promise<{
+        createWritable: () => Promise<{
+          write: (value: Blob) => Promise<void>;
+          close: () => Promise<void>;
+        }>;
+      }>;
+    };
+    if (!pickerWindow.showSaveFilePicker) {
+      pickerBtn.textContent = 'Save location picker is unavailable here';
+      return;
+    }
+    try {
+      const handle = await pickerWindow.showSaveFilePicker({ suggestedName: fileName });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      pickerBtn.textContent = '✅ Saved to your chosen location';
+      playBlockPlace();
+      setDownloadStage('done', fileName);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') {
+        pickerBtn.textContent = 'Save cancelled — choose a location to try again';
+        return;
+      }
+      pickerBtn.textContent = 'Could not save here — use the save or share buttons above';
+      playBlockBreak();
+    }
+  };
+
   const tabBtn = document.createElement('button');
   tabBtn.type = 'button';
   tabBtn.style.cssText =
@@ -378,6 +414,7 @@ function showManualSavePanel(blob: Blob, fileName: string): void {
   holder.appendChild(name);
   holder.appendChild(primary);
   holder.appendChild(shareBtn);
+  holder.appendChild(pickerBtn);
   holder.appendChild(tabBtn);
   panel.appendChild(holder);
   backdrop.appendChild(panel);
