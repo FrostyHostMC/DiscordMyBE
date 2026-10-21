@@ -210,12 +210,22 @@ export const App: React.FC = () => {
   const handleImportPacks = async (newPacks: AddonPack[]) => {
     triggerHaptic(80);
     if (soundTweak) playSuccess().catch(() => {});
-    for (const p of newPacks) {
+    
+    // Filter out packs that already exist (by UUID or name)
+    const existing = new Map(installedPacks.map(p => [p.uuid || p.name, p]));
+    const trulyNew = newPacks.filter(p => !existing.has(p.uuid || p.name));
+    
+    for (const p of trulyNew) {
       await savePackToDB(p);
     }
     const updated = await getAllPacksFromDB();
     setInstalledPacks(updated);
-    showToast(`Successfully added ${newPacks.length} pack(s) to workspace!`);
+    
+    if (trulyNew.length < newPacks.length) {
+      showToast(`Added ${trulyNew.length} pack(s), skipped ${newPacks.length - trulyNew.length} duplicate(s).`);
+    } else {
+      showToast(`Successfully added ${newPacks.length} pack(s) to workspace!`);
+    }
   };
 
   const handleGlobalFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -350,9 +360,9 @@ export const App: React.FC = () => {
     const withSubpacks = packsToMerge.filter(
       (p) => p.subpacks && p.subpacks.length > 0 && p.fileBlob
     );
-    // Deduplicate by pack ID to avoid showing the same pack multiple times
+    // Deduplicate by manifest UUID (not internal ID) to handle re-imports of same pack
     const uniqueWithSubpacks = Array.from(
-      new Map(withSubpacks.map(p => [p.id, p])).values()
+      new Map(withSubpacks.map(p => [p.uuid || p.name, p])).values()
     );
     if (uniqueWithSubpacks.length > 0) {
       pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride };
