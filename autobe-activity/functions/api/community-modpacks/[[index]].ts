@@ -8,6 +8,14 @@ export async function onRequestPost(context: Context) {
   const { request, env } = context;
 
   try {
+    // Check if DB is available
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const data = await request.json();
 
     // Validate required fields
@@ -45,7 +53,7 @@ export async function onRequestPost(context: Context) {
     const result = stmt.run();
 
     if (!result.success) {
-      return new Response(JSON.stringify({ error: 'Failed to save modpack' }), {
+      return new Response(JSON.stringify({ error: 'Failed to save modpack', details: result }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -56,7 +64,8 @@ export async function onRequestPost(context: Context) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('Community modpacks POST error:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -74,6 +83,14 @@ export async function onRequestGet(context: Context) {
     const url = new URL(request.url);
     const modpackId = url.searchParams.get('id');
 
+    // Check if DB is available
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Increment download count if fetching a specific modpack
     if (modpackId) {
       const incrementStmt = env.DB.prepare(
@@ -87,7 +104,7 @@ export async function onRequestGet(context: Context) {
     const result = stmt.all();
 
     if (!result.success) {
-      return new Response(JSON.stringify({ error: 'Failed to fetch modpacks' }), {
+      return new Response(JSON.stringify({ error: 'Failed to fetch modpacks', details: result }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -98,7 +115,8 @@ export async function onRequestGet(context: Context) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('Community modpacks GET error:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -113,6 +131,14 @@ export async function onRequestDelete(context: Context) {
   const { request, env } = context;
 
   try {
+    // Check if DB is available
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const authorId = url.searchParams.get('author_id');
@@ -149,7 +175,7 @@ export async function onRequestDelete(context: Context) {
     const deleteResult = deleteStmt.run();
 
     if (!deleteResult.success) {
-      return new Response(JSON.stringify({ error: 'Failed to delete modpack' }), {
+      return new Response(JSON.stringify({ error: 'Failed to delete modpack', details: deleteResult }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -160,7 +186,8 @@ export async function onRequestDelete(context: Context) {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    console.error('Community modpacks DELETE error:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
