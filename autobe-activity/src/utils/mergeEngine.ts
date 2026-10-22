@@ -1,5 +1,6 @@
 import assetsData from "@/config/assets";
 import JSZip from 'jszip';
+import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
 import { generateUUID, deepMerge, mergeLangFiles, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
@@ -656,20 +657,21 @@ export async function executeMergePacks(packs: AddonPack[], options: {
  * Returns the combined .mcaddon for a modpack, building it from the individual output
  * packs if it hasn't been built yet. Call this only when the file is actually needed.
  */
-export async function ensureCombinedBlob(modpack: MergedModpack): Promise<Blob> {
+export async function ensureCombinedBlob(
+  modpack: MergedModpack,
+  onProgress?: (percent: number) => void
+): Promise<Blob> {
   if (modpack.outputBlob) return modpack.outputBlob;
-  const zip = new JSZip();
-  let added = 0;
+  const entries: StoreZipEntry[] = [];
   for (const o of modpack.outputs ?? []) {
-    if (o.blob) {
-      zip.file(o.fileName, o.blob); // pass Blobs straight through; no extra ArrayBuffer copies
-      added++;
-    }
+    if (o.blob) entries.push({ name: o.fileName, data: o.blob });
   }
-  if (added === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
+  if (entries.length === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
   if (modpack.combinedExtras) {
-    zip.file('_autobe_merge_manifest.json', modpack.combinedExtras.manifestJson);
-    zip.file('_autobe_merge_report.json', modpack.combinedExtras.reportJson);
+    entries.push({ name: '_autobe_merge_manifest.json', data: modpack.combinedExtras.manifestJson });
+    entries.push({ name: '_autobe_merge_report.json', data: modpack.combinedExtras.reportJson });
   }
-  return zip.generateAsync({ type: 'blob', compression: 'STORE' });
+  // The packs are already compressed, so a "stored" zip is equivalent — and it is built from Blob
+  // references with a streaming checksum, so memory stays flat even for 300+ MB modpacks.
+  return buildStoreZip(entries, onProgress);
 }

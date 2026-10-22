@@ -34,11 +34,17 @@ export async function deliverFile(
   let url: string;
   try {
     let lastShown = -1;
-    onStatus?.(`Preparing ${fileName} for download… 0%`);
+    const startedAt = Date.now();
+    onStatus?.(`Uploading ${fileName}… 0%`);
     const result = await uploadToCloud(blob, fileName, 'temp', (pct) => {
-      if (pct - lastShown >= 10 || pct === 100) {
+      if (pct - lastShown >= 5 || pct === 100) {
         lastShown = pct;
-        onStatus?.(`Preparing ${fileName} for download… ${pct}%`);
+        let eta = '';
+        if (pct > 5 && pct < 100) {
+          const secsLeft = Math.round(((Date.now() - startedAt) / pct) * (100 - pct) / 1000);
+          eta = secsLeft >= 60 ? ` · about ${Math.ceil(secsLeft / 60)} min left` : ` · about ${Math.max(5, secsLeft)} sec left`;
+        }
+        onStatus?.(`Uploading ${fileName}… ${pct}%${eta}`);
       }
     });
     url = result.url;
