@@ -555,6 +555,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     const blobData = await b.zip.generateAsync({
       type: 'uint8array'
     });
+    // Release this pack's in-memory zip as soon as its bytes are generated (lowers peak memory
+    // on phones, where the webview is killed if memory gets too high).
+    (b as { zip: unknown }).zip = null;
     outputs.push({
       id: generateUUID(),
       label: b.label,
