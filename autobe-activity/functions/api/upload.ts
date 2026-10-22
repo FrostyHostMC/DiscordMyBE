@@ -18,6 +18,7 @@
 interface Env {
   BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
+  DISCORD_CLIENT_SECRET: string;
   PUBLIC_BASE_URL?: string;
 }
 
@@ -51,6 +52,22 @@ function safeName(name: string): string {
   return (cleaned || 'file.bin').slice(-100);
 }
 
+// A 300 MB upload is ~40 requests. Asking Discord to validate the user's token on every one gets
+// rate-limited, so Discord is asked ONCE (on "create") and the server then hands back a signed
+// upload token (HMAC over key + uploadId) that the remaining requests present instead.
+async function sign(env: Env, key: string, uploadId: string): Promise<string> {
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(`autobe-upload:${env.DISCORD_CLIENT_SECRET}`),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(`${key}|${uploadId}`));
+  return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
 const encodeKey = (key: string) => key.split('/').map(encodeURIComponent).join('/');
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -58,14 +75,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'File storage (R2 bucket binding "BUCKET") is not configured on the server.' }, 500);
   }
 
-  const userId = await authenticate(request, env);
-  if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
+  if (!env.DISCORD_CLIENT_SECRET) {
+    return json({ error: 'Server is missing DISCORD_CLIENT_SECRET.' }, 500);
+  }
 
   const url = new URL(request.url);
   const action = url.searchParams.get('action');
 
   try {
     if (action === 'create' && request.method === 'POST') {
+      const userId = await authenticate(request, env);
+      if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
       const body = (await request.json()) as { fileName?: string; kind?: string; size?: number };
       const kind = body.kind === 'pub' ? 'pub' : 'temp';
       const size = Number(body.size) || 0;
@@ -80,26 +100,27 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
           contentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"`,
         },
       });
-      return json({ key, uploadId: upload.uploadId });
+      return json({ key, uploadId: upload.uploadId, uploadToken: await sign(env, key, upload.uploadId) });
     }
 
-    // All remaining actions operate on a key this user created.
-    const ownsKey = (key: string | null): key is string => {
-      if (!key) return false;
-      const [kind, owner] = key.split('/');
-      return (kind === 'temp' || kind === 'pub') && owner === userId;
+    // All remaining actions must present the signed token issued by "create" for this exact upload.
+    const presented = request.headers.get('x-upload-token') || '';
+    const isAuthorized = async (key: string | null | undefined, uploadId: string | null | undefined) => {
+      if (!key || !uploadId || !/^(temp|pub)\//.test(key) || key.includes('..')) return false;
+      return presented.length > 0 && presented === (await sign(env, key, uploadId));
     };
 
     if (action === 'part' && request.method === 'PUT') {
       const key = url.searchParams.get('key');
       const uploadId = url.searchParams.get('uploadId');
       const partNumber = Number(url.searchParams.get('partNumber'));
-      if (!ownsKey(key) || !uploadId || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > MAX_PARTS) {
+      if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > MAX_PARTS) {
         return json({ error: 'Bad upload part request.' }, 400);
       }
+      if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
       const data = await request.arrayBuffer();
       if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
-      const part = await env.BUCKET.resumeMultipartUpload(key, uploadId).uploadPart(partNumber, data);
+      const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
       return json({ partNumber: part.partNumber, etag: part.etag });
     }
 
@@ -109,19 +130,20 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         uploadId?: string;
         parts?: Array<{ partNumber: number; etag: string }>;
       };
-      if (!ownsKey(body.key ?? null) || !body.uploadId || !Array.isArray(body.parts) || body.parts.length === 0) {
+      if (!Array.isArray(body.parts) || body.parts.length === 0) {
         return json({ error: 'Bad complete request.' }, 400);
       }
+      if (!(await isAuthorized(body.key, body.uploadId))) return json({ error: 'Upload token rejected.' }, 401);
       const parts = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
-      await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId).complete(parts);
+      await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
       const base = (env.PUBLIC_BASE_URL || url.origin).replace(/\/+$/, '');
       return json({ key: body.key, url: `${base}/api/files/${encodeKey(body.key!)}` });
     }
 
     if (action === 'abort' && request.method === 'POST') {
       const body = (await request.json()) as { key?: string; uploadId?: string };
-      if (ownsKey(body.key ?? null) && body.uploadId) {
-        await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId).abort().catch(() => {});
+      if (await isAuthorized(body.key, body.uploadId)) {
+        await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).abort().catch(() => {});
       }
       return json({ ok: true });
     }
