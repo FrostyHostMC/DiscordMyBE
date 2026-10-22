@@ -8,9 +8,9 @@ DISCORD_CLIENT_ID = "1471599214717829120"
 DISCORD_GUILD_ID = "1561951163065180251"
 DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
 
-# Optional: set to your public site URL (e.g. https://autobe-activity.pages.dev)
-# if download links come back with the wrong host.
-# PUBLIC_BASE_URL = "https://discordmybe.pages.dev"
+ Optional: set to your public site URL (e.g. https://autobe-activity.pages.dev)
+ if download links come back with the wrong host.
+ PUBLIC_BASE_URL = "https://discordmybe.pages.dev"
 
 [[r2_buckets]]
 binding = "BUCKET"
