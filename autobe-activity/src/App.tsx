@@ -21,6 +21,7 @@ import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 import {
   getAllPacksFromDB,
   savePackToDB,
+  loadPackFile,
   getLastStorageError,
   deletePackFromDB,
   getAllModpacksFromDB,
@@ -312,8 +313,19 @@ export const App: React.FC = () => {
     globalFileInputRef.current?.click();
   };
 
+  // Packs in the library list carry metadata only (no file bytes). Files are loaded on demand
+  // for the packs being merged and cached here for the duration of that merge.
+  const hydratedPacksRef = useRef<Map<string, AddonPack>>(new Map());
+  const hydratePacks = async (packs: AddonPack[]): Promise<AddonPack[]> => {
+    const out: AddonPack[] = [];
+    for (const p of packs) out.push(await loadPackFile(p)); // one at a time to limit peak memory
+    return out;
+  };
+
   const getSelectedPacks = () =>
-    installedPacks.filter((p) => selectedPackIds.includes(p.id));
+    installedPacks
+      .filter((p) => selectedPackIds.includes(p.id))
+      .map((p) => hydratedPacksRef.current.get(p.id) ?? p);
 
   // Open Script API check screen
   const openScriptCheck = (packsToMerge: AddonPack[]) => {
@@ -325,9 +337,19 @@ export const App: React.FC = () => {
   const handleStartMergeFlow = async (customConfig?: MergeSessionConfig) => {
     triggerHaptic(50);
     handleSoundTap();
-    const packsToMerge = getSelectedPacks();
-    if (packsToMerge.length === 0) {
+    const selected = getSelectedPacks();
+    if (selected.length === 0) {
       showToast('Please select at least one pack to merge.');
+      return;
+    }
+    let packsToMerge: AddonPack[];
+    try {
+      showToast('Loading selected packs…', 20000);
+      packsToMerge = await hydratePacks(selected);
+      hydratedPacksRef.current = new Map(packsToMerge.map((p) => [p.id, p]));
+    } catch (err) {
+      console.error('[Merge] Could not load pack files:', describeError(err));
+      showToast(`Could not load the selected packs: ${describeError(err)}`, 8000);
       return;
     }
 
@@ -347,6 +369,7 @@ export const App: React.FC = () => {
     modpackNameOverride?: string
   ) => {
     mergeLogger.info('Starting merge execution', `Packs: ${packsToMerge.length}, Name: ${modpackNameOverride || 'default'}`);
+    hydratedPacksRef.current = new Map(); // the merge below holds its own reference; free the cache
     setScreen('merging');
     setMergeProgress(10);
     setMergeStep('Reading addons & manifests');
@@ -406,6 +429,13 @@ export const App: React.FC = () => {
     confList: ConflictItem[] = [],
     modpackNameOverride?: string
   ) => {
+    // Make sure every pack's file is loaded (no-op if already loaded by the merge flow).
+    try {
+      packsToMerge = await hydratePacks(packsToMerge);
+    } catch (err) {
+      showToast(`Could not load pack files: ${describeError(err)}`, 8000);
+      return;
+    }
     // Pre-merge scan for runtime script property conflicts (warning only)
     try {
       const hits = await scanScriptRuntimeConflicts(packsToMerge);
