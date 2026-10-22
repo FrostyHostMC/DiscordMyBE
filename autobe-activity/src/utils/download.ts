@@ -281,8 +281,8 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): voi
   document.getElementById('autobe-save-panel')?.remove();
 
   // Use CDN URL if available (works everywhere), otherwise use blob URL
-  const url = cdnUrl || sessionStorage.getItem('last_download_url') || URL.createObjectURL(blob);
-  if (!cdnUrl && !sessionStorage.getItem('last_download_url')) {
+  const url = cdnUrl || URL.createObjectURL(blob);
+  if (!cdnUrl) {
     setTimeout(() => URL.revokeObjectURL(url), 600_000);
   }
 
@@ -316,7 +316,7 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): voi
 
   const linkLabel = document.createElement('div');
   linkLabel.style.cssText = 'font-size:11px;color:#AAA3BB;margin-bottom:6px;';
-  linkLabel.textContent = cdnUrl ? 'Copy this Discord CDN link (works in any browser):' : 'Or copy this link and open it in your browser:';
+  linkLabel.textContent = cdnUrl ? 'Copy this download link (works in any browser):' : 'Or copy this link and open it in your browser:';
 
   const linkInput = document.createElement('input');
   linkInput.type = 'text';
@@ -452,7 +452,8 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): voi
   holder.appendChild(primary);
   holder.appendChild(shareBtn);
   holder.appendChild(pickerBtn);
-  holder.appendChild(tabBtn);
+  // blob: links can't be opened by a phone's browser, so only offer this on desktop.
+  if (!isIOS() && !/Android/i.test(navigator.userAgent)) holder.appendChild(tabBtn);
   panel.appendChild(holder);
   backdrop.appendChild(panel);
   document.body.appendChild(backdrop);
@@ -473,7 +474,7 @@ export { showManualSavePanel };
 
 export async function downloadBlob(blob: Blob, fileName: string): Promise<void> {
   const file = blobToFile(blob, fileName);
-  const cdnUrl = sessionStorage.getItem('last_download_url');
+  const cdnUrl: string | null = null;
 
   setDownloadStage('preparing', fileName);
 

@@ -1,14 +1,26 @@
-// IndexedDB storage for packs and merged modpacks
+// IndexedDB storage for packs and merged modpacks.
+//
+// Errors are THROWN (not swallowed) so callers can tell the user when a save,
+// delete or read really failed — previously failures were logged and the UI
+// reported success / showed an empty list.
 import { AddonPack, MergedModpack } from '@/types/modpack';
-import { describeError } from '@/utils/errorLog';
 
 const DB_NAME = 'AutoBE_DB';
 const DB_VERSION = 1;
 const STORE_PACKS = 'addons_library';
 const STORE_MODPACKS = 'merged_modpacks';
 
+// One shared connection. Opening a new connection per operation (and never
+// closing it) piles up handles, which is fragile in mobile WebViews.
+let dbPromise: Promise<IDBDatabase> | null = null;
+
 function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+  if (dbPromise) return dbPromise;
+  dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('Storage (IndexedDB) is not available in this app view.'));
+      return;
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -19,131 +31,117 @@ function openDB(): Promise<IDBDatabase> {
         db.createObjectStore(STORE_MODPACKS, { keyPath: 'id' });
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      // If the browser closes/upgrades the DB under us, reconnect next time.
+      db.onclose = () => { dbPromise = null; };
+      db.onversionchange = () => { db.close(); dbPromise = null; };
+      resolve(db);
+    };
+    request.onerror = () => reject(request.error ?? new Error('Could not open storage.'));
+    request.onblocked = () => reject(new Error('Storage is blocked by another open copy of the app.'));
+  }).catch((err) => {
+    dbPromise = null; // allow a retry on the next call
+    throw err;
+  });
+  return dbPromise;
+}
+
+/** Runs a transaction and resolves only once it has fully committed. */
+async function run<T>(
+  stores: string | string[],
+  mode: IDBTransactionMode,
+  work: (tx: IDBTransaction) => IDBRequest<T> | void
+): Promise<T | undefined> {
+  const db = await openDB();
+  return new Promise<T | undefined>((resolve, reject) => {
+    let tx: IDBTransaction;
+    try {
+      tx = db.transaction(stores, mode);
+    } catch (e) {
+      dbPromise = null; // connection may be dead; reconnect next time
+      reject(e);
+      return;
+    }
+    let result: T | undefined;
+    try {
+      const req = work(tx);
+      if (req) req.onsuccess = () => { result = req.result; };
+    } catch (e) {
+      try { tx.abort(); } catch { /* already finished */ }
+      reject(e);
+      return;
+    }
+    tx.oncomplete = () => resolve(result);
+    tx.onerror = () => reject(tx.error ?? new Error('Storage write failed.'));
+    tx.onabort = () =>
+      reject(tx.error ?? new Error('Storage write was aborted (the device may be out of space).'));
   });
 }
 
 export async function savePackToDB(pack: AddonPack): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_PACKS, 'readwrite');
+  await run(STORE_PACKS, 'readwrite', (tx) => {
     tx.objectStore(STORE_PACKS).put(pack);
-    return new Promise((res, rej) => {
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] savePackToDB error:', describeError(e));
-  }
+  });
 }
 
 export async function getAllPacksFromDB(): Promise<AddonPack[]> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_PACKS, 'readwrite');
-    const store = tx.objectStore(STORE_PACKS);
-    return new Promise((res, rej) => {
-      const req = store.getAll();
-      req.onsuccess = () => {
-        const packs = (req.result || []) as AddonPack[];
-        const savedPacks = packs.filter((pack) => !pack.id.startsWith('demo-pack-'));
-        packs
-          .filter((pack) => pack.id.startsWith('demo-pack-'))
-          .forEach((pack) => store.delete(pack.id));
-        res(savedPacks);
-      };
-      req.onerror = () => rej(req.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] getAllPacksFromDB error:', describeError(e));
-    return [];
+  const packs = ((await run<AddonPack[]>(STORE_PACKS, 'readonly', (tx) =>
+    tx.objectStore(STORE_PACKS).getAll()
+  )) || []) as AddonPack[];
+
+  const demoIds = packs.filter((p) => p.id.startsWith('demo-pack-')).map((p) => p.id);
+  if (demoIds.length > 0) {
+    // Best-effort cleanup of old demo data; never fail a read because of it.
+    run(STORE_PACKS, 'readwrite', (tx) => {
+      demoIds.forEach((id) => tx.objectStore(STORE_PACKS).delete(id));
+    }).catch(() => {});
   }
+  return packs.filter((p) => !p.id.startsWith('demo-pack-'));
 }
 
 export async function deletePackFromDB(id: string): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_PACKS, 'readwrite');
+  await run(STORE_PACKS, 'readwrite', (tx) => {
     tx.objectStore(STORE_PACKS).delete(id);
-    await new Promise<void>((res, rej) => {
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] deletePackFromDB error:', describeError(e));
-  }
+  });
 }
 
 export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_MODPACKS, 'readwrite');
-    // IndexedDB cannot store Blobs, so strip them before saving
-    // The blob will be kept in memory (justCompletedModpack) for the current session
-    const modpackWithoutBlob = {
-      ...modpack,
-      outputBlob: undefined,
-      outputs: modpack.outputs?.map(out => ({ ...out, blob: undefined })) || []
-    };
+  // Blobs for merged outputs are kept in memory for the current session only,
+  // so strip them before saving the metadata.
+  const modpackWithoutBlob = {
+    ...modpack,
+    outputBlob: undefined,
+    outputs: modpack.outputs?.map((out) => ({ ...out, blob: undefined })) || [],
+  };
+  await run(STORE_MODPACKS, 'readwrite', (tx) => {
     tx.objectStore(STORE_MODPACKS).put(modpackWithoutBlob);
-    return new Promise((res, rej) => {
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] saveModpackToDB error:', describeError(e));
-  }
+  });
 }
 
 export async function getAllModpacksFromDB(): Promise<MergedModpack[]> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_MODPACKS, 'readwrite');
-    const store = tx.objectStore(STORE_MODPACKS);
-    return new Promise((res, rej) => {
-      const req = store.getAll();
-      req.onsuccess = () => {
-        const modpacks = (req.result || []) as MergedModpack[];
-        const savedModpacks = modpacks.filter((modpack) => !modpack.id.startsWith('demo-modpack-'));
-        modpacks
-          .filter((modpack) => modpack.id.startsWith('demo-modpack-'))
-          .forEach((modpack) => store.delete(modpack.id));
-        res(savedModpacks);
-      };
-      req.onerror = () => rej(req.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] getAllModpacksFromDB error:', describeError(e));
-    return [];
+  const modpacks = ((await run<MergedModpack[]>(STORE_MODPACKS, 'readonly', (tx) =>
+    tx.objectStore(STORE_MODPACKS).getAll()
+  )) || []) as MergedModpack[];
+
+  const demoIds = modpacks.filter((m) => m.id.startsWith('demo-modpack-')).map((m) => m.id);
+  if (demoIds.length > 0) {
+    run(STORE_MODPACKS, 'readwrite', (tx) => {
+      demoIds.forEach((id) => tx.objectStore(STORE_MODPACKS).delete(id));
+    }).catch(() => {});
   }
+  return modpacks.filter((m) => !m.id.startsWith('demo-modpack-'));
 }
 
 export async function deleteModpackFromDB(id: string): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction(STORE_MODPACKS, 'readwrite');
+  await run(STORE_MODPACKS, 'readwrite', (tx) => {
     tx.objectStore(STORE_MODPACKS).delete(id);
-    await new Promise<void>((res, rej) => {
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] deleteModpackFromDB error:', describeError(e));
-  }
+  });
 }
 
 export async function clearAllDB(): Promise<void> {
-  try {
-    const db = await openDB();
-    const tx = db.transaction([STORE_PACKS, STORE_MODPACKS], 'readwrite');
+  await run([STORE_PACKS, STORE_MODPACKS], 'readwrite', (tx) => {
     tx.objectStore(STORE_PACKS).clear();
     tx.objectStore(STORE_MODPACKS).clear();
-    await new Promise<void>((res, rej) => {
-      tx.oncomplete = () => res();
-      tx.onerror = () => rej(tx.error);
-    });
-  } catch (e) {
-    console.error('[Aippy] clearAllDB error:', describeError(e));
-  }
+  });
 }
