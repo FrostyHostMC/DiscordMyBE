@@ -22,9 +22,10 @@ const JSON_FOLDERS = ['items/', 'entities/', 'loot_tables/', 'blocks/'];
 const PLAYER_JSON = 'entities/player.json';
 
 // Non-JSON unification sets: exact prefix + required suffix (empty = any file).
+// NOTE: scripts/ and functions/ are removed to prevent overwriting entry files
+// and corrupting binary scripts across different script API groups.
 const EXTRA_SETS: Array<{ prefix: string; suffix: string }> = [
   { prefix: 'functions/', suffix: '.mcfunction' },
-  { prefix: 'scripts/', suffix: '' },
 ];
 
 const YIELD_EVERY = 60;
@@ -67,9 +68,10 @@ export async function unifyCrossGroupBps(zips: JSZip[]): Promise<void> {
       if (fileObj.dir || !lower.startsWith(prefix)) continue;
       if (suffix && !lower.endsWith(suffix)) continue;
       if (skipPaths?.has(lower)) continue;
-      if (!canonical.has(lower)) {
+      // Use original path as key to preserve case sensitivity on Windows
+      if (!canonical.has(path)) {
         try {
-          canonical.set(lower, await fileObj.async('text'));
+          canonical.set(path, await fileObj.async('text'));
         } catch {
           // Unreadable entry — skip; other groups may still provide it.
         }

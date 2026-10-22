@@ -124,10 +124,14 @@ export async function parseAddonArchive(
   const packs: AddonPack[] = [];
   const errors: string[] = [];
 
-  // Look for all manifest.json files
+  // Look for all manifest.json files (ignore nested manifests in subfolders)
   const manifestPaths: string[] = [];
   loaded.forEach((relativePath) => {
-    if (relativePath.toLowerCase().endsWith('manifest.json') && !relativePath.includes('__MACOSX')) {
+    const lower = relativePath.toLowerCase();
+    // Only consider manifests at the root or one level deep
+    // Ignore manifests in subfolders like "unused-assets/manifest.json"
+    const pathParts = relativePath.split('/');
+    if (lower.endsWith('manifest.json') && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
       manifestPaths.push(relativePath);
     }
   });

@@ -370,6 +370,24 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await mergeSubpackHudFiles(rpZip);
     await applyPlayerEntityPass(rpZip);
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
+    
+    // Collect capabilities from all source packs
+    const allCapabilities = new Set<string>();
+    for (const pack of plan.rp) {
+      try {
+        const zip = await JSZip.loadAsync(pack.fileBlob);
+        const manifestFile = zip.file('manifest.json') || zip.file(/manifest\.json$/i)[0];
+        if (manifestFile) {
+          const manifest = JSON.parse(sanitizeJsonString(await manifestFile.async('text')));
+          if (manifest.capabilities && Array.isArray(manifest.capabilities)) {
+            manifest.capabilities.forEach((cap: string) => allCapabilities.add(cap));
+          }
+        }
+      } catch {
+        // Ignore manifest read errors
+      }
+    }
+    
     const rpManifest = {
       format_version: 2,
       header: {
@@ -385,6 +403,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         version: [1, 0, 0]
       }]
     };
+    // Add capabilities if any source pack has them
+    if (allCapabilities.size > 0) {
+      rpManifest.capabilities = Array.from(allCapabilities);
+    }
     rpZip.file('manifest.json', JSON.stringify(rpManifest, null, 2));
     const blobData = await rpZip.generateAsync({
       type: 'uint8array'
