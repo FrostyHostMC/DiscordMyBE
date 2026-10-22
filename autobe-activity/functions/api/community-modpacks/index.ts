@@ -4,13 +4,18 @@
  */
 import type { Context } from '@cloudflare/workers-types';
 
-export async function onRequestPost(context: Context) {
+interface Env {
+  DB: D1Database;
+}
+
+export async function onRequestPost(context: Context & { env: Env }) {
   const { request, env } = context;
 
   try {
     console.log('[Community] POST request received');
     console.log('[Community] Request URL:', request.url);
     console.log('[Community] Request method:', request.method);
+    console.log('[Community] Has DB binding:', !!env.DB);
 
     // Check if DB is available
     if (!env.DB) {
@@ -109,7 +114,7 @@ export async function onRequestPost(context: Context) {
  * GET /api/community-modpacks
  * Fetch all community modpacks
  */
-export async function onRequestGet(context: Context) {
+export async function onRequestGet(context: Context & { env: Env }) {
   const { env, request } = context;
 
   try {
@@ -174,7 +179,7 @@ export async function onRequestGet(context: Context) {
  * DELETE /api/community-modpacks
  * Delete a modpack (only by the author)
  */
-export async function onRequestDelete(context: Context) {
+export async function onRequestDelete(context: Context & { env: Env }) {
   const { request, env } = context;
 
   try {
@@ -260,7 +265,7 @@ export async function onRequestDelete(context: Context) {
  * PATCH /api/community-modpacks
  * Update a modpack (only by the author)
  */
-export async function onRequestPatch(context: Context) {
+export async function onRequestPatch(context: Context & { env: Env }) {
   const { request, env } = context;
 
   try {
