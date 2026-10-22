@@ -545,16 +545,16 @@ export const App: React.FC = () => {
         return;
       }
       console.warn('[Download] Cloud hand-off failed:', result.error);
-      showToast(`Couldn't prepare the download: ${result.error}`);
+      showToast(`Couldn't prepare the download: ${result.error}`, 12000);
       // Show the manual panel (with the copyable link if the upload itself worked).
       const { showManualSavePanel } = await import('@/utils/download');
-      showManualSavePanel(blob, output.fileName, result.url);
+      showManualSavePanel(blob, output.fileName, result.url, result.error);
       if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
-      showToast(`Download failed: ${describeError(e)}`);
+      showToast(`Download failed: ${describeError(e)}`, 12000);
       const { showManualSavePanel } = await import('@/utils/download');
-      showManualSavePanel(blob, output.fileName);
+      showManualSavePanel(blob, output.fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
     }
   };
@@ -601,15 +601,15 @@ export const App: React.FC = () => {
         return;
       }
       console.warn('[Download] Cloud hand-off failed:', result.error);
-      showToast(`Couldn't prepare the download: ${result.error}`);
+      showToast(`Couldn't prepare the download: ${result.error}`, 12000);
       const { showManualSavePanel } = await import('@/utils/download');
-      showManualSavePanel(blob, fileName, result.url);
+      showManualSavePanel(blob, fileName, result.url, result.error);
       if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
-      showToast(`Download failed: ${describeError(e)}`);
+      showToast(`Download failed: ${describeError(e)}`, 12000);
       const { showManualSavePanel } = await import('@/utils/download');
-      showManualSavePanel(blob, fileName);
+      showManualSavePanel(blob, fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
     }
   };
