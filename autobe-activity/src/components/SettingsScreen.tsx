@@ -15,12 +15,6 @@ import {
   Lock,
   ListChecks,
   Package,
-  Download,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  Code2,
-  FolderArchive,
   Puzzle,
   Eraser
 } from 'lucide-react';
@@ -37,11 +31,6 @@ import {
 import { useSFX } from '@/hooks/useSFX';
 
 const tweaks = aippyTweaks(tweaksConfig);
-import { buildProjectArchive, ExportResult } from '@/utils/projectExport';
-import { buildCodebaseArchive, CodebaseExportResult } from '@/utils/codebaseExport';
-import { CodebasePasswordModal } from '@/components/CodebasePasswordModal';
-import { createPersistentDownload, downloadBlob } from '@/utils/download';
-import { useModpackAudio } from '@/hooks/useModpackAudio';
 
 interface SettingsScreenProps {
   autoMerge: boolean;
@@ -148,14 +137,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>('general');
   const [confirmReset, setConfirmReset] = useState(false);
   const [targetBedrockVersion, setTargetBedrockVersion] = useState('1.20+');
-  const [exportState, setExportState] = useState<'idle' | 'working' | 'done' | 'error'>('idle');
-  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
-  const [exportUrl, setExportUrl] = useState<string | null>(null);
-  const [codebaseState, setCodebaseState] = useState<'idle' | 'working' | 'done' | 'error'>('idle');
-  const [codebaseResult, setCodebaseResult] = useState<CodebaseExportResult | null>(null);
-  const [codebaseUrl, setCodebaseUrl] = useState<string | null>(null);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const { playSuccess, playError, playSyncChime } = useModpackAudio();
   const { playToggleOn, playToggleOff } = useSFX();
   const patcherDefault = tweaks.compatibilityPatcher.useState();
   const [patcherEnabled, setPatcherEnabled] = useState<boolean | null>(null);
@@ -179,64 +160,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const handleClearPatchLog = () => {
     clearPatchReport();
     setPatchLog([]);
-  };
-
-  const handleExportCodebase = async (password: string) => {
-    if (codebaseState === 'working') return;
-    setCodebaseState('working');
-    setCodebaseResult(null);
-    if (codebaseUrl) {
-      URL.revokeObjectURL(codebaseUrl);
-      setCodebaseUrl(null);
-    }
-    try {
-      const result = await buildCodebaseArchive(password);
-      const persistent = createPersistentDownload(result.blob, result.fileName);
-      setCodebaseUrl(persistent.url);
-      setCodebaseResult(result);
-      setCodebaseState('done');
-      await playSyncChime();
-
-      // Hand the file to the system browser via our own storage.
-      const { deliverFile } = await import('../utils/deliverFile');
-      const delivered = await deliverFile(result.blob, result.fileName);
-      if (!delivered.ok) {
-        const { showManualSavePanel } = await import('../utils/download');
-        showManualSavePanel(result.blob, result.fileName, delivered.url);
-      }
-      setTimeout(() => setCodebaseState('idle'), 10000);
-    } catch (e) {
-      console.error('[Aippy] Codebase export failed:', e);
-      setCodebaseState('error');
-      await playError();
-      setTimeout(() => setCodebaseState('idle'), 8000);
-    }
-  };
-
-  const handleExportProject = async () => {
-    if (exportState === 'working') return;
-    setExportState('working');
-    setExportResult(null);
-    if (exportUrl) {
-      URL.revokeObjectURL(exportUrl);
-      setExportUrl(null);
-    }
-    try {
-      const result = await buildProjectArchive();
-      downloadBlob(result.blob, result.fileName);
-      // Keep a persistent link so the archive can be re-downloaded manually
-      // if the automatic download is interrupted on mobile.
-      setExportUrl(createPersistentDownload(result.blob, result.fileName).url);
-      setExportResult(result);
-      setExportState('done');
-      await playSuccess();
-      setTimeout(() => setExportState('idle'), 8000);
-    } catch (e) {
-      console.error('[Aippy] Project export failed:', e);
-      setExportState('error');
-      await playError();
-      setTimeout(() => setExportState('idle'), 8000);
-    }
   };
 
   const handleReset = () => {
@@ -367,13 +290,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               right={<span className="text-xs text-[#A855F7]">Open Tool →</span>}
               onClick={onOpenListMaker}
             />
-            <SettingRow
-              icon={<FolderArchive className="w-5 h-5 text-[#A855F7]" />}
-              title="Download App Codebase"
-              sub="Export all real files, server functions and configs for this web app"
-              right={<span className="text-xs text-[#A855F7]">Download ZIP →</span>}
-              onClick={() => setActiveCategory('advanced')}
-            />
           </>
         )}
 
@@ -447,141 +363,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
         {activeCategory === 'advanced' && (
           <>
-            {/* 1. App Full Codebase Download */}
-            <div className="p-4 rounded-xl bg-gradient-to-b from-[#15111F] to-[#100D18] border border-[#762BFF]/60 shadow-[0_0_20px_rgba(118,43,255,0.15)] space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="p-2 rounded-lg bg-[#762BFF]/20 text-[#A855F7] border border-[#762BFF]/30 shrink-0">
-                  <Code2 className="w-5 h-5" />
-                </span>
-                <div className="min-w-0">
-                  <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
-                    <span>Download Entire App Codebase</span>
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
-                      All Files & Folders
-                    </span>
-                  </div>
-                  <div className="text-[11px] text-[#AAA3BB] leading-tight mt-0.5">
-                    Download all real files and directories of this AutoBE app (src/, functions/, public/, configs, package.json) into a complete, standalone project zip.
-                  </div>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowPasswordModal(true)}
-                disabled={codebaseState === 'working'}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] ${
-                  codebaseState === 'working'
-                    ? 'bg-[#15111F] text-[#AAA3BB] border border-[#30263F] cursor-wait'
-                    : 'bg-[#762BFF] text-white border border-[#A855F7] hover:brightness-110 disabled:opacity-60 shadow-[0_0_12px_rgba(118,43,255,0.35)]'
-                }`}
-              >
-                {codebaseState === 'working' && <Loader2 className="w-4 h-4 animate-spin" />}
-                {codebaseState === 'idle' && <Download className="w-4 h-4" />}
-                {codebaseState === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                {codebaseState === 'error' && <XCircle className="w-4 h-4 text-red-400" />}
-                {codebaseState === 'working'
-                  ? 'Packaging App Files & Folders...'
-                  : codebaseState === 'done'
-                    ? 'App Codebase Downloaded'
-                    : codebaseState === 'error'
-                      ? 'Export Failed — Tap to Retry'
-                      : 'Download Entire App Codebase (ZIP)'}
-              </button>
-
-              {codebaseState === 'working' && (
-                <div className="w-full h-1.5 rounded-full bg-[#2A2440] overflow-hidden">
-                  <div
-                    className="h-full w-1/3 rounded-full bg-gradient-to-r from-[#762BFF] to-[#A855F7]"
-                    style={{ animation: 'dl-slide 1.1s ease-in-out infinite' }}
-                  />
-                </div>
-              )}
-
-              {codebaseState === 'done' && codebaseResult && (
-                <div className="rounded-lg bg-[#08070D] border border-[#762BFF]/40 p-3 space-y-1.5">
-                  <div className="text-[11px] font-semibold text-emerald-400">
-                    {codebaseResult.fileName} · {(codebaseResult.blob.size / 1024).toFixed(0)} KB
-                  </div>
-                  <div className="text-[11px] text-[#AAA3BB]">
-                    {codebaseResult.fileCount} application files & directories packaged successfully.
-                  </div>
-                  {codebaseUrl && (
-                    <a
-                      href={codebaseUrl}
-                      download={codebaseResult.fileName}
-                      className="block text-center mt-2 py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/50 text-[11px] font-bold text-[#A855F7] active:scale-[0.98] transition-transform"
-                    >
-                      Download didn't complete? Tap here to save codebase zip again
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* 2. Workspace Packs & Modpacks Export */}
-            <div className="p-3.5 rounded-xl bg-[#100D18] border border-[#30263F] space-y-3">
-              <div className="flex items-center gap-3">
-                <span className="text-[#A855F7] shrink-0"><Download className="w-5 h-5" /></span>
-                <div className="min-w-0">
-                  <div className="text-xs sm:text-sm font-semibold text-white">Export Workspace Addons & Modpacks</div>
-                  <div className="text-[11px] text-[#AAA3BB] leading-tight mt-0.5">
-                    Download a backup of your Bedrock workspace: imported packs, saved modpack outputs, and project index — packed into an archive.
-                  </div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={handleExportProject}
-                disabled={exportState === 'working'}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-bold transition-all active:scale-[0.98] ${
-                  exportState === 'working'
-                    ? 'bg-[#15111F] text-[#AAA3BB] border border-[#30263F] cursor-wait'
-                    : 'bg-[#15111F] text-[#AAA3BB] border border-[#30263F] hover:text-white hover:border-[#762BFF]/50 disabled:opacity-60'
-                }`}
-              >
-                {exportState === 'working' && <Loader2 className="w-4 h-4 animate-spin" />}
-                {exportState === 'idle' && <Download className="w-4 h-4" />}
-                {exportState === 'done' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-                {exportState === 'error' && <XCircle className="w-4 h-4 text-red-400" />}
-                {exportState === 'working'
-                  ? 'Generating Archive...'
-                  : exportState === 'done'
-                    ? 'Workspace Exported'
-                    : exportState === 'error'
-                      ? 'Export Failed — Tap to Retry'
-                      : 'Export Workspace Addons & Packs'}
-              </button>
-
-              {exportState === 'done' && exportResult && (
-                <div className="rounded-lg bg-[#08070D] border border-[#30263F] p-3 space-y-1.5">
-                  <div className="text-[11px] font-semibold text-emerald-400">
-                    {exportResult.fileName} · {(exportResult.blob.size / 1024).toFixed(0)} KB
-                  </div>
-                  <div className="text-[11px] text-[#AAA3BB]">
-                    {exportResult.packCount} pack{exportResult.packCount === 1 ? '' : 's'} and {exportResult.modpackCount} modpack{exportResult.modpackCount === 1 ? '' : 's'} included. Integrity check passed.
-                  </div>
-                  {exportResult.warnings.length > 0 && (
-                    <div className="text-[11px] text-amber-400 leading-relaxed">
-                      {exportResult.warnings.map((w, i) => (
-                        <div key={i}>• {w}</div>
-                      ))}
-                    </div>
-                  )}
-                  {exportUrl && (
-                    <a
-                      href={exportUrl}
-                      download={exportResult.fileName}
-                      className="block text-center mt-2 py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/50 text-[11px] font-bold text-[#A855F7] active:scale-[0.98] transition-transform"
-                    >
-                      Download didn't complete? Tap here to save the archive again
-                    </a>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="pt-4 border-t border-[#30263F]/70">
+            <div className="pt-1">
               <button
                 type="button"
                 onClick={handleReset}
@@ -595,7 +377,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 {confirmReset ? 'Tap again to permanently reset data' : 'Reset Storage & Clear All Data'}
               </button>
               <p className="text-[10px] text-[#716885] text-center mt-1.5">
-                Permanently wipes all cached addon packs and merged modpacks from IndexedDB.
+                Permanently wipes your imported addon packs and merged modpacks stored on this device. Other people's data is never affected.
               </p>
             </div>
           </>
@@ -735,11 +517,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </>
         )}
 
-        <CodebasePasswordModal
-          open={showPasswordModal}
-          onClose={() => setShowPasswordModal(false)}
-          onUnlock={(password) => handleExportCodebase(password)}
-        />
       </div>
     </div>
   );
