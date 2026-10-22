@@ -14,12 +14,33 @@ export class NotSignedInError extends Error {
   }
 }
 
-async function api<T>(query: string, init: RequestInit, token: string): Promise<T> {
-  const res = await fetch(`/api/upload?${query}`, {
-    ...init,
-    cache: 'no-store',
-    headers: { ...(init.headers || {}), authorization: `Bearer ${token}` },
-  });
+async function api<T>(
+  query: string,
+  init: RequestInit,
+  auth: { bearer?: string; uploadToken?: string },
+  timeoutMs = 60_000
+): Promise<T> {
+  // A stalled request must fail (and be retried) instead of hanging forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(`/api/upload?${query}`, {
+      ...init,
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        ...(init.headers || {}),
+        ...(auth.bearer ? { authorization: `Bearer ${auth.bearer}` } : {}),
+        ...(auth.uploadToken ? { 'x-upload-token': auth.uploadToken } : {}),
+      },
+    });
+  } catch (err) {
+    if (controller.signal.aborted) throw new Error('The upload timed out (no response from the server).');
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
   const data = (await res.json().catch(() => ({}))) as T & { error?: string };
   if (!res.ok) throw new Error(data.error || `Upload server error (HTTP ${res.status}).`);
   return data;
@@ -35,15 +56,16 @@ export async function uploadToCloud(
   if (!auth) throw new NotSignedInError();
   const { token } = auth;
 
-  const { key, uploadId } = await api<{ key: string; uploadId: string }>(
+  const { key, uploadId, uploadToken } = await api<{ key: string; uploadId: string; uploadToken: string }>(
     'action=create',
     {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ fileName, kind, size: blob.size }),
     },
-    token
+    { bearer: token } // Discord sign-in is checked once, here; later calls use the signed upload token
   );
+  const tokenAuth = { uploadToken };
 
   const totalParts = Math.max(1, Math.ceil(blob.size / PART_SIZE));
   const parts: Array<{ partNumber: number; etag: string }> = new Array(totalParts);
@@ -60,7 +82,7 @@ export async function uploadToCloud(
         const result = await api<{ partNumber: number; etag: string }>(
           q,
           { method: 'PUT', body: chunk, headers: { 'content-type': 'application/octet-stream' } },
-          token
+          tokenAuth
         );
         parts[index] = { partNumber: result.partNumber, etag: result.etag };
         doneBytes += chunk.size;
@@ -91,7 +113,7 @@ export async function uploadToCloud(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ key, uploadId, parts }),
       },
-      token
+      tokenAuth
     );
     onProgress?.(100);
     return done;
@@ -104,7 +126,7 @@ export async function uploadToCloud(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ key, uploadId }),
       },
-      token
+      tokenAuth
     ).catch(() => {});
     throw err;
   }
