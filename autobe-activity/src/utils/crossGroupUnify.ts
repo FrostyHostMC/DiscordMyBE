@@ -22,11 +22,9 @@ const JSON_FOLDERS = ['items/', 'entities/', 'loot_tables/', 'blocks/'];
 const PLAYER_JSON = 'entities/player.json';
 
 // Non-JSON unification sets: exact prefix + required suffix (empty = any file).
-// NOTE: scripts/ is removed to prevent overwriting entry files and corrupting binary scripts
-// functions/ are copied as binary bytes to preserve file integrity
-const EXTRA_SETS: Array<{ prefix: string; suffix: string; binary: boolean }> = [
-  { prefix: 'functions/', suffix: '.mcfunction', binary: false },
-];
+// NOTE: scripts/ and functions/ are removed to prevent overwriting entry files
+// and corrupting binary files across different script API groups.
+const EXTRA_SETS: Array<{ prefix: string; suffix: string; binary: boolean }> = [];
 
 const YIELD_EVERY = 60;
 
