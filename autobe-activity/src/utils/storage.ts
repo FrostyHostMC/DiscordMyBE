@@ -6,9 +6,11 @@
 import { AddonPack, MergedModpack } from '@/types/modpack';
 
 const DB_NAME = 'AutoBE_DB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_PACKS = 'addons_library';
 const STORE_MODPACKS = 'merged_modpacks';
+// Pack FILE bytes live in their own store so listing packs never loads them into memory.
+const STORE_FILES = 'pack_files';
 
 // One shared connection. Opening a new connection per operation (and never
 // closing it) piles up handles, which is fragile in mobile WebViews.
@@ -30,6 +32,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_MODPACKS)) {
         db.createObjectStore(STORE_MODPACKS, { keyPath: 'id' });
       }
+      if (!db.objectStoreNames.contains(STORE_FILES)) {
+        db.createObjectStore(STORE_FILES, { keyPath: 'id' });
+      }
     };
     request.onsuccess = () => {
       const db = request.result;
@@ -39,7 +44,8 @@ function openDB(): Promise<IDBDatabase> {
       resolve(db);
     };
     request.onerror = () => reject(request.error ?? new Error('Could not open storage.'));
-    request.onblocked = () => reject(new Error('Storage is blocked by another open copy of the app.'));
+    // An older open copy may briefly block the upgrade; the request completes once it closes.
+    request.onblocked = () => console.warn('[Storage] Upgrade waiting for another open copy of the app to close.');
   }).catch((err) => {
     dbPromise = null; // allow a retry on the next call
     throw err;
@@ -87,11 +93,13 @@ async function run<T>(
 // reliable than Blob-backed storage). If persisting still fails, the pack is kept
 // in memory so it can be merged during this session, and the caller is told.
 // ---------------------------------------------------------------------------
-type StoredPack = Omit<AddonPack, 'fileBlob'> & {
-  fileBlob?: Blob;
-  fileData?: ArrayBuffer;
+interface StoredFile {
+  id: string;
+  fileData: ArrayBuffer;
   fileType?: string;
-};
+}
+// Legacy rows (older app versions) kept the file inside the pack row itself.
+type LegacyPackRow = AddonPack & { fileData?: ArrayBuffer; fileType?: string };
 
 const memoryPacks = new Map<string, AddonPack>();
 let lastStorageError = '';
@@ -113,27 +121,23 @@ async function describeStorage(): Promise<string> {
   return '';
 }
 
-async function toStored(pack: AddonPack): Promise<StoredPack> {
-  const { fileBlob, ...rest } = pack;
-  if (!fileBlob) return rest as StoredPack;
-  return { ...rest, fileData: await fileBlob.arrayBuffer(), fileType: fileBlob.type };
-}
-
-function fromStored(stored: StoredPack): AddonPack {
-  const { fileData, fileType, ...rest } = stored;
-  const pack = rest as AddonPack;
-  if (fileData && !pack.fileBlob) {
-    pack.fileBlob = new Blob([fileData], { type: fileType || 'application/zip' });
-  }
-  return pack;
+function stripFile(row: LegacyPackRow): AddonPack {
+  const { fileData: _fileData, fileType: _fileType, fileBlob: _fileBlob, ...meta } = row;
+  void _fileData; void _fileType; void _fileBlob;
+  return meta as AddonPack;
 }
 
 /** Resolves 'saved' when persisted, 'memory' when it could only be kept for this session. */
 export async function savePackToDB(pack: AddonPack): Promise<'saved' | 'memory'> {
   try {
-    const stored = await toStored(pack);
-    await run(STORE_PACKS, 'readwrite', (tx) => {
-      tx.objectStore(STORE_PACKS).put(stored);
+    const meta = stripFile(pack as LegacyPackRow);
+    const file: StoredFile | null = pack.fileBlob
+      ? { id: pack.id, fileData: await pack.fileBlob.arrayBuffer(), fileType: pack.fileBlob.type }
+      : null;
+    // Metadata and file bytes commit together or not at all.
+    await run([STORE_PACKS, STORE_FILES], 'readwrite', (tx) => {
+      tx.objectStore(STORE_PACKS).put(meta);
+      if (file) tx.objectStore(STORE_FILES).put(file);
     });
     memoryPacks.delete(pack.id);
     return 'saved';
@@ -146,11 +150,38 @@ export async function savePackToDB(pack: AddonPack): Promise<'saved' | 'memory'>
   }
 }
 
+/**
+ * Returns the pack WITH its file attached (fileBlob), loading it from storage on demand.
+ * Listing packs deliberately does not load files, so a big library doesn't fill phone memory.
+ */
+export async function loadPackFile(pack: AddonPack): Promise<AddonPack> {
+  if (pack.fileBlob) return pack;
+  const inMemory = memoryPacks.get(pack.id);
+  if (inMemory?.fileBlob) return { ...pack, fileBlob: inMemory.fileBlob };
+
+  const file = (await run<StoredFile | undefined>(STORE_FILES, 'readonly', (tx) =>
+    tx.objectStore(STORE_FILES).get(pack.id)
+  )) as StoredFile | undefined;
+  if (file?.fileData) {
+    return { ...pack, fileBlob: new Blob([file.fileData], { type: file.fileType || 'application/zip' }) };
+  }
+
+  // Fall back to a legacy row that stored the file inline.
+  const legacy = (await run<LegacyPackRow | undefined>(STORE_PACKS, 'readonly', (tx) =>
+    tx.objectStore(STORE_PACKS).get(pack.id)
+  )) as LegacyPackRow | undefined;
+  if (legacy?.fileBlob) return { ...pack, fileBlob: legacy.fileBlob };
+  if (legacy?.fileData) {
+    return { ...pack, fileBlob: new Blob([legacy.fileData], { type: legacy.fileType || 'application/zip' }) };
+  }
+  return pack;
+}
+
 export async function getAllPacksFromDB(): Promise<AddonPack[]> {
-  const rows = ((await run<StoredPack[]>(STORE_PACKS, 'readonly', (tx) =>
+  const rows = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', (tx) =>
     tx.objectStore(STORE_PACKS).getAll()
-  )) || []) as StoredPack[];
-  const persisted = rows.map(fromStored);
+  )) || []) as LegacyPackRow[];
+  const persisted = rows.map(stripFile); // metadata only — files load on demand via loadPackFile()
   const persistedIds = new Set(persisted.map((p) => p.id));
   const packs = [...persisted, ...[...memoryPacks.values()].filter((p) => !persistedIds.has(p.id))];
 
@@ -167,8 +198,9 @@ export async function getAllPacksFromDB(): Promise<AddonPack[]> {
 export async function deletePackFromDB(id: string): Promise<void> {
   const wasInMemory = memoryPacks.delete(id);
   try {
-    await run(STORE_PACKS, 'readwrite', (tx) => {
+    await run([STORE_PACKS, STORE_FILES], 'readwrite', (tx) => {
       tx.objectStore(STORE_PACKS).delete(id);
+      tx.objectStore(STORE_FILES).delete(id);
     });
   } catch (err) {
     if (!wasInMemory) throw err; // memory-only pack: nothing stored to delete
@@ -210,8 +242,9 @@ export async function deleteModpackFromDB(id: string): Promise<void> {
 
 export async function clearAllDB(): Promise<void> {
   memoryPacks.clear();
-  await run([STORE_PACKS, STORE_MODPACKS], 'readwrite', (tx) => {
+  await run([STORE_PACKS, STORE_FILES, STORE_MODPACKS], 'readwrite', (tx) => {
     tx.objectStore(STORE_PACKS).clear();
+    tx.objectStore(STORE_FILES).clear();
     tx.objectStore(STORE_MODPACKS).clear();
   });
 }
