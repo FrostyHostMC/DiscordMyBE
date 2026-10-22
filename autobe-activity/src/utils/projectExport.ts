@@ -1,7 +1,7 @@
 // Project export: bundles all stored packs, modpacks, and metadata into a zip archive.
 import JSZip from 'jszip';
 import { AddonPack, MergedModpack } from '@/types/modpack';
-import { getAllPacksFromDB, getAllModpacksFromDB } from '@/utils/storage';
+import { getAllPacksFromDB, getAllModpacksFromDB, loadPackFile } from '@/utils/storage';
 import { describeError } from '@/utils/errorLog';
 
 export interface ExportResult {
@@ -86,7 +86,7 @@ export async function buildProjectArchive(
 
   const packIndex: ExportManifest['packs'] = [];
   for (let i = 0; i < packs.length; i++) {
-    const pack = packs[i];
+    const pack = await loadPackFile(packs[i]); // files are loaded one at a time to limit memory
     const folder = uniqueFolder(pack.name, 'pack', i);
     packIndex.push({ id: pack.id, name: pack.name, type: pack.type, version: pack.version, uuid: pack.uuid, folder: `packs/${folder}` });
     await addPackToZip(zip.folder('packs')!, pack, folder, warnings);
