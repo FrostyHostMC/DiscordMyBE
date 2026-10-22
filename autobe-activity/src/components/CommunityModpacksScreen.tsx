@@ -58,7 +58,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
   const handleDelete = async (modpack: CommunityModpack) => {
     if (!currentUserId) return;
-    if (!confirm(`Are you sure you want to delete "${modpack.name}"?`)) return;
 
     try {
       const response = await fetch(`/api/community-modpacks?id=${modpack.id}&author_id=${currentUserId}`, {
