@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { sanitizeJsonString } from './addonParser';
-import { mergeBehaviorEntity } from './behaviorEntityMerge';
+import { mergeBehaviorEntity, mergeJsonData } from './behaviorEntityMerge';
 
 /**
  * Port of AutoBE Part 16 identifier-based definition merging (_process_packs):
@@ -34,31 +34,6 @@ function extractIdentifier(kind: Kind, data: any, client: boolean): string | nul
   const rootKey = client ? 'minecraft:client_entity' : KIND_ROOT_KEYS[kind];
   const id = data?.[rootKey]?.description?.identifier;
   return typeof id === 'string' && id !== 'minecraft:player' ? id : null;
-}
-
-function deepMergeDefs(target: any, source: any): any {
-  if (!source || typeof source !== 'object') return source;
-  if (!target || typeof target !== 'object') return structuredClone(source);
-  const result: any = Array.isArray(target) ? [...target] : { ...target };
-  for (const key of Object.keys(source)) {
-    const tv = result[key];
-    const sv = source[key];
-    if (tv && sv && typeof tv === 'object' && typeof sv === 'object' && !Array.isArray(tv) && !Array.isArray(sv)) {
-      result[key] = deepMergeDefs(tv, sv);
-    } else if (Array.isArray(tv) && Array.isArray(sv)) {
-      const seen = new Set(tv.map((x: any) => (typeof x === 'object' ? JSON.stringify(x) : String(x))));
-      for (const item of sv) {
-        const k = typeof item === 'object' ? JSON.stringify(item) : String(item);
-        if (!seen.has(k)) {
-          tv.push(item);
-          seen.add(k);
-        }
-      }
-    } else if (sv !== undefined) {
-      result[key] = sv;
-    }
-  }
-  return result;
 }
 
 /**
@@ -111,13 +86,30 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip): Promise<void> {
         entries.map((e) => ({ packName: e.path.replace(/\.json$/i, ''), data: e.data }))
       );
     } else {
-      merged = entries[0].data;
-      for (let i = 1; i < entries.length; i++) merged = deepMergeDefs(merged, entries[i]);
+      // Use smart merge (mergeJsonData) for client entities, items, blocks
+      // This properly handles texture arrays with union-deduplication
+      merged = structuredClone(entries[0].data);
+      for (let i = 1; i < entries.length; i++) {
+        mergeJsonData(merged, entries[i].data);
+      }
     }
     // Keep the original identifier on the merged definition
     if (merged?.[rootKey]?.description) {
       const keepId = extractIdentifier(entries[0].kind, entries[0].data, entries[0].client);
       if (keepId) merged[rootKey].description.identifier = keepId;
+    }
+    // Sanitize geometry/textures/materials for client entities to prevent Molang errors
+    if (entries[0].client && entries[0].kind === 'entity') {
+      const desc = merged?.[rootKey]?.description;
+      if (desc && typeof desc === 'object') {
+        for (const aliasKey of ['geometry', 'textures', 'materials', 'animations']) {
+          if (aliasKey in desc && typeof desc[aliasKey] === 'object') {
+            desc[aliasKey] = Object.fromEntries(
+              Object.entries(desc[aliasKey]).filter(([k, v]) => k && v && String(k).trim() && String(v).trim())
+            );
+          }
+        }
+      }
     }
     const keepPath = entries[0].path;
     const client = entries[0].client;
