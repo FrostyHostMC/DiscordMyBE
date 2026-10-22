@@ -21,6 +21,7 @@ import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 import {
   getAllPacksFromDB,
   savePackToDB,
+  getLastStorageError,
   deletePackFromDB,
   getAllModpacksFromDB,
   saveModpackToDB,
@@ -241,17 +242,20 @@ export const App: React.FC = () => {
     }
 
     // Save one at a time and COUNT what actually succeeded.
-    let saved = 0;
+    let persisted = 0;
+    let memoryOnly = 0;
     let firstError: string | null = null;
     for (const p of trulyNew) {
       try {
-        await savePackToDB(p);
-        saved++;
+        const where = await savePackToDB(p);
+        if (where === 'saved') persisted++;
+        else memoryOnly++;
       } catch (err) {
         console.error('[Import] Failed to save pack:', p.name, describeError(err));
         if (!firstError) firstError = describeError(err);
       }
     }
+    const saved = persisted + memoryOnly;
 
     // Always refresh the list from storage, even after a partial failure.
     try {
@@ -263,8 +267,13 @@ export const App: React.FC = () => {
     const skipped = newPacks.length - trulyNew.length;
     const failed = trulyNew.length - saved;
     if (failed > 0) {
-      showToast(`Saved ${saved} of ${trulyNew.length} pack(s). Storage error: ${firstError}`);
+      showToast(`Saved ${saved} of ${trulyNew.length} pack(s). Error: ${firstError}`, 12000);
       if (soundTweak) playError().catch(() => {});
+    } else if (memoryOnly > 0) {
+      showToast(
+        `Added ${saved} pack(s). ${memoryOnly} couldn't be saved on this device, so they only last until you close the app — merge them now. (${getLastStorageError()})`,
+        14000
+      );
     } else if (skipped > 0) {
       showToast(`Added ${saved} pack(s), skipped ${skipped} duplicate(s).`);
       if (soundTweak && saved > 0) playSuccess().catch(() => {});
@@ -792,7 +801,7 @@ export const App: React.FC = () => {
         <div className="absolute top-3 left-3 right-3 sm:left-auto sm:right-4 z-50 p-3 rounded-xl bg-[#15111F]/95 border border-[#762BFF]/60 text-xs font-semibold text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] flex items-center justify-between gap-3 max-w-md animate-in slide-in-from-top-2 duration-150">
           <div className="flex items-center gap-2 min-w-0">
             <Info className="w-4 h-4 text-[#A855F7] shrink-0" />
-            <span className="truncate">{toastMessage}</span>
+            <span className="break-words line-clamp-5">{toastMessage}</span>
           </div>
           <button
             type="button"
