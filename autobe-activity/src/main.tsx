@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import App from '@/App.tsx';
 import { describeError } from '@/utils/errorLog';
+import { setDiscordAuth } from '@/utils/discordAuth';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
@@ -89,8 +90,7 @@ function AccessGate() {
         }
 
         // Store credentials for Discord SDK features (file sharing, etc.)
-        sessionStorage.setItem('discord_access_token', tokenData.access_token);
-        sessionStorage.setItem('discord_application_id', clientId);
+        setDiscordAuth(tokenData.access_token, clientId, sdk);
 
         if (!cancelled) setState('allowed');
       } catch (error) {

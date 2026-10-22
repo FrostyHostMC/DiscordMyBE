@@ -15,6 +15,9 @@ import {
   CommunityModpack
 } from '@/types/modpack';
 import { INITIAL_DEMO_PACKS, INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
+import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
+import { uploadToCloud } from '@/utils/cloudUpload';
+import { getDiscordAuth } from '@/utils/discordAuth';
 import {
   getAllPacksFromDB,
   savePackToDB,
@@ -179,6 +182,7 @@ export const App: React.FC = () => {
         }
       } catch (err) {
         console.error('[Aippy] Initialization error:', describeError(err));
+        showToast(`Could not load your saved packs: ${describeError(err)}`);
       }
     };
 
@@ -207,30 +211,72 @@ export const App: React.FC = () => {
   };
 
   // Import packs
-  const handleImportPacks = async (newPacks: AddonPack[]) => {
+  const handleImportPacks = async (newPacks: AddonPack[]): Promise<number> => {
     triggerHaptic(80);
-    if (soundTweak) playSuccess().catch(() => {});
-    
-    // Filter out packs that already exist (by UUID + type to handle BP/RP halves with same UUID)
-    const existing = new Map(installedPacks.map(p => [`${p.uuid}_${p.type}`, p]));
-    const trulyNew = newPacks.filter(p => !existing.has(`${p.uuid}_${p.type}`));
-    
+
+    // Compare against what is REALLY stored (not a possibly-stale React state)
+    // so deleting then re-importing the same addon always works.
+    let existingPacks: AddonPack[];
+    try {
+      existingPacks = await getAllPacksFromDB();
+    } catch (err) {
+      console.error('[Import] Could not read storage:', describeError(err));
+      showToast(`Import failed: storage unavailable (${describeError(err)})`);
+      if (soundTweak) playError().catch(() => {});
+      return 0;
+    }
+
+    // Dedupe by UUID + type (BP/RP halves can share a UUID), including
+    // duplicates inside this same batch.
+    const seen = new Set(existingPacks.map((p) => `${p.uuid}_${p.type}`));
+    const trulyNew: AddonPack[] = [];
+    for (const p of newPacks) {
+      const key = `${p.uuid}_${p.type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      trulyNew.push(p);
+    }
+
+    // Save one at a time and COUNT what actually succeeded.
+    let saved = 0;
+    let firstError: string | null = null;
     for (const p of trulyNew) {
-      await savePackToDB(p);
+      try {
+        await savePackToDB(p);
+        saved++;
+      } catch (err) {
+        console.error('[Import] Failed to save pack:', p.name, describeError(err));
+        if (!firstError) firstError = describeError(err);
+      }
     }
-    const updated = await getAllPacksFromDB();
-    setInstalledPacks(updated);
-    
-    if (trulyNew.length < newPacks.length) {
-      showToast(`Added ${trulyNew.length} pack(s), skipped ${newPacks.length - trulyNew.length} duplicate(s).`);
+
+    // Always refresh the list from storage, even after a partial failure.
+    try {
+      setInstalledPacks(await getAllPacksFromDB());
+    } catch (err) {
+      console.error('[Import] Could not refresh list:', describeError(err));
+    }
+
+    const skipped = newPacks.length - trulyNew.length;
+    const failed = trulyNew.length - saved;
+    if (failed > 0) {
+      showToast(`Saved ${saved} of ${trulyNew.length} pack(s). Storage error: ${firstError}`);
+      if (soundTweak) playError().catch(() => {});
+    } else if (skipped > 0) {
+      showToast(`Added ${saved} pack(s), skipped ${skipped} duplicate(s).`);
+      if (soundTweak && saved > 0) playSuccess().catch(() => {});
     } else {
-      showToast(`Successfully added ${newPacks.length} pack(s) to workspace!`);
+      showToast(`Successfully added ${saved} pack(s) to workspace!`);
+      if (soundTweak) playSuccess().catch(() => {});
     }
+    return saved;
   };
 
   const handleGlobalFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    // Reset so picking the same file again (e.g. after deleting it) still fires onChange.
+    e.target.value = '';
+    if (files.length === 0) return;
     showToast(`Parsing ${files.length} archive(s)...`);
 
     const allParsed: AddonPack[] = [];
@@ -319,9 +365,15 @@ export const App: React.FC = () => {
       mergeLogger.success('Merge completed successfully', result.outputFileName, packsToMerge.length, packsToMerge.map(p => p.name));
 
       // Save to IndexedDB
-      await saveModpackToDB(result);
-      const updatedModpacks = await getAllModpacksFromDB();
-      setMyModpacks(updatedModpacks);
+      try {
+        await saveModpackToDB(result);
+        const updatedModpacks = await getAllModpacksFromDB();
+        setMyModpacks(updatedModpacks);
+      } catch (saveErr) {
+        // The merged file itself is fine — only the history entry failed to save.
+        console.error('[Aippy] Could not save merge to history:', describeError(saveErr));
+        showToast('Merged OK, but could not save it to your Projects list.');
+      }
 
       setJustCompletedModpack(result);
       setScreen('merge_complete');
@@ -429,32 +481,22 @@ export const App: React.FC = () => {
     }
 
     try {
-      // Try Discord native sharing first (bypasses iframe sandbox)
-      const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-      const result = await tryShareViaDiscord(blob, output.fileName);
-
-      if (result.success) {
-        showToast('Opening file for download...');
-        if (result.cdnUrl) {
-          // Store CDN URL in case user needs to copy it
-          sessionStorage.setItem('last_download_url', result.cdnUrl);
-          sessionStorage.setItem('last_download_name', output.fileName);
-        }
+      const result = await deliverFile(blob, output.fileName, showToast);
+      if (result.ok) {
+        showToast('Opening your download…');
         return;
       }
-
-      // If Discord sharing fails, show manual save panel
-      showToast('Discord upload failed. Try the manual save option.');
+      console.warn('[Download] Cloud hand-off failed:', result.error);
+      showToast(`Couldn't prepare the download: ${result.error}`);
+      // Show the manual panel (with the copyable link if the upload itself worked).
       const { showManualSavePanel } = await import('@/utils/download');
-      const lastCdnUrl = sessionStorage.getItem('last_download_url');
-      showManualSavePanel(blob, output.fileName, lastCdnUrl || undefined);
+      showManualSavePanel(blob, output.fileName, result.url);
+      if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
       showToast(`Download failed: ${describeError(e)}`);
-      // Show manual save panel as last resort
       const { showManualSavePanel } = await import('@/utils/download');
-      const lastCdnUrl = sessionStorage.getItem('last_download_url');
-      showManualSavePanel(blob, output.fileName, lastCdnUrl || undefined);
+      showManualSavePanel(blob, output.fileName);
       if (soundTweak) playError().catch(() => {});
     }
   };
@@ -487,32 +529,21 @@ export const App: React.FC = () => {
     const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
 
     try {
-      // Try Discord native sharing first (bypasses iframe sandbox)
-      console.log('[Download] Attempting Discord CDN upload...');
-      const { tryShareViaDiscord } = await import('@/utils/codebaseExport');
-      const result = await tryShareViaDiscord(blob, fileName);
-      console.log('[Download] Discord share result:', result);
-
-      if (result.success) {
-        showToast('Opening file for download...');
-        if (result.cdnUrl) {
-          sessionStorage.setItem('last_download_url', result.cdnUrl);
-          sessionStorage.setItem('last_download_name', fileName);
-        }
+      const result = await deliverFile(blob, fileName, showToast);
+      if (result.ok) {
+        showToast('Opening your download…');
         return;
       }
-
-      // If Discord sharing fails, try the standard download with all fallbacks
-      console.log('[Download] Discord share failed, trying standard download...');
-      const { downloadBlob } = await import('@/utils/download');
-      await downloadBlob(blob, fileName);
+      console.warn('[Download] Cloud hand-off failed:', result.error);
+      showToast(`Couldn't prepare the download: ${result.error}`);
+      const { showManualSavePanel } = await import('@/utils/download');
+      showManualSavePanel(blob, fileName, result.url);
+      if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
       showToast(`Download failed: ${describeError(e)}`);
-      // Show manual save panel as last resort
       const { showManualSavePanel } = await import('@/utils/download');
-      const lastCdnUrl = sessionStorage.getItem('last_download_url');
-      showManualSavePanel(blob, fileName, lastCdnUrl || undefined);
+      showManualSavePanel(blob, fileName);
       if (soundTweak) playError().catch(() => {});
     }
   };
@@ -541,11 +572,16 @@ export const App: React.FC = () => {
   const handleDeletePack = async (id: string) => {
     triggerHaptic(50);
     console.log('[Delete Pack] Deleting pack:', id);
-    await deletePackFromDB(id);
-    const updated = await getAllPacksFromDB();
-    setInstalledPacks(updated);
-    setSelectedPackIds((prev) => prev.filter((x) => x !== id));
-    showToast('Pack removed from workspace');
+    try {
+      await deletePackFromDB(id);
+      const updated = await getAllPacksFromDB();
+      setInstalledPacks(updated);
+      setSelectedPackIds((prev) => prev.filter((x) => x !== id));
+      showToast('Pack removed from workspace');
+    } catch (err) {
+      console.error('[Delete Pack] Error:', err);
+      showToast(`Failed to delete pack: ${describeError(err)}`);
+    }
   };
 
   // Delete selected packs
@@ -569,10 +605,15 @@ export const App: React.FC = () => {
   // Delete all packs
   const handleDeleteAllPacks = async () => {
     triggerHaptic(50);
-    await clearAllDB();
-    setInstalledPacks([]);
-    setSelectedPackIds([]);
-    showToast('All packs removed from workspace');
+    try {
+      await clearAllDB();
+      setInstalledPacks([]);
+      setSelectedPackIds([]);
+      showToast('All packs removed from workspace');
+    } catch (err) {
+      console.error('[Delete All] Error:', err);
+      showToast(`Failed to clear storage: ${describeError(err)}`);
+    }
   };
 
   // Download community modpack
@@ -581,15 +622,9 @@ export const App: React.FC = () => {
     handleSoundTap();
 
     try {
-      // Fetch the blob from the CDN URL
-      const response = await fetch(modpack.blob_url);
-      if (!response.ok) {
-        throw new Error('Failed to download modpack');
-      }
-      const blob = await response.blob();
-
-      // Use the same download handler as regular modpacks
-      await downloadBlob(blob, modpack.file_name);
+      // Open the hosted file in the system browser (blob/anchor downloads are
+      // blocked inside Discord Activities).
+      await openExternalUrl(modpack.blob_url);
       showToast(`${modpack.name} download started!`);
     } catch (e: unknown) {
       console.error('[Aippy] Community modpack download failed:', e);
@@ -620,43 +655,22 @@ export const App: React.FC = () => {
 
       console.log('[Publish] Blob size:', blob.size, 'type:', blob.type);
 
-      // Upload to Discord CDN to get a public URL
-      const accessToken = sessionStorage.getItem('discord_access_token');
-      const applicationId = sessionStorage.getItem('discord_application_id');
-
-      console.log('[Publish] Has Discord auth:', !!accessToken, !!applicationId);
-
-      if (!accessToken || !applicationId) {
-        throw new Error('Not authenticated with Discord');
+      const auth = getDiscordAuth();
+      if (!auth) {
+        throw new Error('Your Discord session was not found. Close and reopen the Activity, then try again.');
       }
+      const accessToken = auth.token;
 
-      console.log('[Publish] Uploading to Discord CDN...');
-      const file = new File([await blob.arrayBuffer()], justCompletedModpack.outputFileName, { type: blob.type });
-      const body = new FormData();
-      body.append('file', file);
-
-      const attachmentResponse = await fetch(
-        `https://discord.com/api/applications/${applicationId}/attachment`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body,
+      // Upload to our own storage (no Discord size limit, link doesn't expire).
+      let lastShown = -1;
+      const uploaded = await uploadToCloud(blob, justCompletedModpack.outputFileName, 'pub', (pct) => {
+        if (pct - lastShown >= 10 || pct === 100) {
+          lastShown = pct;
+          showToast(`Uploading modpack… ${pct}%`);
         }
-      );
-
-      console.log('[Publish] Discord CDN response status:', attachmentResponse.status);
-
-      if (!attachmentResponse.ok) {
-        const errorText = await attachmentResponse.text();
-        console.error('[Publish] Discord CDN upload failed:', errorText);
-        throw new Error(`Failed to upload to Discord CDN: ${errorText}`);
-      }
-
-      const attachmentJson = await attachmentResponse.json();
-      const blobUrl = attachmentJson.attachment.url;
-      console.log('[Publish] Blob URL:', blobUrl);
+      });
+      const blobUrl = uploaded.url;
+      console.log('[Publish] Uploaded:', blobUrl);
 
       // Get Discord user info for author name
       console.log('[Publish] Fetching Discord user info...');
@@ -722,14 +736,19 @@ export const App: React.FC = () => {
   // Delete merged modpack
   const handleDeleteModpack = async (id: string) => {
     triggerHaptic(50);
-    await deleteModpackFromDB(id);
-    const updated = await getAllModpacksFromDB();
-    setMyModpacks(updated);
-    if (activeModpack?.id === id) {
-      setActiveModpack(null);
-      setScreen('main');
+    try {
+      await deleteModpackFromDB(id);
+      const updated = await getAllModpacksFromDB();
+      setMyModpacks(updated);
+      if (activeModpack?.id === id) {
+        setActiveModpack(null);
+        setScreen('main');
+      }
+      showToast('Modpack deleted from storage');
+    } catch (err) {
+      console.error('[Delete Modpack] Error:', err);
+      showToast(`Failed to delete modpack: ${describeError(err)}`);
     }
-    showToast('Modpack deleted from storage');
   };
 
   // Update an existing modpack in storage and UI state (e.g. after customization)
@@ -749,11 +768,15 @@ export const App: React.FC = () => {
   // Clear demo data
   const handleClearDemoData = async () => {
     triggerHaptic(90);
-    await clearAllDB();
-    setInstalledPacks([]);
-    setMyModpacks([]);
-    setSelectedPackIds([]);
-    showToast('Cleared all addons and modpacks data.');
+    try {
+      await clearAllDB();
+      setInstalledPacks([]);
+      setMyModpacks([]);
+      setSelectedPackIds([]);
+      showToast('Cleared all addons and modpacks data.');
+    } catch (err) {
+      showToast(`Failed to clear data: ${describeError(err)}`);
+    }
   };
 
   const behaviorCount = installedPacks.filter((p) => p.type === 'Behavior Pack').length;
