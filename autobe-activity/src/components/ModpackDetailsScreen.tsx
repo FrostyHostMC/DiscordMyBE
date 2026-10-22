@@ -51,9 +51,9 @@ export const ModpackDetailsScreen: React.FC<ModpackDetailsScreenProps> = ({
         ...updated,
         outputBlob: newBlob,
         size: newBlob.size,
-        outputFileName: `${custom.name.replace(/\s+/g, '_')}.mcaddon`
       };
     }
+    updated = { ...updated, outputFileName: `${custom.name.replace(/\s+/g, '_')}.mcaddon` };
     if (updated.outputs && updated.outputs.length > 0) {
       const rewrittenOutputs = await Promise.all(
         updated.outputs.map(async (out) => {
