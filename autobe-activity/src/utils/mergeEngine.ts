@@ -590,17 +590,6 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   onProgress?.('Building final pack', 85);
   await yieldToUI();
 
-  // Pass the already-compressed output Blobs straight to JSZip instead of
-  // inflating them into ArrayBuffers — avoids a full extra copy of the entire
-  // modpack in memory, which is what crashed large merges on mobile.
-  const finalZip = new JSZip();
-  for (const o of outputs) {
-    if (o.blob) {
-      finalZip.file(o.fileName, o.blob);
-    }
-  }
-  finalZip.file('_autobe_merge_manifest.json', JSON.stringify(mergeMeta, null, 2));
-
   // Port of AutoBE._write_merge_report: validation summary embedded in the
   // final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
@@ -630,13 +619,17 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       detail: subpackSelections && subpackSelections.length > 0 ? subpackSelections.map(s => `${s.pack} -> ${s.variant}`).join('; ') : 'No subpack variants selected'
     }]
   };
-  finalZip.file('_autobe_merge_report.json', JSON.stringify(report, null, 2));
+  const combinedExtras = {
+    manifestJson: JSON.stringify(mergeMeta, null, 2),
+    reportJson: JSON.stringify(report, null, 2),
+  };
   onProgress?.('Finalizing...', 100);
-  const finalBlob = await finalZip.generateAsync({
-    type: 'blob'
-  });
+  // NOTE: the combined .mcaddon is NOT built here any more. Building it right after the outputs
+  // needed a second full copy of the modpack in memory and got the app killed on phones.
+  // It is built on demand by ensureCombinedBlob() when the user downloads / publishes it.
   const totalCalculatedSize = packs.reduce((sum, p) => sum + (p.fileSize || 10_000_000), 0);
-  const finalSize = finalBlob.size > 0 ? finalBlob.size : totalCalculatedSize;
+  const outputsTotal = outputs.reduce((sum, o) => sum + (o.size || 0), 0);
+  const finalSize = outputsTotal > 0 ? outputsTotal : totalCalculatedSize;
   const result: MergedModpack = {
     id: generateUUID(),
     name: modpackName,
@@ -646,7 +639,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     createdAt: Date.now(),
     description: description || `All-in-one Bedrock Modpack created with AutoBE. Combines ${packs.length} addons.`,
     outputs,
-    outputBlob: finalBlob,
+    combinedExtras,
     outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
     includedPacks: packs.map(p => ({
       name: p.name,
@@ -657,4 +650,26 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     }))
   };
   return result;
+}
+
+/**
+ * Returns the combined .mcaddon for a modpack, building it from the individual output
+ * packs if it hasn't been built yet. Call this only when the file is actually needed.
+ */
+export async function ensureCombinedBlob(modpack: MergedModpack): Promise<Blob> {
+  if (modpack.outputBlob) return modpack.outputBlob;
+  const zip = new JSZip();
+  let added = 0;
+  for (const o of modpack.outputs ?? []) {
+    if (o.blob) {
+      zip.file(o.fileName, o.blob); // pass Blobs straight through; no extra ArrayBuffer copies
+      added++;
+    }
+  }
+  if (added === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
+  if (modpack.combinedExtras) {
+    zip.file('_autobe_merge_manifest.json', modpack.combinedExtras.manifestJson);
+    zip.file('_autobe_merge_report.json', modpack.combinedExtras.reportJson);
+  }
+  return zip.generateAsync({ type: 'blob', compression: 'STORE' });
 }
