@@ -171,9 +171,9 @@ export async function parseAddonArchive(
 
   for (const manifestPath of manifestPaths) {
     try {
-      const uint8 = await loaded.file(manifestPath)?.async('uint8array');
-      if (!uint8) continue;
-      const sanitized = sanitizeJsonString(decodeTextSafe(uint8));
+      const content = await loaded.file(manifestPath)?.async('text');
+      if (!content) continue;
+      const sanitized = sanitizeJsonString(content);
       const manifest = JSON.parse(sanitized);
 
       const rootFolder = manifestPath.substring(0, manifestPath.lastIndexOf('/') + 1);
@@ -320,8 +320,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         if (!cat) continue;
 
         try {
-          const uint8 = await fileObj.async('uint8array');
-          const txt = decodeTextSafe(uint8);
+          const txt = await fileObj.async('text');
           const json = JSON.parse(sanitizeJsonString(txt));
           let ident = '';
           if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;

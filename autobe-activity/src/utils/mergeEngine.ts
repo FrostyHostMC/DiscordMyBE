@@ -432,8 +432,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         try {
           const manifestFile = zip.file('manifest.json') || zip.file(/manifest\.json$/i)[0];
           if (manifestFile) {
-            const uint8 = await manifestFile.async('uint8array');
-            const manifest = JSON.parse(sanitizeJsonString(decodeTextSafe(uint8)));
+            const content = await manifestFile.async('text');
+            const manifest = JSON.parse(sanitizeJsonString(content));
             const scriptModule = (manifest.modules || []).find((m: any) => m.type === 'script');
             if (scriptModule?.entry) entry = String(scriptModule.entry).replace(/^\.\//, '');
           }
