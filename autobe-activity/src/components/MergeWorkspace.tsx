@@ -28,7 +28,7 @@ interface MergeWorkspaceProps {
   onSelectAll: () => void;
   onClearSelection: () => void;
   onStartMergeFlow: (config: MergeSessionConfig) => void;
-  onImportPacks: (newPacks: AddonPack[]) => void;
+  onImportPacks: (newPacks: AddonPack[]) => Promise<number> | void;
   onDeletePack: (id: string) => void;
   onDeleteSelectedPacks: (ids: string[]) => void;
   onNavigateTab: (tab: any) => void;
@@ -126,8 +126,10 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   };
 
   const handleFilesChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    // Reset so choosing the same file again (e.g. after deleting it) still triggers onChange.
+    e.target.value = '';
+    if (files.length === 0) return;
     setIsImporting(true);
     setImportStatus(`Analyzing ${files.length} file(s)...`);
     const allParsed: AddonPack[] = [];
@@ -144,8 +146,20 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
     }
 
     if (allParsed.length > 0) {
-      onImportPacks(allParsed);
-      setImportStatus(`Imported ${allParsed.length} pack(s) successfully!`);
+      setImportStatus(`Saving ${allParsed.length} pack(s)...`);
+      let saved = allParsed.length;
+      try {
+        const result = await onImportPacks(allParsed);
+        if (typeof result === 'number') saved = result;
+      } catch (err) {
+        console.error('Import save error:', err);
+        saved = 0;
+      }
+      if (saved > 0) {
+        setImportStatus(`Imported ${saved} pack(s) successfully!`);
+      } else {
+        setImportStatus('Nothing new was saved (duplicates, or a storage error — see the message above).');
+      }
     } else {
       setImportStatus('No valid Bedrock addon manifests found.');
     }

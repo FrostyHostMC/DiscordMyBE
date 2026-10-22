@@ -21,7 +21,7 @@ interface AddPacksScreenProps {
   onClearSelection: () => void;
   onDeleteAll: () => void;
   onContinue: () => void;
-  onImportPacks: (newPacks: AddonPack[]) => void;
+  onImportPacks: (newPacks: AddonPack[]) => Promise<number> | void;
   onBack: () => void;
 }
 
@@ -46,8 +46,10 @@ export const AddPacksScreen: React.FC<AddPacksScreenProps> = ({
     installedPacks.length > 0 && selectedPackIds.length === installedPacks.length;
 
   const handleFilesChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+    const files = e.target.files ? Array.from(e.target.files) : [];
+    // Reset so choosing the same file again (e.g. after deleting it) still triggers onChange.
+    e.target.value = '';
+    if (files.length === 0) return;
     setIsImporting(true);
     setImportStatus(`Analyzing ${files.length} archive(s)...`);
     const allParsed: AddonPack[] = [];
@@ -64,9 +66,21 @@ export const AddPacksScreen: React.FC<AddPacksScreenProps> = ({
     }
 
     if (allParsed.length > 0) {
-      onImportPacks(allParsed);
-      setImportStatus(`Imported ${allParsed.length} pack(s) successfully!`);
-      setActiveTab('installed');
+      setImportStatus(`Saving ${allParsed.length} pack(s)...`);
+      let saved = allParsed.length;
+      try {
+        const result = await onImportPacks(allParsed);
+        if (typeof result === 'number') saved = result;
+      } catch (err) {
+        console.error('Import save error:', err);
+        saved = 0;
+      }
+      if (saved > 0) {
+        setImportStatus(`Imported ${saved} pack(s) successfully!`);
+        setActiveTab('installed');
+      } else {
+        setImportStatus('Nothing new was saved (duplicates, or a storage error — see the message above).');
+      }
     } else {
       setImportStatus('No valid Bedrock addon manifests found.');
     }
