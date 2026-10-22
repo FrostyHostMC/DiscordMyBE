@@ -22,10 +22,10 @@ const JSON_FOLDERS = ['items/', 'entities/', 'loot_tables/', 'blocks/'];
 const PLAYER_JSON = 'entities/player.json';
 
 // Non-JSON unification sets: exact prefix + required suffix (empty = any file).
-// NOTE: scripts/ and functions/ are removed to prevent overwriting entry files
-// and corrupting binary scripts across different script API groups.
-const EXTRA_SETS: Array<{ prefix: string; suffix: string }> = [
-  { prefix: 'functions/', suffix: '.mcfunction' },
+// NOTE: scripts/ is removed to prevent overwriting entry files and corrupting binary scripts
+// functions/ are copied as binary bytes to preserve file integrity
+const EXTRA_SETS: Array<{ prefix: string; suffix: string; binary: boolean }> = [
+  { prefix: 'functions/', suffix: '.mcfunction', binary: false },
 ];
 
 const YIELD_EVERY = 60;
@@ -54,12 +54,13 @@ export async function unifyCrossGroupBps(zips: JSZip[]): Promise<void> {
   }
 
   // --- Pass 2: first-wins canonical set + backfill of missing files --------
-  const canonical = new Map<string, string>();
+  const canonical = new Map<string, string | Uint8Array>();
 
   const collect = async (
     zip: JSZip,
     prefix: string,
     suffix: string,
+    binary: boolean = false,
     skipPaths?: Set<string>
   ): Promise<void> => {
     let batch = 0;
@@ -71,7 +72,11 @@ export async function unifyCrossGroupBps(zips: JSZip[]): Promise<void> {
       // Use original path as key to preserve case sensitivity on Windows
       if (!canonical.has(path)) {
         try {
-          canonical.set(path, await fileObj.async('text'));
+          if (binary) {
+            canonical.set(path, await fileObj.async('uint8array'));
+          } else {
+            canonical.set(path, await fileObj.async('text'));
+          }
         } catch {
           // Unreadable entry — skip; other groups may still provide it.
         }
@@ -82,19 +87,26 @@ export async function unifyCrossGroupBps(zips: JSZip[]): Promise<void> {
 
   for (const prefix of JSON_FOLDERS) {
     const skip = prefix === 'entities/' ? new Set([PLAYER_JSON]) : undefined;
-    for (const zip of zips) await collect(zip, prefix, '.json', skip);
+    for (const zip of zips) await collect(zip, prefix, '.json', false, skip);
   }
   for (const set of EXTRA_SETS) {
-    for (const zip of zips) await collect(zip, set.prefix, set.suffix);
+    for (const zip of zips) await collect(zip, set.prefix, set.suffix, set.binary);
   }
 
   if (canonical.size === 0) return;
 
   // Backfill: every group's BP carries the complete unified content set.
+  // Write using original case-sensitive path to avoid Windows overwrites
   for (const zip of zips) {
     let batch = 0;
-    for (const [path, text] of canonical.entries()) {
-      if (!zip.file(path)) zip.file(path, text);
+    for (const [path, data] of canonical.entries()) {
+      if (!zip.file(path)) {
+        if (typeof data === 'string') {
+          zip.file(path, data);
+        } else {
+          zip.file(path, data);
+        }
+      }
       if (++batch % YIELD_EVERY === 0) await yieldToUI();
     }
   }
