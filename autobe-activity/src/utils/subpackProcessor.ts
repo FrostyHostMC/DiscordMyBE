@@ -49,6 +49,7 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
   console.log('[SubpackSelection] Using prefix:', prefix, 'resolved:', resolved);
 
   let extractedCount = 0;
+  let skippedCount = 0;
   for (const [path, f] of Object.entries(zip.files)) {
     if (f.dir) continue;
     const lower = path.toLowerCase();
@@ -66,15 +67,24 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
       // Only the chosen variant is kept; everything else under subpacks/ is dropped.
       if (prefixLower && lower.startsWith(prefixLower)) {
         const outPath = path.slice(prefix.length);
-        out.file(outPath, await f.async('uint8array'));
-        extractedCount++;
+        // JSZip will overwrite if file exists, which matches AutoBE's behavior
+        if (!out.file(outPath)) {
+          out.file(outPath, await f.async('uint8array'));
+          extractedCount++;
+        } else {
+          // File already exists at root - AutoBE would overwrite, so we do too
+          out.file(outPath, await f.async('uint8array'));
+          extractedCount++;
+        }
+      } else {
+        skippedCount++;
       }
       continue;
     }
     out.file(path, await f.async('uint8array'));
   }
   const data = await out.generateAsync({ type: 'uint8array' });
-  console.log('[SubpackSelection] Extracted', extractedCount, 'files from subpack, output size:', data.length);
+  console.log('[SubpackSelection] Extracted', extractedCount, 'files from subpack, skipped', skippedCount, 'unselected files, output size:', data.length);
   return new Blob([data], { type: 'application/octet-stream' });
 }
 
