@@ -21,6 +21,9 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
     if (m) subpackDirs.add(m[1]);
   }
 
+  console.log('[SubpackSelection] Requested variant:', folderName);
+  console.log('[SubpackSelection] Available subpack folders:', [...subpackDirs]);
+
   let resolved = folderName.trim();
   const wantedLower = resolved.toLowerCase();
   if (!subpackDirs.has(wantedLower)) {
@@ -43,6 +46,9 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
   const prefix = `subpacks/${resolved}/`;
   const prefixLower = prefix.toLowerCase();
 
+  console.log('[SubpackSelection] Using prefix:', prefix, 'resolved:', resolved);
+
+  let extractedCount = 0;
   for (const [path, f] of Object.entries(zip.files)) {
     if (f.dir) continue;
     const lower = path.toLowerCase();
@@ -59,13 +65,16 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
     if (lower.startsWith('subpacks/')) {
       // Only the chosen variant is kept; everything else under subpacks/ is dropped.
       if (prefixLower && lower.startsWith(prefixLower)) {
-        out.file(path.slice(prefix.length), await f.async('uint8array'));
+        const outPath = path.slice(prefix.length);
+        out.file(outPath, await f.async('uint8array'));
+        extractedCount++;
       }
       continue;
     }
     out.file(path, await f.async('uint8array'));
   }
   const data = await out.generateAsync({ type: 'uint8array' });
+  console.log('[SubpackSelection] Extracted', extractedCount, 'files from subpack, output size:', data.length);
   return new Blob([data], { type: 'application/octet-stream' });
 }
 

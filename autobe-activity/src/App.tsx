@@ -479,10 +479,12 @@ export const App: React.FC = () => {
     const withSubpacks = packsToMerge.filter(
       (p) => p.subpacks && p.subpacks.length > 0 && p.fileBlob
     );
+    console.log('[MergeStart] Packs with subpacks:', withSubpacks.map(p => ({ name: p.name, uuid: p.uuid, type: p.type, subpacks: p.subpacks })));
     // Deduplicate by UUID + type (not internal ID) to handle BP/RP halves with same UUID
     const uniqueWithSubpacks = Array.from(
       new Map(withSubpacks.map(p => [`${p.uuid}_${p.type}`, p])).values()
     );
+    console.log('[MergeStart] Unique packs with subpacks after dedup:', uniqueWithSubpacks.length);
     if (uniqueWithSubpacks.length > 0) {
       pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride };
       setSubpackPromptPacks(uniqueWithSubpacks);
