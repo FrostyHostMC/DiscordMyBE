@@ -759,6 +759,18 @@ export const App: React.FC = () => {
 
       // Publish to community API
       console.log('[Publish] Publishing to community API...');
+      console.log('[Publish] Request body:', {
+        name: justCompletedModpack.name,
+        description: justCompletedModpack.description,
+        author: authorName,
+        author_id: authorId,
+        version: justCompletedModpack.version,
+        total_packs: justCompletedModpack.totalPacks,
+        size: justCompletedModpack.size,
+        blob_url: blobUrl,
+        file_name: justCompletedModpack.outputFileName,
+      });
+
       const publishResponse = await fetch('/api/community-modpacks', {
         method: 'POST',
         headers: {
@@ -780,14 +792,23 @@ export const App: React.FC = () => {
       });
 
       console.log('[Publish] Community API response status:', publishResponse.status);
+      const responseText = await publishResponse.text();
+      console.log('[Publish] Community API response body:', responseText);
 
       if (!publishResponse.ok) {
-        const error = await publishResponse.json();
+        let error = 'Failed to publish modpack';
+        try {
+          const errorJson = JSON.parse(responseText);
+          error = errorJson.error || error;
+        } catch {
+          error = responseText || error;
+        }
         console.error('[Publish] Community API error:', error);
-        throw new Error(error.error || 'Failed to publish modpack');
+        throw new Error(error);
       }
 
-      console.log('[Publish] Successfully published!');
+      const responseData = JSON.parse(responseText);
+      console.log('[Publish] Successfully published! Modpack ID:', responseData.id);
       showToast('Modpack published to community!');
       if (soundTweak) playSuccess().catch(() => {});
     } catch (e: unknown) {

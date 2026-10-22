@@ -16,10 +16,31 @@ export async function onRequestPost(context: Context) {
       });
     }
 
+    // Check if table exists
+    try {
+      const checkTable = env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='community_modpacks'");
+      const tableResult = checkTable.first();
+      if (!tableResult) {
+        console.error('[Community] Table community_modpacks does not exist');
+        return new Response(JSON.stringify({ error: 'Database table not found. Please run schema.sql to create the table.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (tableError) {
+      console.error('[Community] Error checking table:', tableError);
+      return new Response(JSON.stringify({ error: 'Database table check failed', details: tableError instanceof Error ? tableError.message : String(tableError) }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const data = await request.json();
+    console.log('[Community] POST request data:', { name: data.name, author: data.author, blob_url: data.blob_url });
 
     // Validate required fields
     if (!data.name || !data.description || !data.author || !data.author_id || !data.blob_url || !data.file_name) {
+      console.error('[Community] Missing required fields:', { name: !!data.name, description: !!data.description, author: !!data.author, author_id: !!data.author_id, blob_url: !!data.blob_url, file_name: !!data.file_name });
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -31,6 +52,7 @@ export async function onRequestPost(context: Context) {
       const blobUrl = new URL(String(data.blob_url));
       if (!blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad path');
     } catch {
+      console.error('[Community] Invalid blob_url:', data.blob_url);
       return new Response(JSON.stringify({ error: 'Invalid file link. Upload the modpack through the app first.' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -39,6 +61,8 @@ export async function onRequestPost(context: Context) {
 
     const id = crypto.randomUUID();
     const now = Date.now();
+
+    console.log('[Community] Inserting modpack:', { id, name: data.name, author: data.author });
 
     const stmt = env.DB.prepare(
       'INSERT INTO community_modpacks (id, name, description, author, author_id, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -60,6 +84,8 @@ export async function onRequestPost(context: Context) {
       data.file_name,
       JSON.stringify(data.included_packs || [])
     ).run();
+
+    console.log('[Community] Insert result:', result, 'meta:', result.meta);
 
     return new Response(JSON.stringify({ id, success: true }), {
       status: 201,
@@ -93,6 +119,25 @@ export async function onRequestGet(context: Context) {
       });
     }
 
+    // Check if table exists
+    try {
+      const checkTable = env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='community_modpacks'");
+      const tableResult = checkTable.first();
+      if (!tableResult) {
+        console.error('[Community] Table community_modpacks does not exist');
+        return new Response(JSON.stringify({ error: 'Database table not found. Please run schema.sql to create the table.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (tableError) {
+      console.error('[Community] Error checking table:', tableError);
+      return new Response(JSON.stringify({ error: 'Database table check failed', details: tableError instanceof Error ? tableError.message : String(tableError) }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     // Increment download count if fetching a specific modpack
     if (modpackId) {
       const incrementStmt = env.DB.prepare(
@@ -104,6 +149,8 @@ export async function onRequestGet(context: Context) {
 
     const stmt = env.DB.prepare('SELECT * FROM community_modpacks ORDER BY created_at DESC');
     const result = stmt.all();
+
+    console.log('[Community] Fetched modpacks:', result.results?.length || 0);
 
     return new Response(JSON.stringify({ modpacks: result.results || [] }), {
       status: 200,
