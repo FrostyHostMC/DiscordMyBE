@@ -275,7 +275,7 @@ function playBlockBreak(): void {
  * it to open/save, or long-press → "Save to Files" / "Share" on mobile.
  * The object URL stays valid for 10 minutes, then is released.
  */
-function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): void {
+function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string, reason?: string): void {
   if (typeof document === 'undefined') return;
   // Avoid stacking duplicate panels.
   document.getElementById('autobe-save-panel')?.remove();
@@ -304,6 +304,13 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): voi
     'font-size:12px;color:#AAA3BB;margin-bottom:14px;line-height:1.5;';
   subtitle.textContent =
     'Automatic saving was blocked by this app. Your file is ready below — tap "Save file" to try again, or long-press it and choose "Save" / "Share".';
+
+  const reasonEl = document.createElement('div');
+  if (reason) {
+    reasonEl.style.cssText =
+      'font-size:11px;color:#FCA5A5;background:#2A1216;border:1px solid #7F1D1D;border-radius:8px;padding:8px 10px;margin-bottom:12px;line-height:1.4;word-break:break-word;';
+    reasonEl.textContent = `Why the automatic download failed: ${reason}`;
+  }
 
   const name = document.createElement('div');
   name.style.cssText =
@@ -447,6 +454,7 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string): voi
   holder.appendChild(closeBtn);
   holder.appendChild(title);
   holder.appendChild(subtitle);
+  if (reason) holder.appendChild(reasonEl);
   holder.appendChild(name);
   holder.appendChild(linkSection);
   holder.appendChild(primary);
