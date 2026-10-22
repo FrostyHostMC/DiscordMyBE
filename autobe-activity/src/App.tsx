@@ -576,8 +576,14 @@ export const App: React.FC = () => {
     let blob: Blob | undefined = source.outputBlob;
     if (!blob && source.outputs?.some((o) => o.blob)) {
       try {
-        showToast('Building the combined .mcaddon…', 30000);
-        blob = await ensureCombinedBlob(source);
+        showToast('Building the combined .mcaddon… 0%', 60000);
+        let lastPct = -10;
+        blob = await ensureCombinedBlob(source, (pct) => {
+          if (pct - lastPct >= 10 || pct === 100) {
+            lastPct = pct;
+            showToast(`Building the combined .mcaddon… ${pct}%`, 60000);
+          }
+        });
       } catch (err) {
         console.error('[Download] Could not build combined file:', describeError(err));
         showToast(`Could not build the combined file: ${describeError(err)}`, 8000);
@@ -715,8 +721,8 @@ export const App: React.FC = () => {
       // Get the blob
       let blob = justCompletedModpack.outputBlob;
       if (!blob && justCompletedModpack.outputs?.some((o) => o.blob)) {
-        showToast('Building the combined .mcaddon…', 30000);
-        blob = await ensureCombinedBlob(justCompletedModpack);
+        showToast('Building the combined .mcaddon… 0%', 60000);
+        blob = await ensureCombinedBlob(justCompletedModpack, (pct) => showToast(`Building the combined .mcaddon… ${pct}%`, 60000));
       }
       if (!blob) {
         console.error('[Publish] Blob is missing - cannot publish');
