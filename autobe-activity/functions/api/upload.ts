@@ -136,7 +136,9 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       if (!(await isAuthorized(body.key, body.uploadId))) return json({ error: 'Upload token rejected.' }, 401);
       const parts = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
       await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
-      const base = (env.PUBLIC_BASE_URL || url.origin).replace(/\/+$/, '');
+      // Tolerate stray spaces, slashes or a trailing dot in PUBLIC_BASE_URL (a trailing dot in a
+      // hostname breaks the HTTPS connection: "couldn't establish a secure connection").
+      const base = (env.PUBLIC_BASE_URL || url.origin).trim().replace(/[\s./]+$/, '');
       return json({ key: body.key, url: `${base}/api/files/${encodeKey(body.key!)}` });
     }
 
