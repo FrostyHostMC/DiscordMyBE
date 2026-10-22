@@ -79,16 +79,80 @@ async function run<T>(
   });
 }
 
-export async function savePackToDB(pack: AddonPack): Promise<void> {
-  await run(STORE_PACKS, 'readwrite', (tx) => {
-    tx.objectStore(STORE_PACKS).put(pack);
-  });
+// ---------------------------------------------------------------------------
+// Pack persistence with an in-memory fallback.
+//
+// Some mobile webviews (e.g. Discord's) refuse to persist large Blobs in
+// IndexedDB. Packs are stored with their file as a plain ArrayBuffer (more
+// reliable than Blob-backed storage). If persisting still fails, the pack is kept
+// in memory so it can be merged during this session, and the caller is told.
+// ---------------------------------------------------------------------------
+type StoredPack = Omit<AddonPack, 'fileBlob'> & {
+  fileBlob?: Blob;
+  fileData?: ArrayBuffer;
+  fileType?: string;
+};
+
+const memoryPacks = new Map<string, AddonPack>();
+let lastStorageError = '';
+
+export function getLastStorageError(): string {
+  return lastStorageError;
+}
+
+async function describeStorage(): Promise<string> {
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (est && est.quota !== undefined && est.usage !== undefined) {
+      const mb = (n: number) => `${(n / 1048576).toFixed(0)} MB`;
+      return ` (storage used ${mb(est.usage)} of ${mb(est.quota)})`;
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
+async function toStored(pack: AddonPack): Promise<StoredPack> {
+  const { fileBlob, ...rest } = pack;
+  if (!fileBlob) return rest as StoredPack;
+  return { ...rest, fileData: await fileBlob.arrayBuffer(), fileType: fileBlob.type };
+}
+
+function fromStored(stored: StoredPack): AddonPack {
+  const { fileData, fileType, ...rest } = stored;
+  const pack = rest as AddonPack;
+  if (fileData && !pack.fileBlob) {
+    pack.fileBlob = new Blob([fileData], { type: fileType || 'application/zip' });
+  }
+  return pack;
+}
+
+/** Resolves 'saved' when persisted, 'memory' when it could only be kept for this session. */
+export async function savePackToDB(pack: AddonPack): Promise<'saved' | 'memory'> {
+  try {
+    const stored = await toStored(pack);
+    await run(STORE_PACKS, 'readwrite', (tx) => {
+      tx.objectStore(STORE_PACKS).put(stored);
+    });
+    memoryPacks.delete(pack.id);
+    return 'saved';
+  } catch (err) {
+    lastStorageError = `${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}${await describeStorage()}`;
+    console.error('[Storage] Could not persist pack, keeping it in memory:', pack.name, lastStorageError);
+    if (!pack.fileBlob) throw err; // nothing useful to keep without its file
+    memoryPacks.set(pack.id, pack);
+    return 'memory';
+  }
 }
 
 export async function getAllPacksFromDB(): Promise<AddonPack[]> {
-  const packs = ((await run<AddonPack[]>(STORE_PACKS, 'readonly', (tx) =>
+  const rows = ((await run<StoredPack[]>(STORE_PACKS, 'readonly', (tx) =>
     tx.objectStore(STORE_PACKS).getAll()
-  )) || []) as AddonPack[];
+  )) || []) as StoredPack[];
+  const persisted = rows.map(fromStored);
+  const persistedIds = new Set(persisted.map((p) => p.id));
+  const packs = [...persisted, ...[...memoryPacks.values()].filter((p) => !persistedIds.has(p.id))];
 
   const demoIds = packs.filter((p) => p.id.startsWith('demo-pack-')).map((p) => p.id);
   if (demoIds.length > 0) {
@@ -101,9 +165,14 @@ export async function getAllPacksFromDB(): Promise<AddonPack[]> {
 }
 
 export async function deletePackFromDB(id: string): Promise<void> {
-  await run(STORE_PACKS, 'readwrite', (tx) => {
-    tx.objectStore(STORE_PACKS).delete(id);
-  });
+  const wasInMemory = memoryPacks.delete(id);
+  try {
+    await run(STORE_PACKS, 'readwrite', (tx) => {
+      tx.objectStore(STORE_PACKS).delete(id);
+    });
+  } catch (err) {
+    if (!wasInMemory) throw err; // memory-only pack: nothing stored to delete
+  }
 }
 
 export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
@@ -140,6 +209,7 @@ export async function deleteModpackFromDB(id: string): Promise<void> {
 }
 
 export async function clearAllDB(): Promise<void> {
+  memoryPacks.clear();
   await run([STORE_PACKS, STORE_MODPACKS], 'readwrite', (tx) => {
     tx.objectStore(STORE_PACKS).clear();
     tx.objectStore(STORE_MODPACKS).clear();
