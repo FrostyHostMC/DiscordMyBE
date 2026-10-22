@@ -20,35 +20,6 @@ export function sanitizeJsonString(raw: string): string {
   return cleaned;
 }
 
-// Safely decode text from ArrayBuffer with UTF-8 BOM handling
-export function decodeTextSafe(uint8: Uint8Array): string {
-  // Check for UTF-8 BOM
-  if (uint8.length >= 3 && uint8[0] === 0xEF && uint8[1] === 0xBB && uint8[2] === 0xBF) {
-    uint8 = uint8.slice(3);
-  }
-  // Check for UTF-16 LE BOM
-  if (uint8.length >= 2 && uint8[0] === 0xFF && uint8[1] === 0xFE) {
-    uint8 = uint8.slice(2);
-  }
-  // Check for UTF-16 BE BOM
-  if (uint8.length >= 2 && uint8[0] === 0xFE && uint8[1] === 0xFF) {
-    uint8 = uint8.slice(2);
-  }
-  
-  // Use TextDecoder if available (modern browsers), otherwise fallback
-  if (typeof TextDecoder !== 'undefined') {
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    return decoder.decode(uint8);
-  }
-  
-  // Fallback for older browsers
-  let result = '';
-  for (let i = 0; i < uint8.length; i++) {
-    result += String.fromCharCode(uint8[i]);
-  }
-  return result;
-}
-
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     try {

@@ -2,7 +2,7 @@ import assetsData from "@/config/assets";
 import JSZip from 'jszip';
 import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
-import { generateUUID, deepMerge, mergeLangFiles, sanitizeJsonString, decodeTextSafe } from './addonParser';
+import { generateUUID, deepMerge, mergeLangFiles, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
 import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
@@ -174,8 +174,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const outPath = pathTransform ? pathTransform(path) : path;
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
-        const uint8 = await fileObj.async('uint8array');
-        let text = decodeTextSafe(uint8);
+        let text = await fileObj.async('text');
         // Filter out comment lines (AutoBE.py behavior)
         const lines = text.split('\n');
         const filtered = lines.filter(line => !line.trim().startsWith('//'));
@@ -187,15 +186,14 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
           list.push(...parsed);
           accum.jsonLists.set(lower, list);
         } else {
-          writeBinaryIfFirst(targetZip, accum, outPath, uint8);
+          writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
         }
       } catch {
         writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
       }
     } else if (STRATEGY_MERGE_FILES.has(lower)) {
       try {
-        const uint8 = await fileObj.async('uint8array');
-        const txt = decodeTextSafe(uint8);
+        const txt = await fileObj.async('text');
         const parsed = JSON.parse(sanitizeJsonString(txt));
         const list = accum.jsonLists.get(lower) || [];
         list.push(parsed);
@@ -205,8 +203,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       }
     } else if (DEEP_MERGE_FILES.has(lower)) {
       try {
-        const uint8 = await fileObj.async('uint8array');
-        const txt = decodeTextSafe(uint8);
+        const txt = await fileObj.async('text');
         const parsed = JSON.parse(sanitizeJsonString(txt));
         const existing = accum.jsonFiles.get(lower) || {};
         accum.jsonFiles.set(lower, deepMerge(existing, parsed));
@@ -215,8 +212,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       }
     } else if (lower.endsWith('.lang')) {
       try {
-        const uint8 = await fileObj.async('uint8array');
-        const txt = decodeTextSafe(uint8);
+        const txt = await fileObj.async('text');
         const existing = accum.langFiles.get(outPath) || '';
         accum.langFiles.set(outPath, mergeLangFiles(existing, txt));
       } catch {
@@ -224,8 +220,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
         targetZip.file(outPath, data);
       }
     } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction') || lower.endsWith('.js'))) {
-      const uint8 = await fileObj.async('uint8array');
-      let txt = decodeTextSafe(uint8);
+      let txt = await fileObj.async('text');
       for (const [oldId, newId] of renameMap.entries()) {
         txt = txt.replaceAll(oldId, newId);
       }
