@@ -13,10 +13,6 @@ export function sanitizeJsonString(raw: string): string {
   if (raw.charCodeAt(0) === 0xFEFF) {
     raw = raw.slice(1);
   }
-  // Handle UTF-16 BOMs (less common but possible)
-  if (raw.charCodeAt(0) === 0xFEFF || (raw.charCodeAt(0) === 0xFFFE && raw.charCodeAt(1) === 0xFEFF)) {
-    raw = raw.slice(1);
-  }
   
   let cleaned = raw.replace(/\/\*[\s\S]*?\*\//g, '');
   cleaned = cleaned.replace(/^\s*\/\/.*$/gm, '');

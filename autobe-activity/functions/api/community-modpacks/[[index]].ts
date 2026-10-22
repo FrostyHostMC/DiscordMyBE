@@ -181,6 +181,25 @@ export async function onRequestDelete(context: Context) {
       });
     }
 
+    // Check if table exists
+    try {
+      const checkTable = env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='community_modpacks'");
+      const tableResult = checkTable.first();
+      if (!tableResult) {
+        console.error('[Community] Table community_modpacks does not exist');
+        return new Response(JSON.stringify({ error: 'Database table not found. Please run schema.sql to create the table.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (tableError) {
+      console.error('[Community] Error checking table:', tableError);
+      return new Response(JSON.stringify({ error: 'Database table check failed', details: tableError instanceof Error ? tableError.message : String(tableError) }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     const authorId = url.searchParams.get('author_id');
@@ -243,6 +262,25 @@ export async function onRequestPatch(context: Context) {
     // Check if DB is available
     if (!env.DB) {
       return new Response(JSON.stringify({ error: 'Database not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Check if table exists
+    try {
+      const checkTable = env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='community_modpacks'");
+      const tableResult = checkTable.first();
+      if (!tableResult) {
+        console.error('[Community] Table community_modpacks does not exist');
+        return new Response(JSON.stringify({ error: 'Database table not found. Please run schema.sql to create the table.' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (tableError) {
+      console.error('[Community] Error checking table:', tableError);
+      return new Response(JSON.stringify({ error: 'Database table check failed', details: tableError instanceof Error ? tableError.message : String(tableError) }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       });
