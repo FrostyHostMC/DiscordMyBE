@@ -71,7 +71,7 @@ function AccessGate() {
         }
 
         updateMessage('Checking your Auto Byte role…');
-        await sdk.commands.authenticate({ access_token: tokenData.access_token });
+        const authResult = await sdk.commands.authenticate({ access_token: tokenData.access_token });
 
         const accessResponse = await fetch('/api/access', {
           method: 'POST',
@@ -90,7 +90,7 @@ function AccessGate() {
         }
 
         // Store credentials for Discord SDK features (file sharing, etc.)
-        setDiscordAuth(tokenData.access_token, clientId, sdk);
+        setDiscordAuth(tokenData.access_token, clientId, sdk, authResult?.user ?? null);
 
         if (!cancelled) setState('allowed');
       } catch (error) {
