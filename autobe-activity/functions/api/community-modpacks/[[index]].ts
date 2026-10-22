@@ -192,11 +192,14 @@ export async function onRequestDelete(context: Context) {
       });
     }
 
+    console.log('[Community] DELETE request:', { id, authorId });
+
     // Verify the user is the author
     const stmt = env.DB.prepare('SELECT author_id FROM community_modpacks WHERE id = ?');
     const result = stmt.bind(id).first();
 
     if (!result) {
+      console.error('[Community] Modpack not found:', id);
       return new Response(JSON.stringify({ error: 'Modpack not found' }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' },
@@ -204,6 +207,7 @@ export async function onRequestDelete(context: Context) {
     }
 
     if (result.author_id !== authorId) {
+      console.error('[Community] Unauthorized delete attempt:', { authorId, actual_author: result.author_id });
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
@@ -214,12 +218,111 @@ export async function onRequestDelete(context: Context) {
     const deleteStmt = env.DB.prepare('DELETE FROM community_modpacks WHERE id = ?');
     deleteStmt.bind(id).run();
 
+    console.log('[Community] Deleted modpack:', id);
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Community modpacks DELETE error:', error);
+    return new Response(JSON.stringify({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+/**
+ * PATCH /api/community-modpacks
+ * Update a modpack (only by the author)
+ */
+export async function onRequestPatch(context: Context) {
+  const { request, env } = context;
+
+  try {
+    // Check if DB is available
+    if (!env.DB) {
+      return new Response(JSON.stringify({ error: 'Database not configured' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+    const authorId = url.searchParams.get('author_id');
+
+    if (!id || !authorId) {
+      return new Response(JSON.stringify({ error: 'Missing id or author_id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const data = await request.json();
+    console.log('[Community] PATCH request:', { id, authorId, data });
+
+    // Verify the user is the author
+    const checkStmt = env.DB.prepare('SELECT author_id FROM community_modpacks WHERE id = ?');
+    const checkResult = checkStmt.bind(id).first();
+
+    if (!checkResult) {
+      console.error('[Community] Modpack not found:', id);
+      return new Response(JSON.stringify({ error: 'Modpack not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (checkResult.author_id !== authorId) {
+      console.error('[Community] Unauthorized update attempt:', { authorId, actual_author: checkResult.author_id });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Build update query dynamically based on provided fields
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      values.push(data.name);
+    }
+    if (data.description !== undefined) {
+      updates.push('description = ?');
+      values.push(data.description);
+    }
+    if (data.version !== undefined) {
+      updates.push('version = ?');
+      values.push(data.version);
+    }
+    if (data.icon_data_url !== undefined) {
+      updates.push('icon_data_url = ?');
+      values.push(data.icon_data_url);
+    }
+
+    if (updates.length === 0) {
+      return new Response(JSON.stringify({ error: 'No fields to update' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    values.push(id);
+    const query = `UPDATE community_modpacks SET ${updates.join(', ')} WHERE id = ?`;
+
+    const stmt = env.DB.prepare(query);
+    stmt.bind(...values).run();
+
+    console.log('[Community] Updated modpack:', id);
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Community modpacks PATCH error:', error);
     return new Response(JSON.stringify({ error: 'Internal server error', details: error instanceof Error ? error.message : String(error) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

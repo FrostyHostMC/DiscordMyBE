@@ -96,6 +96,15 @@ export const App: React.FC = () => {
   const [mergeProgress, setMergeProgress] = useState<number>(0);
   const [justCompletedModpack, setJustCompletedModpack] = useState<MergedModpack | null>(null);
 
+  // Discord user state for community modpacks
+  const [discordUser, setDiscordUser] = useState<{ id: string; username?: string; global_name?: string } | null>(null);
+
+  // Load Discord user on mount
+  useEffect(() => {
+    const user = getDiscordUser();
+    if (user) setDiscordUser(user);
+  }, []);
+
   // Subpack selection flow (port of AutoBE._show_subpack_selection)
   const [subpackPromptPacks, setSubpackPromptPacks] = useState<AddonPack[] | null>(null);
   const pendingMergeRef = useRef<{
@@ -1037,6 +1046,7 @@ export const App: React.FC = () => {
         <CommunityModpacksScreen
           onBack={() => setScreen('main')}
           onDownload={handleDownloadCommunityModpack}
+          currentUserId={discordUser?.id}
         />
       )}
 
@@ -1190,6 +1200,7 @@ export const App: React.FC = () => {
                   <CommunityModpacksScreen
                     onBack={() => navigateTab('overview')}
                     onDownload={handleDownloadCommunityModpack}
+                    currentUserId={discordUser?.id}
                   />
                 )}
 

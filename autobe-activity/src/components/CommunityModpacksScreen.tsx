@@ -7,22 +7,29 @@ import {
   Box,
   User,
   Loader2,
-  ExternalLink
+  ExternalLink,
+  Trash2,
+  Edit,
+  X
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 
 interface CommunityModpacksScreenProps {
   onBack: () => void;
   onDownload: (modpack: CommunityModpack) => void;
+  currentUserId?: string; // Discord user ID of the current user
 }
 
 export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = ({
   onBack,
-  onDownload
+  onDownload,
+  currentUserId
 }) => {
   const [modpacks, setModpacks] = useState<CommunityModpack[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingModpack, setEditingModpack] = useState<CommunityModpack | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', description: '', version: '' });
 
   useEffect(() => {
     fetchCommunityModpacks();
@@ -46,6 +53,61 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async (modpack: CommunityModpack) => {
+    if (!currentUserId) return;
+    if (!confirm(`Are you sure you want to delete "${modpack.name}"?`)) return;
+
+    try {
+      const response = await fetch(`/api/community-modpacks?id=${modpack.id}&author_id=${currentUserId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to delete modpack');
+      }
+
+      // Refresh the list
+      await fetchCommunityModpacks();
+    } catch (err) {
+      console.error('Failed to delete modpack:', err);
+      alert(err instanceof Error ? err.message : 'Failed to delete modpack');
+    }
+  };
+
+  const handleEdit = (modpack: CommunityModpack) => {
+    setEditingModpack(modpack);
+    setEditForm({
+      name: modpack.name,
+      description: modpack.description,
+      version: modpack.version
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingModpack || !currentUserId) return;
+
+    try {
+      const response = await fetch(`/api/community-modpacks?id=${editingModpack.id}&author_id=${currentUserId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update modpack');
+      }
+
+      // Refresh the list
+      await fetchCommunityModpacks();
+      setEditingModpack(null);
+    } catch (err) {
+      console.error('Failed to update modpack:', err);
+      alert(err instanceof Error ? err.message : 'Failed to update modpack');
     }
   };
 
@@ -172,10 +234,99 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 <Download className="w-4 h-4" />
                 Download Modpack
               </button>
+
+              {/* Owner Actions */}
+              {currentUserId && modpack.author_id === currentUserId && (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(modpack)}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#1C1730] border border-[#30263F] hover:border-[#762BFF] text-[10px] text-[#AAA3BB] flex items-center justify-center gap-1 transition-all"
+                  >
+                    <Edit className="w-3 h-3" />
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(modpack)}
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-[#1C1730] border border-[#30263F] hover:border-[#EF4444] text-[10px] text-[#AAA3BB] hover:text-[#EF4444] flex items-center justify-center gap-1 transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    Delete
+                  </button>
+                </div>
+              )}
             </div>
           ))
         )}
       </div>
+
+      {/* Edit Modal */}
+      {editingModpack && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="w-full max-w-md bg-[#100D18] border border-[#30263F] rounded-xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white">Edit Modpack</h2>
+              <button
+                type="button"
+                onClick={() => setEditingModpack(null)}
+                className="text-[#AAA3BB] hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Description</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Version</label>
+                <input
+                  type="text"
+                  value={editForm.version}
+                  onChange={(e) => setEditForm({ ...editForm, version: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingModpack(null)}
+                  className="flex-1 px-4 py-2 rounded-lg bg-[#1C1730] border border-[#30263F] text-white text-sm font-semibold hover:border-[#762BFF] transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  className="flex-1 px-4 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-white text-sm font-semibold transition-all"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
