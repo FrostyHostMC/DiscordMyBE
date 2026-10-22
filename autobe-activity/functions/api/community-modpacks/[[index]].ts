@@ -26,6 +26,17 @@ export async function onRequestPost(context: Context) {
       });
     }
 
+    // Only accept files that were uploaded through our own /api/upload (kind "pub").
+    try {
+      const blobUrl = new URL(String(data.blob_url));
+      if (!blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad path');
+    } catch {
+      return new Response(JSON.stringify({ error: 'Invalid file link. Upload the modpack through the app first.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     const id = crypto.randomUUID();
     const now = Date.now();
 
