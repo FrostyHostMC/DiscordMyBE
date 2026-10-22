@@ -17,7 +17,7 @@ import {
 import { INITIAL_DEMO_PACKS, INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
 import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
 import { uploadToCloud } from '@/utils/cloudUpload';
-import { getDiscordAuth } from '@/utils/discordAuth';
+import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 import {
   getAllPacksFromDB,
   savePackToDB,
@@ -108,9 +108,12 @@ export const App: React.FC = () => {
   // Notification Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const showToast = (msg: string) => {
+  const toastTimerRef = useRef<number | undefined>(undefined);
+  const showToast = (msg: string, durationMs = 3500) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
+    // Only the newest toast's timer may clear it (older timers used to hide newer toasts early).
+    if (toastTimerRef.current !== undefined) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), durationMs);
   };
 
   const triggerHaptic = (duration = 50) => {
@@ -481,7 +484,7 @@ export const App: React.FC = () => {
     }
 
     try {
-      const result = await deliverFile(blob, output.fileName, showToast);
+      const result = await deliverFile(blob, output.fileName, (m) => showToast(m, 30000));
       if (result.ok) {
         showToast('Opening your download…');
         return;
@@ -529,7 +532,7 @@ export const App: React.FC = () => {
     const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
 
     try {
-      const result = await deliverFile(blob, fileName, showToast);
+      const result = await deliverFile(blob, fileName, (m) => showToast(m, 30000));
       if (result.ok) {
         showToast('Opening your download…');
         return;
@@ -659,37 +662,27 @@ export const App: React.FC = () => {
       if (!auth) {
         throw new Error('Your Discord session was not found. Close and reopen the Activity, then try again.');
       }
-      const accessToken = auth.token;
+
+      // Author name comes from the Discord SDK sign-in (calling discord.com directly
+      // from inside an Activity is not guaranteed to be allowed by Discord's proxy/CSP).
+      const discordUser = getDiscordUser();
+      if (!discordUser) {
+        throw new Error('Your Discord profile was not found. Close and reopen the Activity, then try again.');
+      }
+      const authorName = discordUser.global_name || discordUser.username || 'Anonymous';
+      const authorId = discordUser.id;
+      console.log('[Publish] Author:', authorName, 'ID:', authorId);
 
       // Upload to our own storage (no Discord size limit, link doesn't expire).
       let lastShown = -1;
       const uploaded = await uploadToCloud(blob, justCompletedModpack.outputFileName, 'pub', (pct) => {
         if (pct - lastShown >= 10 || pct === 100) {
           lastShown = pct;
-          showToast(`Uploading modpack… ${pct}%`);
+          showToast(`Uploading modpack… ${pct}%`, 30000);
         }
       });
       const blobUrl = uploaded.url;
       console.log('[Publish] Uploaded:', blobUrl);
-
-      // Get Discord user info for author name
-      console.log('[Publish] Fetching Discord user info...');
-      const userResponse = await fetch('https://discord.com/api/users/@me', {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!userResponse.ok) {
-        const errorText = await userResponse.text();
-        console.error('[Publish] User info fetch failed:', errorText);
-        throw new Error('Failed to get Discord user info');
-      }
-
-      const userData = await userResponse.json();
-      const authorName = userData.global_name || userData.username || 'Anonymous';
-      const authorId = userData.id;
-      console.log('[Publish] Author:', authorName, 'ID:', authorId);
 
       // Publish to community API
       console.log('[Publish] Publishing to community API...');
@@ -895,8 +888,10 @@ export const App: React.FC = () => {
       {screen === 'merge_complete' && justCompletedModpack && (
         <MergeCompleteScreen
           modpack={justCompletedModpack}
-          onInstallToMinecraft={handleInstallToMinecraft}
-          onSaveToFiles={handleInstallToMinecraft}
+          // NOTE: wrap in arrow functions — passing the handler directly hands it the click
+          // event as its `modpack` argument, which caused "Modpack file not available".
+          onInstallToMinecraft={() => handleInstallToMinecraft()}
+          onSaveToFiles={() => handleInstallToMinecraft()}
           onShare={handleShareModpack}
           onDownloadOutput={handleDownloadOutput}
           onDone={() => {
