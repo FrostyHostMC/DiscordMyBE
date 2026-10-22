@@ -117,3 +117,30 @@ curl https://your-site.pages.dev/api/community-modpacks
 - Each modpack tracks: author, download count, creation date, included packs
 - Only the author can delete their own modpacks
 - You may need to add `DB` as an environment variable in Cloudflare Pages settings with the database ID
+
+---
+
+# Cloudflare R2 Setup (file downloads + publishing)
+
+Downloads and "Publish to Community" upload the file to your own R2 bucket
+(no Discord size limit, links don't expire for published packs). One-time setup:
+
+1. **Create the bucket** (Cloudflare dashboard → R2, or):
+   ```bash
+   wrangler r2 bucket create autobe-modpacks
+   ```
+2. **Bind it to the Pages project.** `wrangler.toml` already declares
+   `binding = "BUCKET"`, `bucket_name = "autobe-modpacks"`. If you deploy via the
+   dashboard instead, add it under Pages project → Settings → Functions →
+   R2 bucket bindings (variable name `BUCKET`) for Production (and Preview).
+3. **Auto-delete temporary download files.** In R2 → `autobe-modpacks` →
+   Settings → Object lifecycle rules, add a rule: prefix `temp/`, delete
+   objects after 1 day. (Published modpacks live under `pub/` and are kept.)
+4. **Optional:** if download links come back with the wrong host, set
+   `PUBLIC_BASE_URL` (e.g. `https://your-project.pages.dev`) in `[vars]`.
+5. Redeploy.
+
+How it works: the app uploads in 8 MB parts to `/api/upload` (R2 multipart,
+needed because a single Pages Function request is limited to ~100 MB), then
+opens `https://<your-site>/api/files/...` in the phone's browser, which
+downloads it normally.
