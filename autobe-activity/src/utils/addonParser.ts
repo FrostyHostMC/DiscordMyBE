@@ -7,11 +7,50 @@ export interface ParseResult {
 }
 
 // Clean JSON with comments (// and /* */) and trailing commas
+// Also strips UTF-8 BOM which can cause encoding corruption
 export function sanitizeJsonString(raw: string): string {
+  // Strip UTF-8 BOM if present (prevents encoding corruption)
+  if (raw.charCodeAt(0) === 0xFEFF) {
+    raw = raw.slice(1);
+  }
+  // Handle UTF-16 BOMs (less common but possible)
+  if (raw.charCodeAt(0) === 0xFEFF || (raw.charCodeAt(0) === 0xFFFE && raw.charCodeAt(1) === 0xFEFF)) {
+    raw = raw.slice(1);
+  }
+  
   let cleaned = raw.replace(/\/\*[\s\S]*?\*\//g, '');
   cleaned = cleaned.replace(/^\s*\/\/.*$/gm, '');
   cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
   return cleaned;
+}
+
+// Safely decode text from ArrayBuffer with UTF-8 BOM handling
+export function decodeTextSafe(uint8: Uint8Array): string {
+  // Check for UTF-8 BOM
+  if (uint8.length >= 3 && uint8[0] === 0xEF && uint8[1] === 0xBB && uint8[2] === 0xBF) {
+    uint8 = uint8.slice(3);
+  }
+  // Check for UTF-16 LE BOM
+  if (uint8.length >= 2 && uint8[0] === 0xFF && uint8[1] === 0xFE) {
+    uint8 = uint8.slice(2);
+  }
+  // Check for UTF-16 BE BOM
+  if (uint8.length >= 2 && uint8[0] === 0xFE && uint8[1] === 0xFF) {
+    uint8 = uint8.slice(2);
+  }
+  
+  // Use TextDecoder if available (modern browsers), otherwise fallback
+  if (typeof TextDecoder !== 'undefined') {
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    return decoder.decode(uint8);
+  }
+  
+  // Fallback for older browsers
+  let result = '';
+  for (let i = 0; i < uint8.length; i++) {
+    result += String.fromCharCode(uint8[i]);
+  }
+  return result;
 }
 
 export function generateUUID(): string {
@@ -165,9 +204,9 @@ export async function parseAddonArchive(
 
   for (const manifestPath of manifestPaths) {
     try {
-      const content = await loaded.file(manifestPath)?.async('text');
-      if (!content) continue;
-      const sanitized = sanitizeJsonString(content);
+      const uint8 = await loaded.file(manifestPath)?.async('uint8array');
+      if (!uint8) continue;
+      const sanitized = sanitizeJsonString(decodeTextSafe(uint8));
       const manifest = JSON.parse(sanitized);
 
       const rootFolder = manifestPath.substring(0, manifestPath.lastIndexOf('/') + 1);
@@ -314,7 +353,8 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         if (!cat) continue;
 
         try {
-          const txt = await fileObj.async('text');
+          const uint8 = await fileObj.async('uint8array');
+          const txt = decodeTextSafe(uint8);
           const json = JSON.parse(sanitizeJsonString(txt));
           let ident = '';
           if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;
