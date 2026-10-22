@@ -16,6 +16,7 @@ import {
 } from '@/types/modpack';
 import { INITIAL_DEMO_PACKS, INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
 import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
+import { ensureCombinedBlob } from '@/utils/mergeEngine';
 import { uploadToCloud } from '@/utils/cloudUpload';
 import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 import {
@@ -318,9 +319,13 @@ export const App: React.FC = () => {
   const hydratedPacksRef = useRef<Map<string, AddonPack>>(new Map());
   const hydratePacks = async (packs: AddonPack[]): Promise<AddonPack[]> => {
     const out: AddonPack[] = [];
-    for (const p of packs) out.push(await loadPackFile(p)); // one at a time to limit peak memory
+    for (let i = 0; i < packs.length; i++) {
+      if (!packs[i].fileBlob) showToast(`Loading ${packs[i].name} (${i + 1}/${packs.length})…`, 20000);
+      out.push(await loadPackFile(packs[i])); // one at a time to limit peak memory
+    }
     return out;
   };
+  const mergeStartingRef = useRef(false);
 
   const getSelectedPacks = () =>
     installedPacks
@@ -335,6 +340,17 @@ export const App: React.FC = () => {
 
   // Start merge flow
   const handleStartMergeFlow = async (customConfig?: MergeSessionConfig) => {
+    // Ignore extra taps while the first one is still loading packs.
+    if (mergeStartingRef.current) return;
+    mergeStartingRef.current = true;
+    try {
+      await handleStartMergeFlowInner(customConfig);
+    } finally {
+      mergeStartingRef.current = false;
+    }
+  };
+
+  const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig) => {
     triggerHaptic(50);
     handleSoundTap();
     const selected = getSelectedPacks();
@@ -393,8 +409,8 @@ export const App: React.FC = () => {
         }
       });
 
-      if (!result || !result.outputBlob) {
-        throw new Error('Merge completed but no output blob was generated');
+      if (!result || (!result.outputBlob && !(result.outputs && result.outputs.some((o) => o.blob)))) {
+        throw new Error('Merge completed but no output files were generated');
       }
 
       mergeLogger.success('Merge completed successfully', result.outputFileName, packsToMerge.length, packsToMerge.map(p => p.name));
@@ -554,11 +570,19 @@ export const App: React.FC = () => {
     console.log('[Download] justCompletedModpack exists:', !!justCompletedModpack);
     console.log('[Download] justCompletedModpack has outputBlob:', !!justCompletedModpack?.outputBlob);
 
-    let blob = modpack.outputBlob;
-    // If loading from DB and blob is missing, check fresh merge
-    if (!blob && justCompletedModpack?.outputBlob && modpack.id === justCompletedModpack.id) {
-      blob = justCompletedModpack.outputBlob;
-      console.log('[Aippy] Using outputBlob from fresh merge');
+    // Prefer the in-memory data of the freshly completed merge (saved copies have no blobs).
+    const source: MergedModpack =
+      justCompletedModpack && modpack.id === justCompletedModpack.id ? justCompletedModpack : modpack;
+    let blob: Blob | undefined = source.outputBlob;
+    if (!blob && source.outputs?.some((o) => o.blob)) {
+      try {
+        showToast('Building the combined .mcaddon…', 30000);
+        blob = await ensureCombinedBlob(source);
+      } catch (err) {
+        console.error('[Download] Could not build combined file:', describeError(err));
+        showToast(`Could not build the combined file: ${describeError(err)}`, 8000);
+        return;
+      }
     }
 
     if (!blob) {
@@ -689,7 +713,11 @@ export const App: React.FC = () => {
 
     try {
       // Get the blob
-      const blob = justCompletedModpack.outputBlob;
+      let blob = justCompletedModpack.outputBlob;
+      if (!blob && justCompletedModpack.outputs?.some((o) => o.blob)) {
+        showToast('Building the combined .mcaddon…', 30000);
+        blob = await ensureCombinedBlob(justCompletedModpack);
+      }
       if (!blob) {
         console.error('[Publish] Blob is missing - cannot publish');
         throw new Error('Modpack blob is missing. Please merge again before publishing.');
