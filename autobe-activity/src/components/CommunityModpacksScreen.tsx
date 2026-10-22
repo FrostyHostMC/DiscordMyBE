@@ -16,6 +16,12 @@ import {
   Info
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
+import { getDiscordAuth } from '@/utils/discordAuth';
+
+const authHeaders = (): Record<string, string> => {
+  const auth = getDiscordAuth();
+  return auth ? { Authorization: `Bearer ${auth.token}` } : {};
+};
 
 interface CommunityModpacksScreenProps {
   onBack: () => void;
@@ -34,6 +40,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [editingModpack, setEditingModpack] = useState<CommunityModpack | null>(null);
   const [editForm, setEditForm] = useState({ name: '', description: '', version: '' });
   const [search, setSearch] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
 
   useEffect(() => {
@@ -65,8 +73,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     if (!currentUserId) return;
 
     try {
-      const response = await fetch(`/api/community-modpacks?id=${modpack.id}&author_id=${currentUserId}`, {
+      const response = await fetch(`/api/community-modpacks?id=${encodeURIComponent(modpack.id)}`, {
         method: 'DELETE',
+        headers: authHeaders(),
       });
 
       if (!response.ok) {
@@ -78,7 +87,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       await fetchCommunityModpacks();
     } catch (err) {
       console.error('Failed to delete modpack:', err);
-      alert(err instanceof Error ? err.message : 'Failed to delete modpack');
+      setNotice(err instanceof Error ? err.message : 'Failed to delete modpack');
     }
   };
 
@@ -95,9 +104,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     if (!editingModpack || !currentUserId) return;
 
     try {
-      const response = await fetch(`/api/community-modpacks?id=${editingModpack.id}&author_id=${currentUserId}`, {
+      const response = await fetch(`/api/community-modpacks?id=${encodeURIComponent(editingModpack.id)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify(editForm),
       });
 
@@ -111,7 +120,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setEditingModpack(null);
     } catch (err) {
       console.error('Failed to update modpack:', err);
-      alert(err instanceof Error ? err.message : 'Failed to update modpack');
+      setNotice(err instanceof Error ? err.message : 'Failed to update modpack');
     }
   };
 
@@ -174,6 +183,11 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
+        {notice && (
+          <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300 break-words" onClick={() => setNotice(null)}>
+            {notice}
+          </div>
+        )}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Loader2 className="w-8 h-8 text-[#762BFF] animate-spin mb-3" />
@@ -250,11 +264,20 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                     {currentUserId && modpack.author_id === currentUserId && (
                       <button
                         type="button"
-                        onClick={() => handleDelete(modpack)}
-                        className="p-1.5 rounded-lg text-[#AAA3BB] hover:text-red-400 hover:bg-[#15111F] transition-colors"
+                        onClick={() => {
+                          if (confirmDeleteId === modpack.id) {
+                            setConfirmDeleteId(null);
+                            handleDelete(modpack);
+                          } else {
+                            setConfirmDeleteId(modpack.id);
+                            setTimeout(() => setConfirmDeleteId((c) => (c === modpack.id ? null : c)), 4000);
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg hover:bg-[#15111F] transition-colors flex items-center gap-1 text-xs ${confirmDeleteId === modpack.id ? 'text-red-400' : 'text-[#AAA3BB] hover:text-red-400'}`}
                         title="Delete"
                       >
                         <Trash2 className="w-4 h-4" />
+                        {confirmDeleteId === modpack.id && <span>Tap again</span>}
                       </button>
                     )}
                   </div>
