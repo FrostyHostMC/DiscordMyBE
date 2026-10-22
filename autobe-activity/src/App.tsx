@@ -500,11 +500,13 @@ export const App: React.FC = () => {
     pendingMergeRef.current = null;
     if (!pending) return;
 
+    console.log('[SubpackConfirm] Selections:', selections);
     const processed: AddonPack[] = [];
     for (const p of pending.packs) {
       // Look up selection by UUID+type (same key used for deduplication)
       const key = `${p.uuid}_${p.type}`;
       const variant = selections[key];
+      console.log('[SubpackConfirm] Processing pack:', p.name, 'key:', key, 'variant:', variant, 'hasBlob:', !!p.fileBlob);
       if (variant && p.fileBlob) {
         try {
           processed.push(await applySubpackToPack(p, variant));
