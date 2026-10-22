@@ -8,8 +8,13 @@ export async function onRequestPost(context: Context) {
   const { request, env } = context;
 
   try {
+    console.log('[Community] POST request received');
+    console.log('[Community] Request URL:', request.url);
+    console.log('[Community] Request method:', request.method);
+
     // Check if DB is available
     if (!env.DB) {
+      console.error('[Community] DB binding not available');
       return new Response(JSON.stringify({ error: 'Database not configured' }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
