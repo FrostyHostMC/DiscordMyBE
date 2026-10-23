@@ -219,14 +219,17 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
         const data = await fileObj.async('uint8array');
         targetZip.file(outPath, data);
       }
-    } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction') || lower.endsWith('.js'))) {
+    } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
       let txt = await fileObj.async('text');
       for (const [oldId, newId] of renameMap.entries()) {
         txt = txt.replaceAll(oldId, newId);
       }
       targetZip.file(outPath, txt);
-    } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction') || lower.endsWith('.js')) {
+    } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
       targetZip.file(outPath, await fileObj.async('text'));
+    } else if (lower.endsWith('.js')) {
+      // JS files must be copied as binary to preserve UTF-8 encoding
+      targetZip.file(outPath, await fileObj.async('uint8array'));
     } else {
       writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
     }
