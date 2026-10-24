@@ -85,6 +85,16 @@ async function ensureTable(env: Env): Promise<void> {
       included_packs TEXT
     )`
   ).run();
+
+  // Migrate databases created before detailed descriptions and gallery images existed.
+  const columns = await env.DB.prepare('PRAGMA table_info(community_modpacks)').all<{ name: string }>();
+  const names = new Set((columns.results || []).map((column) => column.name));
+  if (!names.has('detail_description')) {
+    await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN detail_description TEXT').run();
+  }
+  if (!names.has('detail_images')) {
+    await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN detail_images TEXT').run();
+  }
 }
 
 function fail(label: string, error: unknown) {
@@ -219,7 +229,20 @@ export async function onRequestGet(context: Ctx) {
       } catch {
         included = [];
       }
-      return { ...row, included_packs: Array.isArray(included) ? included : [] };
+      let detailImages: unknown = [];
+      try {
+        detailImages = typeof row.detail_images === 'string' ? JSON.parse(row.detail_images) : [];
+      } catch {
+        detailImages = [];
+      }
+      return {
+        ...row,
+        included_packs: Array.isArray(included) ? included : [],
+        detail_description: typeof row.detail_description === 'string' ? row.detail_description.slice(0, 4000) : '',
+        detail_images: Array.isArray(detailImages)
+          ? detailImages.filter((image): image is string => typeof image === 'string').slice(0, 3)
+          : [],
+      };
     });
 
     console.log('[Community] GET returned', modpacks.length);
@@ -284,7 +307,7 @@ export async function onRequestPatch(context: Ctx) {
     const data = (await request.json()) as Record<string, any>;
     const updates: string[] = [];
     const values: unknown[] = [];
-    for (const field of ['name', 'description', 'version', 'icon_data_url'] as const) {
+    for (const field of ['name', 'description', 'version', 'icon_data_url', 'detail_description', 'detail_images'] as const) {
       if (data[field] === undefined) continue;
       let value: unknown = data[field];
       if (field === 'name') value = String(value).slice(0, 120);
@@ -292,6 +315,21 @@ export async function onRequestPatch(context: Ctx) {
       if (field === 'version') value = String(value).slice(0, 40);
       if (field === 'icon_data_url') {
         value = typeof value === 'string' && value.length <= 100_000 ? value : null;
+      }
+      if (field === 'detail_description') {
+        value = typeof value === 'string' ? value.slice(0, 4000) : '';
+      }
+      if (field === 'detail_images') {
+        if (!Array.isArray(value) || value.length > 3) {
+          return json({ error: 'Gallery images must contain no more than 3 images.' }, 400);
+        }
+        const images = value.map((image) => {
+          if (typeof image !== 'string' || image.length > 95_000 || !/^data:image\/(jpeg|png|webp|gif);base64,/i.test(image)) {
+            throw new Error('Each gallery image must be a supported image under the size limit.');
+          }
+          return image;
+        });
+        value = JSON.stringify(images);
       }
       updates.push(`${field} = ?`);
       values.push(value);
