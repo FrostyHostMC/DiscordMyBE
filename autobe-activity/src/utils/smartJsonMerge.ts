@@ -156,6 +156,76 @@ function mergeCatGroup(mergedCat: any, newCat: any): void {
 }
 
 /**
+ * HUD modifications are an ordered patch list, not ordinary JSON arrays.
+ * Blind concatenation repeats identical patches and lets conflicting replace/
+ * merge patches for the same selector stack on top of each other. Keep unique
+ * insertions (they often add independent controls), deduplicate identical
+ * patches, and coalesce non-insertion patches that address the same target.
+ */
+function mergeHudModifications(...lists: any[][]): any[] {
+  const result: any[] = [];
+  const exactSeen = new Set<string>();
+  const targetIndexes = new Map<string, number>();
+
+  const isObject = (value: any): value is Record<string, any> =>
+    value !== null && typeof value === 'object' && !Array.isArray(value);
+
+  const mergePatchValue = (base: any, incoming: any): any => {
+    if (!isObject(base) || !isObject(incoming)) return structuredClone(incoming);
+    const merged = structuredClone(base);
+    for (const [key, value] of Object.entries(incoming)) {
+      merged[key] = key in merged && isObject(merged[key]) && isObject(value)
+        ? mergePatchValue(merged[key], value)
+        : structuredClone(value);
+    }
+    return merged;
+  };
+
+  for (const list of lists) {
+    for (const raw of list) {
+      if (!isObject(raw)) continue;
+      const patch = structuredClone(raw);
+      const exact = JSON.stringify(patch);
+      if (exactSeen.has(exact)) continue;
+      exactSeen.add(exact);
+
+      const operation = String(patch.operation ?? '').toLowerCase();
+      // Insert operations can intentionally add different controls to the
+      // same array. Preserve their order and only remove exact duplicates.
+      if (operation.startsWith('insert')) {
+        result.push(patch);
+        continue;
+      }
+
+      const selector = JSON.stringify([
+        patch.array_name ?? '',
+        operation,
+        patch.control_name ?? '',
+        patch.element_name ?? '',
+        patch.target ?? ''
+      ]);
+      const previousIndex = targetIndexes.get(selector);
+      if (previousIndex === undefined) {
+        targetIndexes.set(selector, result.length);
+        result.push(patch);
+      } else if (operation === 'merge') {
+        const previous = result[previousIndex];
+        result[previousIndex] = {
+          ...previous,
+          ...patch,
+          value: mergePatchValue(previous.value, patch.value)
+        };
+      } else {
+        // A later replace/remove for the same selector supersedes the earlier
+        // patch instead of applying conflicting edits to the same HUD element.
+        result[previousIndex] = patch;
+      }
+    }
+  }
+  return result;
+}
+
+/**
  * Merge a list of parsed JSON values for one output file using the legacy
  * per-file strategies. `fileName` is the lowercase zip path.
  */
@@ -215,7 +285,7 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         if (!(key in merged)) {
           merged[key] = structuredClone(value);
         } else if (key === 'modifications' && Array.isArray(merged[key]) && Array.isArray(value)) {
-          merged[key] = [...merged[key], ...value];
+          merged[key] = mergeHudModifications(merged[key], value);
         } else if (Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = [...merged[key], ...value];
         } else {
