@@ -240,10 +240,18 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
           merged[key] = structuredClone(value);
         } else if (key === 'modifications' && Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = mergeHudModifications(merged[key], value);
+        } else if (key === 'visible' && typeof merged[key] === 'string' && typeof value === 'string' && merged[key] !== value) {
+          // `visible` is a Molang condition, not a nested JSON object. Keep
+          // both packs' visibility requirements instead of recursively treating
+          // the strings as HUD objects (which would replace them with `{}`).
+          merged[key] = `(${merged[key]}) && (${value})`;
         } else if (Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = [...merged[key], ...value];
-        } else {
+        } else if (merged[key] && value && typeof merged[key] === 'object' && typeof value === 'object' && !Array.isArray(merged[key]) && !Array.isArray(value)) {
           merged[key] = mergeJsonForFile(base, [merged[key], value]);
+        } else {
+          // Preserve the first HUD value when two packs disagree on a scalar;
+          // overwriting it can silently break the first pack's UI definition.
         }
         continue;
       }
