@@ -813,7 +813,10 @@ export const App: React.FC = () => {
         let error = 'Failed to publish modpack';
         try {
           const errorJson = JSON.parse(responseText);
-          error = errorJson.error || error;
+          // Preserve server diagnostics so a generic 500 does not hide the actual cause.
+          error = [errorJson.error, errorJson.details]
+            .filter((part) => typeof part === 'string' && part.trim())
+            .join(': ') || error;
         } catch {
           error = responseText || error;
         }
