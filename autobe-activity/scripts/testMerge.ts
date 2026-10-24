@@ -50,13 +50,14 @@ test('HUD visibility strings merge as conditions instead of being treated as obj
   assert.equal(merged.screen.panel.text, 'base label');
 });
 
-test('subpack HUD visibility conditions are both retained', () => {
+test('subpack HUD merge preserves controls and bindings from both packs', () => {
   const result = deepMergeUi(
-    { panel: { visible: 'query.is_first_person', controls: [{ base: {} }] } },
-    { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }] } },
+    { panel: { visible: 'query.is_first_person', controls: [{ base: {} }], bindings: [{ binding_name: '#base' }] } },
+    { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }], bindings: [{ binding_name: '#overlay' }] } },
   );
   assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
-  assert.deepEqual(result.panel.controls, [{ overlay: {} }]);
+  assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
+  assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
 
 console.log('Merge regression tests passed.');
