@@ -29,6 +29,94 @@ export interface MergePlan {
 const DEEP_MERGE_FILES = new Set(['textures/item_texture.json', 'textures/terrain_texture.json', 'blocks.json', 'sounds.json', 'sounds/sound_definitions.json', 'sounds/music_definitions.json', 'biomes_client.json', 'tick.json']);
 const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/textures_list.json']);
 
+/**
+ * Merge Bedrock animation JSON additively. Entity animation aliases and animate
+ * lists are additive; controller states are combined by name. When the same
+ * transition target has different Molang conditions, OR the conditions rather
+ * than silently discarding one pack's behavior.
+ */
+function mergeAnimationJson(existing: any, incoming: any, path: string): any {
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return incoming;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return existing;
+  const out = { ...existing, ...incoming };
+  const isEntity = /(^|\/)entities?\/.*\.json$/i.test(path);
+  const isController = /(^|\/)animation_controllers?\/.*\.json$/i.test(path);
+
+  if (isEntity) {
+    out.animations = { ...(existing.animations || {}), ...(incoming.animations || {}) };
+    const oldScripts = existing.scripts || {};
+    const newScripts = incoming.scripts || {};
+    out.scripts = { ...oldScripts, ...newScripts };
+    if (Array.isArray(oldScripts.animate) || Array.isArray(newScripts.animate)) {
+      const combined = [...(Array.isArray(oldScripts.animate) ? oldScripts.animate : []),
+        ...(Array.isArray(newScripts.animate) ? newScripts.animate : [])];
+      const seen = new Set<string>();
+      out.scripts.animate = combined.filter((item: any) => {
+        const key = JSON.stringify(item);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+    // Keep component/event data from both definitions instead of shallow overwrite.
+    for (const key of ['description', 'components', 'component_groups', 'events']) {
+      if (existing[key] && incoming[key] && typeof existing[key] === 'object' && typeof incoming[key] === 'object') {
+        out[key] = deepMerge(existing[key], incoming[key]);
+      }
+    }
+  }
+
+  if (isController) {
+    const oldControllers = existing.animation_controllers || {};
+    const newControllers = incoming.animation_controllers || {};
+    const controllers: Record<string, any> = { ...oldControllers };
+    for (const [controllerName, incomingController] of Object.entries(newControllers)) {
+      const previous = controllers[controllerName];
+      if (!previous || typeof previous !== 'object') {
+        controllers[controllerName] = incomingController;
+        continue;
+      }
+      const mergedController: any = { ...previous, ...(incomingController as any) };
+      const oldStates = (previous as any).states || {};
+      const newStates = (incomingController as any)?.states || {};
+      const states: Record<string, any> = { ...oldStates };
+      for (const [stateName, incomingState] of Object.entries(newStates)) {
+        const previousState = states[stateName];
+        if (!previousState || typeof previousState !== 'object') {
+          states[stateName] = incomingState;
+          continue;
+        }
+        const nextState: any = { ...previousState, ...(incomingState as any) };
+        const oldTransitions = Array.isArray((previousState as any).transitions) ? (previousState as any).transitions : [];
+        const newTransitions = Array.isArray((incomingState as any)?.transitions) ? (incomingState as any).transitions : [];
+        const transitionMap = new Map<string, any>();
+        for (const transition of [...oldTransitions, ...newTransitions]) {
+          if (!transition || typeof transition !== 'object') continue;
+          const target = Object.keys(transition)[0];
+          if (!target) continue;
+          const condition = String(transition[target] ?? 'false');
+          const prior = transitionMap.get(target);
+          if (!prior) transitionMap.set(target, { [target]: condition });
+          else if (String(prior[target]) !== condition) {
+            const terms = [String(prior[target]), condition].filter((value, index, all) => all.indexOf(value) === index);
+            transitionMap.set(target, { [target]: terms.map(value => `(${value})`).join(' || ') });
+          }
+        }
+        if (oldTransitions.length || newTransitions.length) nextState.transitions = [...transitionMap.values()];
+        if (Array.isArray((previousState as any).animations) || Array.isArray((incomingState as any)?.animations)) {
+          const animations = [...((previousState as any).animations || []), ...((incomingState as any)?.animations || [])];
+          nextState.animations = animations.filter((item: any, index: number) => animations.findIndex((other: any) => JSON.stringify(other) === JSON.stringify(item)) === index);
+        }
+        states[stateName] = nextState;
+      }
+      mergedController.states = states;
+      controllers[controllerName] = mergedController;
+    }
+    out.animation_controllers = controllers;
+  }
+  return out;
+}
+
 // Per-file strategy merge files (Part 18 _merge_json special branches):
 // collected as lists and merged with mergeJsonForFile at write time.
 const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'crafting_item_catalog.json']);
@@ -207,12 +295,15 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       } catch {
         writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
       }
-    } else if (DEEP_MERGE_FILES.has(lower)) {
+    } else if (DEEP_MERGE_FILES.has(lower) || lower.includes('animation_controllers/') || lower.includes('animation_controller/') || /(^|\\/)entities?\\/.*\\.json$/i.test(lower)) {
       try {
         const txt = await fileObj.async('text');
         const parsed = JSON.parse(sanitizeJsonString(txt));
         const existing = accum.jsonFiles.get(lower) || {};
-        accum.jsonFiles.set(lower, deepMerge(existing, parsed));
+        const merged = (lower.includes('animation_controllers/') || lower.includes('animation_controller/') || /(^|\\/)entities?\\/.*\\.json$/i.test(lower))
+          ? mergeAnimationJson(existing, parsed, lower)
+          : deepMerge(existing, parsed);
+        accum.jsonFiles.set(lower, merged);
       } catch {
         writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
       }
