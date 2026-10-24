@@ -39,12 +39,29 @@ function projectMetadata(project: MergedModpack): Record<string, unknown> {
 }
 
 async function saveRemote(items: RemoteItem[]): Promise<void> {
+  // A single malformed/oversized record must not block unrelated workspace items.
+  // Keep normal batches efficient, then bisect only rejected 400 batches to isolate
+  // the bad record. Auth/server failures still surface immediately.
+  const saveBatch = async (batch: RemoteItem[]): Promise<void> => {
+    if (!batch.length) return;
+    try {
+      await api('/api/workspace', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ items: batch }),
+      });
+    } catch (error) {
+      if (batch.length > 1 && error instanceof Error && /HTTP 400/.test(error.message)) {
+        const middle = Math.floor(batch.length / 2);
+        await saveBatch(batch.slice(0, middle));
+        await saveBatch(batch.slice(middle));
+        return;
+      }
+      throw error;
+    }
+  };
   for (let i = 0; i < items.length; i += 25) {
-    await api('/api/workspace', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ items: items.slice(i, i + 25) }),
-    });
+    await saveBatch(items.slice(i, i + 25));
   }
 }
 
