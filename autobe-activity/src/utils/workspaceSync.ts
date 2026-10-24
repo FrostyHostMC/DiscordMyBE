@@ -49,21 +49,21 @@ async function saveRemote(items: RemoteItem[]): Promise<void> {
 }
 
 export async function syncPackToCloud(pack: AddonPack): Promise<void> {
-  await saveRemote([{ id: pack.id, type: 'pack', data: packMetadata(pack) }]);
+  // Upload the binary first. Do not leave cloud metadata pointing at a missing file.
   const withFile = await loadPackFile(pack);
-  if (withFile.fileBlob) {
-    const response = await fetch(`/api/workspace/files/${encodeURIComponent(pack.id)}`, {
-      method: 'PUT',
-      headers: authHeaders({ 'content-type': withFile.fileBlob.type || 'application/octet-stream' }),
-      body: withFile.fileBlob,
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      let detail = '';
-      try { detail = (await response.json() as { error?: string }).error || ''; } catch { /* ignore */ }
-      throw new Error(detail || `Pack file sync failed (HTTP ${response.status}).`);
-    }
+  if (!withFile.fileBlob) throw new Error(`The local file for "${pack.name}" is missing; cloud metadata was not changed.`);
+  const response = await fetch(`/api/workspace/files/${encodeURIComponent(pack.id)}`, {
+    method: 'PUT',
+    headers: authHeaders({ 'content-type': withFile.fileBlob.type || 'application/octet-stream' }),
+    body: withFile.fileBlob,
+    cache: 'no-store',
+  });
+  if (!response.ok) {
+    let detail = '';
+    try { detail = (await response.json() as { error?: string }).error || ''; } catch { /* ignore */ }
+    throw new Error(detail || `Pack file sync failed (HTTP ${response.status}).`);
   }
+  await saveRemote([{ id: pack.id, type: 'pack', data: packMetadata(pack) }]);
 }
 
 export async function syncProjectToCloud(project: MergedModpack): Promise<void> {
