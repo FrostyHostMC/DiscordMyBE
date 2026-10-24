@@ -12,63 +12,9 @@ const STORE_MODPACKS = 'merged_modpacks';
 // Pack FILE bytes live in their own store so listing packs never loads them into memory.
 const STORE_FILES = 'pack_files';
 
-// Local projects and imported add-ons are temporary workspace data, not community uploads.
-// Keep them for seven days since last save; published community files live in R2 separately.
-const LOCAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
-let cleanupPromise: Promise<void> | null = null;
-
-async function cleanupExpiredLocalData(): Promise<void> {
-  if (cleanupPromise) return cleanupPromise;
-  cleanupPromise = (async () => {
-    const now = Date.now();
-    const packs = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', (tx) =>
-      tx.objectStore(STORE_PACKS).getAll()
-    )) || []) as (LegacyPackRow & { __autobeStoredAt?: number })[];
-    const modpacks = ((await run<(MergedModpack & { __autobeStoredAt?: number })[]>(STORE_MODPACKS, 'readonly', (tx) =>
-      tx.objectStore(STORE_MODPACKS).getAll()
-    )) || []) as (MergedModpack & { __autobeStoredAt?: number })[];
-
-    const stalePackIds: string[] = [];
-    const stampPacks: Array<LegacyPackRow & { __autobeStoredAt: number }> = [];
-    for (const pack of packs) {
-      const savedAt = Number(pack.__autobeStoredAt);
-      if (savedAt > 0 && now - savedAt >= LOCAL_RETENTION_MS) stalePackIds.push(pack.id);
-      else if (!(savedAt > 0)) stampPacks.push({ ...pack, __autobeStoredAt: now });
-    }
-
-    const staleModpackIds: string[] = [];
-    const stampModpacks: Array<MergedModpack & { __autobeStoredAt: number }> = [];
-    for (const modpack of modpacks) {
-      const savedAt = Number(modpack.__autobeStoredAt);
-      if (savedAt > 0 && now - savedAt >= LOCAL_RETENTION_MS) staleModpackIds.push(modpack.id);
-      else if (!(savedAt > 0)) stampModpacks.push({ ...modpack, __autobeStoredAt: now });
-    }
-
-    if (stalePackIds.length || stampPacks.length) {
-      await run([STORE_PACKS, STORE_FILES], 'readwrite', (tx) => {
-        const packStore = tx.objectStore(STORE_PACKS);
-        const fileStore = tx.objectStore(STORE_FILES);
-        stalePackIds.forEach((id) => { packStore.delete(id); fileStore.delete(id); });
-        stampPacks.forEach((pack) => packStore.put(pack));
-      });
-      stalePackIds.forEach((id) => memoryPacks.delete(id));
-    }
-    if (staleModpackIds.length || stampModpacks.length) {
-      await run(STORE_MODPACKS, 'readwrite', (tx) => {
-        const store = tx.objectStore(STORE_MODPACKS);
-        staleModpackIds.forEach((id) => store.delete(id));
-        stampModpacks.forEach((modpack) => store.put(modpack));
-      });
-    }
-    if (stalePackIds.length || staleModpackIds.length) {
-      console.info('[Storage] Expired local workspace data removed', {
-        packs: stalePackIds.length,
-        projects: staleModpackIds.length,
-      });
-    }
-  })().finally(() => { cleanupPromise = null; });
-  return cleanupPromise;
-}
+// Personal workspace data must not expire before account sync is available.
+// Never automatically delete local packs/projects: a device may contain the only
+// copy of an import that has not yet reached the user's account.
 
 // One shared connection. Opening a new connection per operation (and never
 // closing it) piles up handles, which is fragile in mobile WebViews.
@@ -236,7 +182,6 @@ export async function loadPackFile(pack: AddonPack): Promise<AddonPack> {
 }
 
 export async function getAllPacksFromDB(): Promise<AddonPack[]> {
-  await cleanupExpiredLocalData();
   const rows = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', (tx) =>
     tx.objectStore(STORE_PACKS).getAll()
   )) || []) as LegacyPackRow[];
@@ -281,7 +226,6 @@ export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
 }
 
 export async function getAllModpacksFromDB(): Promise<MergedModpack[]> {
-  await cleanupExpiredLocalData();
   const modpacks = ((await run<MergedModpack[]>(STORE_MODPACKS, 'readonly', (tx) =>
     tx.objectStore(STORE_MODPACKS).getAll()
   )) || []) as MergedModpack[];
