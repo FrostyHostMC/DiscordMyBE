@@ -24,8 +24,7 @@ function normalizedUuid(value: unknown): string | null {
  */
 export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<MergeValidationCheck[]> {
   const checks: MergeValidationCheck[] = [];
-  const allFiles = new Map<string, Set<string>>();
-  const manifests: Array<{ fileName: string; value: Record<string, any> }> = [];
+    const manifests: Array<{ fileName: string; value: Record<string, any> }> = [];
   const jsonErrors: string[] = [];
   const uuidErrors: string[] = [];
   const missingDependencies: string[] = [];
@@ -47,14 +46,13 @@ export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<Me
     }
 
     const paths = new Set(Object.entries(zip.files).filter(([, file]) => !file.dir).map(([path]) => path.replace(/\\/g, '/')));
-    allFiles.set(output.fileName, paths);
 
     for (const [path, file] of Object.entries(zip.files)) {
       if (file.dir || !path.toLowerCase().endsWith('.json')) continue;
       let parsed: any;
       try {
         const raw = await file.async('text');
-        parsed = JSON.parse(raw.replace(/^\\uFEFF/, ''));
+        parsed = JSON.parse(raw.replace(/^\uFEFF/, ''));
       } catch (error) {
         jsonErrors.push(`${output.fileName}:${path} (${error instanceof Error ? error.message : 'invalid JSON'})`);
         continue;
@@ -73,11 +71,11 @@ export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<Me
         };
         walk(parsed);
       }
-      if (/textures\\/(?:item_texture|terrain_texture)\.json$/i.test(path) && isObject(parsed?.texture_data)) {
+      if (/textures\/(?:item_texture|terrain_texture)\.json$/i.test(path) && isObject(parsed?.texture_data)) {
         for (const [key, entry] of Object.entries(parsed.texture_data)) {
           const visit = (value: any): void => {
             if (typeof value === 'string') {
-              const texturePath = value.replace(/^textures\\//, '').replace(/\\.(png|tga|jpg|jpeg)$/i, '');
+              const texturePath = value.replace(/^textures\//, '').replace(/\\.(png|tga|jpg|jpeg)$/i, '');
               const candidates = [`textures/${texturePath}.png`, `textures/${texturePath}.tga`, `textures/${texturePath}.jpg`, `textures/${texturePath}.jpeg`];
               if (!candidates.some(candidate => paths.has(candidate))) {
                 // Vanilla/engine textures may be referenced without being shipped by the pack.
