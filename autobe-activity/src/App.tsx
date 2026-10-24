@@ -14,7 +14,6 @@ import {
   MergeSessionConfig,
   CommunityModpack
 } from '@/types/modpack';
-import { INITIAL_DEMO_PACKS, INITIAL_DEMO_MODPACKS } from '@/utils/demoData';
 import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
 import { ensureCombinedBlob } from '@/utils/mergeEngine';
 import { uploadToCloud } from '@/utils/cloudUpload';
