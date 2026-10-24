@@ -117,6 +117,101 @@ function mergeAnimationJson(existing: any, incoming: any, path: string): any {
   return out;
 }
 
+export interface AnimationConflictFinding {
+  severity: 'safe' | 'warning' | 'critical';
+  kind: 'bone-overlap' | 'controller-overlap' | 'parse-warning';
+  packs: string[];
+  file: string;
+  detail: string;
+}
+
+/**
+ * Read-only preflight for animation/controller overlaps. It never renames bones
+ * or edits source files; findings are diagnostic hints, not proof of runtime failure.
+ */
+export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<AnimationConflictFinding[]> {
+  const findings: AnimationConflictFinding[] = [];
+  const sources: Array<{ name: string; path: string; controller: string; state: string; animation: string; bones: string[] }> = [];
+  for (const pack of packs) {
+    if (!pack.fileBlob) continue;
+    let zip: JSZip;
+    try { zip = await JSZip.loadAsync(pack.fileBlob); }
+    catch { continue; }
+    const animationBones = new Map<string, string[]>();
+    const controllers: Array<{ path: string; name: string; state: string; animations: string[] }> = [];
+    for (const [path, entry] of Object.entries(zip.files)) {
+      if (entry.dir || !path.toLowerCase().endsWith('.json')) continue;
+      const lower = path.toLowerCase();
+      if (!lower.includes('animation') && !lower.includes('entities/')) continue;
+      try {
+        const parsed = JSON.parse(sanitizeJsonString(await entry.async('text')));
+        if (parsed.animations && typeof parsed.animations === 'object' && !lower.includes('animation_controllers')) {
+          for (const [id, definition] of Object.entries(parsed.animations as Record<string, any>)) {
+            const bones = Object.keys((definition as any)?.bones || {});
+            animationBones.set(id, bones);
+          }
+        }
+        if (parsed.animation_controllers && typeof parsed.animation_controllers === 'object') {
+          for (const [name, controller] of Object.entries(parsed.animation_controllers as Record<string, any>)) {
+            for (const [state, stateDef] of Object.entries((controller as any)?.states || {})) {
+              const refs: string[] = [];
+              const animations = (stateDef as any)?.animations;
+              if (Array.isArray(animations)) for (const item of animations) {
+                if (typeof item === 'string') refs.push(item);
+                else if (item && typeof item === 'object') refs.push(...Object.keys(item));
+              }
+              controllers.push({ path, name, state, animations: refs });
+            }
+          }
+        }
+      } catch {
+        if (lower.includes('animation_controllers') || /(^|\\/)animations?\\//i.test(lower)) {
+          findings.push({ severity: 'warning', kind: 'parse-warning', packs: [pack.name], file: path, detail: 'Animation JSON could not be parsed during preflight; it was not analyzed.' });
+        }
+      }
+    }
+    for (const c of controllers) {
+      for (const animation of c.animations) {
+        sources.push({ name: pack.name, path: c.path, controller: c.name, state: c.state, animation, bones: animationBones.get(animation) || [] });
+      }
+    }
+  }
+
+  // Same controller/state and same bone is a stronger signal than a simple
+  // shared controller name. Bedrock execution order and Molang still determine runtime behavior.
+  for (let i = 0; i < sources.length; i++) {
+    for (let j = i + 1; j < sources.length; j++) {
+      const a = sources[i], b = sources[j];
+      if (a.name === b.name) continue;
+      const sharedBones = a.bones.filter(bone => b.bones.includes(bone));
+      const sameControllerState = a.controller === b.controller && a.state === b.state;
+      if (sameControllerState && sharedBones.length) {
+        findings.push({
+          severity: 'critical', kind: 'bone-overlap', packs: [a.name, b.name], file: b.path,
+          detail: `Controller ${a.controller} state ${a.state}: animations ${a.animation} and ${b.animation} both target bone(s) ${[...new Set(sharedBones)].join(', ')}. Check conditions and load order; this is a potential conflict, not a guaranteed failure.`
+        });
+      } else if (sameControllerState) {
+        findings.push({
+          severity: 'warning', kind: 'controller-overlap', packs: [a.name, b.name], file: b.path,
+          detail: `Both packs define animations in controller ${a.controller}, state ${a.state}; inspect transition conditions and animation references.`
+        });
+      } else if (sharedBones.length) {
+        findings.push({
+          severity: 'warning', kind: 'bone-overlap', packs: [a.name, b.name], file: b.path,
+          detail: `Animations ${a.animation} and ${b.animation} both target bone(s) ${[...new Set(sharedBones)].join(', ')} in different controller/state contexts.`
+        });
+      }
+    }
+  }
+  const seen = new Set<string>();
+  return findings.filter(f => {
+    const key = [f.severity, f.kind, ...f.packs, f.file, f.detail].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 // Per-file strategy merge files (Part 18 _merge_json special branches):
 // collected as lists and merged with mergeJsonForFile at write time.
 const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'crafting_item_catalog.json']);
@@ -425,7 +520,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     scriptConflicts,
     subpackSelections
   } = options;
-  onProgress?.('Reading addons', 10);
+  onProgress?.('Analyzing animation compatibility', 5);\n  const animationFindings = await analyzeAnimationConflicts(packs);\n  onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
@@ -716,7 +811,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
 
   // Compact merge summary embedded in the final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
-  const report = {
+  const report = {\n    animationCompatibility: {\n      analyzed: true,\n      findingCount: animationFindings.length,\n      criticalCount: animationFindings.filter(f => f.severity === 'critical').length,\n      warningCount: animationFindings.filter(f => f.severity === 'warning').length,\n      findings: animationFindings\n    },
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     generatedAt: new Date().toISOString(),
     modpackName,
