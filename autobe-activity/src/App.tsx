@@ -311,23 +311,31 @@ export const App: React.FC = () => {
     globalFileInputRef.current?.click();
   };
 
-  // Packs in the library list carry metadata only (no file bytes). Files are loaded on demand
-  // for the packs being merged and cached here for the duration of that merge.
-  const hydratedPacksRef = useRef<Map<string, AddonPack>>(new Map());
+  // Packs in the library list carry metadata only (no file bytes). Load only the
+  // exact selected IDs from the current local library; never reuse a prior merge's
+  // pack list or a stale hydration cache.
   const hydratePacks = async (packs: AddonPack[]): Promise<AddonPack[]> => {
     const out: AddonPack[] = [];
+    const seen = new Set<string>();
     for (let i = 0; i < packs.length; i++) {
-      if (!packs[i].fileBlob) showToast(`Loading ${packs[i].name} (${i + 1}/${packs.length})…`, 20000);
-      out.push(await loadPackFile(packs[i])); // one at a time to limit peak memory
+      const pack = packs[i];
+      if (seen.has(pack.id)) continue;
+      seen.add(pack.id);
+      if (!pack.fileBlob) showToast(`Loading ${pack.name} (${i + 1}/${packs.length})…`, 20000);
+      const hydrated = await loadPackFile({ ...pack, fileBlob: undefined });
+      if (!hydrated.fileBlob) {
+        throw new Error(`The selected pack "${pack.name}" has no stored file. Remove it and import the original .mcpack/.mcaddon again.`);
+      }
+      out.push(hydrated);
     }
     return out;
   };
   const mergeStartingRef = useRef(false);
 
-  const getSelectedPacks = () =>
-    installedPacks
-      .filter((p) => selectedPackIds.includes(p.id))
-      .map((p) => hydratedPacksRef.current.get(p.id) ?? p);
+  const getSelectedPacks = () => {
+    const selectedIds = new Set(selectedPackIds);
+    return installedPacks.filter((p) => selectedIds.has(p.id));
+  };
 
   // Open Script API check screen
   const openScriptCheck = (packsToMerge: AddonPack[]) => {
