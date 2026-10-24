@@ -806,7 +806,8 @@ export const App: React.FC = () => {
           author_id: authorId,
           version: justCompletedModpack.version,
           total_packs: justCompletedModpack.totalPacks,
-          size: justCompletedModpack.size,
+          size: blob.size,
+          // Store the actual merged archive size, not the sum of the source packs.
           // Keep base64 image data out of the community API if it is too large for D1.
           icon_data_url: typeof communityIconDataUrl === 'string' && communityIconDataUrl.length <= 100_000
             ? communityIconDataUrl
@@ -833,6 +834,15 @@ export const App: React.FC = () => {
           error = responseText || error;
         }
         console.error('[Publish] Community API error:', error);
+        if (publishResponse.status === 429) {
+          throw new Error(error || 'Publishing limit reached. Please try again later.');
+        }
+        if (publishResponse.status === 507 || /storage.*(limit|full)|quota.*exceed/i.test(error)) {
+          throw new Error('Cloud storage is at its current limit. Your modpack was not published; please try again later.');
+        }
+        if (publishResponse.status === 503 || publishResponse.status === 502) {
+          throw new Error('Cloudflare is temporarily unavailable or a free-tier limit was reached. Please wait a little and try again.');
+        }
         throw new Error(error);
       }
 
