@@ -798,7 +798,10 @@ export const App: React.FC = () => {
           version: justCompletedModpack.version,
           total_packs: justCompletedModpack.totalPacks,
           size: justCompletedModpack.size,
-          icon_data_url: justCompletedModpack.iconDataUrl,
+          // Keep base64 image data out of the community API if it is too large for D1.
+          icon_data_url: typeof justCompletedModpack.iconDataUrl === 'string' && justCompletedModpack.iconDataUrl.length <= 100_000
+            ? justCompletedModpack.iconDataUrl
+            : null,
           blob_url: blobUrl,
           file_name: justCompletedModpack.outputFileName,
           included_packs: justCompletedModpack.includedPacks,
