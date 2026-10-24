@@ -17,7 +17,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const { playSyncChime, playError } = useModpackAudio();
 
-  const handleDownloadCodebase = async () => {
+  const handleDownloadCodebase = async (password: string) => {
     if (downloading) return;
     setDownloading(true);
     setResult(null);
@@ -26,7 +26,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
       setUrl(null);
     }
     try {
-      const res = await buildCodebaseArchive();
+      const res = await buildCodebaseArchive(password);
       downloadBlob(res.blob, res.fileName);
       setUrl(createPersistentDownload(res.blob, res.fileName).url);
       setResult(res);
