@@ -108,28 +108,47 @@ export async function onRequestPost(context: Ctx) {
       return json({ error: 'Invalid file link. Upload the modpack through the app first.' }, 400);
     }
 
+    // Store only bounded listing metadata in D1; the actual .mcaddon lives in R2.
+    // Never persist the arbitrary included_packs payload, which can contain huge project objects.
+    const safeName = String(data.name).slice(0, 120);
+    const safeDescription = String(data.description).slice(0, 2000);
+    const safeAuthor = String(data.author).slice(0, 100);
+    const safeVersion = String(data.version || '1.0.0').slice(0, 40);
+    const safeFileName = String(data.file_name).split('/').pop()?.split('\\').pop()?.slice(0, 255) || 'modpack.mcaddon';
+    const safeIcon = typeof data.icon_data_url === 'string' && data.icon_data_url.length <= 100_000
+      ? data.icon_data_url
+      : null;
+    console.log('[Community] Publish metadata lengths', {
+      name: safeName.length,
+      description: safeDescription.length,
+      author: safeAuthor.length,
+      version: safeVersion.length,
+      fileName: safeFileName.length,
+      icon: safeIcon?.length || 0,
+      includedPacksReceived: Array.isArray(data.included_packs) ? data.included_packs.length : 0,
+      includedPacksStored: 0,
+    });
+
     const id = crypto.randomUUID();
     const result = await env.DB.prepare(
       'INSERT INTO community_modpacks (id, name, description, author, author_id, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
       .bind(
         id,
-        String(data.name),
-        String(data.description),
-        String(data.author),
+        safeName,
+        safeDescription,
+        safeAuthor,
         userId, // verified Discord id, not whatever the request claims
-        String(data.version || '1.0.0'),
+        safeVersion,
         Number(data.total_packs) || 0,
         Number(data.size) || 0,
         // D1 has a per-value size limit; never persist oversized embedded images.
-        typeof data.icon_data_url === 'string' && data.icon_data_url.length <= 100_000
-          ? data.icon_data_url
-          : null,
+        safeIcon,
         Date.now(),
         0,
         String(data.blob_url),
-        String(data.file_name),
-        JSON.stringify(data.included_packs || [])
+        safeFileName,
+        '[]'
       )
       .run();
 
