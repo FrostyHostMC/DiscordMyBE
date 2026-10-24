@@ -808,7 +808,7 @@ export const App: React.FC = () => {
           total_packs: justCompletedModpack.totalPacks,
           size: justCompletedModpack.size,
           // Keep base64 image data out of the community API if it is too large for D1.
-          icon_data_url: typeof communityIconDataUrl === 'string' && communityIconDataUrl.length <= 1_400_000
+          icon_data_url: typeof communityIconDataUrl === 'string' && communityIconDataUrl.length <= 100_000
             ? communityIconDataUrl
             : null,
           blob_url: blobUrl,
