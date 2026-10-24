@@ -730,7 +730,7 @@ export const App: React.FC = () => {
   // Publish modpack to community
   const [isPublishing, setIsPublishing] = useState(false);
 
-  const handlePublishModpack = async () => {
+  const handlePublishModpack = async (communityIconDataUrl?: string | null) => {
     if (!justCompletedModpack) return;
 
     console.log('[Publish] Starting publish for modpack:', justCompletedModpack.name);
@@ -808,8 +808,8 @@ export const App: React.FC = () => {
           total_packs: justCompletedModpack.totalPacks,
           size: justCompletedModpack.size,
           // Keep base64 image data out of the community API if it is too large for D1.
-          icon_data_url: typeof justCompletedModpack.iconDataUrl === 'string' && justCompletedModpack.iconDataUrl.length <= 100_000
-            ? justCompletedModpack.iconDataUrl
+          icon_data_url: typeof communityIconDataUrl === 'string' && communityIconDataUrl.length <= 1_400_000
+            ? communityIconDataUrl
             : null,
           blob_url: blobUrl,
           file_name: justCompletedModpack.outputFileName,
@@ -912,7 +912,7 @@ export const App: React.FC = () => {
 
       {/* Toast Notification Banner */}
       {toastMessage && (
-        <div className="absolute top-3 left-3 right-3 sm:left-auto sm:right-4 z-50 p-3 rounded-xl bg-[#15111F]/95 border border-[#762BFF]/60 text-xs font-semibold text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] flex items-center justify-between gap-3 max-w-md animate-in slide-in-from-top-2 duration-150">
+        <div className="fixed top-[calc(env(safe-area-inset-top)+4.25rem)] left-3 right-3 sm:left-auto sm:right-4 z-[100] p-3 rounded-xl bg-[#15111F]/95 border border-[#762BFF]/60 text-xs font-semibold text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] flex items-center justify-between gap-3 max-w-md animate-in slide-in-from-top-2 duration-150">
           <div className="flex items-center gap-2 min-w-0">
             <Info className="w-4 h-4 text-[#A855F7] shrink-0" />
             <span className="break-words line-clamp-5">{toastMessage}</span>
