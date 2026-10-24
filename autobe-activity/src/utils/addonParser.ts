@@ -25,7 +25,7 @@ export function sanitizeJsonString(raw: string): string {
     if (inString) {
       withoutComments += ch;
       if (escaped) escaped = false;
-      else if (ch === '\\''') escaped = true;
+      else if (ch === '\\') escaped = true;
       else if (ch === '"') inString = false;
       continue;
     }
@@ -65,7 +65,7 @@ export function sanitizeJsonString(raw: string): string {
     if (inString) {
       output += ch;
       if (escaped) escaped = false;
-      else if (ch === '\\''') escaped = true;
+      else if (ch === '\\') escaped = true;
       else if (ch === '"') inString = false;
       continue;
     }
