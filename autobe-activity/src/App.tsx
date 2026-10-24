@@ -707,6 +707,15 @@ export const App: React.FC = () => {
     handleSoundTap();
 
     try {
+      // Count a download attempt server-side, then open the actual R2 file.
+      // Counting is best-effort so a stats/API hiccup never blocks the download.
+      const auth = getDiscordAuth();
+      if (auth) {
+        fetch(`/api/community-modpacks?action=download&id=${encodeURIComponent(modpack.id)}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${auth.token}` },
+        }).catch((err) => console.warn('[Community] Could not record download:', err));
+      }
       // Open the hosted file in the system browser (blob/anchor downloads are
       // blocked inside Discord Activities).
       await openExternalUrl(modpack.blob_url);
