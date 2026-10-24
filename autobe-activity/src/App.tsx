@@ -677,7 +677,14 @@ export const App: React.FC = () => {
     console.log('[Delete Pack] Deleting pack:', id);
     try {
       await deletePackFromDB(id);
-      if (getDiscordAuth()?.token) deleteWorkspaceItemFromCloud('pack', id).catch((error) => showToast(`Pack deleted locally; cloud delete failed: ${describeError(error)}`));
+      if (getDiscordAuth()?.token) {
+        try {
+          await deleteWorkspaceItemFromCloud('pack', id);
+        } catch (error) {
+          console.error('[Delete Pack] Cloud tombstone failed:', error);
+          showToast(`Pack deleted locally, but cloud deletion will need retry: ${describeError(error)}`);
+        }
+      }
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
       setSelectedPackIds((prev) => prev.filter((x) => x !== id));
@@ -695,6 +702,14 @@ export const App: React.FC = () => {
     try {
       for (const id of ids) {
         await deletePackFromDB(id);
+      }
+      if (getDiscordAuth()?.token) {
+        const cloudResults = await Promise.allSettled(ids.map((id) => deleteWorkspaceItemFromCloud('pack', id)));
+        const failed = cloudResults.filter((result) => result.status === 'rejected').length;
+        if (failed > 0) {
+          console.error('[Delete Selected] Cloud delete failures:', cloudResults.filter((result) => result.status === 'rejected'));
+          showToast(`${ids.length} pack(s) deleted locally; ${failed} cloud deletion(s) failed`);
+        }
       }
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
@@ -883,7 +898,14 @@ export const App: React.FC = () => {
     triggerHaptic(50);
     try {
       await deleteModpackFromDB(id);
-      if (getDiscordAuth()?.token) deleteWorkspaceItemFromCloud('project', id).catch((error) => showToast(`Project deleted locally; cloud delete failed: ${describeError(error)}`));
+      if (getDiscordAuth()?.token) {
+        try {
+          await deleteWorkspaceItemFromCloud('project', id);
+        } catch (error) {
+          console.error('[Delete Modpack] Cloud tombstone failed:', error);
+          showToast(`Project deleted locally, but cloud deletion will need retry: ${describeError(error)}`);
+        }
+      }
       const updated = await getAllModpacksFromDB();
       setMyModpacks(updated);
       if (activeModpack?.id === id) {
