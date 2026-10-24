@@ -29,6 +29,7 @@ Important limitations:
 ## 3. Code-level limits
 
 - Individual R2 uploads are capped at 500 MiB.
+- New published uploads are paused when recorded published archive sizes plus the incoming file would exceed a 7 GB safety threshold, leaving headroom below the nominal 10 GB allowance. This is based on D1 metadata and is not an atomic reservation system, so concurrent uploads and older inaccurate size records can still cause the estimate to differ from actual R2 usage.
 - Each Discord user can start at most 3 published uploads per rolling 24-hour window and 20 temporary uploads per rolling 24-hour window.
 - Each Discord user can create at most 3 community listings per rolling 24-hour window.
 - Community list refresh is manual (plus the initial load), rather than polling every 15 seconds.
