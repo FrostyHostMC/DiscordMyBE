@@ -122,6 +122,10 @@ export const App: React.FC = () => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const toastTimerRef = useRef<number | undefined>(undefined);
+  const workspaceLoadedRef = useRef(false);
+  const backgroundSyncInFlightRef = useRef(false);
+  const workspaceLoadedRef = useRef(false);
+  const backgroundSyncInFlightRef = useRef(false);
   const showToast = (msg: string, durationMs = 3500) => {
     setToastMessage(msg);
     // Only the newest toast's timer may clear it (older timers used to hide newer toasts early).
@@ -214,10 +218,31 @@ export const App: React.FC = () => {
       } catch (err) {
         console.error('[Aippy] Initialization error:', describeError(err));
         showToast(`Could not load your saved packs: ${describeError(err)}`);
+      } finally {
+        workspaceLoadedRef.current = true;
       }
     };
 
     loadData();
+  }, []);
+
+  // Keep private workspace sync active while the app is open. Never overlap syncs,
+  // and wait for initial IndexedDB loading before running background reconciliation.
+  useEffect(() => {
+    const interval = window.setInterval(async () => {
+      if (!workspaceLoadedRef.current || backgroundSyncInFlightRef.current || !getDiscordAuth()?.token) return;
+      backgroundSyncInFlightRef.current = true;
+      try {
+        const synced = await syncWorkspaceOnStartup();
+        setInstalledPacks(synced.packs);
+        setMyModpacks(synced.projects);
+      } catch (error) {
+        console.warn('[WorkspaceSync] Background sync failed; local data remains available:', describeError(error));
+      } finally {
+        backgroundSyncInFlightRef.current = false;
+      }
+    }, 30000);
+    return () => window.clearInterval(interval);
   }, []);
 
   // Toggle selection for pack merge
