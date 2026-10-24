@@ -228,7 +228,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
       let txt = await fileObj.async('text');
       for (const [oldId, newId] of renameMap.entries()) {
-        txt = txt.replaceAll(oldId, newId);
+        txt = txt.split(oldId).join(newId);
       }
       targetZip.file(outPath, txt);
     } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
@@ -397,7 +397,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
     }
     
-    const rpManifest = {
+    const rpManifest: any = {
       format_version: 2,
       header: {
         name: `${modpackName} [RP]`,
@@ -428,7 +428,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       packCount: plan.rp.length,
       size: blobData.byteLength,
       achievementsDisabled: plan.rp.some(p => p.hasExperimental),
-      blob: new Blob([blobData])
+      blob: new Blob([new Uint8Array(blobData).buffer as ArrayBuffer])
     });
   }
 
