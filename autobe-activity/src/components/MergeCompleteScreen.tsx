@@ -26,7 +26,7 @@ interface MergeCompleteScreenProps {
   onDownloadOutput: (output: MergedOutput) => void;
   onDone: () => void;
   onRename: (newName: string) => void;
-  onPublish?: (iconDataUrl?: string | null) => void;
+  onPublish?: (iconDataUrl?: string | null) => void | Promise<void>;
   isPublishing?: boolean;
 }
 
@@ -332,14 +332,14 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <span>Share / Save</span>
         </button>
       {showPublishOptions && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80">
-          <div className="w-full max-w-md rounded-2xl bg-[#100D18] border border-[#10B981]/40 shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#08070D]/95 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl bg-[#100D18] border border-[#10B981]/40 shadow-2xl p-5 space-y-4 max-h-[85dvh] overflow-y-auto">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-white">Publish to Community</h3>
                 <p className="text-xs text-[#AAA3BB] mt-1">Add a cover image for the public listing. This does not change your saved project.</p>
               </div>
-              <button type="button" onClick={() => setShowPublishOptions(false)} className="p-1.5 text-[#AAA3BB] hover:text-white" aria-label="Close publish options"><X className="w-4 h-4" /></button>
+              <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="p-1.5 text-[#AAA3BB] hover:text-white disabled:opacity-40" aria-label="Close publish options"><X className="w-4 h-4" /></button>
             </div>
             <input ref={publishIconInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePublishIcon} className="hidden" />
             <div className="flex items-center gap-3">
@@ -357,9 +357,9 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             </div>
             {publishError && <p className="text-xs text-red-400">{publishError}</p>}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB]">Cancel</button>
-              <button type="button" disabled={isPublishing} onClick={() => { onPublish?.(publishIcon); setShowPublishOptions(false); }} className="flex-1 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-50">
-                {isPublishing ? 'Publishing…' : 'Publish modpack'}
+              <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB] disabled:opacity-40">Cancel</button>
+              <button type="button" disabled={isPublishing} onClick={() => { void onPublish?.(publishIcon); }} className="flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-60 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
+                {isPublishing ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span>Publishing…</span></> : <span>Publish modpack</span>}
               </button>
             </div>
           </div>
