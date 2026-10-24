@@ -41,6 +41,15 @@ test('HUD merge preserves ordered patches and removes only exact duplicates', ()
   JSON.parse(JSON.stringify(merged));
 });
 
+test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
+  const merged = mergeJsonForFile('ui/hud_screen.json', [
+    { screen: { panel: { visible: 'query.is_first_person', text: 'base label' } } },
+    { screen: { panel: { visible: 'query.is_alive', text: 'overlay label' } } },
+  ]);
+  assert.equal(merged.screen.panel.visible, '(query.is_first_person) && (query.is_alive)');
+  assert.equal(merged.screen.panel.text, 'base label');
+});
+
 test('subpack HUD visibility conditions are both retained', () => {
   const result = deepMergeUi(
     { panel: { visible: 'query.is_first_person', controls: [{ base: {} }] } },
