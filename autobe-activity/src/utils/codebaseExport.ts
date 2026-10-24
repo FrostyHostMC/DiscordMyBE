@@ -53,11 +53,16 @@ export async function shareViaDiscordCDN(
   const discordSdk = new DiscordSDK(applicationId);
   await discordSdk.ready();
 
-  // Check platform behavior - openShareMomentDialog only works on Web/Desktop
-  const platformBehaviors = await discordSdk.commands.getPlatformBehaviors();
-  const isMobile = platformBehaviors.platform === 'ios' || platformBehaviors.platform === 'android';
+  // The SDK platform-behavior type doesn't expose an OS field; detect mobile browsers.
+  // Include iPadOS devices that report themselves as desktop Safari.
+  const userAgent = navigator.userAgent;
+  const isAndroid = /Android/i.test(userAgent);
+  const isAppleMobile = /iPhone|iPad|iPod/i.test(userAgent);
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  const isMobile = isAndroid || isAppleMobile || isIPadOS;
+  const platform = isAndroid ? 'android' : (isAppleMobile || isIPadOS) ? 'ios' : 'desktop';
 
-  console.log('[Aippy] Platform:', platformBehaviors.platform, 'isMobile:', isMobile);
+  console.log('[Aippy] Platform:', platform, 'isMobile:', isMobile);
 
   if (isMobile) {
     // Mobile: Open in external browser where downloads work
