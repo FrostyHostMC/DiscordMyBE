@@ -7,6 +7,8 @@ import { setDiscordAuth } from '@/utils/discordAuth';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
+// Must match the redirect URI registered in Discord Developer Portal and the server's OAuth setting.
+const browserRedirectUri = 'https://discordmybe.pages.dev/';
 
 type GateState = 'checking' | 'allowed' | 'denied';
 
@@ -28,17 +30,71 @@ function AccessGate() {
     };
 
     async function authenticateAndVerify() {
-      // This app is intentionally locked to Discord Activities.
-      if (window.self === window.top) {
-        deny('AutoBE only works inside Discord. Launch it from your Discord server Activity.');
-        return;
-      }
       if (!clientId) {
         deny('The Discord Application ID is missing. Set VITE_DISCORD_CLIENT_ID in Cloudflare Pages and redeploy.');
         return;
       }
 
       try {
+        // Standalone browser sign-in lets the same Discord account manage published
+        // community modpacks outside the embedded Activity.
+        if (window.self === window.top) {
+          const params = new URLSearchParams(window.location.search);
+          const code = params.get('code');
+          if (!code) {
+            deny('Sign in with Discord to view and manage community modpacks from this browser.');
+            return;
+          }
+
+          const returnedState = params.get('state') || '';
+          let expectedState = '';
+          try {
+            expectedState = sessionStorage.getItem('autobe_discord_oauth_state') || '';
+            sessionStorage.removeItem('autobe_discord_oauth_state');
+          } catch {
+            /* browser storage is required to validate the OAuth state */
+          }
+          window.history.replaceState({}, document.title, window.location.pathname);
+          if (!expectedState || returnedState !== expectedState) {
+            throw new Error('Discord sign-in state did not match. Please start sign-in again.');
+          }
+
+          updateMessage('Completing Discord sign-in…');
+          const tokenResponse = await fetch('/api/token', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            cache: 'no-store',
+            body: JSON.stringify({ code, redirect_uri: browserRedirectUri }),
+          });
+          const tokenData = await tokenResponse.json().catch(() => ({})) as {
+            access_token?: string;
+            error?: string;
+          };
+          if (!tokenResponse.ok || !tokenData.access_token) {
+            throw new Error(tokenData.error || `Token endpoint failed (${tokenResponse.status}).`);
+          }
+
+          updateMessage('Verifying your AutoBE access…');
+          const accessResponse = await fetch('/api/access', {
+            method: 'POST',
+            headers: { authorization: `Bearer ${tokenData.access_token}` },
+            cache: 'no-store',
+          });
+          const accessData = await accessResponse.json().catch(() => ({})) as {
+            allowed?: boolean;
+            reason?: string;
+            error?: string;
+            user?: { id: string; username: string; global_name?: string | null };
+          };
+          if (!accessResponse.ok || accessData.allowed !== true) {
+            deny(accessData.reason || accessData.error || `Role verification failed (${accessResponse.status}).`);
+            return;
+          }
+          setDiscordAuth(tokenData.access_token, clientId, undefined, accessData.user ?? null);
+          if (!cancelled) setState('allowed');
+          return;
+        }
+
         updateMessage('Connecting to Discord Activity…');
         const sdk = new DiscordSDK(clientId);
         await sdk.ready();
@@ -114,12 +170,40 @@ function AccessGate() {
         <p className="text-sm text-zinc-300 leading-relaxed break-words">{message}</p>
         {state === 'checking' && <div className="mt-4 mx-auto h-1 w-28 overflow-hidden rounded-full bg-zinc-800"><div className="h-full w-1/2 animate-pulse rounded-full bg-purple-500" /></div>}
         {state === 'denied' && (
-          <button
-            onClick={() => { setMessage('Retrying Discord connection…'); setState('checking'); setAttempt((value) => value + 1); }}
-            className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
-          >
-            Try again
-          </button>
+          window.self === window.top ? (
+            <button
+              onClick={() => {
+                if (!clientId) {
+                  setMessage('The Discord Application ID is missing. Contact the AutoBE administrator.');
+                  return;
+                }
+                try {
+                  const oauthState = crypto.randomUUID();
+                  sessionStorage.setItem('autobe_discord_oauth_state', oauthState);
+                  const params = new URLSearchParams({
+                    client_id: clientId,
+                    response_type: 'code',
+                    redirect_uri: browserRedirectUri,
+                    scope: 'identify',
+                    state: oauthState,
+                  });
+                  window.location.assign(`https://discord.com/oauth2/authorize?${params.toString()}`);
+                } catch (error) {
+                  setMessage(`Could not start Discord sign-in: ${describeError(error)}`);
+                }
+              }}
+              className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
+            >
+              Sign in with Discord
+            </button>
+          ) : (
+            <button
+              onClick={() => { setMessage('Retrying Discord connection…'); setState('checking'); setAttempt((value) => value + 1); }}
+              className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
+            >
+              Try again
+            </button>
+          )
         )}
       </section>
     </main>
