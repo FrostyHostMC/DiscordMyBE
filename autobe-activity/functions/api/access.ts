@@ -42,7 +42,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: `Discord account verification failed (HTTP ${meResponse.status}).` }, 502);
   }
 
-  const me = await meResponse.json() as { id?: string };
+  const me = await meResponse.json() as { id?: string; username?: string; global_name?: string | null };
   if (!me.id) {
     return json({ allowed: false, reason: 'Discord could not verify your account.' }, 401);
   }
@@ -84,5 +84,5 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, 403);
   }
 
-  return json({ allowed: true });
+  return json({ allowed: true, user: { id: me.id, username: me.username || 'Discord user', global_name: me.global_name ?? null } });
 };
