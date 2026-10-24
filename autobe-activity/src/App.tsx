@@ -177,24 +177,12 @@ export const App: React.FC = () => {
     const loadData = async () => {
       try {
         const storedPacks = await getAllPacksFromDB();
-        if (storedPacks.length > 0) {
-          setInstalledPacks(storedPacks);
-        } else {
-          for (const p of INITIAL_DEMO_PACKS) {
-            await savePackToDB(p);
-          }
-          setInstalledPacks(INITIAL_DEMO_PACKS);
-        }
+        // Keep the workspace strictly device-local. An empty database means empty;
+        // never re-seed deleted/imported packs or projects on the next launch.
+        setInstalledPacks(storedPacks);
 
         const storedModpacks = await getAllModpacksFromDB();
-        if (storedModpacks.length > 0) {
-          setMyModpacks(storedModpacks);
-        } else {
-          for (const m of INITIAL_DEMO_MODPACKS) {
-            await saveModpackToDB(m);
-          }
-          setMyModpacks(INITIAL_DEMO_MODPACKS);
-        }
+        setMyModpacks(storedModpacks);
 
       } catch (err) {
         console.error('[Aippy] Initialization error:', describeError(err));
