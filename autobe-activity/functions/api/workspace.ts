@@ -80,6 +80,13 @@ async function ensureTable(env: Env): Promise<void> {
     PRIMARY KEY (user_id, item_type, item_id)
   )`).run();
   await env.DB.prepare('CREATE INDEX IF NOT EXISTS idx_private_workspace_user_updated ON private_workspace_items(user_id, updated_at DESC)').run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS private_workspace_tombstones (
+    user_id TEXT NOT NULL,
+    item_type TEXT NOT NULL CHECK(item_type IN ('pack', 'project')),
+    item_id TEXT NOT NULL,
+    deleted_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, item_type, item_id)
+  )`).run();
 }
 
 function isResponse(value: { id: string } | Response): value is Response {
@@ -114,9 +121,15 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const rows = await env.DB.prepare(
     'SELECT item_type AS type, item_id AS id, payload, updated_at AS updatedAt FROM private_workspace_items WHERE user_id = ? ORDER BY updated_at ASC'
   ).bind(auth.id).all<{ type: ItemType; id: string; payload: string; updatedAt: number }>();
-  return json({ items: (rows.results || []).map(row => ({
-    type: row.type, id: row.id, data: JSON.parse(row.payload), updatedAt: row.updatedAt,
-  })) });
+  const deleted = await env.DB.prepare(
+    'SELECT item_type AS type, item_id AS id, deleted_at AS deletedAt FROM private_workspace_tombstones WHERE user_id = ?'
+  ).bind(auth.id).all<{ type: ItemType; id: string; deletedAt: number }>();
+  return json({
+    items: (rows.results || []).map(row => ({
+      type: row.type, id: row.id, data: JSON.parse(row.payload), updatedAt: row.updatedAt,
+    })),
+    deleted: deleted.results || [],
+  });
 };
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
@@ -144,14 +157,23 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
 
   await ensureTable(env);
   const now = Date.now();
-  const statements = body.items.map(item => env.DB.prepare(`
+  // Tombstones win over stale clients: a deleted ID can never be recreated by sync.
+  const accepted: WorkspaceItem[] = [];
+  for (const item of body.items as WorkspaceItem[]) {
+    const tombstone = await env.DB.prepare(
+      'SELECT 1 AS found FROM private_workspace_tombstones WHERE user_id = ? AND item_type = ? AND item_id = ?'
+    ).bind(auth.id, item.type, item.id).first();
+    if (!tombstone) accepted.push(item);
+  }
+  if (!accepted.length) return json({ saved: 0, ignoredDeleted: body.items.length, updatedAt: now });
+  const statements = accepted.map(item => env.DB.prepare(`
     INSERT INTO private_workspace_items (user_id, item_type, item_id, payload, updated_at)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(user_id, item_type, item_id) DO UPDATE SET
       payload = excluded.payload, updated_at = excluded.updated_at
   `).bind(auth.id, item.type, item.id, JSON.stringify(item.data), now));
   await env.DB.batch(statements);
-  return json({ saved: body.items.length, updatedAt: now });
+  return json({ saved: accepted.length, ignoredDeleted: body.items.length - accepted.length, updatedAt: now });
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
@@ -164,8 +186,15 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Provide a valid type=pack|project and id.' }, 400);
   }
   await ensureTable(env);
-  await env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?')
-    .bind(auth.id, type, id).run();
+  const now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?')
+      .bind(auth.id, type, id),
+    env.DB.prepare(`INSERT INTO private_workspace_tombstones (user_id, item_type, item_id, deleted_at)
+      VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, item_type, item_id) DO UPDATE SET deleted_at = excluded.deleted_at`)
+      .bind(auth.id, type, id, now),
+  ]);
   if (type === 'pack') await env.BUCKET.delete(`private-workspaces/${auth.id}/packs/${encodeURIComponent(id)}`);
-  return json({ deleted: true });
+  return json({ deleted: true, deletedAt: now });
 };
