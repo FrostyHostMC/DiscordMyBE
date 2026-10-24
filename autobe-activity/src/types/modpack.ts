@@ -86,6 +86,8 @@ export interface CommunityModpack {
   id: string;
   name: string;
   description: string;
+  detail_description?: string;
+  detail_images?: string[];
   author: string;
   author_id: string;
   version: string;
