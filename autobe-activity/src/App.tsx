@@ -124,8 +124,7 @@ export const App: React.FC = () => {
   const toastTimerRef = useRef<number | undefined>(undefined);
   const workspaceLoadedRef = useRef(false);
   const backgroundSyncInFlightRef = useRef(false);
-  const workspaceLoadedRef = useRef(false);
-  const backgroundSyncInFlightRef = useRef(false);
+
   const showToast = (msg: string, durationMs = 3500) => {
     setToastMessage(msg);
     // Only the newest toast's timer may clear it (older timers used to hide newer toasts early).
