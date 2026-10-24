@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import App from '@/App.tsx';
 import { describeError } from '@/utils/errorLog';
-import { setDiscordAuth } from '@/utils/discordAuth';
+import { getDiscordAuth, setDiscordAuth } from '@/utils/discordAuth';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
@@ -42,6 +42,27 @@ function AccessGate() {
           const params = new URLSearchParams(window.location.search);
           const code = params.get('code');
           if (!code) {
+            // Restore this browser's existing Discord session if it is still valid.
+            const savedAuth = getDiscordAuth();
+            if (savedAuth) {
+              updateMessage('Restoring your Discord session…');
+              const accessResponse = await fetch('/api/access', {
+                method: 'POST',
+                headers: { authorization: `Bearer ${savedAuth.token}` },
+                cache: 'no-store',
+              });
+              const accessData = await accessResponse.json().catch(() => ({})) as {
+                allowed?: boolean;
+                reason?: string;
+                error?: string;
+                user?: { id: string; username: string; global_name?: string | null };
+              };
+              if (accessResponse.ok && accessData.allowed === true && accessData.user) {
+                setDiscordAuth(savedAuth.token, savedAuth.applicationId, undefined, accessData.user);
+                if (!cancelled) setState('allowed');
+                return;
+              }
+            }
             deny('Sign in with Discord to view and manage community modpacks from this browser.');
             return;
           }
