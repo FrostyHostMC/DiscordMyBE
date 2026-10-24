@@ -623,8 +623,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   onProgress?.('Building final pack', 85);
   await yieldToUI();
 
-  // Port of AutoBE._write_merge_report: validation summary embedded in the
-  // final .mcaddon for post-merge debugging.
+  // Compact merge summary embedded in the final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
