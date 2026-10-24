@@ -29,6 +29,25 @@ const MAX_PARTS = 200;
 const PUB_UPLOADS_PER_DAY = 3;
 const TEMP_UPLOADS_PER_DAY = 20;
 
+async function ensureCommunityTable(env: Env): Promise<void> {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS community_modpacks (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    author TEXT NOT NULL,
+    author_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    total_packs INTEGER NOT NULL,
+    size INTEGER NOT NULL,
+    icon_data_url TEXT,
+    created_at INTEGER NOT NULL,
+    downloads INTEGER DEFAULT 0,
+    blob_url TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    included_packs TEXT
+  )`).run();
+}
+
 async function consumeDailyQuota(env: Env, userId: string, kind: string): Promise<number> {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
     scope TEXT NOT NULL,
@@ -120,6 +139,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       }
       if (kind === 'pub') {
         try {
+          await ensureCommunityTable(env);
           const usage = await env.DB.prepare(
             'SELECT COALESCE(SUM(size), 0) AS published_bytes FROM community_modpacks'
           ).first<{ published_bytes: number }>();
