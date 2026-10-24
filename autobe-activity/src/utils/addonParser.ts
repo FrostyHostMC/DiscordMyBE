@@ -6,18 +6,82 @@ export interface ParseResult {
   errors: string[];
 }
 
-// Clean JSON with comments (// and /* */) and trailing commas
-// Also strips UTF-8 BOM which can cause encoding corruption
+/**
+ * Strip JSONC comments and trailing commas without touching quoted strings.
+ * Bedrock addon JSON commonly has end-of-line comments after properties;
+ * regex-only stripping can delete valid JSON content or leave the file invalid,
+ * causing the parser to silently drop important files such as hud_screen.json.
+ */
 export function sanitizeJsonString(raw: string): string {
-  // Strip UTF-8 BOM if present (prevents encoding corruption)
-  if (raw.charCodeAt(0) === 0xFEFF) {
-    raw = raw.slice(1);
+  let input = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+  let withoutComments = '';
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i];
+    const next = input[i + 1];
+
+    if (inString) {
+      withoutComments += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = true;
+      withoutComments += ch;
+      continue;
+    }
+
+    // Preserve newlines so line structure remains useful in parser errors.
+    if (ch === '/' && next === '/') {
+      i += 2;
+      while (i < input.length && input[i] !== '\\n' && input[i] !== '\\r') i++;
+      if (i < input.length) withoutComments += input[i];
+      continue;
+    }
+    if (ch === '/' && next === '*') {
+      i += 2;
+      while (i < input.length && !(input[i] === '*' && input[i + 1] === '/')) {
+        if (input[i] === '\\n' || input[i] === '\\r') withoutComments += input[i];
+        i++;
+      }
+      i++; // consume the slash in */
+      continue;
+    }
+    withoutComments += ch;
   }
-  
-  let cleaned = raw.replace(/\/\*[\s\S]*?\*\//g, '');
-  cleaned = cleaned.replace(/^\s*\/\/.*$/gm, '');
-  cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
-  return cleaned;
+
+  // Remove commas immediately before a closing array/object delimiter, but
+  // only when the comma is outside a quoted string.
+  let output = '';
+  inString = false;
+  escaped = false;
+  for (let i = 0; i < withoutComments.length; i++) {
+    const ch = withoutComments[i];
+    if (inString) {
+      output += ch;
+      if (escaped) escaped = false;
+      else if (ch === '\\\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') {
+      inString = true;
+      output += ch;
+      continue;
+    }
+    if (ch === ',') {
+      let nextIndex = i + 1;
+      while (nextIndex < withoutComments.length && /\\s/.test(withoutComments[nextIndex])) nextIndex++;
+      if (withoutComments[nextIndex] === '}' || withoutComments[nextIndex] === ']') continue;
+    }
+    output += ch;
+  }
+  return output;
 }
 
 export function generateUUID(): string {
