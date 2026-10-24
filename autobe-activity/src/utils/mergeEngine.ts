@@ -11,6 +11,7 @@ import { applyPlayerEntityPass } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
+import { validateMergedOutputs } from '@/utils/mergeValidation';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -620,11 +621,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   // Port of AutoBE._write_merge_report: validation summary embedded in the
   // final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
+  const generatedValidationChecks = await validateMergedOutputs(outputs);
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     generatedAt: new Date().toISOString(),
     modpackName,
-    checks: [{
+    checks: [...generatedValidationChecks, {
       name: 'Source packs',
       status: 'ok',
       detail: `${packs.length} addon pack(s) parsed and merged`
