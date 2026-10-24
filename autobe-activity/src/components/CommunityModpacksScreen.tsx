@@ -41,7 +41,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingModpack, setEditingModpack] = useState<CommunityModpack | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', description: '', version: '' });
+  const [editForm, setEditForm] = useState({ name: '', description: '', detail_description: '', version: '' });
+  const [editGalleryImages, setEditGalleryImages] = useState<string[]>([]);
   const [editIcon, setEditIcon] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
@@ -126,9 +127,11 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     setEditForm({
       name: modpack.name,
       description: modpack.description,
+      detail_description: modpack.detail_description || '',
       version: modpack.version
     });
     setEditIcon(modpack.icon_data_url || null);
+    setEditGalleryImages(Array.isArray(modpack.detail_images) ? modpack.detail_images.slice(0, 3) : []);
   };
 
   const refreshDetails = async () => {
@@ -194,6 +197,51 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     reader.readAsDataURL(file);
   };
 
+  const handleGalleryFile = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setNotice('Choose an image file.');
+      return;
+    }
+    if (editGalleryImages.length >= 3) {
+      setNotice('You can add up to 3 gallery images.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setNotice('Could not read that image.');
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => setNotice('That image could not be opened.');
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const max = 1280;
+        const scale = Math.min(1, max / Math.max(image.width, image.height));
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setNotice('Image processing is unavailable in this browser.');
+          return;
+        }
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        let quality = 0.78;
+        let result = canvas.toDataURL('image/jpeg', quality);
+        while (result.length > 90000 && quality > 0.28) {
+          quality -= 0.1;
+          result = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (result.length > 95000) {
+          setNotice('That image is too large after compression. Try a simpler image.');
+          return;
+        }
+        setEditGalleryImages((current) => current.length < 3 ? [...current, result] : current);
+        setNotice(null);
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveEdit = async () => {
     if (!editingModpack || !currentUserId) return;
     setSavingEdit(true);
@@ -202,7 +250,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       const response = await fetch(`/api/community-modpacks?id=${encodeURIComponent(editingModpack.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({ ...editForm, icon_data_url: editIcon }),
+        body: JSON.stringify({ ...editForm, icon_data_url: editIcon, detail_images: editGalleryImages }),
       });
 
       if (!response.ok) {
@@ -212,7 +260,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       // Refresh the list
       await fetchCommunityModpacks();
-      const updated = { ...editingModpack, ...editForm, icon_data_url: editIcon || undefined };
+      const updated = { ...editingModpack, ...editForm, icon_data_url: editIcon || undefined, detail_images: editGalleryImages };
       setSelectedModpack((current) => current?.id === updated.id ? updated : current);
       setEditingModpack(null);
     } catch (err) {
@@ -495,6 +543,22 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               <p className="text-sm text-[#D5CEE3] whitespace-pre-wrap break-words">{selectedModpack.description || 'No description provided.'}</p>
             </section>
             <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-3">
+              {selectedModpack.detail_description && (
+                <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-2">
+                  <h2 className="text-sm font-bold">More details</h2>
+                  <p className="text-sm text-[#D5CEE3] whitespace-pre-wrap break-words">{selectedModpack.detail_description}</p>
+                </section>
+              )}
+              {Array.isArray(selectedModpack.detail_images) && selectedModpack.detail_images.length > 0 && (
+                <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-3">
+                  <h2 className="text-sm font-bold">Gallery</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {selectedModpack.detail_images.slice(0, 3).map((image, index) => (
+                      <img key={index} src={image} alt={`Gallery image ${index + 1} for ${selectedModpack.name}`} loading="lazy" className="w-full max-h-96 object-contain rounded-lg border border-[#30263F] bg-[#08070D]" />
+                    ))}
+                  </div>
+                </section>
+              )}
               <h2 className="text-sm font-bold">Included packs</h2>
               {selectedModpack.included_packs?.length ? (
                 <div className="space-y-2">
@@ -517,7 +581,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       {/* Edit Modal */}
       {editingModpack && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
-          <div className="w-full max-w-md bg-[#100D18] border border-[#30263F] rounded-xl p-6">
+          <div className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-[#100D18] border border-[#30263F] rounded-xl p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-white">Edit Modpack</h2>
               <button
@@ -561,6 +625,37 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                   rows={6}
                   className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors resize-y"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Detailed description (optional)</label>
+                <textarea
+                  value={editForm.detail_description}
+                  maxLength={4000}
+                  onChange={(e) => setEditForm({ ...editForm, detail_description: e.target.value.slice(0, 4000) })}
+                  rows={5}
+                  placeholder="Add extra information, features, installation notes, or credits..."
+                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors resize-y"
+                />
+                <p className="text-[10px] text-[#716885] text-right">{editForm.detail_description.length}/4000 characters</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Gallery images (up to 3)</label>
+                <div className="grid grid-cols-3 gap-2 mb-2">
+                  {editGalleryImages.map((image, index) => (
+                    <div key={index} className="relative aspect-square rounded-lg overflow-hidden border border-[#30263F] bg-[#08070D]">
+                      <img src={image} alt={`Gallery preview ${index + 1}`} className="w-full h-full object-cover" />
+                      <button type="button" onClick={() => setEditGalleryImages((current) => current.filter((_, i) => i !== index))} className="absolute top-1 right-1 rounded-full bg-black/80 p-1 text-white" aria-label={`Remove gallery image ${index + 1}`}>
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {editGalleryImages.length < 3 && (
+                  <input type="file" accept="image/*" onChange={(e) => { handleGalleryFile(e.target.files?.[0]); e.currentTarget.value = ''; }} className="block w-full text-xs text-[#AAA3BB] file:mr-3 file:rounded-lg file:border-0 file:bg-[#762BFF] file:px-3 file:py-2 file:text-white" />
+                )}
+                <p className="text-[10px] text-[#716885]">Images are resized and compressed before saving.</p>
               </div>
 
               <div>
