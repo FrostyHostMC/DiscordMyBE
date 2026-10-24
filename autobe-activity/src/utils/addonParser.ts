@@ -39,14 +39,14 @@ export function sanitizeJsonString(raw: string): string {
     // Preserve newlines so line structure remains useful in parser errors.
     if (ch === '/' && next === '/') {
       i += 2;
-      while (i < input.length && input[i] !== '\\n' && input[i] !== '\\r') i++;
+      while (i < input.length && input[i] !== '\n' && input[i] !== '\r') i++;
       if (i < input.length) withoutComments += input[i];
       continue;
     }
     if (ch === '/' && next === '*') {
       i += 2;
       while (i < input.length && !(input[i] === '*' && input[i + 1] === '/')) {
-        if (input[i] === '\\n' || input[i] === '\\r') withoutComments += input[i];
+        if (input[i] === '\n' || input[i] === '\r') withoutComments += input[i];
         i++;
       }
       i++; // consume the slash in */
@@ -76,7 +76,7 @@ export function sanitizeJsonString(raw: string): string {
     }
     if (ch === ',') {
       let nextIndex = i + 1;
-      while (nextIndex < withoutComments.length && /\\s/.test(withoutComments[nextIndex])) nextIndex++;
+      while (nextIndex < withoutComments.length && /\s/.test(withoutComments[nextIndex])) nextIndex++;
       if (withoutComments[nextIndex] === '}' || withoutComments[nextIndex] === ']') continue;
     }
     output += ch;
