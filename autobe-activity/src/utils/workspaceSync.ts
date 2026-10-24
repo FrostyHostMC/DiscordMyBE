@@ -1,6 +1,6 @@
 import type { AddonPack, MergedModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
-import { getAllPacksFromDB, getAllModpacksFromDB, loadPackFile, savePackToDB, saveModpackToDB } from '@/utils/storage';
+import { getAllPacksFromDB, getAllModpacksFromDB, loadPackFile, savePackToDB, saveModpackToDB, deletePackFromDB, deleteModpackFromDB } from '@/utils/storage';
 
 type RemoteItem = { id: string; type: 'pack' | 'project'; data: Record<string, unknown>; updatedAt?: number };
 
@@ -93,7 +93,13 @@ export async function deleteWorkspaceItemFromCloud(type: 'pack' | 'project', id:
 
 export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; projects: MergedModpack[]; imported: number; uploaded: number }> {
   // Always require the server to verify identity/role before reading or writing cloud data.
-  const remote = await api<{ items: RemoteItem[] }>('/api/workspace');
+  const remote = await api<{ items: RemoteItem[]; deleted?: Array<{ id: string; type: 'pack' | 'project' }> }>('/api/workspace');
+  // Cloud tombstones are authoritative. Remove stale local copies before merge so
+  // a second device cannot resurrect something the user deliberately deleted.
+  for (const item of remote.deleted || []) {
+    if (item.type === 'pack') await deletePackFromDB(item.id);
+    else if (item.type === 'project') await deleteModpackFromDB(item.id);
+  }
   const localPacks = await getAllPacksFromDB();
   const localProjects = await getAllModpacksFromDB();
   const remotePacks = remote.items.filter(item => item.type === 'pack');
