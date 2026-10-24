@@ -242,10 +242,16 @@ export async function onRequestPatch(context: Ctx) {
     const updates: string[] = [];
     const values: unknown[] = [];
     for (const field of ['name', 'description', 'version', 'icon_data_url'] as const) {
-      if (data[field] !== undefined) {
-        updates.push(`${field} = ?`);
-        values.push(data[field]);
+      if (data[field] === undefined) continue;
+      let value: unknown = data[field];
+      if (field === 'name') value = String(value).slice(0, 120);
+      if (field === 'description') value = String(value).slice(0, 2000);
+      if (field === 'version') value = String(value).slice(0, 40);
+      if (field === 'icon_data_url') {
+        value = typeof value === 'string' && value.length <= 100_000 ? value : null;
       }
+      updates.push(`${field} = ?`);
+      values.push(value);
     }
     if (updates.length === 0) return json({ error: 'No fields to update' }, 400);
 
