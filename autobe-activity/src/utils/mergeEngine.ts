@@ -520,7 +520,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     scriptConflicts,
     subpackSelections
   } = options;
-  onProgress?.('Analyzing animation compatibility', 5);\n  const animationFindings = await analyzeAnimationConflicts(packs);\n  onProgress?.('Reading addons', 10);
+  onProgress?.('Analyzing animation compatibility', 5);
+  const animationFindings = await analyzeAnimationConflicts(packs);
+  onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
