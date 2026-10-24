@@ -164,7 +164,10 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
             if (typeof item === 'string') addReferenceScope(item, scope);
             else if (item && typeof item === 'object') for (const key of Object.keys(item)) addReferenceScope(key, scope);
           }
-          for (const reference of Object.keys(entityDef.description?.animation_controllers || {})) addReferenceScope(reference, scope);
+          for (const [alias, target] of Object.entries(entityDef.description?.animation_controllers || {})) {
+            addReferenceScope(alias, scope);
+            if (typeof target === 'string') addReferenceScope(target, scope);
+          }
         }
         if (parsed.animations && typeof parsed.animations === 'object' && !lower.includes('animation_controllers')) {
           for (const [id, definition] of Object.entries(parsed.animations as Record<string, any>)) {
