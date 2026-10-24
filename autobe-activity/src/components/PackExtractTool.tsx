@@ -129,7 +129,7 @@ export const PackExtractTool: React.FC<PackExtractToolProps> = ({ onBack }) => {
       setExtractedName(`${baseName}_extracted.zip`);
       setSummary({
         fileCount: result.totalFiles,
-        entries: Array.from((await JSZip.loadAsync(file)).files.keys())
+        entries: Object.keys((await JSZip.loadAsync(file)).files)
           .filter(p => !p.includes('__MACOSX') && !p.endsWith('/'))
           .slice(0, 8),
         packName: baseName,
