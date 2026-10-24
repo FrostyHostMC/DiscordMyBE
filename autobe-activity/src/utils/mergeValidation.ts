@@ -75,7 +75,7 @@ export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<Me
         for (const [key, entry] of Object.entries(parsed.texture_data)) {
           const visit = (value: any): void => {
             if (typeof value === 'string') {
-              const texturePath = value.replace(/^textures\//, '').replace(/\\.(png|tga|jpg|jpeg)$/i, '');
+              const texturePath = value.replace(/^textures\//, '').replace(/\.(png|tga|jpg|jpeg)$/i, '');
               const candidates = [`textures/${texturePath}.png`, `textures/${texturePath}.tga`, `textures/${texturePath}.jpg`, `textures/${texturePath}.jpeg`];
               if (!candidates.some(candidate => paths.has(candidate))) {
                 // Vanilla/engine textures may be referenced without being shipped by the pack.
