@@ -51,10 +51,10 @@ export function unionMergeList(existing: any[], incoming: any[]): any[] {
 function normalizeString(s: string): string {
   let out = s.replace(/\s*=\s*/g, '=');
   out = out
-    .replaceAll('1st_person', 'first_person')
-    .replaceAll('3rd_person', 'third_person')
-    .replaceAll('v.is_first_person', 'variable.is_first_person')
-    .replaceAll('q.is_spectator', 'query.is_spectator');
+    .split('1st_person').join('first_person')
+    .split('3rd_person').join('third_person')
+    .split('v.is_first_person').join('variable.is_first_person')
+    .split('q.is_spectator').join('query.is_spectator');
   return out;
 }
 
