@@ -367,7 +367,6 @@ export const App: React.FC = () => {
     try {
       showToast('Loading selected packs…', 20000);
       packsToMerge = await hydratePacks(selected);
-      hydratedPacksRef.current = new Map(packsToMerge.map((p) => [p.id, p]));
     } catch (err) {
       console.error('[Merge] Could not load pack files:', describeError(err));
       showToast(`Could not load the selected packs: ${describeError(err)}`, 8000);
@@ -389,8 +388,12 @@ export const App: React.FC = () => {
     confList: ConflictItem[] = [],
     modpackNameOverride?: string
   ) => {
-    mergeLogger.info('Starting merge execution', `Packs: ${packsToMerge.length}, Name: ${modpackNameOverride || 'default'}`);
-    hydratedPacksRef.current = new Map(); // the merge below holds its own reference; free the cache
+    // Log the exact source set so reports can prove which library items entered this merge.
+    mergeLogger.info('Starting merge execution', JSON.stringify({
+      count: packsToMerge.length,
+      selectedSources: packsToMerge.map((p) => ({ id: p.id, name: p.name, type: p.type, uuid: p.uuid })),
+      name: modpackNameOverride || 'default'
+    }));
     setScreen('merging');
     setMergeProgress(10);
     setMergeStep('Reading addons & manifests');
