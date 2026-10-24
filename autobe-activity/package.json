@@ -17,8 +17,8 @@
     "typecheck": "tsc -b --pretty false",
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
     "test": "npm run test:merge && npm run test:verify",
-    "test:merge": "esbuild scripts/testMerge.ts --bundle --platform=node --format=esm --outfile=scripts/.testMerge.mjs --alias:@=./src --external:jszip --log-level=warning && node scripts/.testMerge.mjs",
-    "test:verify": "esbuild scripts/testVerification.ts --bundle --platform=node --format=esm --outfile=scripts/.testVerify.mjs --alias:@=./src --external:jszip --log-level=warning && node scripts/.testVerify.mjs"
+    "test:merge": "tsx scripts/testMerge.ts",
+    "test:verify": "tsx scripts/testVerification.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
@@ -38,7 +38,6 @@
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "@vitejs/plugin-react-swc": "^4.3.3",
     "eslint": "^10.0.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.5.0",
@@ -47,6 +46,7 @@
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.68.0",
     "vite": "^8.2.2",
-    "vite-plugin-singlefile": "^2.3.3"
+    "vite-plugin-singlefile": "^2.3.3",
+    "@vitejs/plugin-react": "^5.0.4"
   }
 }
