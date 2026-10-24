@@ -38,7 +38,6 @@ import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
-import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud } from '@/utils/workspaceSync';
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -197,20 +196,6 @@ export const App: React.FC = () => {
           setMyModpacks(INITIAL_DEMO_MODPACKS);
         }
 
-        // Sync is additive and role-gated. If cloud sync fails, keep local data usable.
-        if (getDiscordAuth()?.token) {
-          try {
-            const synced = await syncWorkspaceOnStartup();
-            setInstalledPacks(synced.packs);
-            setMyModpacks(synced.projects);
-            if (synced.imported || synced.uploaded) {
-              showToast(`Workspace sync complete: imported ${synced.imported}, uploaded ${synced.uploaded}.`);
-            }
-          } catch (syncError) {
-            console.error('[WorkspaceSync] Startup sync failed:', describeError(syncError));
-            showToast(`Cloud sync unavailable; local data is safe. ${describeError(syncError)}`);
-          }
-        }
       } catch (err) {
         console.error('[Aippy] Initialization error:', describeError(err));
         showToast(`Could not load your saved packs: ${describeError(err)}`);
@@ -275,7 +260,6 @@ export const App: React.FC = () => {
     for (const p of trulyNew) {
       try {
         const where = await savePackToDB(p);
-        if (getDiscordAuth()?.token) syncPackToCloud(p).catch((error) => showToast(`Pack saved locally; cloud sync failed: ${describeError(error)}`));
         if (where === 'saved') persisted++;
         else memoryOnly++;
       } catch (err) {
@@ -444,7 +428,6 @@ export const App: React.FC = () => {
       // Save to IndexedDB
       try {
         await saveModpackToDB(result);
-        if (getDiscordAuth()?.token) syncProjectToCloud(result).catch((error) => showToast(`Project saved locally; cloud sync failed: ${describeError(error)}`));
         const updatedModpacks = await getAllModpacksFromDB();
         setMyModpacks(updatedModpacks);
       } catch (saveErr) {
@@ -677,7 +660,6 @@ export const App: React.FC = () => {
     console.log('[Delete Pack] Deleting pack:', id);
     try {
       await deletePackFromDB(id);
-      if (getDiscordAuth()?.token) deleteWorkspaceItemFromCloud('pack', id).catch((error) => showToast(`Pack deleted locally; cloud delete failed: ${describeError(error)}`));
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
       setSelectedPackIds((prev) => prev.filter((x) => x !== id));
@@ -883,7 +865,6 @@ export const App: React.FC = () => {
     triggerHaptic(50);
     try {
       await deleteModpackFromDB(id);
-      if (getDiscordAuth()?.token) deleteWorkspaceItemFromCloud('project', id).catch((error) => showToast(`Project deleted locally; cloud delete failed: ${describeError(error)}`));
       const updated = await getAllModpacksFromDB();
       setMyModpacks(updated);
       if (activeModpack?.id === id) {
@@ -900,7 +881,6 @@ export const App: React.FC = () => {
   // Update an existing modpack in storage and UI state (e.g. after customization)
   const handleUpdateModpack = async (updated: MergedModpack) => {
     await saveModpackToDB(updated);
-    if (getDiscordAuth()?.token) syncProjectToCloud(updated).catch((error) => showToast(`Project updated locally; cloud sync failed: ${describeError(error)}`));
     setMyModpacks((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     if (activeModpack?.id === updated.id) {
       setActiveModpack(updated);
