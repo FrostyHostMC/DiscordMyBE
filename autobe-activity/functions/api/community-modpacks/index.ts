@@ -28,6 +28,27 @@ const json = (body: unknown, status = 200) =>
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 
+async function consumePublishQuota(env: Env, userId: string): Promise<number> {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
+    scope TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    window_start INTEGER NOT NULL,
+    request_count INTEGER NOT NULL,
+    PRIMARY KEY (scope, user_id)
+  )`).run();
+  const now = Date.now();
+  const windowStart = now - 24 * 60 * 60 * 1000;
+  const row = await env.DB.prepare(`
+    INSERT INTO autobe_rate_limits (scope, user_id, window_start, request_count)
+    VALUES ('publish', ?, ?, 1)
+    ON CONFLICT(scope, user_id) DO UPDATE SET
+      window_start = CASE WHEN autobe_rate_limits.window_start <= ? THEN ? ELSE autobe_rate_limits.window_start END,
+      request_count = CASE WHEN autobe_rate_limits.window_start <= ? THEN 1 ELSE autobe_rate_limits.request_count + 1 END
+    RETURNING request_count
+  `).bind(userId, now, windowStart, now, windowStart).first<{ request_count: number }>();
+  return Number(row?.request_count || 0);
+}
+
 async function verifyDiscordUser(request: Request, env: Env): Promise<string | null> {
   const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
   if (!match) return null;
@@ -106,6 +127,15 @@ export async function onRequestPost(context: Ctx) {
       if (!blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad path');
     } catch {
       return json({ error: 'Invalid file link. Upload the modpack through the app first.' }, 400);
+    }
+
+    const publishCount = await consumePublishQuota(env, userId);
+    if (publishCount > 3) {
+      return json({
+        error: 'Publishing limit reached: each account can publish up to 3 modpacks per 24 hours. Try again later.',
+        code: 'RATE_LIMITED',
+        retryAfterSeconds: 86400,
+      }, 429);
     }
 
     // Store only bounded listing metadata in D1; the actual .mcaddon lives in R2.
