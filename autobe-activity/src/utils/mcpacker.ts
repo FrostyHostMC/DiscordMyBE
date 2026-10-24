@@ -82,7 +82,7 @@ export async function recursiveExtractPack(
     const lowerPath = path.toLowerCase();
     if (lowerPath.endsWith('.mcpack') || lowerPath.endsWith('.mcaddon') || lowerPath.endsWith('.zip')) {
       try {
-        const nestedArchive = new File([content], path.split('/').pop() || 'archive.zip');
+        const nestedArchive = new File([new Uint8Array(content).buffer as ArrayBuffer], path.split('/').pop() || 'archive.zip');
         const nestedResults = await recursiveExtractPack(nestedArchive, maxDepth - 1);
         results.packs.push(...nestedResults.packs);
         results.totalFiles += nestedResults.totalFiles;
