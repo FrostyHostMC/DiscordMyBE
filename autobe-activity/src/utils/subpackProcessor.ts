@@ -85,7 +85,7 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
   }
   const data = await out.generateAsync({ type: 'uint8array' });
   console.log('[SubpackSelection] Extracted', extractedCount, 'files from subpack, skipped', skippedCount, 'unselected files, output size:', data.length);
-  return new Blob([data], { type: 'application/octet-stream' });
+  return new Blob([new Uint8Array(data).buffer as ArrayBuffer], { type: 'application/octet-stream' });
 }
 
 export async function applySubpackToPack(pack: AddonPack, folderName: string): Promise<AddonPack> {
