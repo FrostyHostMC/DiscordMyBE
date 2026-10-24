@@ -1,3 +1,5 @@
+import type JSZip from 'jszip';
+
 /**
  * Port of AutoBE Part 16 player-entity passes (_process_packs post-merge fixes):
  * slot sanitization, entity-context query relocation, vanilla animation alias
