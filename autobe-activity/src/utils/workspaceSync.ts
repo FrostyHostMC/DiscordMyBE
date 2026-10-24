@@ -51,7 +51,7 @@ async function saveRemote(items: RemoteItem[]): Promise<void> {
         body: JSON.stringify({ items: batch }),
       });
     } catch (error) {
-      if (batch.length > 1 && error instanceof Error && /HTTP 400/.test(error.message)) {
+      if (batch.length > 1 && error instanceof Error && /HTTP 400|was rejected|Send between/.test(error.message)) {
         const middle = Math.floor(batch.length / 2);
         await saveBatch(batch.slice(0, middle));
         await saveBatch(batch.slice(middle));
