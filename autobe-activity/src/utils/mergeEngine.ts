@@ -600,7 +600,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       packCount: b.packCount,
       size: blobData.byteLength,
       achievementsDisabled: b.achievementsDisabled,
-      blob: new Blob([blobData])
+      blob: new Blob([Uint8Array.from(blobData).buffer])
     });
   }
 
