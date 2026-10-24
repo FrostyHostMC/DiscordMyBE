@@ -97,7 +97,11 @@ export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; pr
       const fileResponse = await fetch(`/api/workspace/files/${encodeURIComponent(item.id)}`, {
         headers: authHeaders(), cache: 'no-store',
       });
-      if (fileResponse.ok) metadata.fileBlob = await fileResponse.blob();
+      if (!fileResponse.ok) {
+        console.warn('[WorkspaceSync] Cloud pack file unavailable; skipped importing metadata to avoid a broken local pack:', item.id, fileResponse.status);
+        continue;
+      }
+      metadata.fileBlob = await fileResponse.blob();
       const result = await savePackToDB(metadata);
       if (result === 'saved') imported++;
     } catch (error) {
@@ -120,23 +124,41 @@ export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; pr
   const projectUploads: RemoteItem[] = localProjects
     .filter(project => !project.id.startsWith('demo-modpack-') && !remoteProjectIds.has(project.id))
     .map(project => ({ id: project.id, type: 'project', data: projectMetadata(project) }));
-  // Upload binaries before publishing their metadata so a failed transfer cannot
-  // leave a cloud record that appears synced but has no downloadable file.
+  // Sync each pack independently. One missing/corrupt local file must not block
+  // unrelated packs or projects from reaching the cloud.
+  const syncedPackMetadata: RemoteItem[] = [];
+  const failures: string[] = [];
   for (const pack of localPacks) {
     if (pack.id.startsWith('demo-pack-') || remotePackIds.has(pack.id)) continue;
-    const withFile = await loadPackFile(pack);
-    if (!withFile.fileBlob) throw new Error(`The local file for "${pack.name}" is missing; it was not synced.`);
-    const response = await fetch(`/api/workspace/files/${encodeURIComponent(pack.id)}`, {
-      method: 'PUT',
-      headers: authHeaders({ 'content-type': withFile.fileBlob.type || 'application/octet-stream' }),
-      body: withFile.fileBlob,
-      cache: 'no-store',
-    });
-    if (!response.ok) throw new Error(`Could not upload pack file "${pack.name}" (HTTP ${response.status}).`);
+    try {
+      const withFile = await loadPackFile(pack);
+      if (!withFile.fileBlob) {
+        failures.push(`"${pack.name}" has no readable local file`);
+        continue;
+      }
+      const response = await fetch(`/api/workspace/files/${encodeURIComponent(pack.id)}`, {
+        method: 'PUT',
+        headers: authHeaders({ 'content-type': withFile.fileBlob.type || 'application/octet-stream' }),
+        body: withFile.fileBlob,
+        cache: 'no-store',
+      });
+      if (!response.ok) {
+        failures.push(`"${pack.name}" file upload failed (HTTP ${response.status})`);
+        continue;
+      }
+      syncedPackMetadata.push({ id: pack.id, type: 'pack', data: packMetadata(pack) });
+    } catch (error) {
+      failures.push(`"${pack.name}": ${error instanceof Error ? error.message : String(error)}`);
+    }
   }
 
-  await saveRemote([...packUploads, ...projectUploads]);
-  uploaded += packUploads.length + projectUploads.length;
+  // Publish metadata only after that pack's binary upload succeeded; save projects
+  // and healthy packs even if another pack has a missing file.
+  await saveRemote([...syncedPackMetadata, ...projectUploads]);
+  uploaded += syncedPackMetadata.length + projectUploads.length;
+  if (failures.length) {
+    console.warn('[WorkspaceSync] Some items were not synced:', failures);
+  }
 
   return { packs: await getAllPacksFromDB(), projects: await getAllModpacksFromDB(), imported, uploaded };
 }
