@@ -19,7 +19,7 @@ This rule is not created by a Git commit; it must be enabled in the Cloudflare a
 
 In the Cloudflare Pages project settings, add the environment variable `ADMIN_DISCORD_USER_ID` for both Production and Preview only if you want the dashboard in both environments. Set it to the owner's numeric Discord user ID, then redeploy.
 
-The endpoint is `GET /api/admin/usage` and requires the owner's valid Discord OAuth bearer token. It reports published-listing count, estimated bytes based on the merged archive size recorded at publish time, and a percentage of the nominal 10 GiB R2 free storage allowance.
+The endpoint is `GET /api/admin/usage` and requires the owner's valid Discord OAuth bearer token. It reports published-listing count, estimated bytes based on the merged archive size recorded at publish time, and a percentage of the nominal 10 GB R2 free storage allowance.
 
 Important limitations:
 - It estimates published files from D1 metadata. It does not enumerate R2 and therefore excludes temporary files, orphaned objects, unfinished multipart uploads, and other objects.
