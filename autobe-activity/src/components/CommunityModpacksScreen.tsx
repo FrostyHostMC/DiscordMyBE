@@ -16,7 +16,9 @@ import {
   Info,
   RefreshCw,
   Image as ImageIcon,
-  Eye
+  Eye,
+  Trophy,
+  Medal
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
@@ -47,6 +49,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [savingEdit, setSavingEdit] = useState(false);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeSection, setActiveSection] = useState<'modpacks' | 'creators'>('modpacks');
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
@@ -290,6 +293,23 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     m.author.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Rank creators by the combined downloads of all their public modpacks.
+  // Keep the creator's most-downloaded single modpack as their featured pack.
+  const topCreators = Array.from(modpacks.reduce((groups, pack) => {
+    const key = pack.author_id || pack.author;
+    const current = groups.get(key) || { id: key, name: pack.author || 'Unknown creator', downloads: 0, packs: [] as CommunityModpack[] };
+    current.downloads += Math.max(0, Number(pack.downloads) || 0);
+    current.packs.push(pack);
+    groups.set(key, current);
+    return groups;
+  }, new Map<string, { id: string; name: string; downloads: number; packs: CommunityModpack[] }>() ).values())
+    .map((creator) => ({
+      ...creator,
+      topPack: [...creator.packs].sort((a, b) => (Number(b.downloads) || 0) - (Number(a.downloads) || 0))[0],
+    }))
+    .sort((a, b) => b.downloads - a.downloads || a.name.localeCompare(b.name))
+    .slice(0, 3);
+
   return (
     <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-hidden">
       {/* Header */}
@@ -347,6 +367,16 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
         </div>
       </div>
 
+      {/* Public section tabs */}
+      <div className="px-4 sm:px-6 py-3 border-b border-[#30263F]/70 bg-[#0C0A12] flex gap-2">
+        <button type="button" onClick={() => setActiveSection('modpacks')} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors ${activeSection === 'modpacks' ? 'bg-[#762BFF]/20 border-[#762BFF] text-white' : 'bg-[#15111F] border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>
+          <Globe className="w-3.5 h-3.5 inline mr-1.5" />Public Modpacks
+        </button>
+        <button type="button" onClick={() => setActiveSection('creators')} className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors ${activeSection === 'creators' ? 'bg-[#762BFF]/20 border-[#762BFF] text-white' : 'bg-[#15111F] border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>
+          <Trophy className="w-3.5 h-3.5 inline mr-1.5" />Top Creators
+        </button>
+      </div>
+
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
         {usage && (
@@ -363,7 +393,35 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             {notice}
           </div>
         )}
-        {loading ? (
+        {activeSection === 'creators' ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-[#30263F] bg-gradient-to-br from-[#171022] to-[#100D18] p-5">
+              <div className="flex items-center gap-2 mb-1"><Trophy className="w-5 h-5 text-amber-300" /><h2 className="text-lg font-bold text-white">Top Creators</h2></div>
+              <p className="text-xs text-[#AAA3BB]">Ranked by total downloads across each creator's public modpacks. Each creator's most-downloaded pack is featured below.</p>
+            </div>
+            {loading ? (
+              <div className="py-12 text-center text-sm text-[#AAA3BB]"><Loader2 className="w-6 h-6 animate-spin mx-auto mb-2" />Loading creator rankings…</div>
+            ) : topCreators.length === 0 ? (
+              <div className="py-12 text-center rounded-xl border border-[#30263F] bg-[#100D18] text-sm text-[#AAA3BB]">No public creators yet. Rankings will appear when modpacks are published.</div>
+            ) : topCreators.map((creator, index) => (
+              <div key={creator.id} className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 flex flex-col sm:flex-row gap-4">
+                <div className="flex items-center gap-3 sm:w-44 shrink-0">
+                  <div className={`w-11 h-11 rounded-full flex items-center justify-center font-black text-lg ${index === 0 ? 'bg-amber-300/15 text-amber-300' : index === 1 ? 'bg-slate-300/15 text-slate-200' : 'bg-orange-400/15 text-orange-300'}`}>
+                    {index === 0 ? <Trophy className="w-5 h-5" /> : <Medal className="w-5 h-5" />}
+                  </div>
+                  <div className="min-w-0"><p className="text-[10px] uppercase tracking-widest text-[#AAA3BB]">Rank #{index + 1}</p><p className="font-bold text-white truncate">{creator.name}</p><p className="text-[11px] text-[#AAA3BB]">{creator.packs.length} public modpack{creator.packs.length === 1 ? '' : 's'}</p></div>
+                </div>
+                <div className="flex-1 min-w-0 rounded-lg border border-[#30263F]/70 bg-[#0B0910] p-3 flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-lg bg-[#15111F] border border-[#30263F] overflow-hidden shrink-0 flex items-center justify-center">
+                    {creator.topPack.icon_data_url ? <img src={creator.topPack.icon_data_url} alt="" className="w-full h-full object-cover" /> : <Box className="w-6 h-6 text-[#A855F7]" />}
+                  </div>
+                  <div className="min-w-0 flex-1"><p className="text-[10px] uppercase tracking-wider text-[#AAA3BB]">Top modpack</p><button type="button" onClick={() => setSelectedModpack(creator.topPack)} className="text-sm font-bold text-white hover:text-[#A855F7] text-left truncate max-w-full">{creator.topPack.name}</button><p className="text-[11px] text-[#AAA3BB]">{(Number(creator.topPack.downloads) || 0).toLocaleString()} downloads</p></div>
+                  <div className="text-right shrink-0"><p className="text-[10px] text-[#AAA3BB]">Creator total</p><p className="font-bold text-emerald-300">{creator.downloads.toLocaleString()}</p></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Loader2 className="w-8 h-8 text-[#762BFF] animate-spin mb-3" />
             <p className="text-sm text-[#AAA3BB]">Loading community modpacks...</p>
