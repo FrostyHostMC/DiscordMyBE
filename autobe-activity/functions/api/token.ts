@@ -1,6 +1,7 @@
 interface Env {
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
+  DISCORD_OAUTH_REDIRECT_URI?: string;
 }
 
 const json = (body: unknown, status = 200) =>
@@ -28,9 +29,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, 500);
   }
 
-  let body: { code?: unknown };
+  let body: { code?: unknown; redirect_uri?: unknown };
   try {
-    body = await request.json() as { code?: unknown };
+    body = await request.json() as { code?: unknown; redirect_uri?: unknown };
   } catch {
     return json({ error: 'Invalid request body.' }, 400);
   }
@@ -39,14 +40,22 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Missing or invalid Discord authorization code.' }, 400);
   }
 
-  // Discord's Embedded App SDK documentation specifies this placeholder redirect URI.
-  // It must also exist under this application's OAuth2 > Redirects in the Developer Portal.
+  // The Embedded App SDK uses Discord's documented placeholder redirect. The
+  // standalone web login uses one explicitly configured, allow-listed redirect URI.
+  const configuredBrowserRedirect = env.DISCORD_OAUTH_REDIRECT_URI || 'https://discordmybe.pages.dev/';
+  let redirectUri = 'https://127.0.0.1/';
+  if (body.redirect_uri !== undefined) {
+    if (typeof body.redirect_uri !== 'string' || body.redirect_uri !== configuredBrowserRedirect) {
+      return json({ error: 'The browser OAuth redirect URI is not allowed. Check the Discord OAuth configuration.' }, 400);
+    }
+    redirectUri = configuredBrowserRedirect;
+  }
   const form = new URLSearchParams({
     client_id: env.DISCORD_CLIENT_ID,
     client_secret: env.DISCORD_CLIENT_SECRET,
     grant_type: 'authorization_code',
     code: body.code,
-    redirect_uri: 'https://127.0.0.1/',
+    redirect_uri: redirectUri,
   });
 
   let response: Response;
