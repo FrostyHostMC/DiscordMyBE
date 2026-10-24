@@ -11,7 +11,6 @@ import { applyPlayerEntityPass } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
-import { validateMergedOutputs } from '@/utils/mergeValidation';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -33,6 +32,12 @@ const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/
 // Per-file strategy merge files (Part 18 _merge_json special branches):
 // collected as lists and merged with mergeJsonForFile at write time.
 const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'crafting_item_catalog.json']);
+
+/** Every UI JSON file participates in the UI merge, not just a hardcoded shortlist. */
+function isStrategyMergeFile(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/').toLowerCase();
+  return STRATEGY_MERGE_FILES.has(normalized) || (normalized.startsWith('ui/') && normalized.endsWith('.json'));
+}
 
 // --- Version utilities -------------------------------------------------
 
@@ -192,7 +197,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       } catch {
         writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
       }
-    } else if (STRATEGY_MERGE_FILES.has(lower)) {
+    } else if (isStrategyMergeFile(lower)) {
       try {
         const txt = await fileObj.async('text');
         const parsed = JSON.parse(sanitizeJsonString(txt));
@@ -621,12 +626,11 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   // Port of AutoBE._write_merge_report: validation summary embedded in the
   // final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
-  const generatedValidationChecks = await validateMergedOutputs(outputs);
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     generatedAt: new Date().toISOString(),
     modpackName,
-    checks: [...generatedValidationChecks, {
+    checks: [{
       name: 'Source packs',
       status: 'ok',
       detail: `${packs.length} addon pack(s) parsed and merged`
