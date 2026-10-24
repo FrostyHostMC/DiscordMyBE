@@ -1,7 +1,7 @@
 /**
  * /api/community-modpacks
- *   GET    list all published modpacks (or ?id=... to count a download)
- *   POST   publish a modpack
+ *   GET    list all published modpacks
+ *   POST   publish a modpack (or ?action=download&id=... to count a download)
  *   PATCH  edit your own modpack      (?id=...)
  *   DELETE delete your own modpack    (?id=...)
  *
@@ -16,6 +16,7 @@ import type { Context } from '@cloudflare/workers-types';
 
 interface Env {
   DB: D1Database;
+  BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
 }
 
@@ -83,6 +84,15 @@ export async function onRequestPost(context: Ctx) {
 
     await ensureTable(env);
 
+    if (new URL(request.url).searchParams.get('action') === 'download') {
+      const id = new URL(request.url).searchParams.get('id');
+      if (!id) return json({ error: 'Missing modpack id' }, 400);
+      const updated = await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1 WHERE id = ?').bind(id).run();
+      if (!updated.meta?.changes) return json({ error: 'Modpack not found' }, 404);
+      const row = await env.DB.prepare('SELECT downloads FROM community_modpacks WHERE id = ?').bind(id).first<{ downloads: number }>();
+      return json({ success: true, downloads: Number(row?.downloads) || 0 });
+    }
+
     const data = (await request.json()) as Record<string, any>;
     console.log('[Community] POST', { name: data.name, author: data.author, userId });
 
@@ -136,13 +146,6 @@ export async function onRequestGet(context: Ctx) {
     if (!env.DB) return json({ error: 'Database not configured' }, 500);
     await ensureTable(env);
 
-    const modpackId = new URL(request.url).searchParams.get('id');
-    if (modpackId) {
-      await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1 WHERE id = ?')
-        .bind(modpackId)
-        .run();
-    }
-
     const { results } = await env.DB.prepare(
       'SELECT * FROM community_modpacks ORDER BY created_at DESC'
     ).all();
@@ -176,12 +179,21 @@ export async function onRequestDelete(context: Ctx) {
     if (!id) return json({ error: 'Missing id' }, 400);
 
     await ensureTable(env);
-    const row = await env.DB.prepare('SELECT author_id FROM community_modpacks WHERE id = ?')
+    const row = await env.DB.prepare('SELECT author_id, blob_url FROM community_modpacks WHERE id = ?')
       .bind(id)
-      .first<{ author_id: string }>();
+      .first<{ author_id: string; blob_url: string }>();
     if (!row) return json({ error: 'Modpack not found' }, 404);
     if (row.author_id !== userId) return json({ error: 'You can only delete your own modpacks' }, 403);
 
+    // Remove the permanent R2 object too; otherwise deleted community packs leak storage forever.
+    if (env.BUCKET && row.blob_url) {
+      const fileUrl = new URL(row.blob_url);
+      const prefix = '/api/files/';
+      if (fileUrl.pathname.startsWith(`${prefix}pub/`)) {
+        const key = fileUrl.pathname.slice(prefix.length).split('/').map((part) => decodeURIComponent(part)).join('/');
+        await env.BUCKET.delete(key);
+      }
+    }
     await env.DB.prepare('DELETE FROM community_modpacks WHERE id = ?').bind(id).run();
     return json({ success: true });
   } catch (error) {
