@@ -17,13 +17,37 @@
  */
 interface Env {
   BUCKET: R2Bucket;
+  DB: D1Database;
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
   PUBLIC_BASE_URL?: string;
 }
 
-const MAX_BYTES = 600 * 1024 * 1024;
+const MAX_BYTES = 500 * 1024 * 1024; // Keep uploads bounded for the small free storage allowance.
 const MAX_PARTS = 200;
+const PUB_UPLOADS_PER_DAY = 3;
+const TEMP_UPLOADS_PER_DAY = 20;
+
+async function consumeDailyQuota(env: Env, userId: string, kind: string): Promise<number> {
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
+    scope TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    window_start INTEGER NOT NULL,
+    request_count INTEGER NOT NULL,
+    PRIMARY KEY (scope, user_id)
+  )`).run();
+  const now = Date.now();
+  const windowStart = now - 24 * 60 * 60 * 1000;
+  const row = await env.DB.prepare(`
+    INSERT INTO autobe_rate_limits (scope, user_id, window_start, request_count)
+    VALUES (?, ?, ?, 1)
+    ON CONFLICT(scope, user_id) DO UPDATE SET
+      window_start = CASE WHEN autobe_rate_limits.window_start <= ? THEN ? ELSE autobe_rate_limits.window_start END,
+      request_count = CASE WHEN autobe_rate_limits.window_start <= ? THEN 1 ELSE autobe_rate_limits.request_count + 1 END
+    RETURNING request_count
+  `).bind(`upload:${kind}`, userId, now, windowStart, now, windowStart).first<{ request_count: number }>();
+  return Number(row?.request_count || 0);
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -87,10 +111,22 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const userId = await authenticate(request, env);
       if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
       const body = (await request.json()) as { fileName?: string; kind?: string; size?: number };
+      if (!env.DB) return json({ error: 'Publishing is temporarily unavailable because the rate-limit database is not configured.' }, 503);
       const kind = body.kind === 'pub' ? 'pub' : 'temp';
       const size = Number(body.size) || 0;
       if (size <= 0 || size > MAX_BYTES) {
-        return json({ error: `File must be between 1 byte and ${Math.round(MAX_BYTES / 1048576)} MB.` }, 413);
+        return json({ error: `File must be between 1 byte and ${Math.round(MAX_BYTES / 1048576)} MB (free-tier safety limit).` }, 413);
+      }
+      const dailyCount = await consumeDailyQuota(env, userId, kind);
+      const dailyLimit = kind === 'pub' ? PUB_UPLOADS_PER_DAY : TEMP_UPLOADS_PER_DAY;
+      if (dailyCount > dailyLimit) {
+        return json({
+          error: kind === 'pub'
+            ? 'Publishing limit reached: you can publish up to 3 modpacks per 24 hours. Try again later.'
+            : 'Upload limit reached: you can create up to 20 temporary downloads per 24 hours. Try again later.',
+          code: 'RATE_LIMITED',
+          retryAfterSeconds: 86400,
+        }, 429);
       }
       const fileName = safeName(String(body.fileName || 'file.bin'));
       const key = `${kind}/${userId}/${crypto.randomUUID()}/${fileName}`;
