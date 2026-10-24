@@ -70,10 +70,13 @@ function AccessGate() {
           const returnedState = params.get('state') || '';
           let expectedState = '';
           try {
-            expectedState = sessionStorage.getItem('autobe_discord_oauth_state') || '';
+            // OAuth may return in a new tab/window in the same browser profile.
+            // localStorage survives that context switch; keep strict state validation.
+            expectedState = localStorage.getItem('autobe_discord_oauth_state') || '';
+            localStorage.removeItem('autobe_discord_oauth_state');
             sessionStorage.removeItem('autobe_discord_oauth_state');
           } catch {
-            /* browser storage is required to validate the OAuth state */
+            /* If persistent storage is blocked, fail closed rather than skip state validation. */
           }
           window.history.replaceState({}, document.title, window.location.pathname);
           if (!expectedState || returnedState !== expectedState) {
@@ -200,7 +203,8 @@ function AccessGate() {
                 }
                 try {
                   const oauthState = crypto.randomUUID();
-                  sessionStorage.setItem('autobe_discord_oauth_state', oauthState);
+                  // Persist across OAuth tab/window transitions in the same browser profile.
+                  localStorage.setItem('autobe_discord_oauth_state', oauthState);
                   const params = new URLSearchParams({
                     client_id: clientId,
                     response_type: 'code',
