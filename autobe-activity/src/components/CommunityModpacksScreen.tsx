@@ -375,7 +375,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             <p className="text-xs text-[#AAA3BB] mt-1 max-w-xs">{error}</p>
             <button
               type="button"
-              onClick={fetchCommunityModpacks}
+              onClick={() => void fetchCommunityModpacks()}
               className="mt-4 px-4 py-2 bg-[#762BFF] hover:bg-[#853CFF] rounded-lg font-bold text-xs text-white active:scale-95 transition-all"
             >
               Retry
