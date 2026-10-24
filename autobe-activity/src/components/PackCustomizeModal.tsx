@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { X, Type, FileText, User, Image as ImageIcon, Loader2, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Type, FileText, User, Loader2, Check } from 'lucide-react';
 import { MergedModpack } from '@/types/modpack';
 import { PackCustomization } from '@/utils/packCustomization';
 
@@ -17,36 +17,8 @@ export const PackCustomizeModal: React.FC<PackCustomizeModalProps> = ({
   const [name, setName] = useState(modpack.name);
   const [description, setDescription] = useState(modpack.description || '');
   const [author, setAuthor] = useState('');
-  const [iconFile, setIconFile] = useState<File | null>(null);
-  const [iconPreview, setIconPreview] = useState<string | null>(modpack.iconDataUrl || null);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    return () => {
-      if (iconPreview && iconPreview.startsWith('blob:')) {
-        URL.revokeObjectURL(iconPreview);
-      }
-    };
-  }, [iconPreview]);
-
-  const pickIcon = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleIconChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith('image/')) {
-      setError('Please choose a PNG or JPG image for the pack icon.');
-      return;
-    }
-    setError(null);
-    setIconFile(file);
-    setIconPreview(URL.createObjectURL(file));
-  };
-
   const handleApply = async () => {
     if (!name.trim()) {
       setError('Pack name is required.');
@@ -59,7 +31,7 @@ export const PackCustomizeModal: React.FC<PackCustomizeModalProps> = ({
         name: name.trim(),
         description: description.trim() || 'Merged with AutoBE',
         author: author.trim(),
-        iconFile
+        iconFile: null
       });
     } catch {
       setApplying(false);
@@ -80,9 +52,9 @@ export const PackCustomizeModal: React.FC<PackCustomizeModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-bold text-white">Name your merged pack</h2>
+              <h2 className="text-sm font-bold text-white">Customize project metadata</h2>
               <p className="text-[11px] text-[#AAA3BB] mt-0.5 truncate">
-                Applies to this modpack only: {modpack.name}
+                Applies to this saved project: {modpack.name}
               </p>
             </div>
             <button
@@ -135,36 +107,6 @@ export const PackCustomizeModal: React.FC<PackCustomizeModalProps> = ({
               className={inputCls}
               placeholder="Optional"
               maxLength={60}
-            />
-          </div>
-
-          {/* Icon */}
-          <div className="space-y-1.5">
-            <label className="flex items-center gap-1.5 text-[11px] font-bold text-[#E5E7EB] uppercase tracking-wider">
-              <ImageIcon className="w-3 h-3 text-[#A855F7]" /> Pack Icon
-            </label>
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-[#15111F] border border-[#30263F] overflow-hidden flex items-center justify-center shrink-0">
-                {iconPreview ? (
-                  <img src={iconPreview} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  <ImageIcon className="w-5 h-5 text-[#716885]" />
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={pickIcon}
-                className="px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs font-semibold text-white hover:text-[#A855F7] active:scale-95 transition-all"
-              >
-                {iconFile ? 'Replace image' : 'Choose image...'}
-              </button>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg"
-              onChange={handleIconChosen}
-              className="hidden"
             />
           </div>
 
