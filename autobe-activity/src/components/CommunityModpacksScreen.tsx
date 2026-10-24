@@ -14,7 +14,9 @@ import {
   Search,
   ArrowUpRight,
   Info,
-  RefreshCw
+  RefreshCw,
+  Image as ImageIcon,
+  Eye
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
@@ -40,6 +42,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [error, setError] = useState<string | null>(null);
   const [editingModpack, setEditingModpack] = useState<CommunityModpack | null>(null);
   const [editForm, setEditForm] = useState({ name: '', description: '', version: '' });
+  const [editIcon, setEditIcon] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -70,6 +75,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       }
 
       setModpacks(data.modpacks || []);
+      setError(null);
     } catch (err) {
       console.error('Failed to fetch community modpacks:', err);
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
@@ -122,16 +128,81 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       description: modpack.description,
       version: modpack.version
     });
+    setEditIcon(modpack.icon_data_url || null);
+  };
+
+  const refreshDetails = async () => {
+    if (!selectedModpack) return;
+    setDetailsLoading(true);
+    try {
+      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to refresh modpack');
+      const latest = (data.modpacks || []).find((item: CommunityModpack) => item.id === selectedModpack.id);
+      if (!latest) {
+        setSelectedModpack(null);
+        setNotice('This modpack is no longer available.');
+      } else {
+        setModpacks(data.modpacks || []);
+        setSelectedModpack(latest);
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Could not refresh modpack details');
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleIconFile = (file?: File) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      setNotice('Choose an image file.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setNotice('Could not read that image.');
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = () => setNotice('That image could not be opened.');
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const max = 256;
+        const scale = Math.min(1, max / Math.max(image.width, image.height));
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          setNotice('Image processing is unavailable in this browser.');
+          return;
+        }
+        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        let quality = 0.82;
+        let result = canvas.toDataURL('image/jpeg', quality);
+        while (result.length > 95000 && quality > 0.3) {
+          quality -= 0.1;
+          result = canvas.toDataURL('image/jpeg', quality);
+        }
+        if (result.length > 100000) {
+          setNotice('That image is too large after compression. Try a simpler image.');
+          return;
+        }
+        setEditIcon(result);
+        setNotice(null);
+      };
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleSaveEdit = async () => {
     if (!editingModpack || !currentUserId) return;
+    setSavingEdit(true);
 
     try {
       const response = await fetch(`/api/community-modpacks?id=${encodeURIComponent(editingModpack.id)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({ ...editForm, icon_data_url: editIcon }),
       });
 
       if (!response.ok) {
@@ -141,10 +212,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       // Refresh the list
       await fetchCommunityModpacks();
+      const updated = { ...editingModpack, ...editForm, icon_data_url: editIcon || undefined };
+      setSelectedModpack((current) => current?.id === updated.id ? updated : current);
       setEditingModpack(null);
     } catch (err) {
       console.error('Failed to update modpack:', err);
       setNotice(err instanceof Error ? err.message : 'Failed to update modpack');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -285,9 +360,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                       )}
                     </div>
                     <div className="min-w-0">
-                      <h3 className="text-sm font-bold text-white group-hover:text-[#A855F7] transition-colors truncate">
+                      <button type="button" onClick={() => setSelectedModpack(modpack)} className="text-left text-sm font-bold text-white group-hover:text-[#A855F7] transition-colors truncate max-w-full">
                         {modpack.name}
-                      </h3>
+                      </button>
                       <div className="flex items-center gap-2 text-[11px] text-[#AAA3BB] font-mono mt-0.5">
                         <span className="text-emerald-400">{modpack.total_packs} packs</span>
                         <span>•</span>
@@ -335,8 +410,11 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                   </div>
                 </div>
 
-                {/* Description */}
-                <p className="text-xs text-[#AAA3BB] line-clamp-2">{modpack.description}</p>
+                {/* Description preview; full text is available on the details page. */}
+                <p className="text-xs text-[#AAA3BB] line-clamp-3">{modpack.description}</p>
+                <button type="button" onClick={() => setSelectedModpack(modpack)} className="self-start inline-flex items-center gap-1.5 text-xs font-semibold text-[#C4A7FF] hover:text-white">
+                  <Eye className="w-3.5 h-3.5" /> View details
+                </button>
 
                 {/* Author info */}
                 <div className="flex items-center gap-2 text-[10px] text-[#716885]">
@@ -380,6 +458,62 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
         )}
       </div>
 
+      {/* Modpack details page */}
+      {selectedModpack && !editingModpack && (
+        <div className="fixed inset-0 z-40 bg-[#08070D] text-white overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-3 border-b border-[#30263F] bg-[#100D18]">
+            <button type="button" onClick={() => setSelectedModpack(null)} className="inline-flex items-center gap-2 text-sm text-[#AAA3BB] hover:text-white">
+              <ArrowLeft className="w-4 h-4" /> Community
+            </button>
+            <button type="button" onClick={() => void refreshDetails()} disabled={detailsLoading} className="inline-flex items-center gap-2 rounded-lg border border-[#30263F] px-3 py-2 text-xs hover:text-white disabled:opacity-50">
+              <RefreshCw className={`w-3.5 h-3.5 ${detailsLoading ? 'animate-spin' : ''}`} /> Refresh details
+            </button>
+          </div>
+          <div className="max-w-3xl mx-auto p-4 sm:p-8 space-y-5 pb-24">
+            <div className="flex flex-col sm:flex-row gap-4 items-start">
+              <div className="w-28 h-28 sm:w-36 sm:h-36 shrink-0 rounded-2xl overflow-hidden border border-[#30263F] bg-[#15111F] flex items-center justify-center">
+                {selectedModpack.icon_data_url ? <img src={selectedModpack.icon_data_url} alt="" className="w-full h-full object-cover" /> : <Box className="w-12 h-12 text-[#A855F7]" />}
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
+                <h1 className="text-2xl font-bold break-words">{selectedModpack.name}</h1>
+                <p className="text-sm text-[#AAA3BB]">by {selectedModpack.author}</p>
+                <div className="flex flex-wrap gap-2 text-xs text-[#AAA3BB]">
+                  <span className="rounded-full border border-[#30263F] px-3 py-1">Version {selectedModpack.version}</span>
+                  <span className="rounded-full border border-[#30263F] px-3 py-1">{selectedModpack.total_packs} packs</span>
+                  <span className="rounded-full border border-[#30263F] px-3 py-1">{formatSize(selectedModpack.size)}</span>
+                  <span className="rounded-full border border-[#30263F] px-3 py-1">{selectedModpack.downloads} downloads</span>
+                </div>
+                {currentUserId && selectedModpack.author_id === currentUserId && (
+                  <button type="button" onClick={() => handleEdit(selectedModpack)} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#762BFF] px-4 py-2 text-sm font-bold hover:bg-[#853CFF]">
+                    <Edit className="w-4 h-4" /> Edit my modpack
+                  </button>
+                )}
+              </div>
+            </div>
+            <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-2">
+              <h2 className="text-sm font-bold">About this modpack</h2>
+              <p className="text-sm text-[#D5CEE3] whitespace-pre-wrap break-words">{selectedModpack.description || 'No description provided.'}</p>
+            </section>
+            <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-3">
+              <h2 className="text-sm font-bold">Included packs</h2>
+              {selectedModpack.included_packs?.length ? (
+                <div className="space-y-2">
+                  {selectedModpack.included_packs.map((pack: any, index: number) => (
+                    <div key={index} className="flex items-center gap-3 rounded-lg bg-[#15111F] p-3">
+                      {pack.icon_data_url ? <img src={pack.icon_data_url} alt="" className="w-9 h-9 rounded object-cover" /> : <Box className="w-5 h-5 text-[#A855F7]" />}
+                      <div className="min-w-0"><p className="text-sm font-semibold break-words">{pack.name || String(pack)}</p>{pack.type && <p className="text-xs text-[#AAA3BB]">{pack.type}{pack.version ? ` · v${pack.version}` : ''}</p>}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : <p className="text-xs text-[#AAA3BB]">Pack-by-pack details were not saved for this listing. The downloadable merged archive is still available.</p>}
+            </section>
+            <button type="button" onClick={() => onDownload(selectedModpack)} className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#762BFF] px-4 py-3 text-sm font-bold hover:bg-[#853CFF]">
+              <Download className="w-4 h-4" /> Download modpack
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Edit Modal */}
       {editingModpack && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
@@ -397,6 +531,19 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
             <div className="space-y-4">
               <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Cover image</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-20 h-20 rounded-lg overflow-hidden border border-[#30263F] bg-[#08070D] flex items-center justify-center">
+                    {editIcon ? <img src={editIcon} alt="Modpack cover preview" className="w-full h-full object-cover" /> : <ImageIcon className="w-7 h-7 text-[#716885]" />}
+                  </div>
+                  <div className="flex-1 space-y-2">
+                    <input type="file" accept="image/*" onChange={(e) => handleIconFile(e.target.files?.[0])} className="block w-full text-xs text-[#AAA3BB] file:mr-3 file:rounded-lg file:border-0 file:bg-[#762BFF] file:px-3 file:py-2 file:text-white" />
+                    {editIcon && <button type="button" onClick={() => setEditIcon(null)} className="text-xs text-red-300 hover:text-red-200">Remove cover image</button>}
+                    <p className="text-[10px] text-[#716885]">Images are resized and compressed before saving.</p>
+                  </div>
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Name</label>
                 <input
                   type="text"
@@ -411,8 +558,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 <textarea
                   value={editForm.description}
                   onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                  rows={3}
-                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors resize-none"
+                  rows={6}
+                  className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors resize-y"
                 />
               </div>
 
@@ -437,9 +584,10 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 <button
                   type="button"
                   onClick={handleSaveEdit}
-                  className="flex-1 px-4 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-white text-sm font-semibold transition-all"
+                  disabled={savingEdit}
+                  className="flex-1 px-4 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-white text-sm font-semibold transition-all disabled:opacity-50"
                 >
-                  Save Changes
+                  {savingEdit ? 'Saving…' : 'Save Changes'}
                 </button>
               </div>
             </div>
