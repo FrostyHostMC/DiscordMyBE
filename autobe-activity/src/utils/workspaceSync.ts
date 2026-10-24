@@ -120,14 +120,12 @@ export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; pr
   const projectUploads: RemoteItem[] = localProjects
     .filter(project => !project.id.startsWith('demo-modpack-') && !remoteProjectIds.has(project.id))
     .map(project => ({ id: project.id, type: 'project', data: projectMetadata(project) }));
-  await saveRemote([...packUploads, ...projectUploads]);
-  uploaded += packUploads.length + projectUploads.length;
-
-  // Upload the actual binary for every local-only pack after metadata succeeds.
+  // Upload binaries before publishing their metadata so a failed transfer cannot
+  // leave a cloud record that appears synced but has no downloadable file.
   for (const pack of localPacks) {
     if (pack.id.startsWith('demo-pack-') || remotePackIds.has(pack.id)) continue;
     const withFile = await loadPackFile(pack);
-    if (!withFile.fileBlob) continue;
+    if (!withFile.fileBlob) throw new Error(`The local file for "${pack.name}" is missing; it was not synced.`);
     const response = await fetch(`/api/workspace/files/${encodeURIComponent(pack.id)}`, {
       method: 'PUT',
       headers: authHeaders({ 'content-type': withFile.fileBlob.type || 'application/octet-stream' }),
@@ -136,6 +134,9 @@ export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; pr
     });
     if (!response.ok) throw new Error(`Could not upload pack file "${pack.name}" (HTTP ${response.status}).`);
   }
+
+  await saveRemote([...packUploads, ...projectUploads]);
+  uploaded += packUploads.length + projectUploads.length;
 
   return { packs: await getAllPacksFromDB(), projects: await getAllModpacksFromDB(), imported, uploaded };
 }
