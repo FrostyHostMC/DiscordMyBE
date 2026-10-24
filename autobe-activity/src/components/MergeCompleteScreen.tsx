@@ -57,17 +57,40 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
       setPublishError('Choose a PNG, JPG, or WebP image.');
       return;
     }
-    if (file.size > 1024 * 1024) {
-      setPublishError('Image must be 1 MB or smaller.');
+    if (file.size > 5 * 1024 * 1024) {
+      setPublishError('Choose an image smaller than 5 MB. It will be resized for the community listing.');
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setPublishIcon(reader.result);
+      if (typeof reader.result !== 'string') {
+        setPublishError('Could not read this image. Try another file.');
+        return;
+      }
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 256 / Math.max(image.width, image.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        const context = canvas.getContext('2d');
+        if (!context) {
+          setPublishError('Could not process this image. Try another file.');
+          return;
+        }
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        let result = canvas.toDataURL('image/jpeg', 0.78);
+        if (result.length > 95_000) result = canvas.toDataURL('image/jpeg', 0.55);
+        if (result.length > 100_000) {
+          setPublishError('This image could not be compressed enough. Try a simpler image.');
+          return;
+        }
+        setPublishIcon(result);
         setPublishIconName(file.name);
         setPublishError(null);
-      }
+      };
+      image.onerror = () => setPublishError('Could not decode this image. Try another file.');
+      image.src = reader.result;
     };
     reader.onerror = () => setPublishError('Could not read this image. Try another file.');
     reader.readAsDataURL(file);
@@ -325,7 +348,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-xs text-white font-semibold">{publishIconName || 'Optional cover image'}</p>
-                <p className="text-[11px] text-[#AAA3BB] mt-1">PNG, JPG, or WebP · up to 1 MB</p>
+                <p className="text-[11px] text-[#AAA3BB] mt-1">PNG, JPG, or WebP · resized for a small listing image</p>
                 <button type="button" onClick={() => publishIconInput.current?.click()} className="mt-2 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs font-semibold text-white hover:border-[#10B981]">
                   {publishIcon ? 'Change image' : 'Choose image'}
                 </button>
