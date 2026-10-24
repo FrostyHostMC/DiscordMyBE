@@ -138,8 +138,21 @@ export async function onRequestPost(context: Ctx) {
       }, 429);
     }
 
-    // Store only bounded listing metadata in D1; the actual .mcaddon lives in R2.
-    // Never persist the arbitrary included_packs payload, which can contain huge project objects.
+    // Store bounded, display-only included-pack summaries. Never persist arbitrary
+    // project objects or embedded image data; the actual .mcaddon lives in R2.
+    const safeIncludedPacks = Array.isArray(data.included_packs)
+      ? data.included_packs.slice(0, 50).map((pack: unknown) => {
+          if (typeof pack === 'string') return pack.slice(0, 120);
+          if (!pack || typeof pack !== 'object') return null;
+          const item = pack as Record<string, unknown>;
+          return {
+            name: String(item.name || 'Unnamed pack').slice(0, 100),
+            type: String(item.type || '').slice(0, 30),
+            version: String(item.version || '').slice(0, 30),
+          };
+        }).filter(Boolean)
+      : [];
+    const safeIncludedPacksJson = JSON.stringify(safeIncludedPacks);
     const safeName = String(data.name).slice(0, 120);
     const safeDescription = String(data.description).slice(0, 2000);
     const safeAuthor = String(data.author).slice(0, 100);
@@ -156,7 +169,7 @@ export async function onRequestPost(context: Ctx) {
       fileName: safeFileName.length,
       icon: safeIcon?.length || 0,
       includedPacksReceived: Array.isArray(data.included_packs) ? data.included_packs.length : 0,
-      includedPacksStored: 0,
+      includedPacksStored: safeIncludedPacks.length,
     });
 
     const id = crypto.randomUUID();
@@ -178,7 +191,7 @@ export async function onRequestPost(context: Ctx) {
         0,
         String(data.blob_url),
         safeFileName,
-        '[]'
+        safeIncludedPacksJson
       )
       .run();
 
