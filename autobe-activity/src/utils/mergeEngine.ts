@@ -120,6 +120,7 @@ function mergeAnimationJson(existing: any, incoming: any, path: string): any {
 export interface AnimationConflictFinding {
   severity: 'safe' | 'warning' | 'critical';
   kind: 'bone-overlap' | 'controller-overlap' | 'parse-warning';
+  scope: 'player' | 'mob' | 'unknown';
   packs: string[];
   file: string;
   detail: string;
@@ -131,20 +132,40 @@ export interface AnimationConflictFinding {
  */
 export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<AnimationConflictFinding[]> {
   const findings: AnimationConflictFinding[] = [];
-  const sources: Array<{ name: string; path: string; controller: string; state: string; animation: string; bones: string[] }> = [];
+  const sources: Array<{ name: string; path: string; controller: string; state: string; animation: string; bones: string[]; scope: 'player' | 'mob' | 'unknown' }> = [];
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     let zip: JSZip;
     try { zip = await JSZip.loadAsync(pack.fileBlob); }
     catch { continue; }
     const animationBones = new Map<string, string[]>();
+    const referenceScopes = new Map<string, 'player' | 'mob'>();
     const controllers: Array<{ path: string; name: string; state: string; animations: string[] }> = [];
+    const addReferenceScope = (reference: string, scope: 'player' | 'mob') => {
+      const previous = referenceScopes.get(reference);
+      // A reference used by both player and mob definitions is ambiguous.
+      if (previous && previous !== scope) referenceScopes.delete(reference);
+      else if (!referenceScopes.has(reference)) referenceScopes.set(reference, scope);
+    };
     for (const [path, entry] of Object.entries(zip.files)) {
       if (entry.dir || !path.toLowerCase().endsWith('.json')) continue;
       const lower = path.toLowerCase();
       if (!lower.includes('animation') && !lower.includes('entities/')) continue;
       try {
         const parsed = JSON.parse(sanitizeJsonString(await entry.async('text')));
+        // Entity identifiers, not folder names, are the source of truth for scope.
+        const entityDefs = parsed['minecraft:entity'] ? [parsed['minecraft:entity']] : [];
+        for (const entityDef of entityDefs) {
+          const identifier = entityDef?.description?.identifier;
+          if (typeof identifier !== 'string' || !identifier.includes(':')) continue;
+          const scope: 'player' | 'mob' = identifier === 'minecraft:player' ? 'player' : 'mob';
+          for (const reference of Object.keys(entityDef.description?.animations || {})) addReferenceScope(reference, scope);
+          for (const item of entityDef.description?.scripts?.animate || []) {
+            if (typeof item === 'string') addReferenceScope(item, scope);
+            else if (item && typeof item === 'object') for (const key of Object.keys(item)) addReferenceScope(key, scope);
+          }
+          for (const reference of Object.keys(entityDef.description?.animation_controllers || {})) addReferenceScope(reference, scope);
+        }
         if (parsed.animations && typeof parsed.animations === 'object' && !lower.includes('animation_controllers')) {
           for (const [id, definition] of Object.entries(parsed.animations as Record<string, any>)) {
             const bones = Object.keys((definition as any)?.bones || {});
@@ -166,13 +187,14 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
         }
       } catch {
         if (lower.includes('animation_controllers') || /(^|\\/)animations?\\//i.test(lower)) {
-          findings.push({ severity: 'warning', kind: 'parse-warning', packs: [pack.name], file: path, detail: 'Animation JSON could not be parsed during preflight; it was not analyzed.' });
+          findings.push({ severity: 'warning', kind: 'parse-warning', scope: 'unknown', packs: [pack.name], file: path, detail: 'Animation JSON could not be parsed during preflight; it was not analyzed.' });
         }
       }
     }
     for (const c of controllers) {
       for (const animation of c.animations) {
-        sources.push({ name: pack.name, path: c.path, controller: c.name, state: c.state, animation, bones: animationBones.get(animation) || [] });
+        const scope = referenceScopes.get(c.name) || referenceScopes.get(animation) || 'unknown';
+        sources.push({ name: pack.name, path: c.path, controller: c.name, state: c.state, animation, bones: animationBones.get(animation) || [], scope });
       }
     }
   }
@@ -187,17 +209,17 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
       const sameControllerState = a.controller === b.controller && a.state === b.state;
       if (sameControllerState && sharedBones.length) {
         findings.push({
-          severity: 'critical', kind: 'bone-overlap', packs: [a.name, b.name], file: b.path,
+          severity: 'critical', kind: 'bone-overlap', scope: a.scope === b.scope ? a.scope : 'unknown', packs: [a.name, b.name], file: b.path,
           detail: `Controller ${a.controller} state ${a.state}: animations ${a.animation} and ${b.animation} both target bone(s) ${[...new Set(sharedBones)].join(', ')}. Check conditions and load order; this is a potential conflict, not a guaranteed failure.`
         });
       } else if (sameControllerState) {
         findings.push({
-          severity: 'warning', kind: 'controller-overlap', packs: [a.name, b.name], file: b.path,
+          severity: 'warning', kind: 'controller-overlap', scope: a.scope === b.scope ? a.scope : 'unknown', packs: [a.name, b.name], file: b.path,
           detail: `Both packs define animations in controller ${a.controller}, state ${a.state}; inspect transition conditions and animation references.`
         });
       } else if (sharedBones.length) {
         findings.push({
-          severity: 'warning', kind: 'bone-overlap', packs: [a.name, b.name], file: b.path,
+          severity: 'warning', kind: 'bone-overlap', scope: a.scope === b.scope ? a.scope : 'unknown', packs: [a.name, b.name], file: b.path,
           detail: `Animations ${a.animation} and ${b.animation} both target bone(s) ${[...new Set(sharedBones)].join(', ')} in different controller/state contexts.`
         });
       }
