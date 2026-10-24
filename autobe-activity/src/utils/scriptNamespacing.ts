@@ -1,3 +1,5 @@
+import type JSZip from 'jszip';
+
 /**
  * Port of AutoBE Part 18 _make_pack_ns / _namespace_script_properties:
  * after merging, all scripts share one behavior-pack UUID, so dynamic
@@ -56,7 +58,7 @@ export function namespaceScriptText(content: string, ns: string): string {
  * pack namespace. Only files whose content actually changes are rewritten.
  */
 export async function namespaceScriptDirAsync(
-  zip: import('jszip').default,
+  zip: JSZip,
   dirPath: string,
   ns: string
 ): Promise<number> {
