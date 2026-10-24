@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -12,7 +12,9 @@ import {
   ScrollText,
   Palette,
   Globe,
-  Loader2
+  Loader2,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { MergedModpack, MergedOutput } from '@/types/modpack';
 
@@ -24,7 +26,7 @@ interface MergeCompleteScreenProps {
   onDownloadOutput: (output: MergedOutput) => void;
   onDone: () => void;
   onRename: (newName: string) => void;
-  onPublish?: () => void;
+  onPublish?: (iconDataUrl?: string | null) => void;
   isPublishing?: boolean;
 }
 
@@ -41,6 +43,35 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(modpack.name);
+  const [showPublishOptions, setShowPublishOptions] = useState(false);
+  const [publishIcon, setPublishIcon] = useState<string | null>(null);
+  const [publishIconName, setPublishIconName] = useState('');
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const publishIconInput = useRef<HTMLInputElement>(null);
+
+  const handlePublishIcon = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setPublishError('Choose a PNG, JPG, or WebP image.');
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      setPublishError('Image must be 1 MB or smaller.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPublishIcon(reader.result);
+        setPublishIconName(file.name);
+        setPublishError(null);
+      }
+    };
+    reader.onerror = () => setPublishError('Could not read this image. Try another file.');
+    reader.readAsDataURL(file);
+  };
 
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -251,7 +282,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         {onPublish && (
           <button
             type="button"
-            onClick={onPublish}
+            onClick={() => setShowPublishOptions(true)}
             disabled={isPublishing}
             className="py-3 px-4 rounded-xl font-semibold text-xs bg-[#10B981] hover:bg-[#059669] text-white border border-[#34D399]/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
@@ -277,6 +308,40 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <Share2 className="w-4 h-4 text-[#A855F7]" />
           <span>Share / Save</span>
         </button>
+      {showPublishOptions && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80">
+          <div className="w-full max-w-md rounded-2xl bg-[#100D18] border border-[#10B981]/40 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-white">Publish to Community</h3>
+                <p className="text-xs text-[#AAA3BB] mt-1">Add a cover image for the public listing. This does not change your saved project.</p>
+              </div>
+              <button type="button" onClick={() => setShowPublishOptions(false)} className="p-1.5 text-[#AAA3BB] hover:text-white" aria-label="Close publish options"><X className="w-4 h-4" /></button>
+            </div>
+            <input ref={publishIconInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={handlePublishIcon} className="hidden" />
+            <div className="flex items-center gap-3">
+              <div className="w-16 h-16 rounded-xl border border-[#30263F] bg-[#15111F] overflow-hidden flex items-center justify-center shrink-0">
+                {publishIcon ? <img src={publishIcon} alt="Community cover preview" className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-[#716885]" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-white font-semibold">{publishIconName || 'Optional cover image'}</p>
+                <p className="text-[11px] text-[#AAA3BB] mt-1">PNG, JPG, or WebP · up to 1 MB</p>
+                <button type="button" onClick={() => publishIconInput.current?.click()} className="mt-2 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs font-semibold text-white hover:border-[#10B981]">
+                  {publishIcon ? 'Change image' : 'Choose image'}
+                </button>
+                {publishIcon && <button type="button" onClick={() => { setPublishIcon(null); setPublishIconName(''); }} className="ml-2 text-xs text-[#AAA3BB] hover:text-white">Remove</button>}
+              </div>
+            </div>
+            {publishError && <p className="text-xs text-red-400">{publishError}</p>}
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB]">Cancel</button>
+              <button type="button" disabled={isPublishing} onClick={() => { onPublish?.(publishIcon); setShowPublishOptions(false); }} className="flex-1 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-50">
+                {isPublishing ? 'Publishing…' : 'Publish modpack'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
