@@ -13,7 +13,8 @@ import {
   X,
   Search,
   ArrowUpRight,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
@@ -45,9 +46,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
 
   useEffect(() => {
-    fetchCommunityModpacks();
-    const refresh = window.setInterval(() => fetchCommunityModpacks(true), 15000);
-    return () => window.clearInterval(refresh);
+    void fetchCommunityModpacks();
   }, []);
 
   const fetchCommunityModpacks = async (silent = false) => {
@@ -165,6 +164,16 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 {modpacks.length} shared modpack{modpacks.length === 1 ? '' : 's'}
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => void fetchCommunityModpacks()}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs text-[#AAA3BB] hover:text-white disabled:opacity-50"
+              aria-label="Refresh community modpacks"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
           </div>
         </div>
 
