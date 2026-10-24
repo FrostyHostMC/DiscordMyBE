@@ -46,12 +46,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
   useEffect(() => {
     fetchCommunityModpacks();
+    const refresh = window.setInterval(() => fetchCommunityModpacks(true), 15000);
+    return () => window.clearInterval(refresh);
   }, []);
 
-  const fetchCommunityModpacks = async () => {
+  const fetchCommunityModpacks = async (silent = false) => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/community-modpacks');
+      if (!silent) setLoading(true);
+      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
       const data = await response.json();
 
       console.log('Community modpacks response:', data);
@@ -65,7 +67,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       console.error('Failed to fetch community modpacks:', err);
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
