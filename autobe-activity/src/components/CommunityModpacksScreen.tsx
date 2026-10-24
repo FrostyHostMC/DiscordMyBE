@@ -44,6 +44,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
+  const [usage, setUsage] = useState<{
+    publishedModpacks: number;
+    estimatedPublishedGiB: number;
+    percentOfR2FreeStorage: number;
+    uploadStartsInLast24Hours: number;
+    warning: string;
+  } | null>(null);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
     void fetchCommunityModpacks();
@@ -67,6 +75,21 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
       if (!silent) setLoading(false);
+    }
+  };
+
+  const loadUsage = async () => {
+    setUsageLoading(true);
+    try {
+      const response = await fetch('/api/admin/usage', { headers: authHeaders(), cache: 'no-store' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not load Cloudflare usage');
+      setUsage(data);
+      setNotice(null);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Could not load Cloudflare usage');
+    } finally {
+      setUsageLoading(false);
     }
   };
 
@@ -174,6 +197,15 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
+            <button
+              type="button"
+              onClick={() => void loadUsage()}
+              disabled={usageLoading}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs text-[#AAA3BB] hover:text-white disabled:opacity-50"
+            >
+              <Info className="w-3.5 h-3.5" />
+              {usageLoading ? 'Checking…' : 'Storage usage'}
+            </button>
           </div>
         </div>
 
@@ -194,6 +226,15 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
+        {usage && (
+          <div className="p-3 rounded-lg border border-[#30263F] bg-[#100D18] text-xs text-[#AAA3BB] space-y-1">
+            <p className="font-bold text-white">Cloudflare usage estimate</p>
+            <p>Published packs: {usage.publishedModpacks}</p>
+            <p>Published archive storage estimate: {usage.estimatedPublishedGiB} GiB / 10 GiB free R2 allowance ({usage.percentOfR2FreeStorage}%)</p>
+            <p>Upload starts in last 24 hours: {usage.uploadStartsInLast24Hours}</p>
+            <p className="text-[10px] text-amber-300">{usage.warning}</p>
+          </div>
+        )}
         {notice && (
           <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300 break-words" onClick={() => setNotice(null)}>
             {notice}
