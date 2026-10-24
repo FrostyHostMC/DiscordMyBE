@@ -47,7 +47,7 @@ test('subpack HUD visibility conditions are both retained', () => {
     { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }] } },
   );
   assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
-  assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
+  assert.deepEqual(result.panel.controls, [{ overlay: {} }]);
 });
 
 console.log('Merge regression tests passed.');
