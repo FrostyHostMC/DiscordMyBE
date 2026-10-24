@@ -24,6 +24,7 @@ interface Env {
 }
 
 const MAX_BYTES = 500 * 1024 * 1024; // Keep uploads bounded for the small free storage allowance.
+const MAX_PUBLISHED_BYTES = 7_000_000_000; // Leave headroom below the nominal 10 GB R2 free allowance.
 const MAX_PARTS = 200;
 const PUB_UPLOADS_PER_DAY = 3;
 const TEMP_UPLOADS_PER_DAY = 20;
@@ -116,6 +117,28 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const size = Number(body.size) || 0;
       if (size <= 0 || size > MAX_BYTES) {
         return json({ error: `File must be between 1 byte and ${Math.round(MAX_BYTES / 1048576)} MB (free-tier safety limit).` }, 413);
+      }
+      if (kind === 'pub') {
+        try {
+          const usage = await env.DB.prepare(
+            'SELECT COALESCE(SUM(size), 0) AS published_bytes FROM community_modpacks'
+          ).first<{ published_bytes: number }>();
+          const publishedBytes = Number(usage?.published_bytes || 0);
+          if (publishedBytes + size > MAX_PUBLISHED_BYTES) {
+            return json({
+              error: 'Community storage is approaching its free-tier safety limit. New publishing is paused to protect existing downloads. Please remove old community packs or try later.',
+              code: 'STORAGE_SAFETY_LIMIT',
+              publishedBytes,
+              safetyLimitBytes: MAX_PUBLISHED_BYTES,
+            }, 507);
+          }
+        } catch (error) {
+          console.error('[AutoBE] Storage safety check failed:', error);
+          return json({
+            error: 'Publishing is temporarily paused because the storage safety check could not run. Please try again later.',
+            code: 'STORAGE_CHECK_UNAVAILABLE',
+          }, 503);
+        }
       }
       const dailyCount = await consumeDailyQuota(env, userId, kind);
       const dailyLimit = kind === 'pub' ? PUB_UPLOADS_PER_DAY : TEMP_UPLOADS_PER_DAY;
