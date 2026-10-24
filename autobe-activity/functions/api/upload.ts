@@ -188,7 +188,17 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
 
     return json({ error: 'Unknown upload action.' }, 400);
   } catch (error) {
-    console.error('[AutoBE] Upload error:', error);
-    return json({ error: `Upload failed on the server: ${error instanceof Error ? error.message : String(error)}` }, 500);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[AutoBE] Upload error:', message);
+    if (/quota|storage.*(limit|full)|too many requests|rate limit/i.test(message)) {
+      return json({
+        error: 'Cloud storage is temporarily at a limit. No publish was completed; please try again later.',
+        code: 'CLOUD_LIMIT_REACHED',
+      }, 503);
+    }
+    return json({
+      error: 'The upload could not be completed. Check your connection and try again. If this keeps happening, the free Cloudflare service may be temporarily unavailable.',
+      code: 'UPLOAD_FAILED',
+    }, 500);
   }
 };
