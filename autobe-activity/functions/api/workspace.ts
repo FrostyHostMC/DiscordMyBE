@@ -86,13 +86,25 @@ function isResponse(value: { id: string } | Response): value is Response {
   return value instanceof Response;
 }
 
-function validItem(item: unknown): item is WorkspaceItem {
-  if (!item || typeof item !== 'object') return false;
+function itemValidationError(item: unknown): string | null {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return 'item must be an object';
   const value = item as Partial<WorkspaceItem>;
-  return typeof value.id === 'string' && value.id.length > 0 && value.id.length <= 200
-    && (value.type === 'pack' || value.type === 'project')
-    && !!value.data && typeof value.data === 'object' && !Array.isArray(value.data)
-    && JSON.stringify(value).length <= 256 * 1024;
+  if (typeof value.id !== 'string' || value.id.trim().length === 0) return 'missing or empty item id';
+  if (value.id.length > 200) return 'item id exceeds 200 characters';
+  if (value.type !== 'pack' && value.type !== 'project') return 'type must be pack or project';
+  if (!value.data || typeof value.data !== 'object' || Array.isArray(value.data)) return 'data must be an object';
+  let serialized: string;
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    return 'item could not be serialized as JSON';
+  }
+  if (new TextEncoder().encode(serialized).byteLength > 256 * 1024) return 'item exceeds the 256 KiB metadata limit';
+  return null;
+}
+
+function validItem(item: unknown): item is WorkspaceItem {
+  return itemValidationError(item) === null;
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
@@ -119,7 +131,16 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) {
     return json({ error: 'Send between 1 and 100 workspace items per request.' }, 400);
   }
-  if (!body.items.every(validItem)) return json({ error: 'One or more workspace items are invalid or too large.' }, 400);
+  const invalidIndex = body.items.findIndex(item => !validItem(item));
+  if (invalidIndex !== -1) {
+    const item = body.items[invalidIndex] as Partial<WorkspaceItem> | null;
+    const reason = itemValidationError(item);
+    return json({
+      error: `Workspace item ${invalidIndex + 1} (${item?.type === 'pack' || item?.type === 'project' ? item.type : 'unknown'} ${typeof item?.id === 'string' ? item.id.slice(0, 80) : 'without-id'}) was rejected: ${reason || 'invalid item'}.`,
+      invalidIndex,
+      reason,
+    }, 400);
+  }
 
   await ensureTable(env);
   const now = Date.now();
