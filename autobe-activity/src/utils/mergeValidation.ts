@@ -24,7 +24,7 @@ function normalizedUuid(value: unknown): string | null {
  */
 export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<MergeValidationCheck[]> {
   const checks: MergeValidationCheck[] = [];
-    const manifests: Array<{ fileName: string; value: Record<string, any> }> = [];
+  const manifests: Array<{ fileName: string; value: Record<string, any> }> = [];
   const jsonErrors: string[] = [];
   const uuidErrors: string[] = [];
   const missingDependencies: string[] = [];
@@ -45,7 +45,7 @@ export async function validateMergedOutputs(outputs: MergedOutput[]): Promise<Me
       continue;
     }
 
-    const paths = new Set(Object.entries(zip.files).filter(([, file]) => !file.dir).map(([path]) => path.replace(/\\/g, '/')));
+    const paths = new Set(Object.entries(zip.files).filter(([, file]) => !file.dir).map(([path]) => path.replace(/\\/g, '/').toLowerCase()));
 
     for (const [path, file] of Object.entries(zip.files)) {
       if (file.dir || !path.toLowerCase().endsWith('.json')) continue;
