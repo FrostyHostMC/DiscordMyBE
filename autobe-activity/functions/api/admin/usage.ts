@@ -41,13 +41,13 @@ export async function onRequestGet({ request, env }: Ctx) {
       'SELECT COALESCE(SUM(request_count), 0) AS upload_starts FROM autobe_rate_limits WHERE window_start >= ?'
     ).bind(Date.now() - 24 * 60 * 60 * 1000).first<{ upload_starts: number }>().catch(() => null);
     const bytes = Number(published?.estimated_bytes || 0);
-    const storageLimitBytes = 10 * 1024 * 1024 * 1024;
+    const storageLimitBytes = 10 * 1_000_000_000;
     return json({
       publishedModpacks: Number(published?.pack_count || 0),
       estimatedPublishedBytes: bytes,
       estimatedPublishedGiB: Number((bytes / (1024 ** 3)).toFixed(3)),
       percentOfR2FreeStorage: Number(Math.min(100, bytes / storageLimitBytes * 100).toFixed(2)),
-      r2FreeStorageGiB: 10,
+      r2FreeStorageGB: 10,
       uploadStartsInLast24Hours: Number(recent?.upload_starts || 0),
       warning: 'Published-size estimate only. It does not include temporary R2 objects, orphaned uploads, or other bucket objects. Confirm actual usage in Cloudflare R2 dashboard.',
     });
