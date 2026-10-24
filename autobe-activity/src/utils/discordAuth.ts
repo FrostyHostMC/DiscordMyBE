@@ -26,6 +26,7 @@ export function setDiscordAuth(
   try {
     sessionStorage.setItem('discord_access_token', accessToken);
     sessionStorage.setItem('discord_application_id', appId);
+    if (userInfo) sessionStorage.setItem('discord_user_info', JSON.stringify(userInfo));
   } catch {
     /* storage unavailable — the in-memory copy is enough */
   }
@@ -51,5 +52,18 @@ export function getDiscordSdk(): DiscordSDK | null {
 
 /** The signed-in user, as returned by the Discord SDK (no extra network call needed). */
 export function getDiscordUser(): DiscordUserInfo | null {
-  return user;
+  if (user) return user;
+  try {
+    const stored = sessionStorage.getItem('discord_user_info');
+    if (stored) {
+      const parsed = JSON.parse(stored) as DiscordUserInfo;
+      if (typeof parsed.id === 'string' && typeof parsed.username === 'string') {
+        user = parsed;
+        return user;
+      }
+    }
+  } catch {
+    /* ignore malformed or unavailable session storage */
+  }
+  return null;
 }
