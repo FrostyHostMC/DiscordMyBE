@@ -111,7 +111,10 @@ export async function onRequestPost(context: Ctx) {
         String(data.version || '1.0.0'),
         Number(data.total_packs) || 0,
         Number(data.size) || 0,
-        data.icon_data_url || null,
+        // D1 has a per-value size limit; never persist oversized embedded images.
+        typeof data.icon_data_url === 'string' && data.icon_data_url.length <= 100_000
+          ? data.icon_data_url
+          : null,
         Date.now(),
         0,
         String(data.blob_url),
