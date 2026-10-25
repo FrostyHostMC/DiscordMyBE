@@ -10,7 +10,7 @@ import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { applyPlayerEntityPass, type PlayerEntityDiagnostic } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
-import { namespaceConflictingAnimationIds, type AnimationIdRepair } from './animationIdNamespacing';
+import { namespaceConflictingAnimationIds, namespaceConflictingPlayerAliases, type AnimationIdRepair, type PlayerAliasRepair } from './animationIdNamespacing';
 import { extractBrarchives } from './brarchive';
 import { stableUUID } from '@/utils/stableUuid';
 export interface MergeProgressCallback {
@@ -529,6 +529,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const outputs: MergedOutput[] = [];
   const playerEntityDiagnostics: PlayerEntityDiagnostic[] = [];
   const animationIdRepairs: AnimationIdRepair[] = [];
+  const playerAliasRepairs: PlayerAliasRepair[] = [];
   const brarchiveStats: Array<{ pack: string; output: string; archivesFound: number; filesExtracted: number; collisions: string[]; invalidArchives: string[] }> = [];
   const fileCollisions: Array<{
     output: string;
@@ -555,6 +556,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
     const seenAnimationIds = new Map<string, { signature: string; owner: string }>();
+    const seenPlayerAliases = new Map<string, { signature: string; owner: string }>();
     if (iconBytes) {
       rpZip.file(assetsData.IMAGE_FFEH, iconBytes);
       accum.writtenBinaryPaths.add(assetsData.IMAGE_FFEH);
@@ -567,6 +569,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const zip = await JSZip.loadAsync(pack.fileBlob);
       const archiveResult = await extractBrarchives(zip);
       if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: 'Resource Pack', ...archiveResult });
+      playerAliasRepairs.push(...await namespaceConflictingPlayerAliases(zip, pack.id, pack.name, seenPlayerAliases));
       animationIdRepairs.push(...await namespaceConflictingAnimationIds(zip, pack.id, pack.name, seenAnimationIds));
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
@@ -855,6 +858,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       detail: playerEntityDiagnostics.length > 0
         ? playerEntityDiagnostics.map(d => `[${d.severity.toUpperCase()} ${d.code}] ${d.message}`).join(' | ')
         : 'No missing animate aliases or uninitialized player Molang variables were detected by this preflight'
+    }, {
+      name: 'Player animation alias repairs',
+      status: playerAliasRepairs.length > 0 ? 'warning' : 'ok',
+      detail: playerAliasRepairs.length > 0
+        ? playerAliasRepairs.slice(0, 30).map(r => `${r.pack}: ${r.originalAlias} -> ${r.renamedAlias} (${r.file})`).join(' | ') + (playerAliasRepairs.length > 30 ? ` | +${playerAliasRepairs.length - 30} more` : '')
+        : 'No conflicting player animation aliases required renaming'
     }, {
       name: 'Animation/controller identifier repairs',
       status: animationIdRepairs.length > 0 ? 'warning' : 'ok',
