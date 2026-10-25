@@ -339,7 +339,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
   const iconBytes = await findFirstPackIcon(packs);
-  const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
+  // Every merge gets a new identity namespace. Deterministic IDs based only on the
+  // modpack name/source UUIDs caused re-merges to reuse the exact same Bedrock pack
+  // identities, so Minecraft could treat a new export as the previously imported pack.
+  // Keep IDs deterministic *within this merge* so BP dependencies can point at this
+  // merge's RP header, but never reuse identities across separate merge operations.
+  const mergeIdentity = generateUUID();
+  const stablePackId = (role: string, members: AddonPack[]) =>
+    stableUUID([mergeIdentity, modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
