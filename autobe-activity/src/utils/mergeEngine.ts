@@ -50,7 +50,7 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     let zip: JSZip;
-    try { zip = await JSZip.loadAsync(pack.fileBlob); }
+    try { zip = await JSZip.loadAsync(pack.fileBlob); await extractBrarchives(zip); }
     catch { continue; }
     const animationBones = new Map<string, string[]>();
     const referenceScopes = new Map<string, 'player' | 'mob'>();
@@ -310,6 +310,9 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
     if (fileObj.dir) continue;
+    // .brarchive files are private storage containers, not Bedrock runtime assets.
+    // Their contents have already been restored into ordinary pack paths.
+    if (lower.startsWith('__brarchive/')) continue;
     // Skip every manifest (root AND nested copies from subfolders) and macOS junk.
     const base = lower.substring(lower.lastIndexOf('/') + 1);
     if (base === 'manifest.json' || lower.includes('__macosx')) continue;
