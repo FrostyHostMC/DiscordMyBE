@@ -374,7 +374,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       } catch {
         writeBinaryIfFirst(targetZip, accum, outPath, await fileObj.async('uint8array'));
       }
-    } else if (DEEP_MERGE_FILES.has(lower) || lower.includes('animation') && lower.endsWith('.json')) {
+    } else if (DEEP_MERGE_FILES.has(lower)) {
       try {
         const txt = await fileObj.async('text');
         const parsed = JSON.parse(sanitizeJsonString(txt));
