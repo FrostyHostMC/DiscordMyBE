@@ -1011,11 +1011,12 @@ export const App: React.FC = () => {
 
       {screen === 'merge_complete' && justCompletedModpack && (
         <MergeCompleteScreen
+          key={justCompletedModpack.id}
           modpack={justCompletedModpack}
           // NOTE: wrap in arrow functions — passing the handler directly hands it the click
           // event as its `modpack` argument, which caused "Modpack file not available".
-          onInstallToMinecraft={() => handleInstallToMinecraft()}
-          onSaveToFiles={() => handleInstallToMinecraft()}
+          onInstallToMinecraft={() => handleInstallToMinecraft(justCompletedModpack)}
+          onSaveToFiles={() => handleInstallToMinecraft(justCompletedModpack)}
           onShare={handleShareModpack}
           onDownloadOutput={handleDownloadOutput}
           onDone={() => {
