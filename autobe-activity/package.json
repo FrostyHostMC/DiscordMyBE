@@ -16,10 +16,12 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
-    "test": "npm run test:merge && npm run test:verify && npm run test:animation",
+    "test": "npm run test:merge && npm run test:verify && npm run test:animation && npm run test:switcher && npm run test:switcher-evidence",
     "test:merge": "tsx scripts/testMerge.ts",
     "test:verify": "tsx scripts/testVerification.ts",
-    "test:animation": "tsx --tsconfig tsconfig.app.json scripts/testAnimationConflicts.ts"
+    "test:animation": "tsx --tsconfig tsconfig.app.json scripts/testAnimationConflicts.ts",
+    "test:switcher": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherEligibility.ts",
+    "test:switcher-evidence": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherEvidenceProducer.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
