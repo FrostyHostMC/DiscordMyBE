@@ -5,9 +5,7 @@
   "description": "Merge Minecraft Bedrock behavior and resource packs into one installable modpack, entirely on-device.",
   "type": "module",
   "packageManager": "pnpm@10.10.0",
-  "engines": {
-    "node": ">=22.13.0"
-  },
+  "engines": { "node": ">=22.13.0" },
   "scripts": {
     "dev": "vite",
     "build": "npx tsx scripts/generateCodebaseArchive.ts && vite build",
@@ -16,12 +14,13 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
-    "test": "npm run test:merge && npm run test:verify && npm run test:animation && npm run test:switcher && npm run test:switcher-evidence",
+    "test": "npm run test:merge && npm run test:verify && npm run test:animation && npm run test:switcher && npm run test:switcher-evidence && npm run test:switcher-generator",
     "test:merge": "tsx scripts/testMerge.ts",
     "test:verify": "tsx scripts/testVerification.ts",
     "test:animation": "tsx --tsconfig tsconfig.app.json scripts/testAnimationConflicts.ts",
     "test:switcher": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherEligibility.ts",
-    "test:switcher-evidence": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherEvidenceProducer.ts"
+    "test:switcher-evidence": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherEvidenceProducer.ts",
+    "test:switcher-generator": "tsx --tsconfig tsconfig.app.json scripts/testSwitcherGenerator.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
