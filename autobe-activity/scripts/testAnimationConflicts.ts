@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import type { AddonPack } from '../src/types/modpack.ts';
-import { analyzeAnimationConflicts } from '../src/utils/mergeEngine.ts';
+
+// The merge engine also imports browser asset configuration. Stub the tiny
+// browser hook before dynamically importing it so this logic test can run in Node.
+(globalThis as any).window = { getReplacedAssets: () => undefined };
+const { analyzeAnimationConflicts } = await import('../src/utils/mergeEngine.ts');
 
 type EntityScope = 'player' | 'mob';
 
