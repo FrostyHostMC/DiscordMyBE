@@ -188,7 +188,7 @@ function AccessGate() {
         {state === 'denied' && (
           window.self === window.top ? (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (!clientId) {
                   setMessage('The Discord Application ID is missing. Contact the AutoBE administrator.');
                   return;
