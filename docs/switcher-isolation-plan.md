@@ -77,3 +77,14 @@ An `eligible` result is only permitted when every gate is supported by explicit 
 ## Validation boundary
 
 Synthetic tests prove decision logic and report determinism only. They do not prove a conflict is solvable in Bedrock. Keep PR #5 and PR #6 as drafts until their checks pass; keep Switcher generation disabled until the Moose + Relic golden baseline is tested in-game and the generated controller behavior is separately validated.
+
+## Evidence producer implementation boundary
+
+The read-only producer is implemented in `autobe-activity/src/utils/switcherEvidenceProducer.ts` and exposes two explicit stages:
+
+1. `resolveSwitcherReferences` enumerates relevant files, records malformed files, collects definitions and aliases across the complete inventory, then resolves references. It returns sorted references, channel facts, diagnostics, and completeness.
+2. `analyzeSwitcherOverlaps` consumes the completed Pass 1 result and emits conservative candidate records for cross-pack matching bone/channel definitions.
+
+The producer currently labels static cross-pack channel matches `possible`, never `proven`, because authored keyframes and shared channels do not establish that Bedrock controllers activate concurrently under intersecting conditions. Unresolved references, malformed relevant JSON, missing archives, and unknown scope remain explicit blockers. This first producer increment does not yet prove condition/time-window intersection, dependency safety, geometry compatibility, or controller inlining; it must not drive Switcher eligibility.
+
+Synthetic coverage lives in `autobe-activity/scripts/testSwitcherEvidenceProducer.ts` and is part of `npm test`. It checks aliases, unresolved references, malformed JSON, channel extraction, and reversed pack order across Pass 1, Pass 2, and the combined report.
