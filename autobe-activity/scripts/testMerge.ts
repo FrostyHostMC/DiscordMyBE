@@ -60,4 +60,24 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
 
+test('player animation/controller files merge named entries instead of last-pack overwrite', () => {
+  const merged = mergeJsonForFile('animation_controllers/player.animation_controllers.json', [
+    {
+      format_version: '1.10.0',
+      'controller.animation.player.first_person': { states: { default: { animations: ['base_first_person'] } } }
+    },
+    {
+      format_version: '1.10.0',
+      'controller.animation.player.third_person': { states: { default: { animations: ['overlay_third_person'] } } }
+    }
+  ]);
+  assert.ok(merged['controller.animation.player.first_person']);
+  assert.ok(merged['controller.animation.player.third_person']);
+  assert.deepEqual(
+    merged['controller.animation.player.third_person'].states.default.animations,
+    ['overlay_third_person']
+  );
+  JSON.parse(JSON.stringify(merged));
+});
+
 console.log('Merge regression tests passed.');
