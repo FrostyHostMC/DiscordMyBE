@@ -200,19 +200,18 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         if (!('format_version' in merged)) merged.format_version = value;
         continue;
       }
-      if (base === 'player.animation_controllers.json' || base === 'player.render_controllers.json' || base === 'player.animation.json') {
-        // First-wins per named entry: deep-merging two incompatible animation
-        // state machines produces broken results.
-        if (!(key in merged)) {
-          merged[key] = value;
-        } else if (merged[key] && typeof merged[key] === 'object' && value && typeof value === 'object') {
-          if (Array.isArray(merged[key]) && Array.isArray(value)) {
-            merged[key] = removeDuplicates([...merged[key], ...value]);
-          } else if (!Array.isArray(merged[key]) && !Array.isArray(value)) {
-            for (const [sk, sv] of Object.entries(value)) {
-              if (!(sk in merged[key])) merged[key][sk] = sv;
-            }
+      if (fileName.toLowerCase().includes('animation') || fileName.toLowerCase().includes('render_controller')) {
+        // These wrapper maps contain independent named definitions. Union the
+        // names, but never blend two values under the same ID: that can create a
+        // state machine that belonged to neither source pack.
+        if (['animations', 'animation_controllers', 'render_controllers'].includes(key) &&
+            value && typeof value === 'object' && !Array.isArray(value)) {
+          if (!merged[key] || typeof merged[key] !== 'object' || Array.isArray(merged[key])) merged[key] = {};
+          for (const [definitionId, definition] of Object.entries(value)) {
+            if (!(definitionId in merged[key])) merged[key][definitionId] = structuredClone(definition);
           }
+        } else if (!(key in merged)) {
+          merged[key] = structuredClone(value);
         }
         continue;
       }

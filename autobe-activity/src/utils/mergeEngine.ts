@@ -7,9 +7,11 @@ import { highestFullScriptVersion } from './scriptApiVersion';
 import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
-import { applyPlayerEntityPass } from './playerEntityFix';
+import { applyPlayerEntityPass, type PlayerEntityDiagnostic } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
+import { namespaceConflictingAnimationIds, namespaceConflictingPlayerAliases, type AnimationIdRepair, type PlayerAliasRepair } from './animationIdNamespacing';
+import { extractBrarchives } from './brarchive';
 import { stableUUID } from '@/utils/stableUuid';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -26,7 +28,7 @@ export interface MergePlan {
 }
 
 // Special JSON paths that must be deep merged when multiple packs provide them
-const DEEP_MERGE_FILES = new Set(['textures/item_texture.json', 'textures/terrain_texture.json', 'blocks.json', 'sounds.json', 'sounds/sound_definitions.json', 'sounds/music_definitions.json', 'biomes_client.json', 'tick.json']);
+const DEEP_MERGE_FILES = new Set(['materials/entity.material', 'textures/item_texture.json', 'textures/terrain_texture.json', 'blocks.json', 'sounds.json', 'sounds/sound_definitions.json', 'sounds/music_definitions.json', 'biomes_client.json', 'tick.json']);
 const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/textures_list.json']);
 
 export interface AnimationConflictFinding {
@@ -48,7 +50,7 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     let zip: JSZip;
-    try { zip = await JSZip.loadAsync(pack.fileBlob); }
+    try { zip = await JSZip.loadAsync(pack.fileBlob); await extractBrarchives(zip); }
     catch { continue; }
     const animationBones = new Map<string, string[]>();
     const referenceScopes = new Map<string, 'player' | 'mob'>();
@@ -270,6 +272,13 @@ interface MergeAccum {
     data: string;
   }>;
   writtenBinaryPaths: Set<string>;
+  fileOwners: Map<string, string>;
+  fileCollisions: Array<{
+    path: string;
+    firstPack: string;
+    laterPack: string;
+    handling: 'merged' | 'last_wins' | 'first_wins';
+  }>;
 }
 function newAccum(): MergeAccum {
   return {
@@ -278,7 +287,9 @@ function newAccum(): MergeAccum {
     langFiles: new Map(),
     binaryPaths: [],
     textPaths: [],
-    writtenBinaryPaths: new Set()
+    writtenBinaryPaths: new Set(),
+    fileOwners: new Map(),
+    fileCollisions: []
   };
 }
 function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, data: Uint8Array): void {
@@ -294,11 +305,71 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
+
+/**
+ * Repair known first-person compatibility gaps when addon player entities
+ * replace the vanilla player entity. These are explicit aliases/variables,
+ * not guessed redirects for arbitrary missing animations.
+ */
+async function repairPlayerFirstPersonAssets(zip: JSZip): Promise<void> {
+  const entityFile = zip.file('entity/player.entity.json');
+  if (entityFile) {
+    try {
+      const entity = JSON.parse(sanitizeJsonString(await entityFile.async('text')));
+      const description = entity?.['minecraft:client_entity']?.description;
+      if (description) {
+        const scripts = description.scripts ?? (description.scripts = {});
+        const initialize = scripts.initialize ?? (scripts.initialize = []);
+        const preAnimation = scripts.pre_animation ?? (scripts.pre_animation = []);
+        const addUnique = (items: string[], value: string) => {
+          if (!items.includes(value)) items.push(value);
+        };
+        addUnique(initialize, 'variable.is_holding_left = 0.0;');
+        addUnique(preAnimation, 'variable.is_first_person = query.is_first_person;');
+        addUnique(preAnimation, "variable.is_holding_left = query.get_equipped_item_name('off_hand') != 'air' ? 1.0 : 0.0;");
+        const animations = description.animations ?? (description.animations = {});
+        animations.first_person_empty_hand ??= 'animation.player.first_person_empty_hand';
+        animations.hold_fp ??= 'animation.player.first_person_base_pose';
+        animations.wield_main_hand_first_person ??= 'animation.shield.wield_main_hand_first_person';
+        zip.file('entity/player.entity.json', JSON.stringify(entity, null, 2));
+      }
+    } catch {
+      // Keep the original entity intact; merge diagnostics report parse errors elsewhere.
+    }
+  }
+
+  const animationFile = zip.file('animations/custom_player.animation.json');
+  if (animationFile) {
+    try {
+      const document = JSON.parse(sanitizeJsonString(await animationFile.async('text')));
+      for (const id of ['animation.player.bow_aim2', 'animation.player.trident_aim2']) {
+        const animation = document?.animations?.[id];
+        if (!animation) continue;
+        const visit = (value: any): void => {
+          if (!value || typeof value !== 'object') return;
+          if (value.lerp_mode === 'catmullrom' || value.lerp_mode === 'catmull_rom' || value.lerp_mode === 'cubic') {
+            value.lerp_mode = 'linear';
+          }
+          if (Array.isArray(value)) value.forEach(visit);
+          else Object.values(value).forEach(visit);
+        };
+        visit(animation);
+      }
+      zip.file('animations/custom_player.animation.json', JSON.stringify(document, null, 2));
+    } catch {
+      // Leave malformed source JSON unchanged for diagnostics rather than dropping it.
+    }
+  }
+}
+
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, sourcePackKey: string, sourcePackName: string, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
     if (fileObj.dir) continue;
+    // .brarchive files are private storage containers, not Bedrock runtime assets.
+    // Their contents have already been restored into ordinary pack paths.
+    if (lower.startsWith('__brarchive/')) continue;
     // Skip every manifest (root AND nested copies from subfolders) and macOS junk.
     const base = lower.substring(lower.lastIndexOf('/') + 1);
     if (base === 'manifest.json' || lower.includes('__macosx')) continue;
@@ -308,6 +379,29 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     // variant and is excluded to avoid duplicate/merged variant content.
     if (lower.startsWith('subpacks/')) continue;
     const outPath = pathTransform ? pathTransform(path) : path;
+    const collisionKey = outPath.replace(/\\/g, '/').toLowerCase();
+    const previousOwner = accum.fileOwners.get(collisionKey);
+    const previousOwnerName = previousOwner ? previousOwner.split('::')[1] ?? previousOwner : undefined;
+    if (previousOwner && previousOwner.split('::')[0] !== sourcePackKey) {
+      const handling: 'merged' | 'last_wins' | 'first_wins' =
+        ARRAY_MERGE_FILES.has(lower) ||
+        isStrategyMergeFile(lower) ||
+        DEEP_MERGE_FILES.has(lower) ||
+        lower.endsWith('.lang') ||
+        lower.endsWith('.json')
+          ? 'merged'
+          : !lower.endsWith('.json') && !lower.endsWith('.mcfunction') && !lower.endsWith('.js')
+            ? 'first_wins'
+            : 'last_wins';
+      accum.fileCollisions.push({
+        path: outPath,
+        firstPack: previousOwnerName ?? previousOwner,
+        laterPack: sourcePackName,
+        handling
+      });
+    } else if (!previousOwner) {
+      accum.fileOwners.set(collisionKey, `${sourcePackKey}::${sourcePackName}`);
+    }
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
         let text = await fileObj.async('text');
@@ -355,14 +449,26 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
         const data = await fileObj.async('uint8array');
         targetZip.file(outPath, data);
       }
-    } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
+    } else if (lower.endsWith('.json')) {
+      try {
+        let txt = await fileObj.async('text');
+        if (renameMap && renameMap.size > 0) {
+          for (const [oldId, newId] of renameMap.entries()) txt = txt.split(oldId).join(newId);
+        }
+        const parsed = JSON.parse(sanitizeJsonString(txt));
+        const list = accum.jsonLists.get(outPath) || [];
+        list.push(parsed);
+        accum.jsonLists.set(outPath, list);
+      } catch {
+        // Malformed source JSON is preserved rather than rewritten or dropped.
+        if (!targetZip.file(outPath)) targetZip.file(outPath, await fileObj.async('uint8array'));
+      }
+    } else if (lower.endsWith('.mcfunction')) {
       let txt = await fileObj.async('text');
-      for (const [oldId, newId] of renameMap.entries()) {
-        txt = txt.split(oldId).join(newId);
+      if (renameMap && renameMap.size > 0) {
+        for (const [oldId, newId] of renameMap.entries()) txt = txt.split(oldId).join(newId);
       }
       targetZip.file(outPath, txt);
-    } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
-      targetZip.file(outPath, await fileObj.async('text'));
     } else if (lower.endsWith('.js')) {
       // JS files must be copied as binary to preserve UTF-8 encoding
       targetZip.file(outPath, await fileObj.async('uint8array'));
@@ -478,6 +584,17 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const stablePackId = (role: string, members: AddonPack[]) =>
     stableUUID([mergeIdentity, modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
+  const playerEntityDiagnostics: PlayerEntityDiagnostic[] = [];
+  const animationIdRepairs: AnimationIdRepair[] = [];
+  const playerAliasRepairs: PlayerAliasRepair[] = [];
+  const brarchiveStats: Array<{ pack: string; output: string; archivesFound: number; filesExtracted: number; collisions: string[]; invalidArchives: string[] }> = [];
+  const fileCollisions: Array<{
+    output: string;
+    path: string;
+    firstPack: string;
+    laterPack: string;
+    handling: 'merged' | 'last_wins' | 'first_wins';
+  }> = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -495,6 +612,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
+    const seenAnimationIds = new Map<string, { signature: string; owner: string }>();
+    const seenPlayerAliases = new Map<string, { signature: string; owner: string }>();
     if (iconBytes) {
       rpZip.file(assetsData.IMAGE_FFEH, iconBytes);
       accum.writtenBinaryPaths.add(assetsData.IMAGE_FFEH);
@@ -505,16 +624,22 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id));
+      const archiveResult = await extractBrarchives(zip);
+      if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: 'Resource Pack', ...archiveResult });
+      animationIdRepairs.push(...await namespaceConflictingAnimationIds(zip, pack.id, pack.name, seenAnimationIds));
+      playerAliasRepairs.push(...await namespaceConflictingPlayerAliases(zip, pack.id, pack.name, seenPlayerAliases));
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
+    fileCollisions.push(...accum.fileCollisions.map(c => ({ output: 'Resource Pack', ...c })));
     writeAccum(rpZip, accum);
     // Port of AutoBE Part 16 RP passes: identifier-based definition merging,
     // subpack HUD merging, and player-entity repair / variable injection.
     await mergeDefinitionsByIdentifier(rpZip);
     await mergeSubpackHudFiles(rpZip);
-    await applyPlayerEntityPass(rpZip);
+    playerEntityDiagnostics.push(...await applyPlayerEntityPass(rpZip));
+    await repairPlayerFirstPersonAssets(rpZip);
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
     
     // Collect capabilities from all source packs
@@ -591,6 +716,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging behavior pack ${pi + 1}/${groupPacks.length}`, type === 'behavior_data' ? 40 + 20 * ((pi + 1) / groupPacks.length) : 50 + 15 * ((pi + 1) / groupPacks.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      const archiveResult = await extractBrarchives(zip);
+      if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: type === 'behavior_data' ? 'Behavior (Data)' : `Behavior (Script API v${major})`, ...archiveResult });
       const slug = slugify(pack.name, pack.id);
       const isScriptGroup = type === 'behavior_script';
 
@@ -610,7 +737,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), pack.id, pack.name, isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
@@ -629,10 +756,31 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         });
       }
     }
+    fileCollisions.push(...accum.fileCollisions.map(c => ({ output: type === 'behavior_data' ? 'Behavior (Data)' : `Behavior (Script API v${major})`, ...c })));
     writeAccum(bpZip, accum);
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
     await mergeDefinitionsByIdentifier(bpZip);
+
+    // Some third-party addons subscribe to cameraChange, which is absent in
+    // several Bedrock Script API builds. Guard the optional event so one
+    // unsupported event cannot abort the addon's entire script entry.
+    const scriptFiles = Object.entries(bpZip.files).filter(([path, file]) =>
+      !file.dir && path.toLowerCase().endsWith('.js')
+    );
+    for (const [path, file] of scriptFiles) {
+      const source = await file.async('text');
+      const guarded = source
+        .replace(
+          /world\.afterEvents\.cameraChange\.subscribe\s*\(/g,
+          'world.afterEvents.cameraChange?.subscribe?.('
+        )
+        .replace(
+          /world\.beforeEvents\.inventory\.drop\.subscribe\s*\(/g,
+          'world.beforeEvents.inventory?.drop?.subscribe?.('
+        );
+      if (guarded !== source) bpZip.file(path, guarded);
+    }
 
     // Scripted BP: one entry file importing every pack's entry
     if (type === 'behavior_script') {
@@ -776,6 +924,36 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       name: 'Outputs',
       status: outputs.length > 0 ? 'ok' : 'warning',
       detail: outputs.map(o => o.fileName).join(', ') || 'No outputs produced — check source pack manifests'
+    }, {
+      name: 'Packed asset archives',
+      status: brarchiveStats.some(s => s.invalidArchives.length > 0 || s.collisions.length > 0) ? 'warning' : 'ok',
+      detail: brarchiveStats.length > 0
+        ? brarchiveStats.map(s => `${s.pack} (${s.output}): ${s.archivesFound} archive(s), ${s.filesExtracted} asset file(s) restored${s.collisions.length ? `, ${s.collisions.length} path collision(s)` : ''}${s.invalidArchives.length ? `; invalid: ${s.invalidArchives.join(', ')}` : ''}`).join(' | ')
+        : 'No hidden .brarchive containers were found'
+    }, {
+      name: 'Player animation references',
+      status: playerEntityDiagnostics.some(d => d.severity === 'error') ? 'error' : playerEntityDiagnostics.length > 0 ? 'warning' : 'ok',
+      detail: playerEntityDiagnostics.length > 0
+        ? playerEntityDiagnostics.map(d => `[${d.severity.toUpperCase()} ${d.code}] ${d.message}`).join(' | ')
+        : 'No missing animate aliases or uninitialized player Molang variables were detected by this preflight'
+    }, {
+      name: 'Player animation alias repairs',
+      status: playerAliasRepairs.length > 0 ? 'warning' : 'ok',
+      detail: playerAliasRepairs.length > 0
+        ? playerAliasRepairs.slice(0, 30).map(r => `${r.pack}: ${r.originalAlias} -> ${r.renamedAlias} (${r.file})`).join(' | ') + (playerAliasRepairs.length > 30 ? ` | +${playerAliasRepairs.length - 30} more` : '')
+        : 'No conflicting player animation aliases required renaming'
+    }, {
+      name: 'Animation/controller identifier repairs',
+      status: animationIdRepairs.length > 0 ? 'warning' : 'ok',
+      detail: animationIdRepairs.length > 0
+        ? animationIdRepairs.slice(0, 30).map(r => `${r.pack}: ${r.originalId} -> ${r.renamedId} (${r.file})`).join(' | ') + (animationIdRepairs.length > 30 ? ` | +${animationIdRepairs.length - 30} more` : '')
+        : 'No conflicting animation/controller identifiers required renaming'
+    }, {
+      name: 'Same-path file collisions',
+      status: fileCollisions.length > 0 ? 'warning' : 'ok',
+      detail: fileCollisions.length > 0
+        ? `${fileCollisions.length} repeated file path(s): ${fileCollisions.slice(0, 20).map(c => `${c.output}: ${c.path} (${c.firstPack} -> ${c.laterPack}; ${c.handling})`).join(' | ')}${fileCollisions.length > 20 ? ` | +${fileCollisions.length - 20} more` : ''}. This is diagnostic only; no source files were renamed or removed.`
+        : 'No repeated file paths were detected across source packs'
     }, {
       name: 'Identifier conflicts',
       status: conflicts.length > 0 ? 'resolved' : 'ok',

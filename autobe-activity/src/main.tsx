@@ -7,8 +7,10 @@ import { getDiscordAuth, setDiscordAuth } from '@/utils/discordAuth';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
-// Must match the redirect URI registered in Discord Developer Portal and the server's OAuth setting.
-const browserRedirectUri = 'https://discordmybe.pages.dev/';
+// Use the exact origin where this build is opened. This is essential for OAuth
+// state validation: the browser stores state per-origin, so redirecting a preview
+// build back to the production domain makes the stored state invisible.
+const browserRedirectUri = `${window.location.origin}/`;
 
 type GateState = 'checking' | 'allowed' | 'denied';
 
@@ -68,19 +70,9 @@ function AccessGate() {
           }
 
           const returnedState = params.get('state') || '';
-          let expectedState = '';
-          try {
-            // OAuth may return in a new tab/window in the same browser profile.
-            // localStorage survives that context switch; keep strict state validation.
-            expectedState = localStorage.getItem('autobe_discord_oauth_state') || '';
-            localStorage.removeItem('autobe_discord_oauth_state');
-            sessionStorage.removeItem('autobe_discord_oauth_state');
-          } catch {
-            /* If persistent storage is blocked, fail closed rather than skip state validation. */
-          }
           window.history.replaceState({}, document.title, window.location.pathname);
-          if (!expectedState || returnedState !== expectedState) {
-            throw new Error('Discord sign-in state did not match. Please start sign-in again.');
+          if (!returnedState) {
+            throw new Error('Discord did not return the sign-in state. Please start sign-in again.');
           }
 
           updateMessage('Completing Discord sign-in…');
@@ -88,7 +80,7 @@ function AccessGate() {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             cache: 'no-store',
-            body: JSON.stringify({ code, redirect_uri: browserRedirectUri }),
+            body: JSON.stringify({ code, state: returnedState, redirect_uri: browserRedirectUri }),
           });
           const tokenData = await tokenResponse.json().catch(() => ({})) as {
             access_token?: string;
@@ -196,21 +188,27 @@ function AccessGate() {
         {state === 'denied' && (
           window.self === window.top ? (
             <button
-              onClick={() => {
+              onClick={async () => {
                 if (!clientId) {
                   setMessage('The Discord Application ID is missing. Contact the AutoBE administrator.');
                   return;
                 }
                 try {
-                  const oauthState = crypto.randomUUID();
-                  // Persist across OAuth tab/window transitions in the same browser profile.
-                  localStorage.setItem('autobe_discord_oauth_state', oauthState);
+                  const stateResponse = await fetch('/api/oauth/state', {
+                    method: 'POST',
+                    cache: 'no-store',
+                    credentials: 'same-origin',
+                  });
+                  const stateData = await stateResponse.json().catch(() => ({})) as { state?: string; error?: string };
+                  if (!stateResponse.ok || !stateData.state) {
+                    throw new Error(stateData.error || 'Could not start secure Discord sign-in.');
+                  }
                   const params = new URLSearchParams({
                     client_id: clientId,
                     response_type: 'code',
                     redirect_uri: browserRedirectUri,
                     scope: 'identify',
-                    state: oauthState,
+                    state: stateData.state,
                   });
                   window.location.assign(`https://discord.com/oauth2/authorize?${params.toString()}`);
                 } catch (error) {

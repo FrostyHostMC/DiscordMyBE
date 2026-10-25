@@ -29,7 +29,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, 500);
   }
 
-  let body: { code?: unknown; redirect_uri?: unknown };
+  let body: { code?: unknown; state?: unknown; redirect_uri?: unknown };
   try {
     body = await request.json() as { code?: unknown; redirect_uri?: unknown };
   } catch {
@@ -40,15 +40,25 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Missing or invalid Discord authorization code.' }, 400);
   }
 
-  // The Embedded App SDK uses Discord's documented placeholder redirect. The
-  // standalone web login uses one explicitly configured, allow-listed redirect URI.
+  // The Embedded App SDK uses Discord's documented placeholder redirect.
+  // Browser OAuth redirects must prove the state cookie issued before the redirect.
   const configuredBrowserRedirect = env.DISCORD_OAUTH_REDIRECT_URI || 'https://discordmybe.pages.dev/';
+  const allowedBrowserRedirects = new Set([
+    configuredBrowserRedirect,
+    'https://fix-merge-diagnostics-no-sil.discordmybe.pages.dev/',
+  ]);
   let redirectUri = 'https://127.0.0.1/';
   if (body.redirect_uri !== undefined) {
-    if (typeof body.redirect_uri !== 'string' || body.redirect_uri !== configuredBrowserRedirect) {
+    if (typeof body.redirect_uri !== 'string' || !allowedBrowserRedirects.has(body.redirect_uri)) {
       return json({ error: 'The browser OAuth redirect URI is not allowed. Check the Discord OAuth configuration.' }, 400);
     }
-    redirectUri = configuredBrowserRedirect;
+    const cookieHeader = request.headers.get('cookie') || '';
+    const stateCookie = cookieHeader.split(';').map(part => part.trim()).find(part => part.startsWith('autobe_discord_oauth_state='));
+    const cookieState = stateCookie ? decodeURIComponent(stateCookie.slice('autobe_discord_oauth_state='.length)) : '';
+    if (typeof body.state !== 'string' || !body.state || body.state !== cookieState) {
+      return json({ error: 'Discord sign-in state did not match. Start sign-in again.' }, 401);
+    }
+    redirectUri = body.redirect_uri;
   }
   const form = new URLSearchParams({
     client_id: env.DISCORD_CLIENT_ID,
@@ -89,8 +99,14 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     }, 401);
   }
 
-  return json({
+  return new Response(JSON.stringify({
     access_token: result.access_token,
     token_type: result.token_type || 'Bearer',
+  }), {
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store, max-age=0',
+      ...(body.redirect_uri !== undefined ? { 'set-cookie': 'autobe_discord_oauth_state=; Path=/; Max-Age=0; Secure; HttpOnly; SameSite=Lax' } : {}),
+    },
   });
 };

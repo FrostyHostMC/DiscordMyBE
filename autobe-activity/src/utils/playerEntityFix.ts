@@ -3,8 +3,8 @@ import type JSZip from 'jszip';
 /**
  * Port of AutoBE Part 16 player-entity passes (_process_packs post-merge fixes):
  * slot sanitization, entity-context query relocation, vanilla animation alias
- * backfill, animate/render-controller deduplication, and undefined animation
- * variable injection into entity/player.entity.json.
+ * backfill and animate/render-controller deduplication. Unknown references are
+ * reported; this pass must not invent animation or Molang-variable fallbacks.
  */
 
 export const VANILLA_PLAYER_ANIMS: Record<string, string> = {
@@ -48,16 +48,6 @@ export const VANILLA_PLAYER_ANIMS: Record<string, string> = {
   look_at_target_gliding: 'animation.player.look_at_target.gliding',
   look_at_target_swimming: 'animation.player.look_at_target.swimming',
   look_at_target_inverted: 'animation.player.look_at_target.inverted'
-};
-
-/** Sensible defaults for known runtime variables that must live in pre_animation. */
-const RUNTIME_VARS: Record<string, string> = {
-  is_holding_left: "variable.is_holding_left = !query.is_item_name_any('slot.weapon.offhand', 0, 'minecraft:air');",
-  player_arm_height: 'variable.player_arm_height = 0.0;',
-  short_arm_offset_left: 'variable.short_arm_offset_left = 0.0;',
-  short_arm_offset_right: 'variable.short_arm_offset_right = 0.0;',
-  is_horizontal_splitscreen: 'variable.is_horizontal_splitscreen = 0.0;',
-  is_vertical_splitscreen: 'variable.is_vertical_splitscreen = 0.0;'
 };
 
 const ENTITY_CTX_QUERIES = [
@@ -126,19 +116,7 @@ function backfillVanillaAnims(playerEntity: any): void {
   }
 }
 
-/** 4. Stub any animate-block short-names that are not defined. */
-function stubMissingAnimateAliases(playerEntity: any): void {
-  const desc = descOf(playerEntity);
-  const anims = desc.animations ?? {};
-  const animateBlock = desc.scripts?.animate;
-  if (!Array.isArray(animateBlock)) return;
-  for (const entry of animateBlock) {
-    const name = typeof entry === 'string' ? entry : entry && typeof entry === 'object' ? Object.keys(entry)[0] : null;
-    if (name && !(name in anims)) anims[name] = 'animation.player.move';
-  }
-}
-
-/** 5. Deduplicate scripts.animate by name (dict-with-condition beats plain string). */
+/** 4. Deduplicate scripts.animate by name (dict-with-condition beats plain string). */
 function dedupeAnimateBlock(playerEntity: any): void {
   const scripts = descOf(playerEntity).scripts;
   const animateBlock = scripts?.animate;
@@ -177,7 +155,6 @@ export function applyPlayerEntityFixes(playerEntity: any): any {
   sanitizeSlots(playerEntity);
   moveEntityCtxQueries(playerEntity);
   backfillVanillaAnims(playerEntity);
-  stubMissingAnimateAliases(playerEntity);
   dedupeAnimateBlock(playerEntity);
   dedupeRenderControllers(playerEntity);
   return playerEntity;
@@ -210,76 +187,96 @@ export async function collectUndefinedAnimVars(zip: JSZip): Promise<Set<string>>
   return used;
 }
 
-/** Inject missing variable initializers into the merged player entity scripts. */
-export function injectUndefinedVars(playerEntity: any, undefinedVars: Set<string>): void {
-  if (undefinedVars.size === 0) return;
-  const desc = descOf(playerEntity);
-  desc.scripts = desc.scripts ?? {};
-  const init: string[] = Array.isArray(desc.scripts.initialize) ? desc.scripts.initialize : [];
-  const pre: string[] = Array.isArray(desc.scripts.pre_animation) ? desc.scripts.pre_animation : [];
-  desc.scripts.initialize = init;
-  desc.scripts.pre_animation = pre;
-  const existing = (init.join(' ') + ' ' + pre.join(' '));
+/** Find referenced Molang variables without an explicit entity-script initializer. */
+export function findUninitializedAnimVars(playerEntity: any, usedVars: Set<string>): string[] {
+  const scripts = descOf(playerEntity).scripts ?? {};
+  const existing = [
+    ...(Array.isArray(scripts.initialize) ? scripts.initialize : []),
+    ...(Array.isArray(scripts.pre_animation) ? scripts.pre_animation : []),
+  ].filter((entry): entry is string => typeof entry === 'string').join(' ');
   const assigned = new Set<string>();
-  for (const m of existing.matchAll(/variable\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g)) assigned.add(m[1]);
-  for (const name of [...undefinedVars].sort()) {
-    if (assigned.has(name)) continue;
-    if (name in RUNTIME_VARS) pre.push(RUNTIME_VARS[name]);
-    else init.push(`variable.${name} = 0.0;`);
-  }
+  for (const match of existing.matchAll(/variable\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g)) assigned.add(match[1]);
+  return [...usedVars].filter((name) => !assigned.has(name)).sort();
 }
 
-/** Build a minimal client-entity stub when no pack supplied a player entity. */
-export function buildStubPlayerEntity(undefinedVars: Set<string>): any {
-  const scripts: any = {};
-  const init: string[] = [];
-  const pre: string[] = [];
-  for (const name of [...undefinedVars].sort()) {
-    if (name in RUNTIME_VARS) pre.push(RUNTIME_VARS[name]);
-    else init.push(`variable.${name} = 0.0;`);
-  }
-  if (init.length > 0) scripts.initialize = init;
-  if (pre.length > 0) scripts.pre_animation = pre;
-  return {
-    format_version: '1.10.0',
-    'minecraft:client_entity': {
-      description: {
-        identifier: 'minecraft:player',
-        animations: { ...VANILLA_PLAYER_ANIMS },
-        scripts
+export interface PlayerEntityDiagnostic {
+  severity: 'warning' | 'error';
+  code: 'missing_animate_alias' | 'uninitialized_molang_variable' | 'missing_player_entity' | 'invalid_player_entity_json';
+  message: string;
+  reference?: string;
+}
+
+function diagnosePlayerEntity(playerEntity: any, usedVars: Set<string>): PlayerEntityDiagnostic[] {
+  const desc = descOf(playerEntity);
+  const diagnostics: PlayerEntityDiagnostic[] = [];
+  const animations = desc.animations ?? {};
+  const animateBlock = desc.scripts?.animate;
+  if (Array.isArray(animateBlock)) {
+    for (const entry of animateBlock) {
+      const alias = typeof entry === 'string'
+        ? entry
+        : entry && typeof entry === 'object'
+          ? Object.keys(entry)[0]
+          : null;
+      if (alias && !(alias in animations)) {
+        diagnostics.push({
+          severity: 'error',
+          code: 'missing_animate_alias',
+          reference: alias,
+          message: `scripts.animate references missing animation/controller alias "${alias}". AutoBE did not substitute a different animation.`,
+        });
       }
     }
-  };
+  }
+  for (const name of findUninitializedAnimVars(playerEntity, usedVars)) {
+    diagnostics.push({
+      severity: 'warning',
+      code: 'uninitialized_molang_variable',
+      reference: `variable.${name}`,
+      message: `Molang variable "${name}" is referenced but has no explicit initializer in player entity scripts. AutoBE did not guess a default value.`,
+    });
+  }
+  return diagnostics;
 }
 
 const PLAYER_ENTITY_PATHS = ['entity/player.entity.json', 'entity/player.json'];
 
 /**
- * Full RP-side player pass: run fixes on the merged player entity (if any),
- * inject undefined animation variables, and write a stub when absent.
+ * Full RP-side player pass. Returns diagnostics instead of inventing fallback
+ * animations, zero-valued Molang variables, or a minimal replacement player entity.
  */
-export async function applyPlayerEntityPass(rpZip: JSZip): Promise<void> {
-  const undefinedVars = await collectUndefinedAnimVars(rpZip);
+export async function applyPlayerEntityPass(rpZip: JSZip): Promise<PlayerEntityDiagnostic[]> {
+  const usedVars = await collectUndefinedAnimVars(rpZip);
+  const diagnostics: PlayerEntityDiagnostic[] = [];
   let playerFile: string | null = null;
   let playerEntity: any = null;
-  for (const p of PLAYER_ENTITY_PATHS) {
-    const f = rpZip.file(p);
-    if (f) {
-      try {
-        playerEntity = JSON.parse(await f.async('text'));
-        playerFile = p;
-        break;
-      } catch {
-        // fall through to stub
-      }
+  for (const path of PLAYER_ENTITY_PATHS) {
+    const file = rpZip.file(path);
+    if (!file) continue;
+    try {
+      playerEntity = JSON.parse(await file.async('text'));
+      playerFile = path;
+      break;
+    } catch {
+      diagnostics.push({
+        severity: 'error',
+        code: 'invalid_player_entity_json',
+        reference: path,
+        message: `Player entity file "${path}" could not be parsed; AutoBE did not replace it with a stub.`,
+      });
     }
   }
-  if (playerEntity) {
-    applyPlayerEntityFixes(playerEntity);
-    injectUndefinedVars(playerEntity, undefinedVars);
-    rpZip.file('entity/player.entity.json', JSON.stringify(playerEntity, null, 2));
-    if (playerFile && playerFile !== 'entity/player.entity.json') rpZip.remove(playerFile);
-  } else if (undefinedVars.size > 0) {
-    rpZip.file('entity/player.entity.json', JSON.stringify(buildStubPlayerEntity(undefinedVars), null, 2));
+  if (!playerEntity) {
+    if (usedVars.size > 0) diagnostics.push({
+      severity: 'error',
+      code: 'missing_player_entity',
+      message: 'Player animation files reference Molang variables but no valid player client-entity definition exists. AutoBE did not generate a replacement player entity.',
+    });
+    return diagnostics;
   }
+
+  applyPlayerEntityFixes(playerEntity);
+  diagnostics.push(...diagnosePlayerEntity(playerEntity, usedVars));
+  rpZip.file(playerFile!, JSON.stringify(playerEntity, null, 2));
+  return diagnostics;
 }
