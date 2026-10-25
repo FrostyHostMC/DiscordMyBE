@@ -1,10 +1,6 @@
 /**
- * Conservative Switcher artifact generator prototype.
- *
- * This module is deliberately pure: it accepts explicit controller/state evidence
- * and returns JSON/source artifacts without opening or modifying user archives.
- * The first supported shape is a selector that chooses one inlined controller
- * branch at a time. It is not connected to the merge pipeline.
+ * Synthetic Switcher artifact generator. Pure output only: no archive writes.
+ * This prototype is deliberately isolated from the production merge pipeline.
  */
 export interface SwitcherControllerInput {
   id: string;
@@ -19,7 +15,6 @@ export interface SwitcherControllerInput {
     [key: string]: unknown;
   }>;
 }
-
 export interface SwitcherGeneratorInput {
   controllers: readonly SwitcherControllerInput[];
   entityIdentifier: string;
@@ -28,27 +23,20 @@ export interface SwitcherGeneratorInput {
   propertyIdentifier: string;
   scriptEntry: string;
 }
-
 export interface SwitcherArtifacts {
   controllerId: string;
   propertyId: string;
   itemId: string;
   gatekeeperController: Record<string, unknown>;
-  /** Partial RP player-entity additions; must be structurally merged into the existing entity. */
   resourceEntityPatch: Record<string, unknown>;
-  /** Partial BP player-entity additions; the property must be registered server-side. */
   behaviorEntityPatch: Record<string, unknown>;
   itemDefinition: Record<string, unknown>;
   scriptSource: string;
   stateMap: Record<string, Record<string, string>>;
   validationErrors: string[];
 }
-
 const validIdentifier = (value: string) => /^[a-z0-9_.-]+:[a-z0-9_./-]+$/i.test(value);
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 function rewriteTransitions(
   transitions: Array<Record<string, string>> | undefined,
@@ -59,96 +47,79 @@ function rewriteTransitions(
   ));
 }
 
-/**
- * Builds a synthetic gatekeeper + selector prototype only from explicitly supplied
- * controller graphs. It rejects malformed graphs rather than guessing missing states.
- */
 export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherArtifacts {
-  const validationErrors: string[] = [];
+  const errors: string[] = [];
   const controllers = [...input.controllers].sort((a, b) => a.id.localeCompare(b.id));
-  if (controllers.length < 2) validationErrors.push('At least two controllers are required to exercise switching.');
-  if (!validIdentifier(input.entityIdentifier)) validationErrors.push('Entity identifier is malformed.');
-  if (!validIdentifier(input.itemIdentifier)) validationErrors.push('Item identifier is malformed.');
-  if (!validIdentifier(input.controllerIdentifier)) validationErrors.push('Generated controller identifier is malformed.');
-  if (!validIdentifier(input.propertyIdentifier)) validationErrors.push('Generated property identifier is malformed.');
-  if (new Set(controllers.map((controller) => controller.id)).size !== controllers.length) {
-    validationErrors.push('Controller IDs must be unique.');
-  }
-  for (const controller of controllers) {
-    if (controller.scope !== 'player') validationErrors.push(`Controller ${controller.id} is not explicitly player-scoped.`);
-    if (!controller.states[controller.initialState]) validationErrors.push(`Controller ${controller.id} has no initial state ${controller.initialState}.`);
-    for (const [stateId, state] of Object.entries(controller.states)) {
-      for (const transition of state.transitions ?? []) {
-        for (const target of Object.values(transition)) {
-          if (!controller.states[target]) validationErrors.push(`Controller ${controller.id} state ${stateId} targets missing state ${target}.`);
-        }
+  if (controllers.length < 2) errors.push('At least two controllers are required.');
+  for (const [label, value] of [
+    ['Entity', input.entityIdentifier], ['Item', input.itemIdentifier],
+    ['Controller', input.controllerIdentifier], ['Property', input.propertyIdentifier],
+  ]) if (!validIdentifier(value)) errors.push(`${label} identifier is malformed.`);
+  if (new Set(controllers.map((c) => c.id)).size !== controllers.length) errors.push('Controller IDs must be unique.');
+  for (const c of controllers) {
+    if (c.scope !== 'player') errors.push(`Controller ${c.id} is not explicitly player-scoped.`);
+    if (!validIdentifier(c.id)) errors.push(`Controller ID ${c.id} is malformed.`);
+    if (!c.states[c.initialState]) errors.push(`Controller ${c.id} has no initial state ${c.initialState}.`);
+    for (const [stateId, state] of Object.entries(c.states)) {
+      for (const transition of state.transitions ?? []) for (const target of Object.values(transition)) {
+        if (!c.states[target]) errors.push(`Controller ${c.id} state ${stateId} targets missing state ${target}.`);
       }
     }
   }
 
   const stateMap: Record<string, Record<string, string>> = {};
   const gateStates: Record<string, unknown> = {};
-  controllers.forEach((controller, controllerIndex) => {
-    const prefix = `autobe_${controllerIndex}_${controller.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
-    stateMap[controller.id] = Object.fromEntries(Object.keys(controller.states).sort().map((stateId) => [stateId, `${prefix}_${stateId.replace(/[^a-zA-Z0-9_]/g, '_')}`]));
+  controllers.forEach((c, i) => {
+    const prefix = `autobe_${i}_${c.id.replace(/[^a-zA-Z0-9_]/g, '_')}`;
+    stateMap[c.id] = Object.fromEntries(Object.keys(c.states).sort().map((state) =>
+      [state, `${prefix}_${state.replace(/[^a-zA-Z0-9_]/g, '_')}`]));
   });
 
-  // Each source state is cloned and every graph edge is structurally rewritten.
-  // The selector property is checked first so a mode change exits the old branch.
-  controllers.forEach((controller, controllerIndex) => {
-    const map = stateMap[controller.id];
-    const otherBranches = controllers
-      .map((candidate, index) => ({ candidate, index }))
-      .filter(({ index }) => index !== controllerIndex);
-    for (const [oldStateId, oldState] of Object.entries(controller.states)) {
-      const stateId = map[oldStateId];
+  controllers.forEach((c, i) => {
+    for (const [oldStateId, oldState] of Object.entries(c.states)) {
+      const switchTransitions = controllers.map((candidate, index) => ({ candidate, index }))
+        .filter(({ index }) => index !== i)
+        .map(({ candidate, index }) => ({
+          [`query.property('${input.propertyIdentifier}') == ${index}`]:
+            stateMap[candidate.id][candidate.initialState],
+        }));
       const source = clone(oldState);
-      const switchTransitions = otherBranches.map(({ candidate, index }) => ({
-        [`query.property('${input.propertyIdentifier}') == ${index}`]: stateMap[candidate.id][candidate.initialState],
-      }));
-      gateStates[stateId] = {
+      gateStates[stateMap[c.id][oldStateId]] = {
         ...source,
-        ...(switchTransitions.length ? { transitions: [...switchTransitions, ...rewriteTransitions(source.transitions, map)] } : {}),
+        ...(switchTransitions.length
+          ? { transitions: [...switchTransitions, ...rewriteTransitions(source.transitions, stateMap[c.id])] }
+          : {}),
       };
     }
   });
 
-  // A neutral state routes into the selected controller's initial state.
-  const neutralState = 'autobe_selector';
-  gateStates[neutralState] = {
+  const selectorState = 'autobe_selector';
+  gateStates[selectorState] = {
     animations: [],
-    transitions: controllers.map((controller, index) => ({
-      [`query.property('${input.propertyIdentifier}') == ${index}`]: stateMap[controller.id][controller.initialState],
+    transitions: controllers.map((c, index) => ({
+      [`query.property('${input.propertyIdentifier}') == ${index}`]:
+        stateMap[c.id][c.initialState],
     })),
   };
 
   const gatekeeperController = {
     format_version: '1.10.0',
     animation_controllers: {
-      [input.controllerIdentifier]: {
-        initial_state: neutralState,
-        states: gateStates,
-      },
+      [input.controllerIdentifier]: { initial_state: selectorState, states: gateStates },
     },
   };
-
-  // These are separate partial patches because animation/controller wiring belongs
-  // in the RP player entity, while the server-authoritative custom property belongs
-  // in the BP player entity. They must be merged into existing definitions, never
-  // written as two competing complete minecraft:player definitions.
+  // These are partial additions. Production integration must merge them into the
+  // existing player entity definitions rather than replace either entity file.
   const resourceEntityPatch = {
     format_version: '1.10.0',
     'minecraft:client_entity': {
       description: {
         identifier: input.entityIdentifier,
-        animation_controllers: {
-          autobe_switcher_gatekeeper: input.controllerIdentifier,
-        },
+        animation_controllers: { autobe_switcher_gatekeeper: input.controllerIdentifier },
         scripts: { animate: ['autobe_switcher_gatekeeper'] },
       },
     },
   };
-
   const behaviorEntityPatch = {
     format_version: '1.16.0',
     'minecraft:entity': {
@@ -156,12 +127,50 @@ export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherA
         identifier: input.entityIdentifier,
         properties: {
           [input.propertyIdentifier]: {
-            type: 'int',
-            range: [0, controllers.length - 1],
-            default: 0,
-            client_sync: true,
+            type: 'int', range: [0, Math.max(0, controllers.length - 1)], default: 0, client_sync: true,
           },
         },
       },
     },
   };
+  const itemDefinition = {
+    format_version: '1.20.50',
+    'minecraft:item': {
+      description: { identifier: input.itemIdentifier, menu_category: { category: 'items' } },
+      components: {
+        'minecraft:icon': { texture: 'apple' },
+        'minecraft:display_name': { value: 'Animation Switcher' },
+        'minecraft:max_stack_size': 1,
+        'minecraft:allow_off_hand': true,
+        'minecraft:use_modifiers': { use_duration: 0.1, movement_modifier: 1.0 },
+      },
+    },
+  };
+  const scriptSource = [
+    "import { world } from '@minecraft/server';",
+    `const ITEM_ID = ${JSON.stringify(input.itemIdentifier)};`,
+    `const PROPERTY_ID = ${JSON.stringify(input.propertyIdentifier)};`,
+    `const MODE_COUNT = ${controllers.length};`,
+    'world.afterEvents.itemUse.subscribe((event) => {',
+    '  if (event.itemStack.typeId !== ITEM_ID) return;',
+    '  const player = event.source;',
+    "  if (player.typeId !== 'minecraft:player') return;",
+    `  const current = Number(player.getProperty(PROPERTY_ID) ?? 0);`,
+    '  player.setProperty(PROPERTY_ID, (current + 1) % MODE_COUNT);',
+    '});',
+    '',
+  ].join('\\n');
+
+  return {
+    controllerId: input.controllerIdentifier,
+    propertyId: input.propertyIdentifier,
+    itemId: input.itemIdentifier,
+    gatekeeperController,
+    resourceEntityPatch,
+    behaviorEntityPatch,
+    itemDefinition,
+    scriptSource,
+    stateMap,
+    validationErrors: [...new Set(errors)].sort(),
+  };
+}
