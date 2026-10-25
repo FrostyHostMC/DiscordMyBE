@@ -34,7 +34,10 @@ export interface SwitcherArtifacts {
   propertyId: string;
   itemId: string;
   gatekeeperController: Record<string, unknown>;
-  entityPatch: Record<string, unknown>;
+  /** Partial RP player-entity additions; must be structurally merged into the existing entity. */
+  resourceEntityPatch: Record<string, unknown>;
+  /** Partial BP player-entity additions; the property must be registered server-side. */
+  behaviorEntityPatch: Record<string, unknown>;
   itemDefinition: Record<string, unknown>;
   scriptSource: string;
   stateMap: Record<string, Record<string, string>>;
@@ -129,16 +132,28 @@ export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherA
     },
   };
 
-  const entityPatch = {
-    format_version: '1.20.0',
-    'minecraft:entity': {
+  // These are separate partial patches because animation/controller wiring belongs
+  // in the RP player entity, while the server-authoritative custom property belongs
+  // in the BP player entity. They must be merged into existing definitions, never
+  // written as two competing complete minecraft:player definitions.
+  const resourceEntityPatch = {
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
       description: {
         identifier: input.entityIdentifier,
-        animations: {},
         animation_controllers: {
           autobe_switcher_gatekeeper: input.controllerIdentifier,
         },
         scripts: { animate: ['autobe_switcher_gatekeeper'] },
+      },
+    },
+  };
+
+  const behaviorEntityPatch = {
+    format_version: '1.16.0',
+    'minecraft:entity': {
+      description: {
+        identifier: input.entityIdentifier,
         properties: {
           [input.propertyIdentifier]: {
             type: 'int',
@@ -150,45 +165,3 @@ export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherA
       },
     },
   };
-
-  const itemDefinition = {
-    format_version: '1.20.50',
-    'minecraft:item': {
-      description: { identifier: input.itemIdentifier, menu_category: { category: 'items' } },
-      components: {
-        'minecraft:icon': { texture: 'apple' },
-        'minecraft:display_name': { value: 'Animation Switcher' },
-        'minecraft:max_stack_size': 1,
-        'minecraft:allow_off_hand': true,
-        'minecraft:use_modifiers': { use_duration: 0.1, movement_modifier: 1.0 },
-      },
-    },
-  };
-
-  const scriptSource = [
-    `import { world } from '@minecraft/server';`,
-    `const ITEM_ID = ${JSON.stringify(input.itemIdentifier)};`,
-    `const PROPERTY_ID = ${JSON.stringify(input.propertyIdentifier)};`,
-    `const MODE_COUNT = ${controllers.length};`,
-    `world.afterEvents.itemUse.subscribe((event) => {`,
-    `  if (event.itemStack.typeId !== ITEM_ID) return;`,
-    `  const player = event.source;`,
-    `  if (player.typeId !== 'minecraft:player') return;`,
-    `  const current = Number(player.getProperty(PROPERTY_ID) ?? 0);`,
-    `  player.setProperty(PROPERTY_ID, (current + 1) % MODE_COUNT);`,
-    `});`,
-    '',
-  ].join('\\n');
-
-  return {
-    controllerId: input.controllerIdentifier,
-    propertyId: input.propertyIdentifier,
-    itemId: input.itemIdentifier,
-    gatekeeperController,
-    entityPatch,
-    itemDefinition,
-    scriptSource,
-    stateMap,
-    validationErrors: [...new Set(validationErrors)].sort(),
-  };
-}
