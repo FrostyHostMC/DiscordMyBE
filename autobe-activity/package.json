@@ -19,7 +19,7 @@
     "test": "npm run test:merge && npm run test:verify && npm run test:animation",
     "test:merge": "tsx scripts/testMerge.ts",
     "test:verify": "tsx scripts/testVerification.ts",
-    "test:animation": "tsx scripts/testAnimationConflicts.ts"
+    "test:animation": "tsx --tsconfig tsconfig.app.json scripts/testAnimationConflicts.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
