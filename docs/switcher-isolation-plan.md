@@ -30,6 +30,22 @@ A controller-name collision or shared bone name alone is not proof of a time-ove
 7. **State-graph rewrite proof:** parse state IDs as a graph and produce an old-state-to-new-state map. Rewrite all transition targets and `on_entry`/`on_exit` references structurally. Reset `blend_transition` on gated entry states to avoid a previous pose lingering. Never patch JSON by string replacement.
 8. **Explicit confirmation:** return a readable dry-run report and require the user to confirm before any archive writes. Even after confirmation, generated output must pass structural validation.
 
+## Frozen evidence contract
+
+Every candidate bone/channel overlap is a structured evidence record, not a free-form assertion. The TypeScript contract is defined in
+`autobe-activity/src/utils/switcherEligibility.ts` and currently requires:
+
+- `confidence`: exactly `proven`, `possible`, or `unknown`.
+- `sourceProof.filePath`: non-empty path to the exact source file in the analyzed pack.
+- `sourceProof.reference`: non-empty JSON path, identifier reference, or source location establishing the claim.
+- `sourceProof.claim`: non-empty concise statement of what that source proves.
+- `bone`, `channel`, exact `animationIds`, `controllerIds`, `packIds`, and `overlapEvidence`.
+- `blockerCodes`: stable machine-readable codes when evidence is not proven, such as `unresolved_reference`, `source_proof_missing`, `overlap_window_unproven`, or `channel_unproven`.
+
+The contract is strict: missing or malformed proof is rejected as `unproven`. Evidence with confidence `possible` or `unknown` can never unlock Switcher; it remains `unproven` regardless of any other passing gate. Every non-proven record must carry at least one recognized blocker code. Human-readable blocker text is supplementary and does not replace the code or source receipt. Unknown is a valid diagnostic outcome, not an analyzer crash.
+
+The evidence producer must resolve references before classifying overlaps. It must not label an overlap `proven` based only on a shared bone name or repeated controller/animation identifier. A proven record needs traceable source proof for the actual channel and overlapping time window or triggering condition.
+
 ## Report schema
 
 The dry-run report must include:
