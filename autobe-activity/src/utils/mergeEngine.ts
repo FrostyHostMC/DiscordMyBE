@@ -108,7 +108,7 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
           }
         }
       } catch {
-        if (lower.includes('animation_controllers') || /(^|\\/)animations?\\//i.test(lower)) {
+        if (lower.includes('animation_controllers') || lower.includes('animations/') || lower.includes('animation/')) {
           findings.push({ severity: 'warning', kind: 'parse-warning', scope: 'unknown', packs: [pack.name], file: path, detail: 'Animation JSON could not be parsed during preflight; it was not analyzed.' });
         }
       }
