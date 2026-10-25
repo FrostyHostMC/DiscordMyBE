@@ -7,8 +7,10 @@ import { getDiscordAuth, setDiscordAuth } from '@/utils/discordAuth';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
-// Must match the redirect URI registered in Discord Developer Portal and the server's OAuth setting.
-const browserRedirectUri = 'https://discordmybe.pages.dev/';
+// Use the exact origin where this build is opened. This is essential for OAuth
+// state validation: the browser stores state per-origin, so redirecting a preview
+// build back to the production domain makes the stored state invisible.
+const browserRedirectUri = `${window.location.origin}/`;
 
 type GateState = 'checking' | 'allowed' | 'denied';
 
