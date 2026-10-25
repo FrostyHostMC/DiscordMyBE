@@ -73,7 +73,7 @@ test('missing animation aliases are preserved and not silently redirected to wal
   };
   applyPlayerEntityFixes(entity);
   const description = entity['minecraft:client_entity'].description;
-  assert.equal(description.animations.relic_first_person_conflict, undefined);
+  assert.equal((description.animations as Record<string, string>).relic_first_person_conflict, undefined);
   assert.deepEqual(description.scripts.animate, ['relic_first_person_conflict']);
 });
 
