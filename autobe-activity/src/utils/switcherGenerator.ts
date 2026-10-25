@@ -159,7 +159,7 @@ export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherA
     '  player.setProperty(PROPERTY_ID, (current + 1) % MODE_COUNT);',
     '});',
     '',
-  ].join('\\n');
+  ].join('\n');
 
   return {
     controllerId: input.controllerIdentifier,
