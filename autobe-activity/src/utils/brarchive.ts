@@ -14,16 +14,10 @@ export interface BrarchiveExtractionResult {
 }
 
 /**
- * Expand StoneByte/Bedrock .brarchive containers into their normal pack paths.
- *
- * The container is not a standard ZIP: it has an 8-byte magic, entry count and
- * version, then fixed 256-byte records (name length + name + uint32 file size),
- * followed by concatenated file payloads. The archive's own path determines
- * the restored directory: __brarchive/animations/fiery/combat.brarchive becomes
- * animations/fiery/combat/<entry-name>.
- *
- * Original .brarchive files are retained. Existing visible files are never
- * overwritten; collisions are returned for diagnostics instead.
+ * Expand StoneByte/Bedrock .brarchive containers into ordinary pack paths.
+ * Valid containers are removed after extraction: Bedrock cannot load the
+ * private container format as normal assets. Existing visible files are never
+ * overwritten; collisions and invalid archives are reported for diagnostics.
  */
 export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtractionResult> {
   const result: BrarchiveExtractionResult = {
@@ -57,7 +51,7 @@ export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtraction
         const nameLength = bytes[start];
         if (nameLength < 1 || nameLength > ENTRY_SIZE_OFFSET - 1) throw new Error(`invalid filename length in entry ${i}`);
         const name = new TextDecoder().decode(bytes.subarray(start + 1, start + 1 + nameLength));
-        if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\') || name.includes('\0')) {
+        if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\\\') || name.includes('\\0')) {
           throw new Error(`unsafe filename in entry ${i}`);
         }
         const size = view.getUint32(start + ENTRY_SIZE_OFFSET, true);
@@ -83,6 +77,8 @@ export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtraction
         zip.file(targetPath, payload);
         result.filesExtracted++;
       }
+      // A successfully parsed container is not a runtime asset.
+      zip.remove(archivePath);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       result.invalidArchives.push(`${archivePath}: ${detail}`);
