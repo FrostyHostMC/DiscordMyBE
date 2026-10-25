@@ -115,7 +115,7 @@ export function buildSwitcherArtifacts(input: SwitcherGeneratorInput): SwitcherA
     'minecraft:client_entity': {
       description: {
         identifier: input.entityIdentifier,
-        animation_controllers: { autobe_switcher_gatekeeper: input.controllerIdentifier },
+        animations: { autobe_switcher_gatekeeper: input.controllerIdentifier },
         scripts: { animate: ['autobe_switcher_gatekeeper'] },
       },
     },
