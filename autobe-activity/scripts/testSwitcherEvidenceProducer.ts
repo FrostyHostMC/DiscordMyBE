@@ -75,6 +75,8 @@ async function main() {
   assert.ok(overlap);
   assert.equal(overlap.confidence, 'possible');
   assert.ok(overlap.blockerCodes.includes('overlap_window_unproven'));
+  // Exact controller IDs must survive evidence extraction; this fails if sourceReference parsing breaks.
+  assert.deepEqual(overlap.controllerIds, ['controller.test:walk', 'controller.test:wave']);
 
   // Reversing pack order must preserve each stage, not merely the final report.
   const reversedPass = await resolveSwitcherReferences([b, a]);
