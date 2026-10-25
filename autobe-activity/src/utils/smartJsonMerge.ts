@@ -200,7 +200,7 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         if (!('format_version' in merged)) merged.format_version = value;
         continue;
       }
-      if (base === 'player.animation_controllers.json' || base === 'player.render_controllers.json' || base === 'player.animation.json') {
+      if (base.includes('animation') || base.includes('render_controller')) {
         // First-wins per named entry: deep-merging two incompatible animation
         // state machines produces broken results.
         if (!(key in merged)) {
