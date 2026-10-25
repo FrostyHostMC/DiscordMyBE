@@ -29,6 +29,40 @@ test('JSONC trailing commas and UTF-8 BOM are accepted', () => {
   assert.deepEqual(JSON.parse(sanitizeJsonString(input)), { items: [1, 2], child: { ok: true } });
 });
 
+test('animation JSON merges named definitions without blending conflicting state machines', () => {
+  const merged = mergeJsonForFile('animations/custom_pack.animation.json', [
+    { format_version: '1.8.0', animations: {
+      'animation.player.attack': { loop: true, bones: { right_arm: { rotation: [1, 2, 3] } } },
+      'animation.player.idle': { loop: true },
+    } },
+    { format_version: '1.8.0', animations: {
+      'animation.player.attack': { loop: false, bones: { left_arm: { rotation: [4, 5, 6] } }, animation_length: 2 },
+      'animation.player.run': { loop: true },
+    } },
+  ]);
+  assert.deepEqual(merged.animations['animation.player.attack'], {
+    loop: true, bones: { right_arm: { rotation: [1, 2, 3] } },
+  });
+  assert.deepEqual(merged.animations['animation.player.idle'], { loop: true });
+  assert.deepEqual(merged.animations['animation.player.run'], { loop: true });
+});
+
+test('animation controller JSON preserves whole conflicting controller definitions', () => {
+  const merged = mergeJsonForFile('animation_controllers/custom.controller.json', [
+    { format_version: '1.10.0', animation_controllers: {
+      'controller.animation.player.main': { states: { default: { animations: ['animation.player.idle'], transitions: [{ done: 'attack' }] } } },
+    } },
+    { format_version: '1.10.0', animation_controllers: {
+      'controller.animation.player.main': { states: { default: { animations: ['animation.player.run'], transitions: [{ done: 'run' }] } } },
+      'controller.animation.player.extra': { states: { default: { animations: ['animation.player.extra'] } } },
+    } },
+  ]);
+  assert.deepEqual(merged.animation_controllers['controller.animation.player.main'], {
+    states: { default: { animations: ['animation.player.idle'], transitions: [{ done: 'attack' }] } },
+  });
+  assert.ok(merged.animation_controllers['controller.animation.player.extra']);
+});
+
 test('HUD merge preserves ordered patches and removes only exact duplicates', () => {
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'a' }] } },
