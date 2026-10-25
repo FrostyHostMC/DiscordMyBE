@@ -200,7 +200,7 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         if (!('format_version' in merged)) merged.format_version = value;
         continue;
       }
-      if (base.includes('animation') || base.includes('render_controller')) {
+      if (fileName.toLowerCase().includes('animation') || fileName.toLowerCase().includes('render_controller')) {
         // These wrapper maps contain independent named definitions. Union the
         // names, but never blend two values under the same ID: that can create a
         // state machine that belonged to neither source pack.
