@@ -236,7 +236,7 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
   const controllerDefinitions = new Map<string, Array<{ file: ParsedJsonFile; definition: any }>>();
   const animationAliases = new Map<string, Array<{ target: string; file: ParsedJsonFile; scope: 'player' | 'mob' | 'unknown'; alias: string }>>();
   const controllerAliases = new Map<string, Array<{ target: string; file: ParsedJsonFile; scope: 'player' | 'mob' | 'unknown'; alias: string }>>();
-  const entityScopeByPack = new Map<string, 'player' | 'mob' | 'unknown'>();
+  const controllerScopes = new Map<string, Set<'player' | 'mob' | 'unknown'>>();
 
   for (const file of files) {
     for (const { id, definition } of readAnimationDefinitions(file)) {
@@ -254,8 +254,12 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
     const entities = file.value?.['minecraft:entity'] ? [file.value['minecraft:entity']] : [];
     for (const entity of entities) {
       const scope = scopeForIdentifier(entity?.description?.identifier);
-      const priorScope = entityScopeByPack.get(file.pack.id);
-      entityScopeByPack.set(file.pack.id, priorScope && priorScope !== scope ? 'unknown' : scope);
+      const rememberControllerScope = (controllerId: string) => {
+        const key = `${file.pack.id}|${controllerId}`;
+        const scopes = controllerScopes.get(key) ?? new Set<'player' | 'mob' | 'unknown'>();
+        scopes.add(scope);
+        controllerScopes.set(key, scopes);
+      };
       for (const [alias, target] of Object.entries(entity?.description?.animations ?? {})) {
         if (typeof target !== 'string') continue;
         const list = animationAliases.get(`${file.pack.id}|${alias}`) ?? [];
@@ -267,6 +271,8 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
         const list = controllerAliases.get(`${file.pack.id}|${alias}`) ?? [];
         list.push({ target, file, scope, alias });
         controllerAliases.set(`${file.pack.id}|${alias}`, list);
+        rememberControllerScope(target);
+        rememberControllerScope(alias);
       }
       for (const item of entity?.description?.scripts?.animate ?? []) {
         const aliases = typeof item === 'string' ? [item] : item && typeof item === 'object' ? Object.keys(item) : [];
@@ -315,8 +321,12 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
 
   // Resolve controller references in every controller state after the complete inventory exists.
   for (const file of files) {
-    const scope = entityScopeByPack.get(file.pack.id) ?? 'unknown';
     for (const { id, definition } of readControllerDefinitions(file)) {
+      const controllerScopeSet = controllerScopes.get(`${file.pack.id}|${id}`) ?? new Set<'player' | 'mob' | 'unknown'>();
+      const controllerScopesSorted = sortStrings(controllerScopeSet);
+      const scope: 'player' | 'mob' | 'unknown' = controllerScopesSorted.length === 1 && controllerScopesSorted[0] !== 'unknown'
+        ? controllerScopesSorted[0] as 'player' | 'mob'
+        : 'unknown';
       const states = definition?.states && typeof definition.states === 'object' ? Object.entries(definition.states) : [];
       for (const [stateName, state] of states) {
         const animationList = Array.isArray((state as any)?.animations) ? (state as any).animations : [];
@@ -330,6 +340,7 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
     const entities = file.value?.['minecraft:entity'] ? [file.value['minecraft:entity']] : [];
     for (const entity of entities) {
       const description = entity?.description ?? {};
+      const scope = scopeForIdentifier(description.identifier);
       for (const [alias, target] of Object.entries(description.animations ?? {})) {
         if (typeof target === 'string') addReference(file, `minecraft:entity.description.animations.${alias}`, alias, 'animation', animationAliases, animationDefinitions, scope);
       }
@@ -355,7 +366,12 @@ export async function resolveSwitcherReferences(packs: readonly AddonPack[]): Pr
     for (const { id, definition } of readAnimationDefinitions(file)) {
       const bones = definition?.bones;
       if (!bones || typeof bones !== 'object' || Array.isArray(bones)) continue;
-      const scope = entityScopeByPack.get(file.pack.id) ?? 'unknown';
+      const animationScopes = sortStrings(references
+        .filter((reference) => reference.kind === 'animation' && reference.packId === file.pack.id && reference.resolvedId === id)
+        .map((reference) => reference.scope));
+      const scope: 'player' | 'mob' | 'unknown' = animationScopes.length === 1 && animationScopes[0] !== 'unknown'
+        ? animationScopes[0] as 'player' | 'mob'
+        : 'unknown';
       for (const [bone, boneDef] of Object.entries(bones)) {
         for (const channel of channelNames) {
           if (!(boneDef as any)?.[channel]) continue;
