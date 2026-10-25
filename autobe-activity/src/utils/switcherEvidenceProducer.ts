@@ -442,11 +442,11 @@ export function analyzeSwitcherOverlaps(passOne: Awaited<ReturnType<typeof resol
         controllerIds: sortStrings([
           ...passOne.references
             .filter((ref) => ref.kind === 'animation' && ref.packId === a.packId && ref.resolvedId === a.animationId)
-            .map((ref) => ref.sourceReference.match(/^animation_controllers\\.(.+?)\\.states\\./)?.[1])
+            .map((ref) => ref.sourceReference.match(/^animation_controllers\.(.+?)\.states\./)?.[1])
             .filter((id): id is string => Boolean(id)),
           ...passOne.references
             .filter((ref) => ref.kind === 'animation' && ref.packId === b.packId && ref.resolvedId === b.animationId)
-            .map((ref) => ref.sourceReference.match(/^animation_controllers\\.(.+?)\\.states\\./)?.[1])
+            .map((ref) => ref.sourceReference.match(/^animation_controllers\.(.+?)\.states\./)?.[1])
             .filter((id): id is string => Boolean(id)),
         ]),
         packIds: [a.packId, b.packId],
