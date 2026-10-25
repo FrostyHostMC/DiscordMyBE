@@ -195,7 +195,7 @@ export function findUninitializedAnimVars(playerEntity: any, usedVars: Set<strin
     ...(Array.isArray(scripts.pre_animation) ? scripts.pre_animation : []),
   ].filter((entry): entry is string => typeof entry === 'string').join(' ');
   const assigned = new Set<string>();
-  for (const match of existing.matchAll(/variable\\.([a-zA-Z_][a-zA-Z0-9_]*)\\s*=/g)) assigned.add(match[1]);
+  for (const match of existing.matchAll(/variable\.([a-zA-Z_][a-zA-Z0-9_]*)\s*=/g)) assigned.add(match[1]);
   return [...usedVars].filter((name) => !assigned.has(name)).sort();
 }
 
