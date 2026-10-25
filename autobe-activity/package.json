@@ -18,7 +18,8 @@
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
     "test": "npm run test:merge && npm run test:verify",
     "test:merge": "tsx scripts/testMerge.ts",
-    "test:verify": "tsx scripts/testVerification.ts"
+    "test:verify": "tsx scripts/testVerification.ts",
+    "test:animation": "tsx scripts/testAnimationScopes.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
