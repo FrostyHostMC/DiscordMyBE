@@ -125,6 +125,66 @@ async function describeStorage(): Promise<string> {
   return '';
 }
 
+const FALLBACK_CACHE = 'autobe-persistent-pack-fallback-v1';
+
+function describeErrorForStorage(err: unknown): string { return err instanceof Error ? err.message : String(err); }
+
+function fallbackKey(kind: 'meta' | 'file', id: string): Request {
+  const origin = typeof location !== 'undefined' ? location.origin : 'https://autobe-storage.invalid';
+  return new Request(new URL(`/__autobe_storage__/${kind}/${encodeURIComponent(id)}`, origin).toString());
+}
+
+async function getFallbackCache(): Promise<Cache> {
+  if (typeof caches === 'undefined') throw new Error('Persistent Cache Storage is not available in this app view.');
+  return caches.open(FALLBACK_CACHE);
+}
+
+async function savePackFallback(pack: AddonPack): Promise<void> {
+  if (!pack.fileBlob) throw new Error('Cannot persist an add-on without its original archive bytes.');
+  const cache = await getFallbackCache();
+  const meta = stripFile(pack as LegacyPackRow);
+  try {
+    await cache.put(fallbackKey('file', pack.id), new Response(await pack.fileBlob.arrayBuffer(), {
+      headers: { 'Content-Type': pack.fileBlob.type || 'application/zip' }
+    }));
+    await cache.put(fallbackKey('meta', pack.id), new Response(JSON.stringify(meta), {
+      headers: { 'Content-Type': 'application/json' }
+    }));
+  } catch (err) {
+    await Promise.allSettled([cache.delete(fallbackKey('file', pack.id)), cache.delete(fallbackKey('meta', pack.id))]);
+    throw err;
+  }
+}
+
+async function readFallbackPacks(): Promise<AddonPack[]> {
+  const cache = await getFallbackCache();
+  const requests = await cache.keys();
+  const packs: AddonPack[] = [];
+  for (const request of requests) {
+    const url = new URL(request.url);
+    if (!url.pathname.includes('/meta/')) continue;
+    try {
+      const response = await cache.match(request);
+      if (response) packs.push(JSON.parse(await response.text()) as AddonPack);
+    } catch (err) {
+      console.warn('[Storage] Skipping unreadable fallback metadata:', err);
+    }
+  }
+  return packs;
+}
+
+async function readFallbackFile(id: string): Promise<Blob | null> {
+  const cache = await getFallbackCache();
+  const response = await cache.match(fallbackKey('file', id));
+  if (!response) return null;
+  return new Blob([await response.arrayBuffer()], { type: response.headers.get('Content-Type') || 'application/zip' });
+}
+
+async function deleteFallbackPack(id: string): Promise<void> {
+  const cache = await getFallbackCache();
+  await Promise.all([cache.delete(fallbackKey('meta', id)), cache.delete(fallbackKey('file', id))]);
+}
+
 function stripFile(row: LegacyPackRow): AddonPack {
   const { fileData: _fileData, fileType: _fileType, fileBlob: _fileBlob, ...meta } = row;
   void _fileData; void _fileType; void _fileBlob;
@@ -147,10 +207,19 @@ export async function savePackToDB(pack: AddonPack): Promise<'saved' | 'memory'>
     return 'saved';
   } catch (err) {
     lastStorageError = `${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}${await describeStorage()}`;
-    console.error('[Storage] Could not persist pack, keeping it in memory:', pack.name, lastStorageError);
-    if (!pack.fileBlob) throw err; // nothing useful to keep without its file
-    memoryPacks.set(pack.id, pack);
-    return 'memory';
+    console.error('[Storage] IndexedDB save failed; trying persistent Cache Storage fallback:', pack.name, lastStorageError);
+    try {
+      await savePackFallback(pack);
+      memoryPacks.delete(pack.id);
+      lastStorageError = '';
+      return 'saved';
+    } catch (fallbackErr) {
+      const fallbackMessage = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+      lastStorageError = `${lastStorageError}; persistent fallback failed: ${fallbackMessage}`;
+      // Do not pretend this item was saved. An in-memory copy would disappear on
+      // navigation/restart and is exactly the failure users reported.
+      throw new Error(`Could not save this add-on persistently. ${lastStorageError}`);
+    }
   }
 }
 
@@ -163,12 +232,18 @@ export async function loadPackFile(pack: AddonPack): Promise<AddonPack> {
   const inMemory = memoryPacks.get(pack.id);
   if (inMemory?.fileBlob) return { ...pack, fileBlob: inMemory.fileBlob };
 
-  const file = (await run<StoredFile | undefined>(STORE_FILES, 'readonly', (tx) =>
-    tx.objectStore(STORE_FILES).get(pack.id)
-  )) as StoredFile | undefined;
-  if (file?.fileData) {
-    return { ...pack, fileBlob: new Blob([file.fileData], { type: file.fileType || 'application/zip' }) };
+  try {
+    const file = (await run<StoredFile | undefined>(STORE_FILES, 'readonly', (tx) =>
+      tx.objectStore(STORE_FILES).get(pack.id)
+    )) as StoredFile | undefined;
+    if (file?.fileData) {
+      return { ...pack, fileBlob: new Blob([file.fileData], { type: file.fileType || 'application/zip' }) };
+    }
+  } catch (err) {
+    console.warn('[Storage] IndexedDB file read failed; trying persistent fallback:', err);
   }
+  const fallbackBlob = await readFallbackFile(pack.id).catch(() => null);
+  if (fallbackBlob) return { ...pack, fileBlob: fallbackBlob };
 
   // Fall back to a legacy row that stored the file inline.
   const legacy = (await run<LegacyPackRow | undefined>(STORE_PACKS, 'readonly', (tx) =>
@@ -182,12 +257,25 @@ export async function loadPackFile(pack: AddonPack): Promise<AddonPack> {
 }
 
 export async function getAllPacksFromDB(): Promise<AddonPack[]> {
-  const rows = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', (tx) =>
-    tx.objectStore(STORE_PACKS).getAll()
-  )) || []) as LegacyPackRow[];
+  let rows: LegacyPackRow[] = [];
+  let idbError: unknown = null;
+  try {
+    rows = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', (tx) =>
+      tx.objectStore(STORE_PACKS).getAll()
+    )) || []) as LegacyPackRow[];
+  } catch (err) {
+    idbError = err;
+    console.warn('[Storage] IndexedDB listing failed; trying persistent fallback:', err);
+  }
   const persisted = rows.map(stripFile); // metadata only — files load on demand via loadPackFile()
-  const persistedIds = new Set(persisted.map((p) => p.id));
-  const packs = [...persisted, ...[...memoryPacks.values()].filter((p) => !persistedIds.has(p.id))];
+  let fallback: AddonPack[] = [];
+  try { fallback = await readFallbackPacks(); } catch (err) {
+    if (idbError) throw new Error(`IndexedDB and persistent fallback are unavailable: ${describeErrorForStorage(idbError)}; ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const all = [...persisted, ...fallback, ...[...memoryPacks.values()]];
+  const byId = new Map<string, AddonPack>();
+  for (const pack of all) if (!byId.has(pack.id)) byId.set(pack.id, pack);
+  const packs = [...byId.values()];
 
   const demoIds = packs.filter((p) => p.id.startsWith('demo-pack-')).map((p) => p.id);
   if (demoIds.length > 0) {
@@ -200,14 +288,21 @@ export async function getAllPacksFromDB(): Promise<AddonPack[]> {
 }
 
 export async function deletePackFromDB(id: string): Promise<void> {
-  const wasInMemory = memoryPacks.delete(id);
+  memoryPacks.delete(id);
+  let idbError: unknown = null;
   try {
     await run([STORE_PACKS, STORE_FILES], 'readwrite', (tx) => {
       tx.objectStore(STORE_PACKS).delete(id);
       tx.objectStore(STORE_FILES).delete(id);
     });
-  } catch (err) {
-    if (!wasInMemory) throw err; // memory-only pack: nothing stored to delete
+  } catch (err) { idbError = err; }
+  try { await deleteFallbackPack(id); } catch (err) {
+    if (idbError) throw new Error(`Could not delete pack from IndexedDB or persistent fallback: ${describeErrorForStorage(idbError)}; ${describeErrorForStorage(err)}`);
+  }
+  if (idbError) {
+    // If fallback deletion succeeded, a missing IndexedDB row is harmless.
+    const fallbackPacks = await readFallbackPacks().catch(() => []);
+    if (fallbackPacks.some((p) => p.id === id)) throw idbError;
   }
 }
 
