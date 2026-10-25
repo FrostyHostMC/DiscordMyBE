@@ -40,15 +40,21 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Missing or invalid Discord authorization code.' }, 400);
   }
 
-  // The Embedded App SDK uses Discord's documented placeholder redirect. The
-  // standalone web login uses one explicitly configured, allow-listed redirect URI.
+  // The Embedded App SDK uses Discord's documented placeholder redirect.
+  // Browser OAuth must return to the same origin that initiated sign-in so its
+  // origin-scoped state can be validated. Only production and the stable branch
+  // preview origin are accepted; arbitrary callback hosts remain rejected.
   const configuredBrowserRedirect = env.DISCORD_OAUTH_REDIRECT_URI || 'https://discordmybe.pages.dev/';
+  const allowedBrowserRedirects = new Set([
+    configuredBrowserRedirect,
+    'https://fix-merge-diagnostics-no-sil.discordmybe.pages.dev/',
+  ]);
   let redirectUri = 'https://127.0.0.1/';
   if (body.redirect_uri !== undefined) {
-    if (typeof body.redirect_uri !== 'string' || body.redirect_uri !== configuredBrowserRedirect) {
+    if (typeof body.redirect_uri !== 'string' || !allowedBrowserRedirects.has(body.redirect_uri)) {
       return json({ error: 'The browser OAuth redirect URI is not allowed. Check the Discord OAuth configuration.' }, 400);
     }
-    redirectUri = configuredBrowserRedirect;
+    redirectUri = body.redirect_uri;
   }
   const form = new URLSearchParams({
     client_id: env.DISCORD_CLIENT_ID,
