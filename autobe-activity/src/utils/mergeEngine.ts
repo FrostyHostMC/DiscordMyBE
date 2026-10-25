@@ -328,8 +328,8 @@ async function repairPlayerFirstPersonAssets(zip: JSZip): Promise<void> {
         addUnique(preAnimation, 'variable.is_first_person = query.is_first_person;');
         addUnique(preAnimation, "variable.is_holding_left = query.get_equipped_item_name('off_hand') != 'air' ? 1.0 : 0.0;");
         const animations = description.animations ?? (description.animations = {});
-        animations.first_person_empty_hand = 'animation.player.first_person.empty_hand';
-        animations.hold_fp ??= 'animation.player.first_person.empty_hand';
+        animations.first_person_empty_hand ??= 'animation.player.first_person_empty_hand';
+        animations.hold_fp ??= 'animation.player.first_person_base_pose';
         animations.wield_main_hand_first_person ??= 'animation.shield.wield_main_hand_first_person';
         zip.file('entity/player.entity.json', JSON.stringify(entity, null, 2));
       }
