@@ -2,8 +2,41 @@ import type { AnimationConflictFinding } from './mergeEngine';
 
 export type SwitcherDecision = 'not-needed' | 'needs-review' | 'eligible' | 'ineligible' | 'unproven';
 export type AnimationChannel = 'position' | 'rotation' | 'scale' | 'unknown';
+export type EvidenceConfidence = 'proven' | 'possible' | 'unknown';
+
+/** Stable machine-readable reasons why a claim cannot be treated as proven. */
+export type EvidenceBlockerCode =
+  | 'unresolved_reference'
+  | 'source_proof_missing'
+  | 'source_proof_malformed'
+  | 'overlap_window_unproven'
+  | 'channel_unproven'
+  | 'scope_unknown'
+  | 'analysis_incomplete'
+  | 'dependency_unhandled'
+  | 'geometry_mismatch'
+  | 'runtime_unverified'
+  | 'version_unknown'
+  | 'state_graph_incomplete'
+  | 'entry_path_unrewritable'
+  | 'other';
+
+export interface EvidenceSourceProof {
+  /** Exact source file path within the analyzed pack. */
+  filePath: string;
+  /** Exact JSON path, reference, or source location establishing the claim. */
+  reference: string;
+  /** Short explanation of what this source proves; not a substitute for filePath/reference. */
+  claim: string;
+}
 
 export interface BoneChannelOverlap {
+  /** Only 'proven' evidence can ever qualify a plan for Switcher. */
+  confidence: EvidenceConfidence;
+  /** Required traceability receipt for the overlap claim. */
+  sourceProof: EvidenceSourceProof;
+  /** Stable blocker codes are required whenever confidence is possible or unknown. */
+  blockerCodes: EvidenceBlockerCode[];
   bone: string;
   channel: AnimationChannel;
   /** Exact source animation IDs contributing to this overlapping interval. */
@@ -122,6 +155,42 @@ export function assessSwitcherEligibility(input: SwitcherEligibilityInput): Swit
     return plan('not-needed', criticalFindings.length
       ? 'No bone/channel overlap group was proven; do not trigger Switcher from a coarse critical finding alone.'
       : 'No conflicting bone/channel group was found; use the standard merge path.');
+  }
+  const allowedConfidence = new Set<EvidenceConfidence>(['proven', 'possible', 'unknown']);
+  const allowedBlockerCodes = new Set<EvidenceBlockerCode>([
+    'unresolved_reference', 'source_proof_missing', 'source_proof_malformed',
+    'overlap_window_unproven', 'channel_unproven', 'scope_unknown',
+    'analysis_incomplete', 'dependency_unhandled', 'geometry_mismatch',
+    'runtime_unverified', 'version_unknown', 'state_graph_incomplete',
+    'entry_path_unrewritable', 'other',
+  ]);
+  const malformedEvidence = input.overlapGroups.some((group) => {
+    const proof = (group as BoneChannelOverlap & { sourceProof?: unknown }).sourceProof;
+    const codes = (group as BoneChannelOverlap & { blockerCodes?: unknown }).blockerCodes;
+    return !allowedConfidence.has(group.confidence)
+      || !proof || typeof proof !== 'object'
+      || typeof (proof as EvidenceSourceProof).filePath !== 'string'
+      || !(proof as EvidenceSourceProof).filePath.trim()
+      || typeof (proof as EvidenceSourceProof).reference !== 'string'
+      || !(proof as EvidenceSourceProof).reference.trim()
+      || typeof (proof as EvidenceSourceProof).claim !== 'string'
+      || !(proof as EvidenceSourceProof).claim.trim()
+      || !Array.isArray(codes)
+      || !codes.every((code) => typeof code === 'string' && allowedBlockerCodes.has(code as EvidenceBlockerCode));
+  });
+  if (malformedEvidence) {
+    blockedBy.push('Evidence contract violation: confidence, structured source proof, or blocker codes are missing or malformed.');
+    return plan('unproven', 'Rejected malformed evidence; no Switcher eligibility decision can be made.');
+  }
+
+  for (const group of input.overlapGroups) {
+    if (group.confidence !== 'proven') {
+      if (group.blockerCodes.length === 0) {
+        blockedBy.push(`Evidence contract violation for ${group.bone}: non-proven evidence has no blocker code.`);
+      }
+      for (const code of group.blockerCodes) blockedBy.push(`Evidence ${group.confidence} for ${group.bone} [${group.channel}] is blocked by code: ${code}.`);
+      blockedBy.push(`Overlap evidence for ${group.bone} [${group.channel}] is ${group.confidence}, not proven; Switcher eligibility is denied.`);
+    }
   }
   if (input.overlapGroups.some((group) => group.channel === 'unknown' || !group.overlapEvidence.trim())) {
     blockedBy.push('At least one bone/channel group lacks a known channel or reproducible time-window overlap evidence.');
