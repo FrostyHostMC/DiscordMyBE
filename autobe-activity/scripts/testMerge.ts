@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { sanitizeJsonString } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
+import { applyPlayerEntityFixes, findUninitializedAnimVars } from '../src/utils/playerEntityFix.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -58,6 +59,36 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
   assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
   assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
+});
+
+test('missing animation aliases are preserved and not silently redirected to walking', () => {
+  const entity = {
+    'minecraft:client_entity': {
+      description: {
+        identifier: 'minecraft:player',
+        animations: { move: 'animation.player.move' },
+        scripts: { animate: ['relic_first_person_conflict'] },
+      },
+    },
+  };
+  applyPlayerEntityFixes(entity);
+  const description = entity['minecraft:client_entity'].description;
+  assert.equal(description.animations.relic_first_person_conflict, undefined);
+  assert.deepEqual(description.scripts.animate, ['relic_first_person_conflict']);
+});
+
+test('unknown Molang variables are diagnosed, not assigned guessed zero values', () => {
+  const entity = {
+    'minecraft:client_entity': {
+      description: {
+        scripts: { initialize: [], pre_animation: [] },
+      },
+    },
+  };
+  const missing = findUninitializedAnimVars(entity, new Set(['is_holding_left', 'relic_custom_state']));
+  assert.deepEqual(missing, ['is_holding_left', 'relic_custom_state']);
+  assert.deepEqual(entity['minecraft:client_entity'].description.scripts.initialize, []);
+  assert.deepEqual(entity['minecraft:client_entity'].description.scripts.pre_animation, []);
 });
 
 console.log('Merge regression tests passed.');
