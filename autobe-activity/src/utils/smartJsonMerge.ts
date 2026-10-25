@@ -201,19 +201,11 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         continue;
       }
       if (base.includes('animation') || base.includes('render_controller')) {
-        // First-wins per named entry: deep-merging two incompatible animation
-        // state machines produces broken results.
-        if (!(key in merged)) {
-          merged[key] = value;
-        } else if (merged[key] && typeof merged[key] === 'object' && value && typeof value === 'object') {
-          if (Array.isArray(merged[key]) && Array.isArray(value)) {
-            merged[key] = removeDuplicates([...merged[key], ...value]);
-          } else if (!Array.isArray(merged[key]) && !Array.isArray(value)) {
-            for (const [sk, sv] of Object.entries(value)) {
-              if (!(sk in merged[key])) merged[key][sk] = sv;
-            }
-          }
-        }
+        // Keep each named animation/controller definition intact. Merge-time ID
+        // namespacing runs before this point; if a duplicate remains (for example
+        // identical definitions or an unrecognized collision), combining state
+        // machine objects can produce a definition that belonged to neither pack.
+        if (!(key in merged)) merged[key] = structuredClone(value);
         continue;
       }
       if (base === '_ui_defs.json') {
