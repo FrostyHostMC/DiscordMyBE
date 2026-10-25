@@ -106,7 +106,7 @@ export function assessSwitcherEligibility(input: SwitcherEligibilityInput): Swit
     inliningMap,
     renamedTransitionTargets,
     proposedOwners,
-    blockedBy: [...new Set(blockedBy)],
+    blockedBy: [...new Set(blockedBy)].sort(),
     requiresUserConfirmation: true,
   });
 
