@@ -305,6 +305,63 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
+
+/**
+ * Repair known first-person compatibility gaps when addon player entities
+ * replace the vanilla player entity. These are explicit aliases/variables,
+ * not guessed redirects for arbitrary missing animations.
+ */
+async function repairPlayerFirstPersonAssets(zip: JSZip): Promise<void> {
+  const entityFile = zip.file('entity/player.entity.json');
+  if (entityFile) {
+    try {
+      const entity = JSON.parse(sanitizeJsonString(await entityFile.async('text')));
+      const description = entity?.['minecraft:client_entity']?.description;
+      if (description) {
+        const scripts = description.scripts ?? (description.scripts = {});
+        const initialize = scripts.initialize ?? (scripts.initialize = []);
+        const preAnimation = scripts.pre_animation ?? (scripts.pre_animation = []);
+        const addUnique = (items: string[], value: string) => {
+          if (!items.includes(value)) items.push(value);
+        };
+        addUnique(initialize, 'variable.is_holding_left = 0.0;');
+        addUnique(preAnimation, 'variable.is_first_person = query.is_first_person;');
+        addUnique(preAnimation, "variable.is_holding_left = query.get_equipped_item_name('off_hand') != 'air' ? 1.0 : 0.0;");
+        const animations = description.animations ?? (description.animations = {});
+        animations.first_person_empty_hand = 'animation.player.first_person.empty_hand';
+        animations.hold_fp ??= 'animation.player.first_person.empty_hand';
+        animations.wield_main_hand_first_person ??= 'animation.shield.wield_main_hand_first_person';
+        zip.file('entity/player.entity.json', JSON.stringify(entity, null, 2));
+      }
+    } catch {
+      // Keep the original entity intact; merge diagnostics report parse errors elsewhere.
+    }
+  }
+
+  const animationFile = zip.file('animations/custom_player.animation.json');
+  if (animationFile) {
+    try {
+      const document = JSON.parse(sanitizeJsonString(await animationFile.async('text')));
+      for (const id of ['animation.player.bow_aim2', 'animation.player.trident_aim2']) {
+        const animation = document?.animations?.[id];
+        if (!animation) continue;
+        const visit = (value: any): void => {
+          if (!value || typeof value !== 'object') return;
+          if (value.lerp_mode === 'catmullrom' || value.lerp_mode === 'catmull_rom' || value.lerp_mode === 'cubic') {
+            value.lerp_mode = 'linear';
+          }
+          if (Array.isArray(value)) value.forEach(visit);
+          else Object.values(value).forEach(visit);
+        };
+        visit(animation);
+      }
+      zip.file('animations/custom_player.animation.json', JSON.stringify(document, null, 2));
+    } catch {
+      // Leave malformed source JSON unchanged for diagnostics rather than dropping it.
+    }
+  }
+}
+
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, sourcePackKey: string, sourcePackName: string, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
@@ -582,6 +639,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await mergeDefinitionsByIdentifier(rpZip);
     await mergeSubpackHudFiles(rpZip);
     playerEntityDiagnostics.push(...await applyPlayerEntityPass(rpZip));
+    await repairPlayerFirstPersonAssets(rpZip);
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
     
     // Collect capabilities from all source packs
@@ -712,10 +770,15 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     );
     for (const [path, file] of scriptFiles) {
       const source = await file.async('text');
-      const guarded = source.replace(
-        /world\.afterEvents\.cameraChange\.subscribe\s*\(/g,
-        'world.afterEvents.cameraChange?.subscribe?.('
-      );
+      const guarded = source
+        .replace(
+          /world\.afterEvents\.cameraChange\.subscribe\s*\(/g,
+          'world.afterEvents.cameraChange?.subscribe?.('
+        )
+        .replace(
+          /world\.beforeEvents\.inventory\.drop\.subscribe\s*\(/g,
+          'world.beforeEvents.inventory?.drop?.subscribe?.('
+        );
       if (guarded !== source) bpZip.file(path, guarded);
     }
 
