@@ -201,11 +201,18 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         continue;
       }
       if (base.includes('animation') || base.includes('render_controller')) {
-        // Keep each named animation/controller definition intact. Merge-time ID
-        // namespacing runs before this point; if a duplicate remains (for example
-        // identical definitions or an unrecognized collision), combining state
-        // machine objects can produce a definition that belonged to neither pack.
-        if (!(key in merged)) merged[key] = structuredClone(value);
+        // These wrapper maps contain independent named definitions. Union the
+        // names, but never blend two values under the same ID: that can create a
+        // state machine that belonged to neither source pack.
+        if (['animations', 'animation_controllers', 'render_controllers'].includes(key) &&
+            value && typeof value === 'object' && !Array.isArray(value)) {
+          if (!merged[key] || typeof merged[key] !== 'object' || Array.isArray(merged[key])) merged[key] = {};
+          for (const [definitionId, definition] of Object.entries(value)) {
+            if (!(definitionId in merged[key])) merged[key][definitionId] = structuredClone(definition);
+          }
+        } else if (!(key in merged)) {
+          merged[key] = structuredClone(value);
+        }
         continue;
       }
       if (base === '_ui_defs.json') {
