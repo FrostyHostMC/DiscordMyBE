@@ -15,6 +15,13 @@ function finding(overrides: Partial<AnimationConflictFinding> = {}): AnimationCo
 }
 
 const overlap: BoneChannelOverlap = {
+  confidence: 'proven',
+  sourceProof: {
+    filePath: 'animations/synthetic.animation.json',
+    reference: 'animations.synthetic:rotation.rightArm',
+    claim: 'Source animation defines the rightArm rotation channel and its active interval.',
+  },
+  blockerCodes: [],
   bone: 'rightArm',
   channel: 'rotation',
   animationIds: ['animation.synthetic:a', 'animation.synthetic:b'],
@@ -64,6 +71,52 @@ function main() {
   assert.deepEqual(eligible.conflictingAnimationIds, ['animation.synthetic:a', 'animation.synthetic:b']);
   assert.ok(eligible.inliningMap['controller.synthetic:a']);
   assert.equal(eligible.requiresUserConfirmation, true);
+
+  // Evidence contract: possible-only evidence cannot ever qualify for Switcher.
+  const possible = assessSwitcherEligibility(input({
+    overlapGroups: [{ ...overlap, confidence: 'possible', blockerCodes: ['overlap_window_unproven'] }],
+  }));
+  assert.equal(possible.decision, 'unproven');
+  assert.equal(possible.eligible, false);
+  assert.ok(possible.blockedBy.some((reason) => reason.includes('overlap_window_unproven')));
+
+  // Evidence contract: unknown/unresolved references are first-class blockers.
+  const unresolved = assessSwitcherEligibility(input({
+    overlapGroups: [{ ...overlap, confidence: 'unknown', blockerCodes: ['unresolved_reference'] }],
+  }));
+  assert.equal(unresolved.decision, 'unproven');
+  assert.ok(unresolved.blockedBy.some((reason) => reason.includes('unresolved_reference')));
+
+  // Evidence contract: missing or malformed proof is rejected, not downgraded to a warning.
+  const missingProof = assessSwitcherEligibility(input({
+    overlapGroups: [{ ...overlap, sourceProof: { filePath: '', reference: '', claim: '' } }],
+  }));
+  assert.equal(missingProof.decision, 'unproven');
+  assert.equal(missingProof.eligible, false);
+  assert.ok(missingProof.blockedBy.some((reason) => reason.includes('malformed')));
+
+  const missingBlocker = assessSwitcherEligibility(input({
+    overlapGroups: [{ ...overlap, confidence: 'possible', blockerCodes: [] }],
+  }));
+  assert.equal(missingBlocker.decision, 'unproven');
+  assert.ok(missingBlocker.blockedBy.some((reason) => reason.includes('no blocker code')));
+
+  // Determinism: changing scan/input order must not change the serialized report.
+  const reversedGroups = assessSwitcherEligibility(input({
+    overlapGroups: [
+      { ...overlap, bone: 'leftArm', animationIds: ['animation.synthetic:c', 'animation.synthetic:d'], controllerIds: ['controller.synthetic:c', 'controller.synthetic:d'], packIds: ['synthetic-c', 'synthetic-d'], proposedOwner: 'controller.synthetic:c', sourceProof: { filePath: 'animations/left.json', reference: 'animations.synthetic:leftArm', claim: 'Left arm rotation interval.' } },
+      overlap,
+    ],
+    controllerEvidence: [controller('controller.synthetic:b'), controller('controller.synthetic:a')],
+  }));
+  const forwardGroups = assessSwitcherEligibility(input({
+    overlapGroups: [
+      overlap,
+      { ...overlap, bone: 'leftArm', animationIds: ['animation.synthetic:c', 'animation.synthetic:d'], controllerIds: ['controller.synthetic:c', 'controller.synthetic:d'], packIds: ['synthetic-c', 'synthetic-d'], proposedOwner: 'controller.synthetic:c', sourceProof: { filePath: 'animations/left.json', reference: 'animations.synthetic:leftArm', claim: 'Left arm rotation interval.' } },
+    ],
+    controllerEvidence: [controller('controller.synthetic:a'), controller('controller.synthetic:b')],
+  }));
+  assert.deepEqual(reversedGroups, forwardGroups);
 
   // Unproven: missing/parse-failed analysis must never produce a partial plan.
   assert.equal(assessSwitcherEligibility(input({ analysisComplete: false })).decision, 'unproven');
