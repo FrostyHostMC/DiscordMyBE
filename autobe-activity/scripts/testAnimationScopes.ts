@@ -56,15 +56,25 @@ async function test(name: string, run: () => Promise<void>) {
 }
 
 await test('player-only and mob-only references retain their scope', async () => {
-  const player = await syntheticPack('player-pack', [
+  const playerA = await syntheticPack('player-pack-a', [
     { path: 'entities/player.json', identifier: 'minecraft:player' },
   ]);
-  const mob = await syntheticPack('mob-pack', [
+  const playerB = await syntheticPack('player-pack-b', [
+    { path: 'entities/player.json', identifier: 'minecraft:player' },
+  ]);
+  const mobA = await syntheticPack('mob-pack-a', [
     { path: 'entities/wolf.json', identifier: 'minecraft:wolf' },
   ]);
-  const findings = await analyzeAnimationConflicts([player, mob]);
+  const mobB = await syntheticPack('mob-pack-b', [
+    { path: 'entities/cat.json', identifier: 'minecraft:cat' },
+  ]);
+  const findings = await analyzeAnimationConflicts([playerA, playerB, mobA, mobB]);
+  assert.ok(findings.some(f => f.kind === 'bone-overlap' && f.scope === 'player'),
+    'player-only references should be classified as player');
+  assert.ok(findings.some(f => f.kind === 'bone-overlap' && f.scope === 'mob'),
+    'mob-only references should be classified as mob');
   assert.ok(findings.some(f => f.kind === 'bone-overlap' && f.scope === 'unknown'),
-    'cross-scope overlap should be reported as unknown, not mislabeled player or mob');
+    'cross-scope overlap should be reported as unknown');
 });
 
 await test('a player/mob/player reference stays ambiguous after the third definition', async () => {
