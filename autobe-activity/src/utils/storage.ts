@@ -140,6 +140,9 @@ async function getFallbackCache(): Promise<Cache> {
 }
 
 async function savePackFallback(pack: AddonPack): Promise<void> {
+  // Ask the browser not to evict this origin's local data under storage pressure.
+  // Browsers may decline; Cache Storage still provides a persistent fallback.
+  try { await navigator.storage?.persist?.(); } catch { /* best effort */ }
   if (!pack.fileBlob) throw new Error('Cannot persist an add-on without its original archive bytes.');
   const cache = await getFallbackCache();
   const meta = stripFile(pack as LegacyPackRow);
@@ -204,6 +207,9 @@ export async function savePackToDB(pack: AddonPack): Promise<'saved' | 'memory'>
       if (file) tx.objectStore(STORE_FILES).put(file);
     });
     memoryPacks.delete(pack.id);
+    // Avoid a stale fallback copy shadowing a newer IndexedDB row after re-import.
+    await deleteFallbackPack(pack.id).catch(() => {});
+    lastStorageError = '';
     return 'saved';
   } catch (err) {
     lastStorageError = `${err instanceof Error ? `${err.name}: ${err.message}` : String(err)}${await describeStorage()}`;
