@@ -183,6 +183,7 @@ export function assessSwitcherEligibility(input: SwitcherEligibilityInput): Swit
     return plan('unproven', 'Rejected malformed evidence; no Switcher eligibility decision can be made.');
   }
 
+  const hasNonProvenEvidence = input.overlapGroups.some((group) => group.confidence !== 'proven');
   for (const group of input.overlapGroups) {
     if (group.confidence !== 'proven') {
       if (group.blockerCodes.length === 0) {
@@ -223,7 +224,7 @@ export function assessSwitcherEligibility(input: SwitcherEligibilityInput): Swit
 
   if (blockedBy.length) {
     const isUnknown = blockedBy.some((reason) => /unknown|incomplete|not supplied|not been proved|not been verified|not have a/i.test(reason));
-    return plan(isUnknown ? 'unproven' : 'ineligible', 'Switcher plan is blocked; do not generate or modify files.');
+    return plan(hasNonProvenEvidence || isUnknown ? 'unproven' : 'ineligible', 'Switcher plan is blocked; do not generate or modify files.');
   }
 
   return plan('eligible', 'A dry-run isolation plan passed all supplied static gates. User confirmation and generated-output validation are still required.');
