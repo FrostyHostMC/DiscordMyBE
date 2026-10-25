@@ -6,12 +6,12 @@ import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { applyPlayerEntityFixes, findUninitializedAnimVars } from '../src/utils/playerEntityFix.ts';
 
-function test(name: string, run: () => void) {
-  run();
+async function test(name: string, run: () => void | Promise<void>) {
+  await run();
   console.log(`✓ ${name}`);
 }
 
-test('JSONC comments are stripped without changing strings', () => {
+await test('JSONC comments are stripped without changing strings', () => {
   const input = `{
     // comment
     "url": "https://example.com/a//b",
@@ -26,12 +26,12 @@ test('JSONC comments are stripped without changing strings', () => {
   assert.equal(parsed.enabled, true);
 });
 
-test('JSONC trailing commas and UTF-8 BOM are accepted', () => {
+await test('JSONC trailing commas and UTF-8 BOM are accepted', () => {
   const input = '\uFEFF{"items":[1,2,],"child":{"ok":true,},}';
   assert.deepEqual(JSON.parse(sanitizeJsonString(input)), { items: [1, 2], child: { ok: true } });
 });
 
-test('brarchive extraction restores files and removes private containers', async () => {
+await test('brarchive extraction restores files and removes private containers', async () => {
   const zip = new JSZip();
   const magic = new Uint8Array([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26]);
   const name = new TextEncoder().encode('item.json');
@@ -54,7 +54,7 @@ test('brarchive extraction restores files and removes private containers', async
   assert.equal(await zip.file('items/example/item.json')?.async('text'), '{"minecraft:item":{}}');
 });
 
-test('animation JSON merges named definitions without blending conflicting state machines', () => {
+await test('animation JSON merges named definitions without blending conflicting state machines', () => {
   const merged = mergeJsonForFile('animations/custom_pack.animation.json', [
     { format_version: '1.8.0', animations: {
       'animation.player.attack': { loop: true, bones: { right_arm: { rotation: [1, 2, 3] } } },
@@ -72,7 +72,7 @@ test('animation JSON merges named definitions without blending conflicting state
   assert.deepEqual(merged.animations['animation.player.run'], { loop: true });
 });
 
-test('animation controller JSON preserves whole conflicting controller definitions', () => {
+await test('animation controller JSON preserves whole conflicting controller definitions', () => {
   const merged = mergeJsonForFile('animation_controllers/custom.controller.json', [
     { format_version: '1.10.0', animation_controllers: {
       'controller.animation.player.main': { states: { default: { animations: ['animation.player.idle'], transitions: [{ done: 'attack' }] } } },
@@ -88,7 +88,7 @@ test('animation controller JSON preserves whole conflicting controller definitio
   assert.ok(merged.animation_controllers['controller.animation.player.extra']);
 });
 
-test('HUD merge preserves ordered patches and removes only exact duplicates', () => {
+await test('HUD merge preserves ordered patches and removes only exact duplicates', () => {
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'a' }] } },
     { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'b' }] } },
@@ -101,7 +101,7 @@ test('HUD merge preserves ordered patches and removes only exact duplicates', ()
   JSON.parse(JSON.stringify(merged));
 });
 
-test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
+await test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { panel: { visible: 'query.is_first_person', text: 'base label' } } },
     { screen: { panel: { visible: 'query.is_alive', text: 'overlay label' } } },
@@ -110,7 +110,7 @@ test('HUD visibility strings merge as conditions instead of being treated as obj
   assert.equal(merged.screen.panel.text, 'base label');
 });
 
-test('subpack HUD merge preserves controls and bindings from both packs', () => {
+await test('subpack HUD merge preserves controls and bindings from both packs', () => {
   const result = deepMergeUi(
     { panel: { visible: 'query.is_first_person', controls: [{ base: {} }], bindings: [{ binding_name: '#base' }] } },
     { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }], bindings: [{ binding_name: '#overlay' }] } },
@@ -120,7 +120,7 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
 
-test('missing animation aliases are preserved and not silently redirected to walking', () => {
+await test('missing animation aliases are preserved and not silently redirected to walking', () => {
   const entity = {
     'minecraft:client_entity': {
       description: {
@@ -136,7 +136,7 @@ test('missing animation aliases are preserved and not silently redirected to wal
   assert.deepEqual(description.scripts.animate, ['relic_first_person_conflict']);
 });
 
-test('unknown Molang variables are diagnosed, not assigned guessed zero values', () => {
+await test('unknown Molang variables are diagnosed, not assigned guessed zero values', () => {
   const entity = {
     'minecraft:client_entity': {
       description: {
