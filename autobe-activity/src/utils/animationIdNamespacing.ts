@@ -89,6 +89,25 @@ export async function namespaceConflictingAnimationIds(
     repairs.push({ pack: packName, file: def.path, originalId: def.id, renamedId: candidate });
   }
 
+  // A controller whose definition was identical before a referenced animation
+  // was renamed is no longer identical afterward. Namespace it too so the two
+  // packs retain independent controller logic instead of last-wins replacement.
+  for (const def of definitions) {
+    if (def.kind !== 'controller' || renames.has(def.id)) continue;
+    const referencesRenamedId = [...renames.keys()].some(id => JSON.stringify(def.value).includes(JSON.stringify(id)));
+    const previous = seen.get(def.id);
+    if (!referencesRenamedId || !previous || previous.owner === packId) continue;
+    let attempt = 1;
+    let candidate = renamedId(def.id, token, attempt);
+    while (reserved.has(candidate) || definitions.some(other => other.id === candidate)) {
+      attempt++;
+      candidate = renamedId(def.id, token, attempt);
+    }
+    renames.set(def.id, candidate);
+    reserved.add(candidate);
+    repairs.push({ pack: packName, file: def.path, originalId: def.id, renamedId: candidate });
+  }
+
   if (renames.size > 0) {
     for (const [path, data] of parsedFiles) {
       const rewritten = visitAndRename(data, renames);
