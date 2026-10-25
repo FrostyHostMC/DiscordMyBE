@@ -67,10 +67,7 @@ export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtraction
       if (tableEnd + totalSize !== bytes.length) throw new Error('payload sizes do not match archive length');
 
       let payloadOffset = tableEnd;
-      const destinationBase = archivePath
-        .slice('__brarchive/'.length, -'.brarchive'.length)
-        .replace(/\\/g, '/')
-        .replace(/^\\/+|\\/+$/g, '');
+      const destinationBase = archivePath.slice('__brarchive/'.length, -'.brarchive'.length);
       if (!destinationBase || destinationBase.split('/').some(part => part === '.' || part === '..')) {
         throw new Error('unsafe archive destination');
       }
