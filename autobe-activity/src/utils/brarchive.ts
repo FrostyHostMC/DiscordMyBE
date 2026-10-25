@@ -57,7 +57,7 @@ export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtraction
         const nameLength = bytes[start];
         if (nameLength < 1 || nameLength > ENTRY_SIZE_OFFSET - 1) throw new Error(`invalid filename length in entry ${i}`);
         const name = new TextDecoder().decode(bytes.subarray(start + 1, start + 1 + nameLength));
-        if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\\\') || name.includes('\0')) {
+        if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\') || name.includes('\0')) {
           throw new Error(`unsafe filename in entry ${i}`);
         }
         const size = view.getUint32(start + ENTRY_SIZE_OFFSET, true);
@@ -69,7 +69,7 @@ export async function extractBrarchives(zip: JSZip): Promise<BrarchiveExtraction
       let payloadOffset = tableEnd;
       const destinationBase = archivePath
         .slice('__brarchive/'.length, -'.brarchive'.length)
-        .replace(/\\\\/g, '/')
+        .replace(/\\/g, '/')
         .replace(/^\\/+|\\/+$/g, '');
       if (!destinationBase || destinationBase.split('/').some(part => part === '.' || part === '..')) {
         throw new Error('unsafe archive destination');
