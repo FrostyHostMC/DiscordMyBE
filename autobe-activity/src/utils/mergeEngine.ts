@@ -529,6 +529,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const outputs: MergedOutput[] = [];
   const playerEntityDiagnostics: PlayerEntityDiagnostic[] = [];
   const animationIdRepairs: AnimationIdRepair[] = [];
+  const brarchiveStats: Array<{ pack: string; output: string; archivesFound: number; filesExtracted: number; collisions: string[]; invalidArchives: string[] }> = [];
   const fileCollisions: Array<{
     output: string;
     path: string;
@@ -564,7 +565,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await extractBrarchives(zip);
+      const archiveResult = await extractBrarchives(zip);
+      if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: 'Resource Pack', ...archiveResult });
       animationIdRepairs.push(...await namespaceConflictingAnimationIds(zip, pack.id, pack.name, seenAnimationIds));
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
@@ -653,7 +655,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging behavior pack ${pi + 1}/${groupPacks.length}`, type === 'behavior_data' ? 40 + 20 * ((pi + 1) / groupPacks.length) : 50 + 15 * ((pi + 1) / groupPacks.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await extractBrarchives(zip);
+      const archiveResult = await extractBrarchives(zip);
+      if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: type === 'behavior_data' ? 'Behavior (Data)' : `Behavior (Script API v${major})`, ...archiveResult });
       const slug = slugify(pack.name, pack.id);
       const isScriptGroup = type === 'behavior_script';
 
@@ -840,6 +843,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       name: 'Outputs',
       status: outputs.length > 0 ? 'ok' : 'warning',
       detail: outputs.map(o => o.fileName).join(', ') || 'No outputs produced — check source pack manifests'
+    }, {
+      name: 'Packed asset archives',
+      status: brarchiveStats.some(s => s.invalidArchives.length > 0 || s.collisions.length > 0) ? 'warning' : 'ok',
+      detail: brarchiveStats.length > 0
+        ? brarchiveStats.map(s => `${s.pack} (${s.output}): ${s.archivesFound} archive(s), ${s.filesExtracted} asset file(s) restored${s.collisions.length ? `, ${s.collisions.length} path collision(s)` : ''}${s.invalidArchives.length ? `; invalid: ${s.invalidArchives.join(', ')}` : ''}`).join(' | ')
+        : 'No hidden .brarchive containers were found'
     }, {
       name: 'Player animation references',
       status: playerEntityDiagnostics.some(d => d.severity === 'error') ? 'error' : playerEntityDiagnostics.length > 0 ? 'warning' : 'ok',
