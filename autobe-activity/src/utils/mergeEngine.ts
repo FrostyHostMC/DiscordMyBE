@@ -704,6 +704,21 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // definitions instead of letting later packs silently overwrite earlier ones.
     await mergeDefinitionsByIdentifier(bpZip);
 
+    // Some third-party addons subscribe to cameraChange, which is absent in
+    // several Bedrock Script API builds. Guard the optional event so one
+    // unsupported event cannot abort the addon's entire script entry.
+    const scriptFiles = Object.entries(bpZip.files).filter(([path, file]) =>
+      !file.dir && path.toLowerCase().endsWith('.js')
+    );
+    for (const [path, file] of scriptFiles) {
+      const source = await file.async('text');
+      const guarded = source.replace(
+        /world\.afterEvents\.cameraChange\.subscribe\s*\(/g,
+        'world.afterEvents.cameraChange?.subscribe?.('
+      );
+      if (guarded !== source) bpZip.file(path, guarded);
+    }
+
     // Scripted BP: one entry file importing every pack's entry
     if (type === 'behavior_script') {
       const imports = slugMap.map(s => `import './${s.entry.replace(/^scripts\//, '')}';`).join('\n');
