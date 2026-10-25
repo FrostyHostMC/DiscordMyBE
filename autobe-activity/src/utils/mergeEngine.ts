@@ -27,7 +27,7 @@ export interface MergePlan {
 }
 
 // Special JSON paths that must be deep merged when multiple packs provide them
-const DEEP_MERGE_FILES = new Set(['textures/item_texture.json', 'textures/terrain_texture.json', 'blocks.json', 'sounds.json', 'sounds/sound_definitions.json', 'sounds/music_definitions.json', 'biomes_client.json', 'tick.json']);
+const DEEP_MERGE_FILES = new Set(['materials/entity.material', 'textures/item_texture.json', 'textures/terrain_texture.json', 'blocks.json', 'sounds.json', 'sounds/sound_definitions.json', 'sounds/music_definitions.json', 'biomes_client.json', 'tick.json']);
 const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/textures_list.json']);
 
 export interface AnimationConflictFinding {
