@@ -16,9 +16,10 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
-    "test": "npm run test:merge && npm run test:verify",
+    "test": "npm run test:merge && npm run test:verify && npm run test:animation",
     "test:merge": "tsx scripts/testMerge.ts",
-    "test:verify": "tsx scripts/testVerification.ts"
+    "test:verify": "tsx scripts/testVerification.ts",
+    "test:animation": "tsx scripts/testAnimationScopes.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
