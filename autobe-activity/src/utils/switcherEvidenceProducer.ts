@@ -423,10 +423,16 @@ export function analyzeSwitcherOverlaps(passOne: Awaited<ReturnType<typeof resol
         blockerCodes: [...blockerCodes, ...(!passOne.analysisComplete ? ['analysis_incomplete' as const] : [])],
         bone: a.bone, channel: a.channel,
         animationIds: [a.animationId, b.animationId],
-        controllerIds: [
-          ...passOne.references.filter((ref) => ref.kind === 'controller' && ref.packId === a.packId).map((ref) => ref.resolvedId ?? ref.reference),
-          ...passOne.references.filter((ref) => ref.kind === 'controller' && ref.packId === b.packId).map((ref) => ref.resolvedId ?? ref.reference),
-        ],
+        controllerIds: sortStrings([
+          ...passOne.references
+            .filter((ref) => ref.kind === 'animation' && ref.packId === a.packId && ref.resolvedId === a.animationId)
+            .map((ref) => ref.sourceReference.match(/^animation_controllers\\.(.+?)\\.states\\./)?.[1])
+            .filter((id): id is string => Boolean(id)),
+          ...passOne.references
+            .filter((ref) => ref.kind === 'animation' && ref.packId === b.packId && ref.resolvedId === b.animationId)
+            .map((ref) => ref.sourceReference.match(/^animation_controllers\\.(.+?)\\.states\\./)?.[1])
+            .filter((id): id is string => Boolean(id)),
+        ]),
         packIds: [a.packId, b.packId],
         detail: 'Possible static channel overlap only. Runtime activation/condition intersection is not proven; this record cannot unlock Switcher.',
         scope,
