@@ -303,7 +303,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, sourcePackName: string, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, sourcePackKey: string, sourcePackName: string, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -319,24 +319,25 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const outPath = pathTransform ? pathTransform(path) : path;
     const collisionKey = outPath.replace(/\\/g, '/').toLowerCase();
     const previousOwner = accum.fileOwners.get(collisionKey);
-    if (previousOwner && previousOwner !== sourcePackName) {
+    const previousOwnerName = previousOwner ? previousOwner.split('::')[1] ?? previousOwner : undefined;
+    if (previousOwner && previousOwner.split('::')[0] !== sourcePackKey) {
       const handling: 'merged' | 'last_wins' | 'first_wins' =
         ARRAY_MERGE_FILES.has(lower) ||
         isStrategyMergeFile(lower) ||
         DEEP_MERGE_FILES.has(lower) ||
         lower.endsWith('.lang')
           ? 'merged'
-          : !lower.endsWith('.json') && !lower.endsWith('.mcfunction')
+          : !lower.endsWith('.json') && !lower.endsWith('.mcfunction') && !lower.endsWith('.js')
             ? 'first_wins'
             : 'last_wins';
       accum.fileCollisions.push({
         path: outPath,
-        firstPack: previousOwner,
+        firstPack: previousOwnerName ?? previousOwner,
         laterPack: sourcePackName,
         handling
       });
     } else if (!previousOwner) {
-      accum.fileOwners.set(collisionKey, sourcePackName);
+      accum.fileOwners.set(collisionKey, `${sourcePackKey}::${sourcePackName}`);
     }
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
@@ -543,7 +544,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.name);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
@@ -649,7 +650,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), pack.name, isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), pack.id, pack.name, isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
