@@ -57,7 +57,8 @@ export async function namespaceConflictingAnimationIds(
   zip.forEach((path, file) => {
     if (file.dir || !path.toLowerCase().endsWith('.json')) return;
     const lower = path.toLowerCase();
-    if (!lower.includes('animation') && !lower.includes('entity')) return;
+    // Parse all JSON files so renamed IDs are rewritten in attachables, item
+    // definitions, and any other consumers—not only the definition files.
     jobs.push(file.async('text').then(text => {
       const parsed = JSON.parse(sanitizeJsonString(text));
       parsedFiles.set(path, parsed);
