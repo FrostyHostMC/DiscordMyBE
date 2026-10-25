@@ -140,12 +140,20 @@ export async function analyzeAnimationConflicts(packs: AddonPack[]): Promise<Ani
     catch { continue; }
     const animationBones = new Map<string, string[]>();
     const referenceScopes = new Map<string, 'player' | 'mob'>();
+    // Once a reference is seen in both scopes, keep it ambiguous for the rest of
+    // this pack. Deleting it from the map alone lets a later file re-add it,
+    // making results depend on ZIP entry order.
+    const ambiguousReferences = new Set<string>();
     const controllers: Array<{ path: string; name: string; state: string; animations: string[] }> = [];
     const addReferenceScope = (reference: string, scope: 'player' | 'mob') => {
+      if (ambiguousReferences.has(reference)) return;
       const previous = referenceScopes.get(reference);
-      // A reference used by both player and mob definitions is ambiguous.
-      if (previous && previous !== scope) referenceScopes.delete(reference);
-      else if (!referenceScopes.has(reference)) referenceScopes.set(reference, scope);
+      if (previous && previous !== scope) {
+        referenceScopes.delete(reference);
+        ambiguousReferences.add(reference);
+      } else if (!referenceScopes.has(reference)) {
+        referenceScopes.set(reference, scope);
+      }
     };
     for (const [path, entry] of Object.entries(zip.files)) {
       if (entry.dir || !path.toLowerCase().endsWith('.json')) continue;
