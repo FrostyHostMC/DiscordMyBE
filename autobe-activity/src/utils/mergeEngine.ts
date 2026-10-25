@@ -569,8 +569,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const zip = await JSZip.loadAsync(pack.fileBlob);
       const archiveResult = await extractBrarchives(zip);
       if (archiveResult.archivesFound > 0) brarchiveStats.push({ pack: pack.name, output: 'Resource Pack', ...archiveResult });
-      playerAliasRepairs.push(...await namespaceConflictingPlayerAliases(zip, pack.id, pack.name, seenPlayerAliases));
       animationIdRepairs.push(...await namespaceConflictingAnimationIds(zip, pack.id, pack.name, seenAnimationIds));
+      playerAliasRepairs.push(...await namespaceConflictingPlayerAliases(zip, pack.id, pack.name, seenPlayerAliases));
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
