@@ -7,7 +7,7 @@ import { highestFullScriptVersion } from './scriptApiVersion';
 import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
-import { applyPlayerEntityPass } from './playerEntityFix';
+import { applyPlayerEntityPass, type PlayerEntityDiagnostic } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
@@ -478,6 +478,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const stablePackId = (role: string, members: AddonPack[]) =>
     stableUUID([mergeIdentity, modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
+  const playerEntityDiagnostics: PlayerEntityDiagnostic[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -514,7 +515,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // subpack HUD merging, and player-entity repair / variable injection.
     await mergeDefinitionsByIdentifier(rpZip);
     await mergeSubpackHudFiles(rpZip);
-    await applyPlayerEntityPass(rpZip);
+    playerEntityDiagnostics.push(...await applyPlayerEntityPass(rpZip));
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
     
     // Collect capabilities from all source packs
@@ -776,6 +777,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       name: 'Outputs',
       status: outputs.length > 0 ? 'ok' : 'warning',
       detail: outputs.map(o => o.fileName).join(', ') || 'No outputs produced — check source pack manifests'
+    }, {
+      name: 'Player animation references',
+      status: playerEntityDiagnostics.some(d => d.severity === 'error') ? 'error' : playerEntityDiagnostics.length > 0 ? 'warning' : 'ok',
+      detail: playerEntityDiagnostics.length > 0
+        ? playerEntityDiagnostics.map(d => `[${d.severity.toUpperCase()} ${d.code}] ${d.message}`).join(' | ')
+        : 'No missing animate aliases or uninitialized player Molang variables were detected by this preflight'
     }, {
       name: 'Identifier conflicts',
       status: conflicts.length > 0 ? 'resolved' : 'ok',
