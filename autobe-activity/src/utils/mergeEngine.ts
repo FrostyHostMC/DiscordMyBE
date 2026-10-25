@@ -11,6 +11,7 @@ import { applyPlayerEntityPass, type PlayerEntityDiagnostic } from './playerEnti
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { namespaceConflictingAnimationIds, type AnimationIdRepair } from './animationIdNamespacing';
+import { extractBrarchives } from './brarchive';
 import { stableUUID } from '@/utils/stableUuid';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -560,6 +561,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      await extractBrarchives(zip);
       animationIdRepairs.push(...await namespaceConflictingAnimationIds(zip, pack.id, pack.name, seenAnimationIds));
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.id, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
@@ -648,6 +650,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging behavior pack ${pi + 1}/${groupPacks.length}`, type === 'behavior_data' ? 40 + 20 * ((pi + 1) / groupPacks.length) : 50 + 15 * ((pi + 1) / groupPacks.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      await extractBrarchives(zip);
       const slug = slugify(pack.name, pack.id);
       const isScriptGroup = type === 'behavior_script';
 
