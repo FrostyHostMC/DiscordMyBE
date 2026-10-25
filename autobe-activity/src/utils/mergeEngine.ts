@@ -270,6 +270,13 @@ interface MergeAccum {
     data: string;
   }>;
   writtenBinaryPaths: Set<string>;
+  fileOwners: Map<string, string>;
+  fileCollisions: Array<{
+    path: string;
+    firstPack: string;
+    laterPack: string;
+    handling: 'merged' | 'last_wins' | 'first_wins';
+  }>;
 }
 function newAccum(): MergeAccum {
   return {
@@ -278,7 +285,9 @@ function newAccum(): MergeAccum {
     langFiles: new Map(),
     binaryPaths: [],
     textPaths: [],
-    writtenBinaryPaths: new Set()
+    writtenBinaryPaths: new Set(),
+    fileOwners: new Map(),
+    fileCollisions: []
   };
 }
 function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, data: Uint8Array): void {
@@ -294,7 +303,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, sourcePackName: string, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -308,6 +317,27 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     // variant and is excluded to avoid duplicate/merged variant content.
     if (lower.startsWith('subpacks/')) continue;
     const outPath = pathTransform ? pathTransform(path) : path;
+    const collisionKey = outPath.replace(/\\/g, '/').toLowerCase();
+    const previousOwner = accum.fileOwners.get(collisionKey);
+    if (previousOwner && previousOwner !== sourcePackName) {
+      const handling: 'merged' | 'last_wins' | 'first_wins' =
+        ARRAY_MERGE_FILES.has(lower) ||
+        isStrategyMergeFile(lower) ||
+        DEEP_MERGE_FILES.has(lower) ||
+        lower.endsWith('.lang')
+          ? 'merged'
+          : !lower.endsWith('.json') && !lower.endsWith('.mcfunction')
+            ? 'first_wins'
+            : 'last_wins';
+      accum.fileCollisions.push({
+        path: outPath,
+        firstPack: previousOwner,
+        laterPack: sourcePackName,
+        handling
+      });
+    } else if (!previousOwner) {
+      accum.fileOwners.set(collisionKey, sourcePackName);
+    }
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
         let text = await fileObj.async('text');
@@ -479,6 +509,13 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     stableUUID([mergeIdentity, modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
   const playerEntityDiagnostics: PlayerEntityDiagnostic[] = [];
+  const fileCollisions: Array<{
+    output: string;
+    path: string;
+    firstPack: string;
+    laterPack: string;
+    handling: 'merged' | 'last_wins' | 'first_wins';
+  }> = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -506,10 +543,11 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id));
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
+    fileCollisions.push(...accum.fileCollisions.map(c => ({ output: 'Resource Pack', ...c })));
     writeAccum(rpZip, accum);
     // Port of AutoBE Part 16 RP passes: identifier-based definition merging,
     // subpack HUD merging, and player-entity repair / variable injection.
@@ -611,7 +649,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), pack.name, isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
@@ -630,6 +668,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         });
       }
     }
+    fileCollisions.push(...accum.fileCollisions.map(c => ({ output: type === 'behavior_data' ? 'Behavior (Data)' : `Behavior (Script API v${major})`, ...c })));
     writeAccum(bpZip, accum);
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
@@ -783,6 +822,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       detail: playerEntityDiagnostics.length > 0
         ? playerEntityDiagnostics.map(d => `[${d.severity.toUpperCase()} ${d.code}] ${d.message}`).join(' | ')
         : 'No missing animate aliases or uninitialized player Molang variables were detected by this preflight'
+    }, {
+      name: 'Same-path file collisions',
+      status: fileCollisions.length > 0 ? 'warning' : 'ok',
+      detail: fileCollisions.length > 0
+        ? `${fileCollisions.length} repeated file path(s): ${fileCollisions.slice(0, 20).map(c => `${c.output}: ${c.path} (${c.firstPack} -> ${c.laterPack}; ${c.handling})`).join(' | ')}${fileCollisions.length > 20 ? ` | +${fileCollisions.length - 20} more` : ''}. This is diagnostic only; no source files were renamed or removed.`
+        : 'No repeated file paths were detected across source packs'
     }, {
       name: 'Identifier conflicts',
       status: conflicts.length > 0 ? 'resolved' : 'ok',
