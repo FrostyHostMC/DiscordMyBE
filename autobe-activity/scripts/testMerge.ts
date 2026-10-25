@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import JSZip from 'jszip';
+import { extractBrarchives } from '../src/utils/brarchive.ts';
 import { sanitizeJsonString } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
@@ -27,6 +29,29 @@ test('JSONC comments are stripped without changing strings', () => {
 test('JSONC trailing commas and UTF-8 BOM are accepted', () => {
   const input = '\uFEFF{"items":[1,2,],"child":{"ok":true,},}';
   assert.deepEqual(JSON.parse(sanitizeJsonString(input)), { items: [1, 2], child: { ok: true } });
+});
+
+test('brarchive extraction restores files and removes private containers', async () => {
+  const zip = new JSZip();
+  const magic = new Uint8Array([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26]);
+  const name = new TextEncoder().encode('item.json');
+  const payload = new TextEncoder().encode('{"minecraft:item":{}}');
+  const bytes = new Uint8Array(16 + 256 + payload.length);
+  bytes.set(magic, 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, 1, true);
+  view.setUint32(12, 1, true);
+  bytes[16] = name.length;
+  bytes.set(name, 17);
+  view.setUint32(16 + 252, payload.length, true);
+  bytes.set(payload, 16 + 256);
+  zip.file('__brarchive/items/example.brarchive', bytes);
+  const result = await extractBrarchives(zip);
+  assert.equal(result.archivesFound, 1);
+  assert.equal(result.filesExtracted, 1);
+  assert.deepEqual(result.invalidArchives, []);
+  assert.equal(zip.file('__brarchive/items/example.brarchive'), null);
+  assert.equal(await zip.file('items/example/item.json')?.async('text'), '{"minecraft:item":{}}');
 });
 
 test('animation JSON merges named definitions without blending conflicting state machines', () => {
