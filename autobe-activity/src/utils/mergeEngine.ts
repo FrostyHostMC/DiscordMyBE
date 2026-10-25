@@ -326,7 +326,8 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
         ARRAY_MERGE_FILES.has(lower) ||
         isStrategyMergeFile(lower) ||
         DEEP_MERGE_FILES.has(lower) ||
-        lower.endsWith('.lang')
+        lower.endsWith('.lang') ||
+        lower.endsWith('.json')
           ? 'merged'
           : !lower.endsWith('.json') && !lower.endsWith('.mcfunction') && !lower.endsWith('.js')
             ? 'first_wins'
@@ -387,14 +388,26 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
         const data = await fileObj.async('uint8array');
         targetZip.file(outPath, data);
       }
-    } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
+    } else if (lower.endsWith('.json')) {
+      try {
+        let txt = await fileObj.async('text');
+        if (renameMap && renameMap.size > 0) {
+          for (const [oldId, newId] of renameMap.entries()) txt = txt.split(oldId).join(newId);
+        }
+        const parsed = JSON.parse(sanitizeJsonString(txt));
+        const list = accum.jsonLists.get(outPath) || [];
+        list.push(parsed);
+        accum.jsonLists.set(outPath, list);
+      } catch {
+        // Malformed source JSON is preserved rather than rewritten or dropped.
+        if (!targetZip.file(outPath)) targetZip.file(outPath, await fileObj.async('uint8array'));
+      }
+    } else if (lower.endsWith('.mcfunction')) {
       let txt = await fileObj.async('text');
-      for (const [oldId, newId] of renameMap.entries()) {
-        txt = txt.split(oldId).join(newId);
+      if (renameMap && renameMap.size > 0) {
+        for (const [oldId, newId] of renameMap.entries()) txt = txt.split(oldId).join(newId);
       }
       targetZip.file(outPath, txt);
-    } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
-      targetZip.file(outPath, await fileObj.async('text'));
     } else if (lower.endsWith('.js')) {
       // JS files must be copied as binary to preserve UTF-8 encoding
       targetZip.file(outPath, await fileObj.async('uint8array'));
