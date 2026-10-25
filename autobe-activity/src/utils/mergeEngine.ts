@@ -616,6 +616,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const mergeMeta = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     mergedAt: new Date().toISOString(),
+    mergeId: mergeIdentity,
     modpackName,
     version,
     plan: formatPlanSummary(plan),
@@ -635,6 +636,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     generatedAt: new Date().toISOString(),
+    mergeId: mergeIdentity,
     modpackName,
     checks: [{
       name: 'Source packs',
@@ -670,7 +672,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const outputsTotal = outputs.reduce((sum, o) => sum + (o.size || 0), 0);
   const finalSize = outputsTotal > 0 ? outputsTotal : totalCalculatedSize;
   const result: MergedModpack = {
-    id: generateUUID(),
+    id: mergeIdentity,
     name: modpackName,
     totalPacks: packs.length,
     size: finalSize,
@@ -679,7 +681,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     description: description || `All-in-one Bedrock Modpack created with AutoBE. Combines ${packs.length} addons.`,
     outputs,
     combinedExtras,
-    outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
+    // Unique filename avoids mobile/OS handlers reusing a previous import with the same name.
+    outputFileName: `${modpackName.replace(/\s+/g, '_')}_${mergeIdentity.slice(0, 8)}.mcaddon`,
     includedPacks: packs.map(p => ({
       name: p.name,
       type: p.type,
