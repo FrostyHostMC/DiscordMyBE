@@ -88,11 +88,13 @@ function compareVersion(a: string, b: string): number {
 export function assessSwitcherEligibility(input: SwitcherEligibilityInput): SwitcherIsolationPlan {
   const blockedBy: string[] = [];
   const criticalFindings = input.findings.filter((finding) => finding.severity === 'critical');
-  const controllerIds = [...new Set(input.controllerEvidence.map((item) => item.controllerId))].sort();
-  const conflictingAnimationIds = [...new Set(input.overlapGroups.flatMap((group) => group.animationIds))].sort();
-  const inliningMap = Object.fromEntries(input.controllerEvidence.map((item) => [item.controllerId, item.stateMap]));
-  const renamedTransitionTargets = Object.fromEntries(input.controllerEvidence.map((item) => [item.controllerId, item.renamedTransitionTargets]));
-  const proposedOwners = input.overlapGroups.map(({ bone, channel, proposedOwner }) => ({ bone, channel, owner: proposedOwner }));
+  const orderedControllers = [...input.controllerEvidence].sort((a, b) => a.controllerId.localeCompare(b.controllerId));
+  const orderedGroups = [...input.overlapGroups].sort((a, b) => `${a.bone}|${a.channel}|${a.animationIds.slice().sort().join(',')}|${a.controllerIds.slice().sort().join(',')}`.localeCompare(`${b.bone}|${b.channel}|${b.animationIds.slice().sort().join(',')}|${b.controllerIds.slice().sort().join(',')}`));
+  const controllerIds = [...new Set(orderedControllers.map((item) => item.controllerId))].sort();
+  const conflictingAnimationIds = [...new Set(orderedGroups.flatMap((group) => group.animationIds))].sort();
+  const inliningMap = Object.fromEntries(orderedControllers.map((item) => [item.controllerId, item.stateMap]));
+  const renamedTransitionTargets = Object.fromEntries(orderedControllers.map((item) => [item.controllerId, item.renamedTransitionTargets]));
+  const proposedOwners = orderedGroups.map(({ bone, channel, proposedOwner }) => ({ bone, channel, owner: proposedOwner }));
 
   const plan = (decision: SwitcherDecision, summary: string): SwitcherIsolationPlan => ({
     decision,
@@ -100,7 +102,7 @@ export function assessSwitcherEligibility(input: SwitcherEligibilityInput): Swit
     summary,
     conflictingAnimationIds,
     controllerIds,
-    boneChannelOverlaps: input.overlapGroups.map((group) => ({ ...group, animationIds: [...group.animationIds], controllerIds: [...group.controllerIds], packIds: [...group.packIds] })),
+    boneChannelOverlaps: orderedGroups.map((group) => ({ ...group, animationIds: [...group.animationIds].sort(), controllerIds: [...group.controllerIds].sort(), packIds: [...group.packIds].sort() })),
     inliningMap,
     renamedTransitionTargets,
     proposedOwners,
