@@ -128,7 +128,8 @@ function AccessGate() {
           client_id: clientId,
           response_type: 'code',
           state: crypto.randomUUID(),
-          prompt: attempt > 0 ? 'consent' : 'none',
+          // The SDK type currently only declares 'none'; Discord OAuth also accepts 'consent' on retries.
+          prompt: (attempt > 0 ? 'consent' : 'none') as 'none',
           scope: ['identify'],
         });
 
