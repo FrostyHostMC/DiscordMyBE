@@ -253,7 +253,7 @@ test('optional Script API subscriptions guard nested event paths', () => {
     'world.beforeEvents.inventory.drop.subscribe(() => {});',
     'world.beforeEvents.inventory.move.subscribe(() => {});',
     'world.afterEvents.playerSpawn.subscribe(() => {});',
-    'world2.beforeEvents.playerLeave.subscribe(() => {});'
+    'world2.beforeEvents.playerLeave.subscribe(() => {});',
     'world.beforeEvents.inventory?.drop?.subscribe(() => {});'
   ].join('\n');
   const output = namespaceScriptText(source, 'demo');
@@ -261,6 +261,7 @@ test('optional Script API subscriptions guard nested event paths', () => {
   assert.match(output, /world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/);
   assert.match(output, /world\.beforeEvents\?\.inventory\?\.move\?\.subscribe/);
   assert.match(output, /world\.afterEvents\?\.playerSpawn\?\.subscribe/);
+  assert.match(output, /world2\.beforeEvents\?\.playerLeave\?\.subscribe/);
   assert.equal((output.match(/world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/g) || []).length, 2);
   assert.doesNotMatch(output, /(?:cameraChange|playerSpawn|inventory\.drop|inventory\.move)\.subscribe/);
 });
