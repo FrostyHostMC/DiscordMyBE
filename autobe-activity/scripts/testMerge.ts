@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { sanitizeJsonString } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
+import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -81,3 +82,52 @@ test('player animation/controller files merge named entries instead of last-pack
 });
 
 console.log('Merge regression tests passed.');
+
+
+test('duplicate item definitions preserve compatible components from both addons', () => {
+  const merged = {
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:icon': { texture: 'utility_item' },
+        'minecraft:max_stack_size': 16
+      }
+    }
+  };
+  const addonItem = {
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:food': { nutrition: 2, can_always_eat: true },
+        'minecraft:max_stack_size': 64
+      }
+    }
+  };
+  mergeJsonData(merged, addonItem);
+  assert.equal(merged['minecraft:item'].description.identifier, 'demo:utility_item');
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
+  assert.equal(merged['minecraft:item'].components['minecraft:max_stack_size'], 64);
+  JSON.parse(JSON.stringify(merged));
+});
+
+test('same item component can combine non-conflicting component properties', () => {
+  const merged = {
+    'minecraft:item': {
+      description: { identifier: 'demo:book_tool' },
+      components: { 'minecraft:food': { nutrition: 2 } }
+    }
+  };
+  mergeJsonData(merged, {
+    'minecraft:item': {
+      description: { identifier: 'demo:book_tool' },
+      components: { 'minecraft:food': { can_always_eat: true } }
+    }
+  });
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:food'], {
+    nutrition: 2,
+    can_always_eat: true
+  });
+});
