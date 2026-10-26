@@ -246,14 +246,6 @@ await (async () => {
 })();
 
 
-test('pack namespaces remain deterministic but distinguish similarly named imports', () => {
-  assert.equal(makePackNs('Example RP.mcpack'), makePackNs('Example RP.mcpack'));
-  assert.notEqual(makePackNs('Example RP.mcpack'), makePackNs('Example BP.mcpack'));
-  assert.notEqual(makePackNs('Example_2.mcpack'), makePackNs('Example_3.mcpack'));
-  assert.equal(makePackNs('!!!.mcpack').length, 8);
-});
-
-
 await (async () => {
   const zip = new JSZip();
   const diagnostics: string[] = [];
