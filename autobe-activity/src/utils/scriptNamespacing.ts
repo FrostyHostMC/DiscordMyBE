@@ -22,7 +22,7 @@ export function makePackNs(name: string): string {
     .replace(/\.(mcpack|mcaddon)$/i, '')
     .replace(/_modified$/i, '')
     .toLowerCase();
-  const stem = clean.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'pack';
+  const stem = clean.replace(/[^a-z0-9]/g, '').slice(0, 4) || 'pack';
 
   // A readable prefix alone is not a namespace: similarly named packs can
   // collapse to the same token after truncation. Add deterministic hash bits.
@@ -32,7 +32,7 @@ export function makePackNs(name: string): string {
     hash ^= clean.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return stem + hash.toString(16).padStart(8, '0').slice(-3);
+  return stem + hash.toString(16).padStart(8, '0').slice(-4);
 }
 
 /** Apply the dynamic-property / scoreboard-objective prefixing to one script. */
