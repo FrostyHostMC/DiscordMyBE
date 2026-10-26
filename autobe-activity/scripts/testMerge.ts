@@ -253,6 +253,7 @@ test('optional Script API subscriptions guard nested event paths', () => {
     'world.beforeEvents.inventory.drop.subscribe(() => {});',
     'world.beforeEvents.inventory.move.subscribe(() => {});',
     'world.afterEvents.playerSpawn.subscribe(() => {});',
+    'world2.beforeEvents.playerLeave.subscribe(() => {});'
     'world.beforeEvents.inventory?.drop?.subscribe(() => {});'
   ].join('\n');
   const output = namespaceScriptText(source, 'demo');
