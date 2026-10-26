@@ -3,6 +3,8 @@ import { sanitizeJsonString } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
+import JSZip from 'jszip';
+import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -130,4 +132,42 @@ test('same item component can combine non-conflicting component properties', () 
     nutrition: 2,
     can_always_eat: true
   });
+});
+
+
+test('full ZIP merge combines duplicate item identifiers from separate paths', () => {
+  // Exercise the same post-accumulation pass used by executeMergePacks.
+  const run = async () => {
+    const zip = new JSZip();
+    zip.file('items/utility_item.json', JSON.stringify({
+      format_version: '1.20.0',
+      'minecraft:item': {
+        description: { identifier: 'demo:utility_item' },
+        components: {
+          'minecraft:icon': { texture: 'utility_item' },
+          'minecraft:max_stack_size': 16
+        }
+      }
+    }));
+    zip.file('items/utility_item_extra.json', JSON.stringify({
+      format_version: '1.20.0',
+      'minecraft:item': {
+        description: { identifier: 'demo:utility_item' },
+        components: {
+          'minecraft:food': { nutrition: 2, can_always_eat: true },
+          'minecraft:max_stack_size': 64
+        }
+      }
+    }));
+    await mergeDefinitionsByIdentifier(zip);
+    const paths = Object.keys(zip.files).filter(p => p.startsWith('items/') && !zip.files[p].dir);
+    assert.equal(paths.length, 1);
+    const result = JSON.parse(await zip.file(paths[0])!.async('text'));
+    assert.equal(result['minecraft:item'].description.identifier, 'demo:utility_item');
+    assert.deepEqual(result['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
+    assert.deepEqual(result['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
+    assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 64);
+  };
+  // The test harness below is synchronous, so explicitly surface async failures.
+  void run().catch(err => { console.error(err); process.exitCode = 1; });
 });
