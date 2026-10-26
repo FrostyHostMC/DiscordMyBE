@@ -18,7 +18,7 @@ async function api<T>(
   query: string,
   init: RequestInit,
   auth: { bearer?: string; uploadToken?: string },
-  timeoutMs = 60_000
+  timeoutMs = 180_000
 ): Promise<T> {
   // A stalled request must fail (and be retried) instead of hanging forever.
   const controller = new AbortController();
