@@ -22,7 +22,6 @@ import {
   getAllPacksFromDB,
   savePackToDB,
   loadPackFile,
-  getLastStorageError,
   deletePackFromDB,
   getAllModpacksFromDB,
   saveModpackToDB,
@@ -242,19 +241,17 @@ export const App: React.FC = () => {
 
     // Save one at a time and COUNT what actually succeeded.
     let persisted = 0;
-    let memoryOnly = 0;
     let firstError: string | null = null;
     for (const p of trulyNew) {
       try {
         const where = await savePackToDB(p);
         if (where === 'saved') persisted++;
-        else memoryOnly++;
       } catch (err) {
         console.error('[Import] Failed to save pack:', p.name, describeError(err));
         if (!firstError) firstError = describeError(err);
       }
     }
-    const saved = persisted + memoryOnly;
+    const saved = persisted;
 
     // Always refresh the list from storage, even after a partial failure.
     try {
@@ -268,11 +265,6 @@ export const App: React.FC = () => {
     if (failed > 0) {
       showToast(`Saved ${saved} of ${trulyNew.length} pack(s). Error: ${firstError}`, 12000);
       if (soundTweak) playError().catch(() => {});
-    } else if (memoryOnly > 0) {
-      showToast(
-        `Added ${saved} pack(s). ${memoryOnly} couldn't be saved on this device, so they only last until you close the app — merge them now. (${getLastStorageError()})`,
-        14000
-      );
     } else if (skipped > 0) {
       showToast(`Added ${saved} pack(s), skipped ${skipped} duplicate(s).`);
       if (soundTweak && saved > 0) playSuccess().catch(() => {});
@@ -1054,11 +1046,12 @@ export const App: React.FC = () => {
 
       {screen === 'merge_complete' && justCompletedModpack && (
         <MergeCompleteScreen
+          key={justCompletedModpack.id}
           modpack={justCompletedModpack}
           // NOTE: wrap in arrow functions — passing the handler directly hands it the click
           // event as its `modpack` argument, which caused "Modpack file not available".
-          onInstallToMinecraft={() => handleInstallToMinecraft()}
-          onSaveToFiles={() => handleInstallToMinecraft()}
+          onInstallToMinecraft={() => handleInstallToMinecraft(justCompletedModpack)}
+          onSaveToFiles={() => handleInstallToMinecraft(justCompletedModpack)}
           onShare={handleShareModpack}
           onDownloadOutput={handleDownloadOutput}
           onDone={() => {

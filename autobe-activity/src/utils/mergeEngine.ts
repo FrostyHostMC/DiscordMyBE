@@ -351,7 +351,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
   const iconBytes = await findFirstPackIcon(packs);
-  const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
+  // Every merge gets a new identity namespace. Deterministic IDs based only on the
+  // modpack name/source UUIDs caused re-merges to reuse the exact same Bedrock pack
+  // identities, so Minecraft could treat a new export as the previously imported pack.
+  // Keep IDs deterministic *within this merge* so BP dependencies can point at this
+  // merge's RP header, but never reuse identities across separate merge operations.
+  const mergeIdentity = generateUUID();
+  const stablePackId = (role: string, members: AddonPack[]) =>
+    stableUUID([mergeIdentity, modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
@@ -621,6 +628,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const mergeMeta = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     mergedAt: new Date().toISOString(),
+    mergeId: mergeIdentity,
     modpackName,
     version,
     plan: formatPlanSummary(plan),
@@ -640,6 +648,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
     generatedAt: new Date().toISOString(),
+    mergeId: mergeIdentity,
     modpackName,
     checks: [{
       name: 'Source packs',
@@ -675,7 +684,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const outputsTotal = outputs.reduce((sum, o) => sum + (o.size || 0), 0);
   const finalSize = outputsTotal > 0 ? outputsTotal : totalCalculatedSize;
   const result: MergedModpack = {
-    id: generateUUID(),
+    id: mergeIdentity,
     name: modpackName,
     totalPacks: packs.length,
     size: finalSize,
@@ -684,7 +693,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     description: description || `All-in-one Bedrock Modpack created with AutoBE. Combines ${packs.length} addons.`,
     outputs,
     combinedExtras,
-    outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
+    // Unique filename avoids mobile/OS handlers reusing a previous import with the same name.
+    outputFileName: `${modpackName.replace(/\s+/g, '_')}_${mergeIdentity.slice(0, 8)}.mcaddon`,
     includedPacks: packs.map(p => ({
       name: p.name,
       type: p.type,
