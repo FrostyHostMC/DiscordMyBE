@@ -11,6 +11,7 @@ import { applyPlayerEntityPass } from './playerEntityFix';
 import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
+import { expandBrarchiveFiles } from './brarchive';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -202,6 +203,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon'): Promise<void> {
+  await expandBrarchiveFiles(zip);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
