@@ -173,7 +173,7 @@ await (async () => {
 
 await (async () => {
   const zip = new JSZip();
-  const files = [
+  const files: Array<[string, Uint8Array]> = [
     ['copper_greatsword.json', new TextEncoder().encode('{"minecraft:item":{"description":{"identifier":"fiery_combat:copper_greatsword"}}}')],
     ['wooden_greatsword.json', new TextEncoder().encode('{"minecraft:item":{"description":{"identifier":"fiery_combat:wooden_greatsword"}}}')],
   ];
