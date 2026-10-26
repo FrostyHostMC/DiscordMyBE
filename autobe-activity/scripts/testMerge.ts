@@ -6,6 +6,7 @@ import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
+import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -199,7 +200,88 @@ await (async () => {
   const count = await expandBrarchiveFiles(zip);
   assert.equal(count, 2);
   assert.equal(zip.file('__brarchive/items/fiery/greatsword.brarchive'), null);
-  assert.ok(zip.file('items/fiery/greatsword/copper_greatsword.json'));
-  assert.ok(zip.file('items/fiery/greatsword/wooden_greatsword.json'));
+  assert.ok(zip.file('items/fiery/copper_greatsword.json'));
+  assert.ok(zip.file('items/fiery/wooden_greatsword.json'));
   console.log('✓ packed .brarchive item definitions are expanded into Bedrock JSON paths');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  const makeArchive = (entries: Array<[string, Uint8Array]>) => {
+    const payloadBase = 16 + entries.length * 256;
+    const payloadLength = entries.reduce((total, [, data]) => total + data.length, 0);
+    const bytes = new Uint8Array(payloadBase + payloadLength);
+    bytes.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26], 0);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(8, entries.length, true);
+    let offset = 0;
+    entries.forEach(([name, data], index) => {
+      const record = 16 + index * 256;
+      const nameBytes = new TextEncoder().encode(name);
+      bytes[record] = nameBytes.length;
+      bytes.set(nameBytes, record + 1);
+      view.setUint32(record + 248, offset, true);
+      view.setUint32(record + 252, data.length, true);
+      bytes.set(data, payloadBase + offset);
+      offset += data.length;
+    });
+    return bytes;
+  };
+  const same = new TextEncoder().encode('same');
+  const different = new TextEncoder().encode('different');
+  zip.file('items/kept.json', same);
+  zip.file('__brarchive/items/collision.brarchive', makeArchive([
+    ['kept.json', same],
+    ['kept.json', different]
+  ]));
+  const count = await expandBrarchiveFiles(zip, diagnostics);
+  assert.equal(count, 1, 'identical payload should be skipped, distinct collision preserved');
+  assert.deepEqual(Array.from(await zip.file('items/kept.json')!.async('uint8array')), Array.from(same));
+  assert.deepEqual(Array.from(await zip.file('items/kept.autobe-2.json')!.async('uint8array')), Array.from(different));
+  assert.ok(diagnostics.some(message => message.includes('Duplicate identical archive entry skipped')));
+  assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
+  console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  const identical = {
+    format_version: '1.10.0',
+    'minecraft:attachable': {
+      description: {
+        identifier: 'minecraft:apple',
+        geometry: { default: 'geometry.item_sprite' },
+        textures: { default: 'textures/items/apple' }
+      }
+    }
+  };
+  zip.file('attachables/apple.json', JSON.stringify(identical));
+  zip.file('attachables/apple(Copy).json', JSON.stringify(identical));
+  zip.file('attachables/stick.json', JSON.stringify({
+    ...identical,
+    'minecraft:attachable': {
+      description: { ...identical['minecraft:attachable'].description, identifier: 'minecraft:stick' }
+    }
+  }));
+  zip.file('attachables/stick(Copy).json', JSON.stringify({
+    ...identical,
+    'minecraft:attachable': {
+      description: {
+        ...identical['minecraft:attachable'].description,
+        identifier: 'minecraft:stick',
+        geometry: { default: 'geometry.custom_item' }
+      }
+    }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics);
+  assert.ok(zip.file('attachables/apple.json'));
+  assert.equal(zip.file('attachables/apple(Copy).json'), null);
+  assert.ok(zip.file('attachables/stick.json'));
+  assert.ok(zip.file('attachables/stick(Copy).json'));
+  assert.ok(diagnostics.some(message => message.includes('Conflicting attachables share identifier "minecraft:stick"')));
+  console.log('✓ identical attachables deduplicate while incompatible visual rigs remain explicit');
 })();

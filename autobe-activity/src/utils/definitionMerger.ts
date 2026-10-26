@@ -9,12 +9,13 @@ import { mergeBehaviorEntity, mergeJsonData } from './behaviorEntityMerge';
  * definition so Bedrock sees one authoritative copy instead of last-wins.
  */
 
-type Kind = 'entity' | 'item' | 'block';
+type Kind = 'entity' | 'item' | 'block' | 'attachable';
 
 const KIND_ROOT_KEYS: Record<Kind, string> = {
   entity: 'minecraft:entity',
   item: 'minecraft:item',
-  block: 'minecraft:block'
+  block: 'minecraft:block',
+  attachable: 'minecraft:attachable'
 };
 
 /** Client-entity files live under entity/ with the client_entity root key. */
@@ -25,6 +26,7 @@ function classify(path: string): { kind: Kind; client: boolean } | null {
     return lower.includes('animation') || lower.includes('render_controller') ? null : { kind: 'entity', client: true };
   }
   if (lower.includes('entities/')) return { kind: 'entity', client: false };
+  if (lower.includes('attachables/')) return { kind: 'attachable', client: false };
   if (lower.includes('items/')) return { kind: 'item', client: false };
   if (lower.includes('blocks/')) return { kind: 'block', client: false };
   return null;
@@ -41,7 +43,11 @@ function extractIdentifier(kind: Kind, data: any, client: boolean): string | nul
  * output zip. Multiple files for one identifier are combined and only the
  * first file's path keeps the merged content.
  */
-export async function mergeDefinitionsByIdentifier(zip: JSZip): Promise<void> {
+export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics?: string[]): Promise<void> {
+  const report = (message: string) => {
+    if (diagnostics) diagnostics.push(message);
+    else console.warn('[AutoBE] ' + message);
+  };
   interface Entry {
     path: string;
     kind: Kind;
@@ -49,7 +55,6 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip): Promise<void> {
     data: any;
   }
   const byId = new Map<string, Entry[]>();
-  const all: Entry[] = [];
 
   const loads: Promise<void>[] = [];
   zip.forEach((path, f) => {
@@ -64,19 +69,39 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip): Promise<void> {
           const id = extractIdentifier(cls.kind, data, cls.client);
           if (!id) return;
           const entry: Entry = { path, kind: cls.kind, client: cls.client, data };
-          all.push(entry);
-          const arr = byId.get(id) ?? [];
+          const groupKey = cls.kind + ':' + (cls.client ? 'client:' : 'behavior:') + id;
+          const arr = byId.get(groupKey) ?? [];
           arr.push(entry);
-          byId.set(id, arr);
+          byId.set(groupKey, arr);
         })
         .catch(() => undefined)
     );
   });
   await Promise.all(loads);
 
-  for (const [, entries] of byId) {
+  for (const [identifier, entries] of byId) {
     if (entries.length < 2) continue;
     const rootKey = entries[0].client ? 'minecraft:client_entity' : KIND_ROOT_KEYS[entries[0].kind];
+
+    // Attachables are keyed by the item identifier itself. Exact duplicate
+    // copies (common in exported/renamed packs) are safe to collapse, but
+    // different rigs for the same item must not be recursively blended: that
+    // can produce a syntactically valid but unusable model/controller graph.
+    if (entries[0].kind === 'attachable') {
+      const canonical = entries.map((entry) => JSON.stringify(entry.data));
+      if (canonical.every((value) => value === canonical[0])) {
+        for (const entry of entries.slice(1)) zip.remove(entry.path);
+        continue;
+      }
+      const attachableId = extractIdentifier('attachable', entries[0].data, false) ?? identifier;
+      report(
+        'Conflicting attachables share identifier "' + attachableId + '": ' +
+        entries.map((entry) => entry.path).join(', ') +
+        '. All definitions were preserved for review; choose or adapt the intended visual rig.'
+      );
+      continue;
+    }
+
     let merged: any;
     if (entries[0].kind === 'entity' && !entries[0].client) {
       // Port of AutoBE Part 17 _merge_behavior_entity: conflicting root
