@@ -302,8 +302,9 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string, reas
   const subtitle = document.createElement('div');
   subtitle.style.cssText =
     'font-size:12px;color:#AAA3BB;margin-bottom:14px;line-height:1.5;';
-  subtitle.textContent =
-    'Automatic saving was blocked by this app. Your file is ready below — tap "Save file" to try again, or long-press it and choose "Save" / "Share".';
+  subtitle.textContent = cdnUrl
+    ? 'Automatic saving was blocked by this app. Use the direct download link below, or tap "Save file" / "Save via share sheet".'
+    : 'Automatic saving was blocked by this app. This temporary file is available only in this app window, so copying its link will not work in another browser. Tap "Save file" or "Save via share sheet" below.';
 
   const reasonEl = document.createElement('div');
   if (reason) {
@@ -319,11 +320,11 @@ function showManualSavePanel(blob: Blob, fileName: string, cdnUrl?: string, reas
 
   // Copyable link section
   const linkSection = document.createElement('div');
-  linkSection.style.cssText = 'margin-bottom:14px;';
+  linkSection.style.cssText = `margin-bottom:14px;display:${cdnUrl ? 'block' : 'none'};`;
 
   const linkLabel = document.createElement('div');
   linkLabel.style.cssText = 'font-size:11px;color:#AAA3BB;margin-bottom:6px;';
-  linkLabel.textContent = cdnUrl ? 'Copy this download link (works in any browser):' : 'Or copy this link and open it in your browser:';
+  linkLabel.textContent = 'Copy this download link (works in any browser):';
 
   const linkInput = document.createElement('input');
   linkInput.type = 'text';
