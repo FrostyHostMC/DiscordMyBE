@@ -244,7 +244,6 @@ await (async () => {
   assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
   console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
 })();
-})();
 
 
 test('optional Script API subscriptions guard nested event paths', () => {
