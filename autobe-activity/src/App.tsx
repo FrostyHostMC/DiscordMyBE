@@ -548,13 +548,14 @@ export const App: React.FC = () => {
     if (!blob) {
       console.error('[Aippy] Output blob is missing for:', output.fileName);
       showToast('This output file is not available for download. Please merge again.');
+      endTransfer();
       return;
     }
 
     try {
       const result = await deliverFile(blob, output.fileName, (m) => {
-        const match = m.match(/(\\d+)%/);
-        updateTransfer(m.replace(/….*$/, '').replace(/\\s+\\d+%.*$/, ''), match ? Number(match[1]) : transferProgress);
+        const match = m.match(/(\d+)%/);
+        updateTransfer(m.replace(/….*$/, '').replace(/\s+\d+%.*$/, ''), match ? Number(match[1]) : transferProgress);
       });
       if (result.ok) {
         showToast('Opening your download…');
@@ -618,7 +619,7 @@ export const App: React.FC = () => {
     try {
       updateTransfer('Uploading .mcaddon', 0);
       const result = await deliverFile(blob, fileName, (m) => {
-        const match = m.match(/(\\d+)%/);
+        const match = m.match(/(\d+)%/);
         updateTransfer(m.includes('Uploading') ? 'Uploading .mcaddon' : 'Preparing download', match ? Number(match[1]) : transferProgress);
       });
       if (result.ok) {
