@@ -547,7 +547,7 @@ export const App: React.FC = () => {
 
     if (!blob) {
       console.error('[Aippy] Output blob is missing for:', output.fileName);
-      showToast('This output file is not available for download. Please merge again.');
+      console.warn('[Download] Output file is unavailable; merge again to regenerate it.');
       endTransfer();
       return;
     }
@@ -558,18 +558,18 @@ export const App: React.FC = () => {
         updateTransfer(m.replace(/….*$/, '').replace(/\s+\d+%.*$/, ''), match ? Number(match[1]) : transferProgress);
       });
       if (result.ok) {
-        showToast('Opening your download…');
+        updateTransfer('Opening download', 100);
         return;
       }
       console.warn('[Download] Cloud hand-off failed:', result.error);
-      showToast(`Couldn't prepare the download: ${result.error}`, 12000);
+      console.warn('[Download] Could not prepare download:', result.error);
       // Show the manual panel (with the copyable link if the upload itself worked).
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, output.fileName, result.url, result.error);
       if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
-      showToast(`Download failed: ${describeError(e)}`, 12000);
+      console.error('[Download] Download failed:', describeError(e));
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, output.fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
@@ -600,7 +600,7 @@ export const App: React.FC = () => {
         blob = await ensureCombinedBlob(source, (pct) => updateTransfer('Building .mcaddon', pct));
       } catch (err) {
         console.error('[Download] Could not build combined file:', describeError(err));
-        showToast(`Could not build the combined file: ${describeError(err)}`, 8000);
+        console.error('[Download] Could not build the combined file:', describeError(err));
         endTransfer();
         return;
       }
@@ -608,7 +608,7 @@ export const App: React.FC = () => {
 
     if (!blob) {
       console.error('[Aippy] Modpack blob is missing - cannot download from saved modpacks');
-      showToast('Modpack file not available. Please merge again to regenerate.');
+      console.warn('[Download] Modpack file unavailable; merge again to regenerate it.');
       endTransfer();
       return;
     }
@@ -880,11 +880,12 @@ export const App: React.FC = () => {
 
       const responseData = JSON.parse(responseText);
       console.log('[Publish] Successfully published! Modpack ID:', responseData.id);
-      showToast('Modpack published to community!');
+      updateTransfer('Published successfully', 100);
       if (soundTweak) playSuccess().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Publish failed:', e);
-      showToast(`Publish failed: ${describeError(e)}`);
+      console.error('[Publish] Publish failed:', describeError(e));
+      return describeError(e);
       if (soundTweak) playError().catch(() => {});
     } finally {
       setIsPublishing(false);
