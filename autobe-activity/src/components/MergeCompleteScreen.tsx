@@ -277,7 +277,8 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => onDownloadOutput(out)}
-                      className="p-2 rounded-lg bg-[#15111F] hover:bg-[#201A2E] border border-[#30263F] text-white hover:text-[#A855F7] transition-colors"
+                      disabled={activeTransfer !== null}
+                      className="p-2 rounded-lg bg-[#15111F] hover:bg-[#201A2E] border border-[#30263F] text-white hover:text-[#A855F7] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title={`Download ${out.fileName}`}
                     >
                       <Download className="w-3.5 h-3.5" />
