@@ -272,3 +272,44 @@ test('pack namespaces remain deterministic but distinguish similarly named impor
   assert.notEqual(makePackNs('Example_2.mcpack'), makePackNs('Example_3.mcpack'));
   assert.equal(makePackNs('!!!.mcpack').length, 8);
 });
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  const identical = {
+    format_version: '1.10.0',
+    'minecraft:attachable': {
+      description: {
+        identifier: 'minecraft:apple',
+        geometry: { default: 'geometry.item_sprite' },
+        textures: { default: 'textures/items/apple' }
+      }
+    }
+  };
+  zip.file('attachables/apple.json', JSON.stringify(identical));
+  zip.file('attachables/apple(Copy).json', JSON.stringify(identical));
+  zip.file('attachables/stick.json', JSON.stringify({
+    ...identical,
+    'minecraft:attachable': {
+      description: { ...identical['minecraft:attachable'].description, identifier: 'minecraft:stick' }
+    }
+  }));
+  zip.file('attachables/stick(Copy).json', JSON.stringify({
+    ...identical,
+    'minecraft:attachable': {
+      description: {
+        ...identical['minecraft:attachable'].description,
+        identifier: 'minecraft:stick',
+        geometry: { default: 'geometry.custom_item' }
+      }
+    }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics);
+  assert.ok(zip.file('attachables/apple.json'));
+  assert.equal(zip.file('attachables/apple(Copy).json'), null);
+  assert.ok(zip.file('attachables/stick.json'));
+  assert.ok(zip.file('attachables/stick(Copy).json'));
+  assert.ok(diagnostics.some(message => message.includes('Conflicting attachables share identifier "minecraft:stick"')));
+  console.log('✓ identical attachables deduplicate while incompatible visual rigs remain explicit');
+})();
