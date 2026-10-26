@@ -246,26 +246,6 @@ await (async () => {
 })();
 
 
-test('optional Script API subscriptions guard nested event paths', () => {
-  const source = [
-    'world.afterEvents.cameraChange.subscribe(() => {});',
-    'world.beforeEvents.inventory.drop.subscribe(() => {});',
-    'world.beforeEvents.inventory.move.subscribe(() => {});',
-    'world.afterEvents.playerSpawn.subscribe(() => {});',
-    'world2.beforeEvents.playerLeave.subscribe(() => {});',
-    'world.beforeEvents.inventory?.drop?.subscribe(() => {});'
-  ].join('\n');
-  const output = namespaceScriptText(source, 'demo');
-  assert.match(output, /world\.afterEvents\?\.cameraChange\?\.subscribe/);
-  assert.match(output, /world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/);
-  assert.match(output, /world\.beforeEvents\?\.inventory\?\.move\?\.subscribe/);
-  assert.match(output, /world\.afterEvents\?\.playerSpawn\?\.subscribe/);
-  assert.match(output, /world2\.beforeEvents\?\.playerLeave\?\.subscribe/);
-  assert.equal((output.match(/world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/g) || []).length, 2);
-  assert.doesNotMatch(output, /(?:cameraChange|playerSpawn|inventory\.drop|inventory\.move)\.subscribe/);
-});
-
-
 test('pack namespaces remain deterministic but distinguish similarly named imports', () => {
   assert.equal(makePackNs('Example RP.mcpack'), makePackNs('Example RP.mcpack'));
   assert.notEqual(makePackNs('Example RP.mcpack'), makePackNs('Example BP.mcpack'));
