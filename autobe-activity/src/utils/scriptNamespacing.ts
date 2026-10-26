@@ -35,7 +35,7 @@ export function namespaceScriptText(content: string, ns: string): string {
   // addon's script from initializing. Guard only the event's subscribe access;
   // supported events keep their original behavior.
   out = out.replace(
-    /(world\\.(?:afterEvents|beforeEvents)\\.[A-Za-z_$][\\w$]*)\\.subscribe\\s*\\(/g,
+    /(world\.(?:afterEvents|beforeEvents)\.[A-Za-z_$][\w$]*)\.subscribe\s*\(/g,
     '$1?.subscribe('
   );
 
