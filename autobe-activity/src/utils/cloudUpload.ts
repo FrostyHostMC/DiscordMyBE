@@ -23,9 +23,8 @@ async function api<T>(
   // A stalled request must fail (and be retried) instead of hanging forever.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let res: Response;
   try {
-    res = await fetch(`/api/upload?${query}`, {
+    const res = await fetch(`/api/upload?${query}`, {
       ...init,
       cache: 'no-store',
       signal: controller.signal,
@@ -35,15 +34,17 @@ async function api<T>(
         ...(auth.uploadToken ? { 'x-upload-token': auth.uploadToken } : {}),
       },
     });
+    // Keep the timeout active while reading the response body too. Fetch can
+    // resolve headers and then stall while res.json() is still pending.
+    const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+    if (!res.ok) throw new Error(data.error || `Upload server error (HTTP ${res.status}).`);
+    return data;
   } catch (err) {
-    if (controller.signal.aborted) throw new Error('The upload timed out (no response from the server).');
+    if (controller.signal.aborted) throw new Error('The upload timed out waiting for the server. Please retry.');
     throw err;
   } finally {
     clearTimeout(timer);
   }
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error || `Upload server error (HTTP ${res.status}).`);
-  return data;
 }
 
 export async function uploadToCloud(
