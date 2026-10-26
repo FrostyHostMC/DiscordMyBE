@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { sanitizeJsonString } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
+import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
+import JSZip from 'jszip';
+import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -60,4 +63,108 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
 
+test('player animation/controller files merge named entries instead of last-pack overwrite', () => {
+  const merged = mergeJsonForFile('animation_controllers/player.animation_controllers.json', [
+    {
+      format_version: '1.10.0',
+      'controller.animation.player.first_person': { states: { default: { animations: ['base_first_person'] } } }
+    },
+    {
+      format_version: '1.10.0',
+      'controller.animation.player.third_person': { states: { default: { animations: ['overlay_third_person'] } } }
+    }
+  ]);
+  assert.ok(merged['controller.animation.player.first_person']);
+  assert.ok(merged['controller.animation.player.third_person']);
+  assert.deepEqual(
+    merged['controller.animation.player.third_person'].states.default.animations,
+    ['overlay_third_person']
+  );
+  JSON.parse(JSON.stringify(merged));
+});
+
 console.log('Merge regression tests passed.');
+
+
+test('duplicate item definitions preserve compatible components from both addons', () => {
+  const merged = {
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:icon': { texture: 'utility_item' },
+        'minecraft:max_stack_size': 16
+      }
+    }
+  };
+  const addonItem = {
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:food': { nutrition: 2, can_always_eat: true },
+        'minecraft:max_stack_size': 64
+      }
+    }
+  };
+  mergeJsonData(merged, addonItem);
+  assert.equal(merged['minecraft:item'].description.identifier, 'demo:utility_item');
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
+  assert.equal(merged['minecraft:item'].components['minecraft:max_stack_size'], 64);
+  JSON.parse(JSON.stringify(merged));
+});
+
+test('same item component can combine non-conflicting component properties', () => {
+  const merged = {
+    'minecraft:item': {
+      description: { identifier: 'demo:book_tool' },
+      components: { 'minecraft:food': { nutrition: 2 } }
+    }
+  };
+  mergeJsonData(merged, {
+    'minecraft:item': {
+      description: { identifier: 'demo:book_tool' },
+      components: { 'minecraft:food': { can_always_eat: true } }
+    }
+  });
+  assert.deepEqual(merged['minecraft:item'].components['minecraft:food'], {
+    nutrition: 2,
+    can_always_eat: true
+  });
+});
+
+
+await (async () => {
+  // Exercise the same post-accumulation pass used by executeMergePacks.
+  const zip = new JSZip();
+  zip.file('items/utility_item.json', JSON.stringify({
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:icon': { texture: 'utility_item' },
+        'minecraft:max_stack_size': 16
+      }
+    }
+  }));
+  zip.file('items/utility_item_extra.json', JSON.stringify({
+    format_version: '1.20.0',
+    'minecraft:item': {
+      description: { identifier: 'demo:utility_item' },
+      components: {
+        'minecraft:food': { nutrition: 2, can_always_eat: true },
+        'minecraft:max_stack_size': 64
+      }
+    }
+  }));
+  await mergeDefinitionsByIdentifier(zip);
+  const paths = Object.keys(zip.files).filter(p => p.startsWith('items/') && !zip.files[p].dir);
+  assert.equal(paths.length, 1);
+  const result = JSON.parse(await zip.file(paths[0])!.async('text'));
+  assert.equal(result['minecraft:item'].description.identifier, 'demo:utility_item');
+  assert.deepEqual(result['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
+  assert.deepEqual(result['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
+  assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 64);
+  console.log('✓ full ZIP merge combines duplicate item identifiers from separate paths');
+})();

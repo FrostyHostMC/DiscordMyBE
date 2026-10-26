@@ -33,10 +33,22 @@ const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/
 // collected as lists and merged with mergeJsonForFile at write time.
 const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'crafting_item_catalog.json']);
 
-/** Every UI JSON file participates in the UI merge, not just a hardcoded shortlist. */
+/** Every UI JSON file and the shared player animation/controller JSON files
+ * participate in the strategy merge. Without collecting these files first,
+ * accumulatePack writes them directly to the ZIP and later packs overwrite
+ * earlier player animation definitions before mergeJsonForFile can run.
+ */
 function isStrategyMergeFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').toLowerCase();
-  return STRATEGY_MERGE_FILES.has(normalized) || (normalized.startsWith('ui/') && normalized.endsWith('.json'));
+  const base = normalized.substring(normalized.lastIndexOf('/') + 1);
+  const isPlayerAnimationFile = new Set([
+    'player.animation.json',
+    'player.animation_controllers.json',
+    'player.render_controllers.json'
+  ]).has(base);
+  return STRATEGY_MERGE_FILES.has(normalized) ||
+    (normalized.startsWith('ui/') && normalized.endsWith('.json')) ||
+    isPlayerAnimationFile;
 }
 
 // --- Version utilities -------------------------------------------------
