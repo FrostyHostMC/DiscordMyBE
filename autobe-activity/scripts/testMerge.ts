@@ -206,9 +206,15 @@ await (async () => {
 })();
 
 
-test('unsupported optional Script API events do not crash merged module initialization', () => {
-  const source = 'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });';
+test('optional Script API event containers and events are guarded during merged initialization', () => {
+  const source = [
+    'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });',
+    'world.beforeEvents.startup.subscribe(() => {});',
+    'world.afterEvents.playerSpawn.subscribe(() => {});'
+  ].join('\\n');
   const output = namespaceScriptText(source, 'demo');
-  assert.match(output, /world\.afterEvents\.cameraChange\?\.subscribe/);
-  assert.doesNotMatch(output, /cameraChange\.subscribe/);
+  assert.match(output, /world\\.afterEvents\\?\\.cameraChange\\?\\.subscribe/);
+  assert.match(output, /world\\.beforeEvents\\?\\.startup\\?\\.subscribe/);
+  assert.match(output, /world\\.afterEvents\\?\\.playerSpawn\\?\\.subscribe/);
+  assert.doesNotMatch(output, /(?:cameraChange|startup|playerSpawn)\\.subscribe/);
 });
