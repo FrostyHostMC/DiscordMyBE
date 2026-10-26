@@ -6,7 +6,11 @@ import type JSZip from 'jszip';
  * stores a length-prefixed UTF-8 filename, payload offset at +248, and size
  * at +252. Unknown formats are left untouched so diagnostics can report them.
  */
-export async function expandBrarchiveFiles(zip: JSZip, diagnostics: string[] = []): Promise<number> {
+export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): Promise<number> {
+  const report = (message: string) => {
+    if (diagnostics) diagnostics.push(message);
+    else console.warn('[AutoBE] ' + message);
+  };
   const magic = [0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26];
   let expandedCount = 0;
   const archives = Object.entries(zip.files).filter(([path, file]) =>
@@ -67,7 +71,7 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics: string[] = [
           previous.every((value, index) => value === entry.data[index]);
         if (identical) {
           // Identical payloads need no duplicate path and no renamed references.
-          diagnostics.push('Duplicate identical archive entry skipped: ' + outputPath + ' (' + archivePath + ')');
+          report('Duplicate identical archive entry skipped: ' + outputPath + ' (' + archivePath + ')');
           continue;
         }
 
@@ -82,7 +86,7 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics: string[] = [
         do {
           outputPath = stem + '.autobe-' + suffix++ + extension;
         } while (zip.file(outputPath));
-        diagnostics.push(
+        report(
           'Conflicting archive path preserved as ' + outputPath +
           '; original path was ' + joined + ' from ' + archivePath +
           '. References to this duplicate were not automatically rewritten.'
