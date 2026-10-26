@@ -1,3 +1,5 @@
+import type JSZip from 'jszip';
+
 /**
  * Expand Bedrock .brarchive containers used by some packaged addons.
  * Format: 16-byte header, followed by count 256-byte records. Each record
