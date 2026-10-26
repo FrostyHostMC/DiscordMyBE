@@ -95,7 +95,7 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics?: str
       }
       const attachableId = extractIdentifier('attachable', entries[0].data, false) ?? identifier;
       report(
-        'Conflicting attachables share identifier "' + identifier + '": ' +
+        'Conflicting attachables share identifier "' + attachableId + '": ' +
         entries.map((entry) => entry.path).join(', ') +
         '. All definitions were preserved for review; choose or adapt the intended visual rig.'
       );
