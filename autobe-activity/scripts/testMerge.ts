@@ -206,6 +206,47 @@ await (async () => {
 })();
 
 
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  const makeArchive = (entries: Array<[string, Uint8Array]>) => {
+    const payloadBase = 16 + entries.length * 256;
+    const payloadLength = entries.reduce((total, [, data]) => total + data.length, 0);
+    const bytes = new Uint8Array(payloadBase + payloadLength);
+    bytes.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26], 0);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(8, entries.length, true);
+    let offset = 0;
+    entries.forEach(([name, data], index) => {
+      const record = 16 + index * 256;
+      const nameBytes = new TextEncoder().encode(name);
+      bytes[record] = nameBytes.length;
+      bytes.set(nameBytes, record + 1);
+      view.setUint32(record + 248, offset, true);
+      view.setUint32(record + 252, data.length, true);
+      bytes.set(data, payloadBase + offset);
+      offset += data.length;
+    });
+    return bytes;
+  };
+  const same = new TextEncoder().encode('same');
+  const different = new TextEncoder().encode('different');
+  zip.file('items/kept.json', same);
+  zip.file('__brarchive/items/collision.brarchive', makeArchive([
+    ['kept.json', same],
+    ['kept.json', different]
+  ]));
+  const count = await expandBrarchiveFiles(zip, diagnostics);
+  assert.equal(count, 1, 'identical payload should be skipped, distinct collision preserved');
+  assert.deepEqual(Array.from(await zip.file('items/kept.json')!.async('uint8array')), Array.from(same));
+  assert.deepEqual(Array.from(await zip.file('items/kept.autobe-2.json')!.async('uint8array')), Array.from(different));
+  assert.ok(diagnostics.some(message => message.includes('Duplicate identical archive entry skipped')));
+  assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
+  console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
+})();
+})();
+
+
 test('optional Script API subscriptions guard nested event paths', () => {
   const source = [
     'world.afterEvents.cameraChange.subscribe(() => {});',
