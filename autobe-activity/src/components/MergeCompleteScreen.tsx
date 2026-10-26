@@ -26,7 +26,7 @@ interface MergeCompleteScreenProps {
   onDownloadOutput: (output: MergedOutput) => void;
   onDone: () => void;
   onRename: (newName: string) => void;
-  onPublish?: (iconDataUrl?: string | null) => void | Promise<void>;
+  onPublish?: (iconDataUrl?: string | null) => void | string | Promise<void | string>;
   isPublishing?: boolean;
   activeTransfer?: 'publish' | 'install' | 'download' | null;
   transferProgress?: number;
@@ -363,7 +363,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             {publishError && <p className="text-xs text-red-400">{publishError}</p>}
             <div className="flex gap-2">
               <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB] disabled:opacity-40">Cancel</button>
-              <button type="button" disabled={activeTransfer !== null} onClick={() => { void onPublish?.(publishIcon); }} className="relative overflow-hidden flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
+              <button type="button" disabled={activeTransfer !== null} onClick={async () => { setPublishError(null); const result = await onPublish?.(publishIcon); if (typeof result === 'string' && result) setPublishError(result); }} className="relative overflow-hidden flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
                 {activeTransfer === 'publish' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-emerald-300/50 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
                 <span className="relative z-10 inline-flex items-center justify-center gap-2 min-w-0">
                   {activeTransfer === 'publish' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Publishing'} {transferProgress}%</span></> : <span>Publish modpack</span>}
