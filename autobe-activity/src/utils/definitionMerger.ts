@@ -43,7 +43,11 @@ function extractIdentifier(kind: Kind, data: any, client: boolean): string | nul
  * output zip. Multiple files for one identifier are combined and only the
  * first file's path keeps the merged content.
  */
-export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: string[] = []): Promise<void> {
+export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics?: string[]): Promise<void> {
+  const report = (message: string) => {
+    if (diagnostics) diagnostics.push(message);
+    else console.warn('[AutoBE] ' + message);
+  };
   interface Entry {
     path: string;
     kind: Kind;
@@ -89,7 +93,7 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
         for (const entry of entries.slice(1)) zip.remove(entry.path);
         continue;
       }
-      diagnostics.push(
+      report(
         'Conflicting attachables share identifier "' + identifier + '": ' +
         entries.map((entry) => entry.path).join(', ') +
         '. All definitions were preserved for review; choose or adapt the intended visual rig.'
