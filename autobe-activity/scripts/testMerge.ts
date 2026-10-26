@@ -6,7 +6,7 @@ import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
-import { namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
+import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -263,4 +263,12 @@ test('optional Script API subscriptions guard nested event paths', () => {
   assert.match(output, /world2\.beforeEvents\?\.playerLeave\?\.subscribe/);
   assert.equal((output.match(/world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/g) || []).length, 2);
   assert.doesNotMatch(output, /(?:cameraChange|playerSpawn|inventory\.drop|inventory\.move)\.subscribe/);
+});
+
+
+test('pack namespaces remain deterministic but distinguish similarly named imports', () => {
+  assert.equal(makePackNs('Example RP.mcpack'), makePackNs('Example RP.mcpack'));
+  assert.notEqual(makePackNs('Example RP.mcpack'), makePackNs('Example BP.mcpack'));
+  assert.notEqual(makePackNs('Example_2.mcpack'), makePackNs('Example_3.mcpack'));
+  assert.equal(makePackNs('!!!.mcpack').length, 8);
 });
