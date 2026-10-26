@@ -30,6 +30,15 @@ export function makePackNs(name: string): string {
 export function namespaceScriptText(content: string, ns: string): string {
   let out = content;
 
+  // Optional Script API events vary across Bedrock versions. A missing event
+  // must not throw during module evaluation and prevent every other merged
+  // addon's script from initializing. Guard only the event's subscribe access;
+  // supported events keep their original behavior.
+  out = out.replace(
+    /(world\\.(?:afterEvents|beforeEvents)\\.[A-Za-z_$][\\w$]*)\\.subscribe\\s*\\(/g,
+    '$1?.subscribe('
+  );
+
   // --- Dynamic properties: prefix bare keys (no colon) ---
   out = out.replace(
     /((?:set|get)DynamicProperty\s*\(\s*["'])([^"':\n]+)(["'])/g,
