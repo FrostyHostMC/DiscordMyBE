@@ -21,8 +21,8 @@ async function inspectArchive(bytes, label, depth = 0) {
     return;
   }
   const files = Object.values(zip.files).filter((f) => !f.dir);
-  const br = files.filter((f) => /(^|\\/)__brarchive\\//i.test(f.name) || /\\.brarchive$/i.test(f.name));
-  const copies = files.filter((f) => /\\(copy(?: \\d+)?\\)/i.test(f.name));
+  const br = files.filter((f) => /(^|\/)__brarchive\//i.test(f.name) || /\.brarchive$/i.test(f.name));
+  const copies = files.filter((f) => /\(copy(?: \d+)?\)/i.test(f.name));
   console.log(`  ZIP ${label}: files=${files.length} brarchive=${br.length} copy-suffixed=${copies.length}`);
   for (const f of br.slice(0, 20)) {
     const b = await f.async('uint8array');
@@ -30,7 +30,7 @@ async function inspectArchive(bytes, label, depth = 0) {
     console.log(`    BR ${f.name} bytes=${b.length} hex=${hex(b.subarray(0, 24))} ascii=${ascii(b.subarray(0, 24))} zipMagic=${nested}`);
     if (nested) await inspectArchive(b, f.name, depth + 1);
   }
-  const nestedPacks = files.filter((f) => /\\.(mcpack|mcaddon|zip)$/i.test(f.name));
+  const nestedPacks = files.filter((f) => /\.(mcpack|mcaddon|zip)$/i.test(f.name));
   for (const f of nestedPacks.slice(0, 12)) {
     const b = await f.async('uint8array');
     await inspectArchive(b, f.name, depth + 1);
