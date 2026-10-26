@@ -163,6 +163,31 @@ function newAccum(): MergeAccum {
     writtenBinaryPaths: new Set()
   };
 }
+/** Keep definitions from different addons when their archive paths collide.
+ * Bedrock resolves behavior definitions by identifier, not by filename, so a
+ * deterministic alternate filename lets the later identifier pass merge equal
+ * IDs while retaining different IDs. Non-definition JSON keeps existing policy.
+ */
+function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
+  if (!targetZip.file(path)) return path;
+  const lower = path.toLowerCase();
+  if (!lower.endsWith('.json') || !/(^|\/)(items|entities|blocks|entity)\//.test(lower)) return path;
+  const slash = path.lastIndexOf('/');
+  const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
+  const filename = slash >= 0 ? path.slice(slash + 1) : path;
+  const dot = filename.lastIndexOf('.');
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : '';
+  const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20) || 'addon';
+  let candidate = `${dir}${stem}__${slug}${ext}`;
+  let suffix = 2;
+  while (targetZip.file(candidate)) {
+    candidate = `${dir}${stem}__${slug}_${suffix}${ext}`;
+    suffix++;
+  }
+  return candidate;
+}
+
 function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, data: Uint8Array): void {
   if (accum.writtenBinaryPaths.has(path)) return;
   targetZip.file(path, data);
@@ -176,7 +201,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>): Promise<void> {
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon'): Promise<void> {
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -190,6 +215,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     // variant and is excluded to avoid duplicate/merged variant content.
     if (lower.startsWith('subpacks/')) continue;
     const outPath = pathTransform ? pathTransform(path) : path;
+    const targetPath = definitionOutputPath(targetZip, outPath, sourceLabel);
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
         let text = await fileObj.async('text');
@@ -242,9 +268,9 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       for (const [oldId, newId] of renameMap.entries()) {
         txt = txt.split(oldId).join(newId);
       }
-      targetZip.file(outPath, txt);
+      targetZip.file(targetPath, txt);
     } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
-      targetZip.file(outPath, await fileObj.async('text'));
+      targetZip.file(targetPath, await fileObj.async('text'));
     } else if (lower.endsWith('.js')) {
       // JS files must be copied as binary to preserve UTF-8 encoding
       targetZip.file(outPath, await fileObj.async('uint8array'));
@@ -380,7 +406,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id));
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
@@ -485,7 +511,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
