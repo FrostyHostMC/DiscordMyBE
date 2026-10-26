@@ -18,14 +18,16 @@ async function api<T>(
   query: string,
   init: RequestInit,
   auth: { bearer?: string; uploadToken?: string },
-  timeoutMs = 60_000
+  timeoutMs = 180_000
 ): Promise<T> {
-  // A stalled request must fail (and be retried) instead of hanging forever.
+  // Mobile and cross-region connections can be slow, especially while several
+  // 8 MB R2 multipart chunks are uploading. Keep the deadline active through
+  // response-body parsing too; clearing it as soon as headers arrive can leave
+  // a stalled body hanging without a useful timeout.
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
-  let res: Response;
   try {
-    res = await fetch(`/api/upload?${query}`, {
+    const res = await fetch(`/api/upload?${query}`, {
       ...init,
       cache: 'no-store',
       signal: controller.signal,
@@ -35,15 +37,17 @@ async function api<T>(
         ...(auth.uploadToken ? { 'x-upload-token': auth.uploadToken } : {}),
       },
     });
+    const data = (await res.json().catch(() => ({}))) as T & { error?: string };
+    if (!res.ok) throw new Error(data.error || `Upload server error (HTTP ${res.status}).`);
+    return data;
   } catch (err) {
-    if (controller.signal.aborted) throw new Error('The upload timed out (no response from the server).');
+    if (controller.signal.aborted) {
+      throw new Error(`The upload request timed out after ${Math.round(timeoutMs / 1000)} seconds. Check the connection and retry.`);
+    }
     throw err;
   } finally {
     clearTimeout(timer);
   }
-  const data = (await res.json().catch(() => ({}))) as T & { error?: string };
-  if (!res.ok) throw new Error(data.error || `Upload server error (HTTP ${res.status}).`);
-  return data;
 }
 
 export async function uploadToCloud(
