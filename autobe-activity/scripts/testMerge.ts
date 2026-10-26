@@ -5,7 +5,7 @@ import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
-import { expandBrarchiveFiles } from '../src/utils/mergeEngine.ts';
+import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 
 function test(name: string, run: () => void) {
   run();
