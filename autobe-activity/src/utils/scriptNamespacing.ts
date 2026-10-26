@@ -21,9 +21,18 @@ export function makePackNs(name: string): string {
   const clean = (name || '')
     .replace(/\.(mcpack|mcaddon)$/i, '')
     .replace(/_modified$/i, '')
-    .replace(/_\d+$/, '');
-  const ns = clean.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 8);
-  return ns || 'pack';
+    .toLowerCase();
+  const stem = clean.replace(/[^a-z0-9]/g, '').slice(0, 5) || 'pack';
+
+  // A readable prefix alone is not a namespace: similarly named packs can
+  // collapse to the same token after truncation. Add deterministic hash bits.
+  // Keep numeric duplicate suffixes so separate imported copies stay isolated.
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < clean.length; i++) {
+    hash ^= clean.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return stem + hash.toString(16).padStart(8, '0').slice(-3);
 }
 
 /** Apply the dynamic-property / scoreboard-objective prefixing to one script. */
@@ -48,7 +57,7 @@ export function namespaceScriptText(content: string, ns: string): string {
   );
 
   // --- Scoreboard objectives: prefix names (Bedrock max 16 chars total) ---
-  const shortNs = ns.slice(0, 4); // 4 chars + '_' + 11 chars = 16
+  const shortNs = ns.slice(-4); // Include hash entropy to reduce objective collisions
   out = out.replace(
     /((?:add|get|remove)Objective\s*\(\s*)(["'])([^"']{1,16})\2/g,
     (full, method: string, q: string, name: string) => {
