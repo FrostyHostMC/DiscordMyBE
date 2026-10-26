@@ -529,6 +529,7 @@ export const App: React.FC = () => {
 
   // Download individual .mcpack
   const handleDownloadOutput = async (output: MergedOutput) => {
+    if (!beginTransfer('download', 'Preparing download')) return;
     triggerHaptic(50);
     handleSoundTap();
     console.log('[Aippy] Download output:', output);
@@ -551,7 +552,10 @@ export const App: React.FC = () => {
     }
 
     try {
-      const result = await deliverFile(blob, output.fileName, (m) => showToast(m, 30000));
+      const result = await deliverFile(blob, output.fileName, (m) => {
+        const match = m.match(/(\\d+)%/);
+        updateTransfer(m.replace(/….*$/, '').replace(/\\s+\\d+%.*$/, ''), match ? Number(match[1]) : transferProgress);
+      });
       if (result.ok) {
         showToast('Opening your download…');
         return;
@@ -568,14 +572,17 @@ export const App: React.FC = () => {
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, output.fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
+    } finally {
+      endTransfer();
     }
   };
 
   // Download combined .mcaddon
   const handleInstallToMinecraft = async (modpack: MergedModpack | null = justCompletedModpack) => {
+    if (!beginTransfer('install', 'Preparing .mcaddon')) return;
     triggerHaptic(60);
     handleSoundTap();
-    if (!modpack) return;
+    if (!modpack) { endTransfer(); return; }
 
     console.log('[Download] Starting download for modpack:', modpack.name, 'id:', modpack.id);
     console.log('[Download] Modpack has outputBlob:', !!modpack.outputBlob);
@@ -588,17 +595,12 @@ export const App: React.FC = () => {
     let blob: Blob | undefined = source.outputBlob;
     if (!blob && source.outputs?.some((o) => o.blob)) {
       try {
-        showToast('Building the combined .mcaddon… 0%', 60000);
-        let lastPct = -10;
-        blob = await ensureCombinedBlob(source, (pct) => {
-          if (pct - lastPct >= 10 || pct === 100) {
-            lastPct = pct;
-            showToast(`Building the combined .mcaddon… ${pct}%`, 60000);
-          }
-        });
+        updateTransfer('Building .mcaddon', 0);
+        blob = await ensureCombinedBlob(source, (pct) => updateTransfer('Building .mcaddon', pct));
       } catch (err) {
         console.error('[Download] Could not build combined file:', describeError(err));
         showToast(`Could not build the combined file: ${describeError(err)}`, 8000);
+        endTransfer();
         return;
       }
     }
@@ -606,6 +608,7 @@ export const App: React.FC = () => {
     if (!blob) {
       console.error('[Aippy] Modpack blob is missing - cannot download from saved modpacks');
       showToast('Modpack file not available. Please merge again to regenerate.');
+      endTransfer();
       return;
     }
 
@@ -613,7 +616,11 @@ export const App: React.FC = () => {
     const fileName = modpack.outputFileName || 'StoneByte_Modpack.mcaddon';
 
     try {
-      const result = await deliverFile(blob, fileName, (m) => showToast(m, 30000));
+      updateTransfer('Uploading .mcaddon', 0);
+      const result = await deliverFile(blob, fileName, (m) => {
+        const match = m.match(/(\\d+)%/);
+        updateTransfer(m.includes('Uploading') ? 'Uploading .mcaddon' : 'Preparing download', match ? Number(match[1]) : transferProgress);
+      });
       if (result.ok) {
         showToast('Opening your download…');
         return;
@@ -629,6 +636,8 @@ export const App: React.FC = () => {
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
+    } finally {
+      endTransfer();
     }
   };
 
@@ -728,9 +737,32 @@ export const App: React.FC = () => {
 
   // Publish modpack to community
   const [isPublishing, setIsPublishing] = useState(false);
+  const [activeTransfer, setActiveTransfer] = useState<'publish' | 'install' | 'download' | null>(null);
+  const [transferProgress, setTransferProgress] = useState(0);
+  const [transferStatus, setTransferStatus] = useState('');
+  const transferLockRef = useRef(false);
+
+  const beginTransfer = (kind: 'publish' | 'install' | 'download', status: string) => {
+    if (transferLockRef.current) return false;
+    transferLockRef.current = true;
+    setActiveTransfer(kind);
+    setTransferProgress(0);
+    setTransferStatus(status);
+    return true;
+  };
+  const updateTransfer = (status: string, progress: number) => {
+    setTransferStatus(status);
+    setTransferProgress(Math.max(0, Math.min(100, progress)));
+  };
+  const endTransfer = () => {
+    transferLockRef.current = false;
+    setActiveTransfer(null);
+    setTransferProgress(0);
+    setTransferStatus('');
+  };
 
   const handlePublishModpack = async (communityIconDataUrl?: string | null) => {
-    if (!justCompletedModpack) return;
+    if (!justCompletedModpack || !beginTransfer('publish', 'Building modpack')) return;
 
     console.log('[Publish] Starting publish for modpack:', justCompletedModpack.name);
     console.log('[Publish] Has outputBlob:', !!justCompletedModpack.outputBlob);
@@ -742,8 +774,8 @@ export const App: React.FC = () => {
       // Get the blob
       let blob = justCompletedModpack.outputBlob;
       if (!blob && justCompletedModpack.outputs?.some((o) => o.blob)) {
-        showToast('Building the combined .mcaddon… 0%', 60000);
-        blob = await ensureCombinedBlob(justCompletedModpack, (pct) => showToast(`Building the combined .mcaddon… ${pct}%`, 60000));
+        updateTransfer('Building modpack', 0);
+        blob = await ensureCombinedBlob(justCompletedModpack, (pct) => updateTransfer('Building modpack', pct));
       }
       if (!blob) {
         console.error('[Publish] Blob is missing - cannot publish');
@@ -772,7 +804,7 @@ export const App: React.FC = () => {
       const uploaded = await uploadToCloud(blob, justCompletedModpack.outputFileName, 'pub', (pct) => {
         if (pct - lastShown >= 10 || pct === 100) {
           lastShown = pct;
-          showToast(`Uploading modpack… ${pct}%`, 30000);
+          updateTransfer('Uploading modpack', pct);
         }
       });
       const blobUrl = uploaded.url;
@@ -855,6 +887,7 @@ export const App: React.FC = () => {
       if (soundTweak) playError().catch(() => {});
     } finally {
       setIsPublishing(false);
+      endTransfer();
     }
   };
 
@@ -1038,6 +1071,9 @@ export const App: React.FC = () => {
           }}
           onPublish={handlePublishModpack}
           isPublishing={isPublishing}
+          activeTransfer={activeTransfer}
+          transferProgress={transferProgress}
+          transferStatus={transferStatus}
         />
       )}
 
