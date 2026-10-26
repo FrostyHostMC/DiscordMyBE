@@ -206,16 +206,19 @@ await (async () => {
 })();
 
 
-test('optional Script API event containers and events are guarded during merged initialization', () => {
+test('optional Script API subscriptions guard nested event paths', () => {
   const source = [
-    'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });',
-    'world.beforeEvents.startup.subscribe(() => {});',
+    'world.afterEvents.cameraChange.subscribe(() => {});',
+    'world.beforeEvents.inventory.drop.subscribe(() => {});',
+    'world.beforeEvents.inventory.move.subscribe(() => {});',
     'world.afterEvents.playerSpawn.subscribe(() => {});',
-    'world.afterEvents.cameraChange?.subscribe(() => {});'
+    'world.beforeEvents.inventory?.drop?.subscribe(() => {});'
   ].join('\n');
   const output = namespaceScriptText(source, 'demo');
-  assert.equal((output.match(/world\.afterEvents\?\.cameraChange\?\.subscribe/g) || []).length, 2);
-  assert.match(output, /world\.beforeEvents\?\.startup\?\.subscribe/);
+  assert.match(output, /world\.afterEvents\?\.cameraChange\?\.subscribe/);
+  assert.match(output, /world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/);
+  assert.match(output, /world\.beforeEvents\?\.inventory\?\.move\?\.subscribe/);
   assert.match(output, /world\.afterEvents\?\.playerSpawn\?\.subscribe/);
-  assert.doesNotMatch(output, /(?:cameraChange|startup|playerSpawn)\.subscribe/);
+  assert.equal((output.match(/world\.beforeEvents\?\.inventory\?\.drop\?\.subscribe/g) || []).length, 2);
+  assert.doesNotMatch(output, /(?:cameraChange|playerSpawn|inventory\.drop|inventory\.move)\.subscribe/);
 });
