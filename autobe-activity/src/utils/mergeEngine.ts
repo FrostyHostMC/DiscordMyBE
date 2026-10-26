@@ -379,6 +379,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const iconBytes = await findFirstPackIcon(packs);
   const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const outputs: MergedOutput[] = [];
+  // Track formats that Bedrock cannot load directly so the report never labels an
+  // archive as healthy when protected/internal archives or copy-suffixed assets remain.
+  const archiveDiagnostics = { brarchive: [] as string[], copySuffixed: 0 };
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -411,6 +414,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       zip.files = {} as typeof zip.files;
     }
     writeAccum(rpZip, accum);
+    archiveDiagnostics.copySuffixed = Object.keys(rpZip.files).filter(p => !rpZip.files[p].dir && /\(copy(?:\s+\d+)?\)/i.test(p)).length;
     // Port of AutoBE Part 16 RP passes: identifier-based definition merging,
     // subpack HUD merging, and player-entity repair / variable injection.
     await mergeDefinitionsByIdentifier(rpZip);
@@ -531,6 +535,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
     }
     writeAccum(bpZip, accum);
+    archiveDiagnostics.brarchive.push(...Object.keys(bpZip.files).filter(p => !bpZip.files[p].dir && (p.toLowerCase().startsWith('__brarchive/') || p.toLowerCase().endsWith('.brarchive'))).map(p => `${type}/${p}`));
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
     await mergeDefinitionsByIdentifier(bpZip);
@@ -683,6 +688,18 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       name: 'Script runtime property conflicts',
       status: conflictEntries.length > 0 ? 'warning' : 'ok',
       detail: conflictEntries.length > 0 ? `${conflictEntries.length} shared property write(s); last pack wins` : 'No runtime property write collisions detected'
+    }, {
+      name: 'Unexpanded internal archives',
+      status: archiveDiagnostics.brarchive.length > 0 ? 'warning' : 'ok',
+      detail: archiveDiagnostics.brarchive.length > 0
+        ? `${archiveDiagnostics.brarchive.length} internal .brarchive file(s) remain; Bedrock will not load their contained definitions as ordinary item/entity/recipe JSON. First examples: ${archiveDiagnostics.brarchive.slice(0, 6).join(', ')}`
+        : 'No .brarchive containers remain in behavior outputs'
+    }, {
+      name: 'Copy-suffixed resource assets',
+      status: archiveDiagnostics.copySuffixed > 0 ? 'warning' : 'ok',
+      detail: archiveDiagnostics.copySuffixed > 0
+        ? `${archiveDiagnostics.copySuffixed} resource path(s) contain (Copy) suffixes. These may be accidental duplicate files and should be reviewed before treating the merge as clean.`
+        : 'No copy-suffixed resource paths found'
     }, {
       name: 'Subpack variants',
       status: 'ok',
