@@ -176,7 +176,7 @@ function AccessGate() {
       } catch (error) {
         const detail = describeError(error);
         console.error('[AutoBE] Discord access check failed:', detail);
-        deny(`Discord sign-in failed: ${detail}. Close the Activity and reopen it. If this keeps happening, send the error text to the administrator.`);
+        deny(`Discord sign-in failed: ${detail}. You can try again below. If it keeps failing, send this error text to the administrator.`);
       }
     }
 
