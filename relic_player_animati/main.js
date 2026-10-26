@@ -160,16 +160,10 @@ world.afterEvents.itemUse.subscribe((event) => {
     openPerspectiveMenu(player);
 });
 
-// Sự kiện khi người chơi đổi góc nhìn bằng phím F5
-world.afterEvents.cameraChange.subscribe((event) => {
-    const player = event.player;
-    const currentState = playerCameraState.get(player.id);
-    
-    // Nếu đang ở góc nhìn thứ nhất của chúng ta, giữ nguyên
-    if (currentState === "first") {
-        player.camera.setCamera("minecraft:first_person");
-    }
-});
+// NOTE: world.afterEvents.cameraChange is not available in the Script API
+// version used by the target runtime. Subscribing to it crashes module startup
+// and prevents all later event handlers from registering. Do not use it here.
+// Camera changes are handled only by the explicit menu actions below.
 
 // Ngăn người chơi vứt gậy
 world.beforeEvents.inventory.drop.subscribe((event) => {
