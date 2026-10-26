@@ -50,7 +50,6 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
     data: any;
   }
   const byId = new Map<string, Entry[]>();
-  const all: Entry[] = [];
 
   const loads: Promise<void>[] = [];
   zip.forEach((path, f) => {
@@ -65,10 +64,7 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
           const id = extractIdentifier(cls.kind, data, cls.client);
           if (!id) return;
           const entry: Entry = { path, kind: cls.kind, client: cls.client, data };
-          all.push(entry);
-          const arr = byId.get(id) ?? [];
-          arr.push(entry);
-          byId.set(id, arr);
+          const groupKey = cls.kind + ':' + (cls.client ? 'client:' : 'behavior:') + id;\n          const arr = byId.get(groupKey) ?? [];\n          arr.push(entry);\n          byId.set(groupKey, arr);
         })
         .catch(() => undefined)
     );
