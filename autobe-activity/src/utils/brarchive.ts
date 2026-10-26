@@ -24,7 +24,12 @@ export async function expandBrarchiveFiles(zip: JSZip): Promise<number> {
     }
     const payloadBase = 16 + count * 256;
     const archiveRelative = archivePath.replace(/^__brarchive\//i, '').replace(/\.brarchive$/i, '');
-    const outputDirectory = archiveRelative.toLowerCase() === 'item_catalog' ? '' : archiveRelative;
+    // The archive filename is a container label, not an output directory.
+    // Files belong beside the container in the corresponding Bedrock folder.
+    // The item catalog is the exception: its payload is a root-level catalog.
+    const outputDirectory = archiveRelative.toLowerCase() === 'item_catalog'
+      ? ''
+      : archiveRelative.includes('/') ? archiveRelative.slice(0, archiveRelative.lastIndexOf('/')) : '';
     const decoded: Array<{ name: string; data: Uint8Array }> = [];
 
     for (let index = 0; index < count; index++) {
