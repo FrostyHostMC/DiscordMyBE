@@ -26,7 +26,8 @@ function classify(path: string): { kind: Kind; client: boolean } | null {
     return lower.includes('animation') || lower.includes('render_controller') ? null : { kind: 'entity', client: true };
   }
   if (lower.includes('entities/')) return { kind: 'entity', client: false };
-  if (lower.includes('attachables/')) return { kind: 'attachable', client: false };\n  if (lower.includes('items/')) return { kind: 'item', client: false };
+  if (lower.includes('attachables/')) return { kind: 'attachable', client: false };
+  if (lower.includes('items/')) return { kind: 'item', client: false };
   if (lower.includes('blocks/')) return { kind: 'block', client: false };
   return null;
 }
@@ -64,7 +65,10 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
           const id = extractIdentifier(cls.kind, data, cls.client);
           if (!id) return;
           const entry: Entry = { path, kind: cls.kind, client: cls.client, data };
-          const groupKey = cls.kind + ':' + (cls.client ? 'client:' : 'behavior:') + id;\n          const arr = byId.get(groupKey) ?? [];\n          arr.push(entry);\n          byId.set(groupKey, arr);
+          const groupKey = cls.kind + ':' + (cls.client ? 'client:' : 'behavior:') + id;
+          const arr = byId.get(groupKey) ?? [];
+          arr.push(entry);
+          byId.set(groupKey, arr);
         })
         .catch(() => undefined)
     );
