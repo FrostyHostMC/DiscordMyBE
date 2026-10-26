@@ -885,8 +885,8 @@ export const App: React.FC = () => {
     } catch (e: unknown) {
       console.error('[Aippy] Publish failed:', e);
       console.error('[Publish] Publish failed:', describeError(e));
-      return describeError(e);
       if (soundTweak) playError().catch(() => {});
+      return describeError(e);
     } finally {
       setIsPublishing(false);
       endTransfer();
