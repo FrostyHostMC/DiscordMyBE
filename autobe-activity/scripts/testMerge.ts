@@ -209,6 +209,6 @@ await (async () => {
 test('unsupported optional Script API events do not crash merged module initialization', () => {
   const source = 'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });';
   const output = namespaceScriptText(source, 'demo');
-  assert.match(output, /world\\.afterEvents\\.cameraChange\\?\\.subscribe/);
-  assert.doesNotMatch(output, /cameraChange\\.subscribe/);
+  assert.match(output, /world\.afterEvents\.cameraChange\?\.subscribe/);
+  assert.doesNotMatch(output, /cameraChange\.subscribe/);
 });
