@@ -28,6 +28,9 @@ interface MergeCompleteScreenProps {
   onRename: (newName: string) => void;
   onPublish?: (iconDataUrl?: string | null) => void | Promise<void>;
   isPublishing?: boolean;
+  activeTransfer?: 'publish' | 'install' | 'download' | null;
+  transferProgress?: number;
+  transferStatus?: string;
 }
 
 export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
@@ -39,7 +42,10 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
   onDone,
   onRename,
   onPublish,
-  isPublishing = false
+  isPublishing = false,
+  activeTransfer = null,
+  transferProgress = 0,
+  transferStatus = ''
 }) => {
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameVal, setNameVal] = useState(modpack.name);
@@ -221,14 +227,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onInstallToMinecraft}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-xs font-bold text-white transition-all shadow-[0_0_10px_rgba(118,43,255,0.3)] active:scale-95 shrink-0"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Download</span>
-          </button>
+
         </div>
 
         {/* Individual Outputs List (.mcpack) */}
@@ -296,17 +295,21 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         <button
           type="button"
           onClick={onInstallToMinecraft}
-          className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#762BFF] hover:bg-[#853CFF] text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] border border-[#A855F7]/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          disabled={activeTransfer !== null}
+          aria-label={activeTransfer === 'install' ? `${transferStatus} ${transferProgress}%` : 'Install Modpack'}
+          className="relative overflow-hidden flex-1 min-w-0 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#762BFF] hover:bg-[#853CFF] text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] border border-[#A855F7]/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait transition-colors"
         >
-          <Download className="w-4 h-4" />
-          <span>Install to Minecraft (.mcaddon)</span>
+          {activeTransfer === 'install' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-[#A855F7]/60 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
+          <span className="relative z-10 flex items-center justify-center gap-2 min-w-0">
+            {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'} {transferProgress}%</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
+          </span>
         </button>
 
         {onPublish && (
           <button
             type="button"
             onClick={() => setShowPublishOptions(true)}
-            disabled={isPublishing}
+            disabled={activeTransfer !== null}
             className="py-3 px-4 rounded-xl font-semibold text-xs bg-[#10B981] hover:bg-[#059669] text-white border border-[#34D399]/40 flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPublishing ? (
@@ -326,7 +329,8 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         <button
           type="button"
           onClick={onShare}
-          className="py-3 px-4 rounded-xl font-semibold text-xs bg-[#100D18] hover:bg-[#15111F] text-[#AAA3BB] hover:text-white border border-[#30263F] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+          disabled={activeTransfer !== null}
+          className="py-3 px-4 rounded-xl font-semibold text-xs bg-[#100D18] hover:bg-[#15111F] text-[#AAA3BB] hover:text-white border border-[#30263F] flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Share2 className="w-4 h-4 text-[#A855F7]" />
           <span>Share / Save</span>
@@ -358,8 +362,11 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             {publishError && <p className="text-xs text-red-400">{publishError}</p>}
             <div className="flex gap-2">
               <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB] disabled:opacity-40">Cancel</button>
-              <button type="button" disabled={isPublishing} onClick={() => { void onPublish?.(publishIcon); }} className="flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-60 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
-                {isPublishing ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span>Publishing…</span></> : <span>Publish modpack</span>}
+              <button type="button" disabled={activeTransfer !== null} onClick={() => { void onPublish?.(publishIcon); }} className="relative overflow-hidden flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
+                {activeTransfer === 'publish' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-emerald-300/50 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
+                <span className="relative z-10 inline-flex items-center justify-center gap-2 min-w-0">
+                  {activeTransfer === 'publish' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Publishing'} {transferProgress}%</span></> : <span>Publish modpack</span>}
+                </span>
               </button>
             </div>
           </div>
