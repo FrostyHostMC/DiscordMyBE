@@ -6,6 +6,7 @@ import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
+import { namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -199,7 +200,15 @@ await (async () => {
   const count = await expandBrarchiveFiles(zip);
   assert.equal(count, 2);
   assert.equal(zip.file('__brarchive/items/fiery/greatsword.brarchive'), null);
-  assert.ok(zip.file('items/fiery/greatsword/copper_greatsword.json'));
-  assert.ok(zip.file('items/fiery/greatsword/wooden_greatsword.json'));
+  assert.ok(zip.file('items/fiery/copper_greatsword.json'));
+  assert.ok(zip.file('items/fiery/wooden_greatsword.json'));
   console.log('✓ packed .brarchive item definitions are expanded into Bedrock JSON paths');
 })();
+
+
+test('unsupported optional Script API events do not crash merged module initialization', () => {
+  const source = 'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });';
+  const output = namespaceScriptText(source, 'demo');
+  assert.match(output, /world\\.afterEvents\\.cameraChange\\?\\.subscribe/);
+  assert.doesNotMatch(output, /cameraChange\\.subscribe/);
+});
