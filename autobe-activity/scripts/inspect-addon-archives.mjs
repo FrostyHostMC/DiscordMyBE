@@ -3,9 +3,9 @@ import path from 'node:path';
 import JSZip from 'jszip';
 
 const inputs = [
-  '../Fiery Combat.mcaddon',
-  '../Relic player animations V2.1 2.mcaddon',
-  '../AutoBE_Modpack_10-26-2026.mcaddon',
+  '../../Fiery Combat.mcaddon',
+  '../../Relic player animations V2.1 2.mcaddon',
+  '../../AutoBE_Modpack_10-26-2026.mcaddon',
 ];
 
 const ascii = (bytes) => Array.from(bytes, (b) => b >= 32 && b <= 126 ? String.fromCharCode(b) : '.').join('');
