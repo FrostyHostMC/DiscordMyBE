@@ -171,7 +171,7 @@ function newAccum(): MergeAccum {
 function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
   if (!targetZip.file(path)) return path;
   const lower = path.toLowerCase();
-  if (!lower.endsWith('.json') || !/(^|\\/)(items|entities|blocks|entity)\\//.test(lower)) return path;
+  if (!lower.endsWith('.json') || !/(^|\/)(items|entities|blocks|entity)\//.test(lower)) return path;
   const slash = path.lastIndexOf('/');
   const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
   const filename = slash >= 0 ? path.slice(slash + 1) : path;
