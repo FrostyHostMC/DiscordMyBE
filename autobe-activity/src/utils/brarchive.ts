@@ -6,7 +6,7 @@ import type JSZip from 'jszip';
  * stores a length-prefixed UTF-8 filename, payload offset at +248, and size
  * at +252. Unknown formats are left untouched so diagnostics can report them.
  */
-export async function expandBrarchiveFiles(zip: JSZip): Promise<number> {
+export async function expandBrarchiveFiles(zip: JSZip, diagnostics: string[] = []): Promise<number> {
   const magic = [0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26];
   let expandedCount = 0;
   const archives = Object.entries(zip.files).filter(([path, file]) =>
@@ -39,7 +39,7 @@ export async function expandBrarchiveFiles(zip: JSZip): Promise<number> {
         throw new Error('Invalid .brarchive filename length in ' + archivePath + ' record ' + index);
       }
       const name = new TextDecoder().decode(bytes.subarray(recordOffset + 1, recordOffset + 1 + nameLength)).replace(/\\/g, '/');
-      if (!name || name.startsWith('/') || name.split('/').some(part => part === '..')) {
+      if (!name || name.startsWith('/') || /^[a-z]:\//i.test(name) || name.split('/').some(part => part === '..' || part === '.')) {
         throw new Error('Unsafe .brarchive filename in ' + archivePath + ': ' + name);
       }
       const payloadOffset = view.getUint32(recordOffset + 248, true);
@@ -56,12 +56,39 @@ export async function expandBrarchiveFiles(zip: JSZip): Promise<number> {
       const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
       const segments = joined.split('/').filter(Boolean);
       let outputPath = segments.join('/');
-      const slash = outputPath.lastIndexOf('/');
-      const dot = outputPath.lastIndexOf('.');
-      const stem = dot > slash ? outputPath.slice(0, dot) : outputPath;
-      const extension = dot > slash ? outputPath.slice(dot) : '';
-      let suffix = 2;
-      while (zip.file(outputPath)) outputPath = stem + '.autobe-' + suffix++ + extension;
+      if (!outputPath || outputPath.split('/').some(part => part === '..' || part === '.')) {
+        throw new Error('Unsafe .brarchive output path in ' + archivePath + ': ' + outputPath);
+      }
+
+      const existing = zip.file(outputPath);
+      if (existing) {
+        const previous = await existing.async('uint8array');
+        const identical = previous.length === entry.data.length &&
+          previous.every((value, index) => value === entry.data[index]);
+        if (identical) {
+          // Identical payloads need no duplicate path and no renamed references.
+          diagnostics.push('Duplicate identical archive entry skipped: ' + outputPath + ' (' + archivePath + ')');
+          continue;
+        }
+
+        // Never overwrite either payload. Keep the second payload available,
+        // but make the unresolved collision explicit: asset references may
+        // still need a semantic rewrite before this pack is runtime-safe.
+        const slash = outputPath.lastIndexOf('/');
+        const dot = outputPath.lastIndexOf('.');
+        const stem = dot > slash ? outputPath.slice(0, dot) : outputPath;
+        const extension = dot > slash ? outputPath.slice(dot) : '';
+        let suffix = 2;
+        do {
+          outputPath = stem + '.autobe-' + suffix++ + extension;
+        } while (zip.file(outputPath));
+        diagnostics.push(
+          'Conflicting archive path preserved as ' + outputPath +
+          '; original path was ' + joined + ' from ' + archivePath +
+          '. References to this duplicate were not automatically rewritten.'
+        );
+      }
+
       zip.file(outputPath, entry.data);
       expandedCount++;
     }
