@@ -623,17 +623,17 @@ export const App: React.FC = () => {
         updateTransfer(m.includes('Uploading') ? 'Uploading .mcaddon' : 'Preparing download', match ? Number(match[1]) : transferProgress);
       });
       if (result.ok) {
-        showToast('Opening your download…');
+        updateTransfer('Opening download', 100);
         return;
       }
       console.warn('[Download] Cloud hand-off failed:', result.error);
-      showToast(`Couldn't prepare the download: ${result.error}`, 12000);
+      console.warn('[Download] Could not prepare download:', result.error);
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, fileName, result.url, result.error);
       if (soundTweak) playError().catch(() => {});
     } catch (e: unknown) {
       console.error('[Aippy] Download failed:', e);
-      showToast(`Download failed: ${describeError(e)}`, 12000);
+      console.error('[Download] Download failed:', describeError(e));
       const { showManualSavePanel } = await import('@/utils/download');
       showManualSavePanel(blob, fileName, undefined, describeError(e));
       if (soundTweak) playError().catch(() => {});
