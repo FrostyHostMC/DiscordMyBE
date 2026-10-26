@@ -5,6 +5,7 @@ import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
+import { expandBrarchiveFiles } from '../src/utils/mergeEngine.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -167,4 +168,38 @@ await (async () => {
   assert.deepEqual(result['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
   assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 64);
   console.log('✓ full ZIP merge combines duplicate item identifiers from separate paths');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const files = [
+    ['copper_greatsword.json', new TextEncoder().encode('{"minecraft:item":{"description":{"identifier":"fiery_combat:copper_greatsword"}}}')],
+    ['wooden_greatsword.json', new TextEncoder().encode('{"minecraft:item":{"description":{"identifier":"fiery_combat:wooden_greatsword"}}}')],
+  ];
+  const payloadBase = 16 + files.length * 256;
+  const payloadLength = files.reduce((total, [, data]) => total + data.length, 0);
+  const bytes = new Uint8Array(payloadBase + payloadLength);
+  bytes.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26], 0);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(8, files.length, true);
+  view.setUint32(12, 1, true);
+  let payloadOffset = 0;
+  files.forEach(([name, data], index) => {
+    const record = 16 + index * 256;
+    const nameBytes = new TextEncoder().encode(name);
+    bytes[record] = nameBytes.length;
+    bytes.set(nameBytes, record + 1);
+    view.setUint32(record + 248, payloadOffset, true);
+    view.setUint32(record + 252, data.length, true);
+    bytes.set(data, payloadBase + payloadOffset);
+    payloadOffset += data.length;
+  });
+  zip.file('__brarchive/items/fiery/greatsword.brarchive', bytes);
+  const count = await expandBrarchiveFiles(zip);
+  assert.equal(count, 2);
+  assert.equal(zip.file('__brarchive/items/fiery/greatsword.brarchive'), null);
+  assert.ok(zip.file('items/fiery/greatsword/copper_greatsword.json'));
+  assert.ok(zip.file('items/fiery/greatsword/wooden_greatsword.json'));
+  console.log('✓ packed .brarchive item definitions are expanded into Bedrock JSON paths');
 })();
