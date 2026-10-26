@@ -210,10 +210,11 @@ test('optional Script API event containers and events are guarded during merged 
   const source = [
     'world.afterEvents.cameraChange.subscribe((event) => { player.sendMessage("ok"); });',
     'world.beforeEvents.startup.subscribe(() => {});',
-    'world.afterEvents.playerSpawn.subscribe(() => {});'
+    'world.afterEvents.playerSpawn.subscribe(() => {});',
+    'world.afterEvents.cameraChange?.subscribe(() => {});'
   ].join('\n');
   const output = namespaceScriptText(source, 'demo');
-  assert.match(output, /world\.afterEvents\?\.cameraChange\?\.subscribe/);
+  assert.equal((output.match(/world\.afterEvents\?\.cameraChange\?\.subscribe/g) || []).length, 2);
   assert.match(output, /world\.beforeEvents\?\.startup\?\.subscribe/);
   assert.match(output, /world\.afterEvents\?\.playerSpawn\?\.subscribe/);
   assert.doesNotMatch(output, /(?:cameraChange|startup|playerSpawn)\.subscribe/);
