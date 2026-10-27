@@ -172,7 +172,7 @@ function newAccum(): MergeAccum {
 function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
   if (!targetZip.file(path)) return path;
   const lower = path.toLowerCase();
-  if (!lower.endsWith('.json') || !/(^|\/)(items|entities|blocks|entity)\//.test(lower)) return path;
+  if (!lower.endsWith('.json') || !/(^|\/)(items|entities|blocks|entity|attachables)\//.test(lower)) return path;
   const slash = path.lastIndexOf('/');
   const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
   const filename = slash >= 0 ? path.slice(slash + 1) : path;
@@ -202,8 +202,8 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon'): Promise<void> {
-  await expandBrarchiveFiles(zip);
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics?: string[]): Promise<void> {
+  await expandBrarchiveFiles(zip, diagnostics);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -376,6 +376,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   } = options;
   onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
+  const mergeDiagnostics: string[] = [];
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
   const iconBytes = await findFirstPackIcon(packs);
@@ -408,14 +409,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
     writeAccum(rpZip, accum);
     // Port of AutoBE Part 16 RP passes: identifier-based definition merging,
     // subpack HUD merging, and player-entity repair / variable injection.
-    await mergeDefinitionsByIdentifier(rpZip);
+    await mergeDefinitionsByIdentifier(rpZip, mergeDiagnostics);
     await mergeSubpackHudFiles(rpZip);
     await applyPlayerEntityPass(rpZip);
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
@@ -513,7 +514,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
@@ -535,7 +536,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     writeAccum(bpZip, accum);
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
-    await mergeDefinitionsByIdentifier(bpZip);
+    await mergeDefinitionsByIdentifier(bpZip, mergeDiagnostics);
 
     // Scripted BP: one entry file importing every pack's entry
     if (type === 'behavior_script') {
@@ -681,6 +682,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       name: 'Identifier conflicts',
       status: conflicts.length > 0 ? 'resolved' : 'ok',
       detail: conflicts.length > 0 ? `${conflicts.length} collision(s) detected and resolved` : 'No identifier collisions detected'
+    }, {
+      name: 'Merge diagnostics',
+      status: mergeDiagnostics.length > 0 ? 'warning' : 'ok',
+      detail: mergeDiagnostics.length > 0 ? mergeDiagnostics.join(' | ') : 'No archive or definition merge warnings detected'
     }, {
       name: 'Script runtime property conflicts',
       status: conflictEntries.length > 0 ? 'warning' : 'ok',
