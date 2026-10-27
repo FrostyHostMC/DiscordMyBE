@@ -6,10 +6,10 @@ import {
   Boxes,
   ArrowRight,
   Clock,
-  Download
+  Download,
+  Sparkles
 } from 'lucide-react';
 import { TabType, MergedModpack, AddonPack } from '@/types/modpack';
-import { Sparkles } from 'lucide-react';
 
 interface HomeScreenProps {
   onStartCreate: () => void;
