@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { ShieldCheck, ShieldAlert, LoaderCircle, LockKeyhole } from 'lucide-react';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import App from '@/App.tsx';
 import { describeError } from '@/utils/errorLog';
@@ -187,12 +188,20 @@ function AccessGate() {
   if (state === 'allowed') return <App />;
 
   return (
-    <main className="min-h-screen w-full flex items-center justify-center bg-[#07050F] text-white p-6">
-      <section className="w-full max-w-sm rounded-2xl border border-purple-500/30 bg-[#0D091A] p-6 text-center shadow-2xl">
-        <div className="text-3xl mb-3">{state === 'checking' ? '🔐' : '⛔'}</div>
-        <h1 className="text-2xl font-black mb-2">Auto<span className="text-purple-400">BE</span></h1>
-        <p className="text-sm text-zinc-300 leading-relaxed break-words">{message}</p>
-        {state === 'checking' && <div className="mt-4 mx-auto h-1 w-28 overflow-hidden rounded-full bg-zinc-800"><div className="h-full w-1/2 animate-pulse rounded-full bg-purple-500" /></div>}
+    <main className="relative min-h-screen w-full overflow-hidden flex items-center justify-center bg-[#090710] text-white p-5 sm:p-6">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 40% at 50% 0%, rgba(118,43,255,0.18), transparent 75%)' }} />
+      <section className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#30263F] bg-[#100D18] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+        <div className="h-1 w-full bg-gradient-to-r from-[#762BFF] via-[#A855F7] to-[#4F13C4]" />
+        <div className="p-6 sm:p-8 text-center">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#762BFF]/40 bg-[#762BFF]/15 text-[#C4A5FF] shadow-[0_0_28px_rgba(118,43,255,0.16)]">
+            {state === 'checking' ? <LoaderCircle className="h-7 w-7 animate-spin" strokeWidth={1.8} /> : <ShieldAlert className="h-7 w-7" strokeWidth={1.8} />}
+          </div>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.24em] text-[#A78BDB]">Bedrock Merging Studio</p>
+          <h1 className="text-3xl font-black tracking-tight text-white">Auto<span className="text-[#A855F7]">BE</span></h1>
+          <div className="mx-auto my-5 h-px w-16 bg-[#762BFF]/50" />
+          <h2 className="mb-2 text-lg font-bold text-white">{state === 'checking' ? 'Securing your session' : 'Access unavailable'}</h2>
+          <p className="text-sm leading-relaxed text-[#AAA3BB] break-words">{message}</p>
+          {state === 'checking' && <div className="mt-6 flex items-center justify-center gap-2 text-xs font-medium text-[#A78BDB]"><LockKeyhole className="h-3.5 w-3.5" /> Verifying Discord access</div>}
         {state === 'denied' && (
           window.self === window.top ? (
             <button
@@ -217,19 +226,20 @@ function AccessGate() {
                   setMessage(`Could not start Discord sign-in: ${describeError(error)}`);
                 }
               }}
-              className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#762BFF] to-[#5D21C9] px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(118,43,255,0.24)] transition hover:brightness-110 active:scale-[0.98]"
             >
-              Sign in with Discord
+              <ShieldCheck className="h-4 w-4" /> Sign in with Discord
             </button>
           ) : (
             <button
               onClick={() => { setMessage('Retrying Discord connection…'); setState('checking'); setAttempt((value) => value + 1); }}
               className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
             >
-              Try again
+              <ShieldCheck className="h-4 w-4" /> Try again
             </button>
           )
         )}
+        </div>
       </section>
     </main>
   );
