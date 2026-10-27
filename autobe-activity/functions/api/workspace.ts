@@ -177,7 +177,6 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   if (!body.items.every(validItem)) return json({ error: 'One or more workspace items are invalid or too large.' }, 400);
 
   await ensureTable(env);
-  await pruneExpiredWorkspaceItems(env);
   const now = Date.now();
   const statements = body.items.map(item => env.DB.prepare(`
     INSERT INTO private_workspace_items (user_id, item_type, item_id, payload, updated_at)
@@ -199,7 +198,6 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Provide a valid type=pack|project and id.' }, 400);
   }
   await ensureTable(env);
-  await pruneExpiredWorkspaceItems(env);
   await env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?')
     .bind(auth.id, type, id).run();
   if (type === 'pack') {
