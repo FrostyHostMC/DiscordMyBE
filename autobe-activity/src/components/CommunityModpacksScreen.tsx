@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
+import { cleanDiscordDisplayName } from '@/utils/displayName';
 
 const authHeaders = (): Record<string, string> => {
   const auth = getDiscordAuth();
@@ -298,7 +299,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       const key = modpack.author_id || modpack.author;
       const current = creators.get(key) || {
         id: key,
-        name: modpack.author || 'Community creator',
+        name: cleanDiscordDisplayName(modpack.author) || 'Community creator',
         modpackCount: 0,
         downloads: 0
       };
@@ -515,7 +516,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 {/* Author info */}
                 <div className="flex items-center gap-2 text-[10px] text-[#716885]">
                   <User className="w-3 h-3" />
-                  <span>by {modpack.author}</span>
+                  <span>by {cleanDiscordDisplayName(modpack.author)}</span>
                   <span>•</span>
                   <span className="font-mono">{modpack.version}</span>
                 </div>
@@ -572,7 +573,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               </div>
               <div className="flex-1 min-w-0 space-y-2">
                 <h1 className="text-2xl font-bold break-words">{selectedModpack.name}</h1>
-                <p className="text-sm text-[#AAA3BB]">by {selectedModpack.author}</p>
+                <p className="text-sm text-[#AAA3BB]">by {cleanDiscordDisplayName(selectedModpack.author)}</p>
                 <div className="flex flex-wrap gap-2 text-xs text-[#AAA3BB]">
                   <span className="rounded-full border border-[#30263F] px-3 py-1">Version {selectedModpack.version}</span>
                   <span className="rounded-full border border-[#30263F] px-3 py-1">{selectedModpack.total_packs} packs</span>
