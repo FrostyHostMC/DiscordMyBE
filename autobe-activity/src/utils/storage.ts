@@ -11,6 +11,9 @@ const STORE_PACKS = 'addons_library';
 const STORE_MODPACKS = 'merged_modpacks';
 // Pack FILE bytes live in their own store so listing packs never loads them into memory.
 const STORE_FILES = 'pack_files';
+// Generated project archives are stored as binary records alongside pack files.
+const projectOutputKey = (projectId: string, outputId: string) => `project:${projectId}:output:${outputId}`;
+const projectCombinedKey = (projectId: string) => `project:${projectId}:combined`;
 
 // Personal workspace data must not expire before account sync is available.
 // Never automatically delete local packs/projects: a device may contain the only
@@ -212,17 +215,62 @@ export async function deletePackFromDB(id: string): Promise<void> {
 }
 
 export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
-  // Blobs for merged outputs are kept in memory for the current session only,
-  // so strip them before saving the metadata.
-  const modpackWithoutBlob = {
-    ...modpack,
+  // Save project metadata and generated files together. Files are stored as ArrayBuffers
+  // because Discord's mobile webview can be less reliable with Blob values in IndexedDB.
+  const { outputBlob, outputs, ...metadata } = modpack;
+  const storedProject = {
+    ...metadata,
     __autobeStoredAt: Date.now(),
-    outputBlob: undefined,
-    outputs: modpack.outputs?.map((out) => ({ ...out, blob: undefined })) || [],
+    outputs: (outputs || []).map(({ blob: _blob, ...out }) => {
+      void _blob;
+      return out;
+    }),
   };
-  await run(STORE_MODPACKS, 'readwrite', (tx) => {
-    tx.objectStore(STORE_MODPACKS).put(modpackWithoutBlob);
+  const files: StoredFile[] = [];
+  if (outputBlob) files.push({
+    id: projectCombinedKey(modpack.id),
+    fileData: await outputBlob.arrayBuffer(),
+    fileType: outputBlob.type || 'application/vnd.minecraft.mcaddon',
   });
+  for (const output of outputs || []) {
+    if (!output.blob) continue;
+    files.push({
+      id: projectOutputKey(modpack.id, output.id),
+      fileData: await output.blob.arrayBuffer(),
+      fileType: output.blob.type || 'application/octet-stream',
+    });
+  }
+  await run([STORE_MODPACKS, STORE_FILES], 'readwrite', (tx) => {
+    tx.objectStore(STORE_MODPACKS).put(storedProject);
+    const fileStore = tx.objectStore(STORE_FILES);
+    files.forEach(file => fileStore.put(file));
+  });
+}
+
+/** Rehydrates generated project files from local IndexedDB when available. */
+export async function loadModpackFiles(modpack: MergedModpack): Promise<MergedModpack> {
+  let outputBlob = modpack.outputBlob;
+  if (!outputBlob) {
+    const stored = await run<StoredFile | undefined>(STORE_FILES, 'readonly', tx =>
+      tx.objectStore(STORE_FILES).get(projectCombinedKey(modpack.id))
+    ) as StoredFile | undefined;
+    if (stored?.fileData) {
+      outputBlob = new Blob([stored.fileData], { type: stored.fileType || 'application/vnd.minecraft.mcaddon' });
+    }
+  }
+
+  const outputs = await Promise.all((modpack.outputs || []).map(async output => {
+    if (output.blob) return output;
+    const stored = await run<StoredFile | undefined>(STORE_FILES, 'readonly', tx =>
+      tx.objectStore(STORE_FILES).get(projectOutputKey(modpack.id, output.id))
+    ) as StoredFile | undefined;
+    if (!stored?.fileData) return output;
+    return {
+      ...output,
+      blob: new Blob([stored.fileData], { type: stored.fileType || 'application/octet-stream' }),
+    };
+  }));
+  return { ...modpack, ...(outputBlob ? { outputBlob } : {}), outputs };
 }
 
 export async function getAllModpacksFromDB(): Promise<MergedModpack[]> {
@@ -240,8 +288,15 @@ export async function getAllModpacksFromDB(): Promise<MergedModpack[]> {
 }
 
 export async function deleteModpackFromDB(id: string): Promise<void> {
-  await run(STORE_MODPACKS, 'readwrite', (tx) => {
+  const files = await run<StoredFile[]>(STORE_FILES, 'readonly', tx =>
+    tx.objectStore(STORE_FILES).getAll()
+  ) as StoredFile[];
+  const prefix = `project:${id}:`;
+  const related = files.filter(file => file.id.startsWith(prefix)).map(file => file.id);
+  await run([STORE_MODPACKS, STORE_FILES], 'readwrite', (tx) => {
     tx.objectStore(STORE_MODPACKS).delete(id);
+    const fileStore = tx.objectStore(STORE_FILES);
+    related.forEach(fileId => fileStore.delete(fileId));
   });
 }
 
