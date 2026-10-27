@@ -1188,6 +1188,7 @@ export const App: React.FC = () => {
                     libraryCount={installedPacks.length}
                     modpacks={myModpacks}
                     installedPacks={installedPacks}
+                    welcomeName={discordUser?.global_name || discordUser?.username}
                   />
                 )}
 
