@@ -9,6 +9,7 @@ import {
   Download
 } from 'lucide-react';
 import { TabType, MergedModpack, AddonPack } from '@/types/modpack';
+import { Sparkles } from 'lucide-react';
 
 interface HomeScreenProps {
   onStartCreate: () => void;
@@ -21,6 +22,7 @@ interface HomeScreenProps {
   libraryCount: number;
   modpacks: MergedModpack[];
   installedPacks: AddonPack[];
+  welcomeName?: string;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -43,7 +45,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   modpackCount,
   libraryCount,
   modpacks,
-  installedPacks
+  installedPacks,
+  welcomeName
 }) => {
   const behaviorCount = installedPacks.filter((p) => p.type === 'Behavior Pack').length;
   const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
@@ -53,6 +56,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 
   return (
     <div className="flex flex-col gap-5 px-4 sm:px-6 pt-5 pb-24 max-w-5xl w-full mx-auto select-none">
+      {welcomeName && (
+        <div className="flex items-center gap-3 rounded-xl border border-[#762BFF]/30 bg-gradient-to-r from-[#171027] to-[#100D18] px-4 py-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#762BFF]/40 bg-[#762BFF]/15 text-[#C4A5FF]">
+            <Sparkles className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A78BDB]">Discord connected</p>
+            <p className="truncate text-sm font-bold text-white">Welcome back, {welcomeName}</p>
+          </div>
+        </div>
+      )}
       {/* Overview Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 sm:p-6 rounded-2xl bg-[#100D18] border border-[#30263F]/70 shadow-[0_4px_24px_rgba(0,0,0,0.5)]">
         <div>
