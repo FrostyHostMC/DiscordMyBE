@@ -58,7 +58,12 @@ async function authenticatedUser(request: Request, env: Env): Promise<{ id: stri
       { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
     );
     if (memberResponse.status === 404) return json({ error: 'Join the AutoBE server and get the required role.' }, 403);
-    if (!memberResponse.ok) return json({ error: 'Could not verify the required Discord role.' }, 502);
+    if (memberResponse.status === 401) return json({ error: 'AutoBE cloud backup is not configured correctly: the Discord bot token is invalid or expired.' }, 503);
+    if (memberResponse.status === 403) return json({ error: 'AutoBE cloud backup cannot check roles: the Discord bot needs permission to view server members.' }, 503);
+    if (!memberResponse.ok) {
+      console.error('[Workspace] Discord member lookup failed with status:', memberResponse.status);
+      return json({ error: 'Discord role verification is temporarily unavailable. Your local workspace is unchanged; cloud backup was not completed.' }, 502);
+    }
     const member = await memberResponse.json() as { roles?: string[] };
     if (!Array.isArray(member.roles) || !member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID)) {
       return json({ error: 'You need the required AutoBE role to access your private workspace.' }, 403);
