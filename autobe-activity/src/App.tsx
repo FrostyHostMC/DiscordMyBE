@@ -25,6 +25,8 @@ import {
   getLastStorageError,
   deletePackFromDB,
   getAllModpacksFromDB,
+  loadModpackFiles,
+  cleanupExpiredLocalWorkspace,
   saveModpackToDB,
   deleteModpackFromDB,
   clearAllDB
@@ -191,7 +193,10 @@ export const App: React.FC = () => {
     let cancelled = false;
     const loadData = async () => {
       try {
-        const [storedPacks, storedModpacks] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
+        const expired = await cleanupExpiredLocalWorkspace();
+        if (expired.packs || expired.projects) showToast(`Removed ${expired.packs} inactive pack(s) and ${expired.projects} inactive project(s) older than 7 days.`, 6500);
+        const [storedPacks, storedModpackRows] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
+        const storedModpacks = await Promise.all(storedModpackRows.map(loadModpackFiles));
         if (cancelled) return;
         setInstalledPacks(storedPacks);
         setMyModpacks(storedModpacks);
