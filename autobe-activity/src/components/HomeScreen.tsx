@@ -9,6 +9,7 @@ import {
   Download
 } from 'lucide-react';
 import { TabType, MergedModpack, AddonPack } from '@/types/modpack';
+import { cleanDiscordDisplayName } from '@/utils/displayName';
 
 interface HomeScreenProps {
   onStartCreate: () => void;
@@ -51,16 +52,17 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 }) => {
   const behaviorCount = installedPacks.filter((p) => p.type === 'Behavior Pack').length;
   const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
+  const displayName = cleanDiscordDisplayName(welcomeName);
 
   const sortedModpacks = [...modpacks].sort((a, b) => b.createdAt - a.createdAt);
   const recentModpacks = sortedModpacks.slice(0, 4);
 
   return (
     <div className="flex flex-col gap-5 px-4 sm:px-6 pt-5 pb-24 max-w-5xl w-full mx-auto select-none">
-      {welcomeName && (
+      {displayName && (
         <div className="flex items-center gap-3 rounded-xl border border-[#762BFF]/30 bg-gradient-to-r from-[#171027] to-[#100D18] px-4 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {welcomeName}</p>
+            <p className="truncate text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {displayName}</p>
           </div>
         </div>
       )}
