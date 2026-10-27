@@ -120,5 +120,7 @@ export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; pr
     if (project.id.startsWith('demo-modpack-') || remoteProjectMap.has(project.id)) continue;
     await syncProjectToCloud(await loadModpackFiles(project)); uploaded++;
   }
-  return { packs: await getAllPacksFromDB(), projects: await getAllModpacksFromDB(), imported, uploaded };
+  const [packs, projectRows] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
+  const projects = await Promise.all(projectRows.map(loadModpackFiles));
+  return { packs, projects, imported, uploaded };
 }
