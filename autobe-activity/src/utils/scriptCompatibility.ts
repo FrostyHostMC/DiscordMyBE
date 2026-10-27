@@ -40,6 +40,20 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
     const typeId = body.match(/\btypeId\s*:\s*([^,\n]+)\s*,?/);
     const amount = body.match(/\bamount\s*:\s*(\d+)\s*,?/);
     const hasComponents = /\bcomponents\s*:\s*\{/.test(body);
+    let topLevelBody = body;
+    const componentsAt = body.search(/\bcomponents\s*:\s*\{/);
+    if (componentsAt >= 0) {
+      const componentsOpen = body.indexOf('{', componentsAt);
+      const componentsClose = matchingBrace(body, componentsOpen);
+      if (componentsClose >= 0) {
+        topLevelBody = body.slice(0, componentsAt) + body.slice(componentsClose + 1);
+      }
+    }
+    const topLevelProperties = [...topLevelBody
+      .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""')
+      .matchAll(/\b([A-Za-z_$][\w$]*)\s*:/g)]
+      .map((entry) => entry[1])
+      .filter((key) => key !== 'typeId' && key !== 'amount');
     const passedToInventory = new RegExp('\\.setItem\\s*\\([^,]+,\\s*' + variable + '\\s*\\)').test(source);
     const passedToSpawn = new RegExp('\\.spawnItem\\s*\\(\\s*' + variable + '\\s*,').test(source);
     if (!typeId || !amount || (!passedToInventory && !passedToSpawn)) {
@@ -57,7 +71,7 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
     const hasCanDestroy = keys.includes('minecraft:can_destroy');
     const hasDurability = keys.includes('minecraft:item_durability');
 
-    if ((!hasComponents && !/^\s*typeId\s*:\s*[^,]+,\s*amount\s*:\s*\d+\s*,?\s*$/.test(body)) || unknown.length || (hasLock && !lock) || (hasCanDestroy && !emptyCanDestroy) || (hasDurability && !zeroDurability)) {
+    if (topLevelProperties.length > 0 || (!hasComponents && !/^\s*typeId\s*:\s*[^,]+,\s*amount\s*:\s*\d+\s*,?\s*$/.test(body)) || unknown.length || (hasLock && !lock) || (hasCanDestroy && !emptyCanDestroy) || (hasDurability && !zeroDurability)) {
       diagnostics.push('Possible legacy plain-object ItemStack in ' + path + ' (' + variable + ') was not rewritten because its component data is not fully recognized. It may fail at runtime; inspect this script and the Script API version.');
       declaration.lastIndex = closeAt + 1;
       continue;
