@@ -16,7 +16,8 @@ import {
   Info,
   RefreshCw,
   Image as ImageIcon,
-  Eye
+  Eye,
+  Trophy
 } from 'lucide-react';
 import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
@@ -290,6 +291,27 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     m.author.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Rank community creators from the live published-pack list. Creator identity
+  // uses Discord author_id when available, so similarly named users aren't merged.
+  const topCreators = Array.from(
+    modpacks.reduce((creators, modpack) => {
+      const key = modpack.author_id || modpack.author;
+      const current = creators.get(key) || {
+        id: key,
+        name: modpack.author || 'Community creator',
+        modpackCount: 0,
+        downloads: 0
+      };
+      current.modpackCount += 1;
+      current.downloads += Number.isFinite(modpack.downloads) ? modpack.downloads : 0;
+      creators.set(key, current);
+      return creators;
+    }, new Map<string, { id: string; name: string; modpackCount: number; downloads: number }>())
+      .values()
+  )
+    .sort((a, b) => b.modpackCount - a.modpackCount || b.downloads - a.downloads || a.name.localeCompare(b.name))
+    .slice(0, 3);
+
   return (
     <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-hidden">
       {/* Header */}
@@ -349,6 +371,32 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
+        {!loading && !error && topCreators.length > 0 && (
+          <section className="rounded-xl border border-[#762BFF]/30 bg-gradient-to-br from-[#171027] to-[#100D18] p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <Trophy className="h-4 w-4 text-[#C4A7FF]" aria-hidden="true" />
+              <div>
+                <h2 className="text-sm font-bold text-white">Top Creators</h2>
+                <p className="text-[10px] text-[#AAA3BB]">Community members ranked by published modpacks</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              {topCreators.map((creator, index) => (
+                <div key={creator.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#30263F] bg-[#0D0B19]/80 p-3">
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-[#762BFF]/25 text-[#D9C5FF]' : 'bg-[#201A2E] text-[#AAA3BB]'}`}>
+                    #{index + 1}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-bold text-white">{creator.name}</p>
+                    <p className="text-[10px] text-[#AAA3BB]">
+                      {creator.modpackCount} modpack{creator.modpackCount === 1 ? '' : 's'} · {creator.downloads} downloads
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         {usage && (
           <div className="p-3 rounded-lg border border-[#30263F] bg-[#100D18] text-xs text-[#AAA3BB] space-y-1">
             <p className="font-bold text-white">Cloudflare usage estimate</p>
