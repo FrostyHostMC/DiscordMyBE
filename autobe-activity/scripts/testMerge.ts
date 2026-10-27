@@ -309,3 +309,42 @@ await (async () => {
   assert.equal(secondPass, 0, 'event guard pass must be idempotent');
   console.log('✓ unavailable Script API event subscriptions are guarded without add-on-specific rules');
 })();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('scripts/legacy-item.js', [
+    'const item = {',
+    '  typeId: "minecraft:stick",',
+    '  amount: 1,',
+    '  components: {',
+    '    "minecraft:item_lock": { mode: "lock_in_slot" },',
+    '    "minecraft:can_destroy": { blocks: [] },',
+    '    "minecraft:item_durability": { damage: 0, max_durability: 0 }',
+    '  }',
+    '};',
+    'inventory.setItem(8, item);'
+  ].join('\n'));
+  const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
+  assert.equal(changed, 1);
+  const output = await zip.file('scripts/legacy-item.js')!.async('text');
+  assert.ok(output.includes('new AutoBEItemStack("minecraft:stick", 1)'));
+  assert.ok(output.includes('ItemLockMode as AutoBEItemLockMode'));
+  assert.ok(output.includes('item.lockMode = AutoBEItemLockMode.slot'));
+  assert.ok(output.includes('item.setCanDestroy([])'));
+  assert.ok(diagnostics.some(message => message.includes('Converted legacy plain-object ItemStack')));
+
+  const unsafe = new JSZip();
+  const unsafeDiagnostics: string[] = [];
+  unsafe.file('scripts/unsafe-item.js', [
+    'const item = { typeId: "custom:item", amount: 1, components: { "minecraft:custom_component": { value: 2 } } };',
+    'inventory.setItem(0, item);'
+  ].join('\n'));
+  await guardUnavailableEventSubscriptions(unsafe, unsafeDiagnostics);
+  const preserved = await unsafe.file('scripts/unsafe-item.js')!.async('text');
+  assert.ok(preserved.includes('"minecraft:custom_component"'));
+  assert.ok(preserved.includes('const item = {'));
+  assert.ok(unsafeDiagnostics.some(message => message.includes('was not rewritten')));
+  console.log('✓ legacy plain-object ItemStacks are converted only when recognized; unknown components are preserved with diagnostics');
+})();
