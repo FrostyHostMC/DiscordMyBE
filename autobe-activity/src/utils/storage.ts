@@ -300,6 +300,53 @@ export async function deleteModpackFromDB(id: string): Promise<void> {
   });
 }
 
+/**
+ * Seven-day inactivity cleanup for device-local private workspace data only.
+ * Community/public data is stored separately and is never queried or deleted here.
+ * Legacy rows without a timestamp are stamped now so an upgrade cannot erase them.
+ */
+export async function cleanupExpiredLocalWorkspace(now = Date.now()): Promise<{ packs: number; projects: number }> {
+  const cutoff = now - 7 * 24 * 60 * 60 * 1000;
+  const packs = ((await run<LegacyPackRow[]>(STORE_PACKS, 'readonly', tx => tx.objectStore(STORE_PACKS).getAll())) || []) as (LegacyPackRow & { __autobeStoredAt?: number })[];
+  const projects = ((await run<Array<MergedModpack & { __autobeStoredAt?: number }>>(STORE_MODPACKS, 'readonly', tx => tx.objectStore(STORE_MODPACKS).getAll())) || []) as Array<MergedModpack & { __autobeStoredAt?: number }>;
+  const expiredPackIds: string[] = [];
+  const expiredProjectIds: string[] = [];
+
+  for (const pack of packs) {
+    if (typeof pack.__autobeStoredAt !== 'number') {
+      await run(STORE_PACKS, 'readwrite', tx => tx.objectStore(STORE_PACKS).put({ ...pack, __autobeStoredAt: now }));
+    } else if (pack.__autobeStoredAt < cutoff) {
+      expiredPackIds.push(pack.id);
+    }
+  }
+  for (const project of projects) {
+    if (typeof project.__autobeStoredAt !== 'number') {
+      await run(STORE_MODPACKS, 'readwrite', tx => tx.objectStore(STORE_MODPACKS).put({ ...project, __autobeStoredAt: now }));
+    } else if (project.__autobeStoredAt < cutoff) {
+      expiredProjectIds.push(project.id);
+    }
+  }
+
+  if (expiredPackIds.length || expiredProjectIds.length) {
+    const storedFiles = ((await run<StoredFile[]>(STORE_FILES, 'readonly', tx => tx.objectStore(STORE_FILES).getAll())) || []) as StoredFile[];
+    const expiredPackSet = new Set(expiredPackIds);
+    const expiredProjectSet = new Set(expiredProjectIds);
+    const expiredFileIds = storedFiles
+      .filter(file => expiredPackSet.has(file.id) || [...expiredProjectSet].some(id => file.id.startsWith(`project:${id}:`)))
+      .map(file => file.id);
+    await run([STORE_PACKS, STORE_MODPACKS, STORE_FILES], 'readwrite', tx => {
+      const packStore = tx.objectStore(STORE_PACKS);
+      const projectStore = tx.objectStore(STORE_MODPACKS);
+      const fileStore = tx.objectStore(STORE_FILES);
+      expiredPackIds.forEach(id => packStore.delete(id));
+      expiredProjectIds.forEach(id => projectStore.delete(id));
+      expiredFileIds.forEach(id => fileStore.delete(id));
+    });
+    expiredPackIds.forEach(id => memoryPacks.delete(id));
+  }
+  return { packs: expiredPackIds.length, projects: expiredProjectIds.length };
+}
+
 export async function clearAllDB(): Promise<void> {
   memoryPacks.clear();
   await run([STORE_PACKS, STORE_FILES, STORE_MODPACKS], 'readwrite', (tx) => {
