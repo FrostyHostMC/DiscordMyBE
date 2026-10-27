@@ -6,8 +6,7 @@ import {
   Boxes,
   ArrowRight,
   Clock,
-  Download,
-  Sparkles
+  Download
 } from 'lucide-react';
 import { TabType, MergedModpack, AddonPack } from '@/types/modpack';
 
@@ -60,11 +59,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
     <div className="flex flex-col gap-5 px-4 sm:px-6 pt-5 pb-24 max-w-5xl w-full mx-auto select-none">
       {welcomeName && (
         <div className="flex items-center gap-3 rounded-xl border border-[#762BFF]/30 bg-gradient-to-r from-[#171027] to-[#100D18] px-4 py-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#762BFF]/40 bg-[#762BFF]/15 text-[#C4A5FF]">
-            <Sparkles className="h-4 w-4" aria-hidden="true" />
-          </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A78BDB]">Discord connected</p>
             <p className="truncate text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {welcomeName}</p>
           </div>
         </div>
