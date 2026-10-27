@@ -42,7 +42,7 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
     const hasComponents = /\bcomponents\s*:\s*\{/.test(body);
     const passedToInventory = new RegExp('\\.setItem\\s*\\([^,]+,\\s*' + variable + '\\s*\\)').test(source);
     const passedToSpawn = new RegExp('\\.spawnItem\\s*\\(\\s*' + variable + '\\s*,').test(source);
-    if (!typeId || !amount || !hasComponents || (!passedToInventory && !passedToSpawn)) {
+    if (!typeId || !amount || (!passedToInventory && !passedToSpawn)) {
       declaration.lastIndex = closeAt + 1;
       continue;
     }
@@ -57,7 +57,7 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
     const hasCanDestroy = keys.includes('minecraft:can_destroy');
     const hasDurability = keys.includes('minecraft:item_durability');
 
-    if (unknown.length || (hasLock && !lock) || (hasCanDestroy && !emptyCanDestroy) || (hasDurability && !zeroDurability)) {
+    if ((!hasComponents && !/^\s*typeId\s*:\s*[^,]+,\s*amount\s*:\s*\d+\s*,?\s*$/.test(body)) || unknown.length || (hasLock && !lock) || (hasCanDestroy && !emptyCanDestroy) || (hasDurability && !zeroDurability)) {
       diagnostics.push('Possible legacy plain-object ItemStack in ' + path + ' (' + variable + ') was not rewritten because its component data is not fully recognized. It may fail at runtime; inspect this script and the Script API version.');
       declaration.lastIndex = closeAt + 1;
       continue;
@@ -65,7 +65,8 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
 
     const mode = lock?.[1] === 'lock_in_slot' ? 'slot' : lock?.[1] === 'lock_in_inventory' ? 'inventory' : 'none';
     const replacement = match[1] + ' ' + variable + ' = new AutoBEItemStack(' + typeId[1].trim() + ', ' + amount[1] + ');' +
-      (lock ? '\n' + variable + '.lockMode = AutoBEItemLockMode.' + mode + ';' : '');
+      (lock ? '\n' + variable + '.lockMode = AutoBEItemLockMode.' + mode + ';' : '') +
+      (hasCanDestroy ? '\n' + variable + '.setCanDestroy([]);' : '');
     edits.push({ start: match.index, end: closeAt + 1, replacement });
     diagnostics.push(
       'Converted legacy plain-object ItemStack ' + variable + ' in ' + path +
