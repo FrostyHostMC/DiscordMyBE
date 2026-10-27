@@ -715,13 +715,10 @@ export const App: React.FC = () => {
     triggerHaptic(50);
     console.log('[Delete Pack] Deleting pack:', id);
     try {
+      // Confirm cloud deletion before removing the only local copy. Fire-and-forget
+      // deletes race app closure and allow startup sync to resurrect the item.
+      if (getDiscordAuth()?.token) await deleteWorkspaceItemFromCloud('pack', id);
       await deletePackFromDB(id);
-      if (getDiscordAuth()?.token) {
-        void deleteWorkspaceItemFromCloud('pack', id).catch(err => {
-          console.error('[WorkspaceSync] Cloud pack delete failed:', describeError(err));
-          showToast(`Pack deleted locally, but cloud copy could not be removed: ${describeError(err)}`, 9000);
-        });
-      }
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
       setSelectedPackIds((prev) => prev.filter((x) => x !== id));
@@ -737,14 +734,11 @@ export const App: React.FC = () => {
     triggerHaptic(50);
     console.log('[Delete Selected] Deleting packs:', ids);
     try {
-      for (const id of ids) {
-        await deletePackFromDB(id);
-        if (getDiscordAuth()?.token) {
-          void deleteWorkspaceItemFromCloud('pack', id).catch(err => {
-            console.error('[WorkspaceSync] Cloud pack delete failed:', describeError(err));
-          });
-        }
+      // Delete cloud copies first so a failed request cannot be mistaken for success.
+      if (getDiscordAuth()?.token) {
+        for (const id of ids) await deleteWorkspaceItemFromCloud('pack', id);
       }
+      for (const id of ids) await deletePackFromDB(id);
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
       setSelectedPackIds([]);
@@ -960,13 +954,9 @@ export const App: React.FC = () => {
   const handleDeleteModpack = async (id: string) => {
     triggerHaptic(50);
     try {
+      // Wait for private cloud deletion before removing the local project.
+      if (getDiscordAuth()?.token) await deleteWorkspaceItemFromCloud('project', id);
       await deleteModpackFromDB(id);
-      if (getDiscordAuth()?.token) {
-        void deleteWorkspaceItemFromCloud('project', id).catch(err => {
-          console.error('[WorkspaceSync] Cloud project delete failed:', describeError(err));
-          showToast(`Project deleted locally, but cloud copy could not be removed: ${describeError(err)}`, 9000);
-        });
-      }
       const updated = await getAllModpacksFromDB();
       setMyModpacks(updated);
       if (activeModpack?.id === id) {
