@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
+import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -284,4 +285,27 @@ await (async () => {
   assert.ok(zip.file('attachables/stick(Copy).json'));
   assert.ok(diagnostics.some(message => message.includes('Conflicting attachables share identifier "minecraft:stick"')));
   console.log('✓ identical attachables deduplicate while incompatible visual rigs remain explicit');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('scripts/main.js', [
+    'world.afterEvents.cameraChange.subscribe((event) => {});',
+    'world.beforeEvents.inventory.drop.subscribe((event) => {});',
+    'world.afterEvents.itemUse?.subscribe?.((event) => {});'
+  ].join('\n'));
+
+  const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
+  assert.equal(changed, 1);
+  const output = await zip.file('scripts/main.js')!.async('text');
+  assert.ok(output.includes('world.afterEvents.cameraChange?.subscribe?.('));
+  assert.ok(output.includes('world.beforeEvents.inventory?.drop?.subscribe?.('));
+  assert.ok(output.includes('world.afterEvents.itemUse?.subscribe?.('));
+  assert.equal(diagnostics.length, 1);
+
+  const secondPass = await guardUnavailableEventSubscriptions(zip, diagnostics);
+  assert.equal(secondPass, 0, 'event guard pass must be idempotent');
+  console.log('✓ unavailable Script API event subscriptions are guarded without add-on-specific rules');
 })();
