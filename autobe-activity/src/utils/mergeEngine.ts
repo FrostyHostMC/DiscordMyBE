@@ -12,6 +12,7 @@ import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
+import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -204,6 +205,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics?: string[]): Promise<void> {
   await expandBrarchiveFiles(zip, diagnostics);
+  await guardUnavailableEventSubscriptions(zip, diagnostics);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
