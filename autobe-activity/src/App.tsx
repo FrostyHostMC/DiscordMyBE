@@ -37,6 +37,7 @@ import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
+import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud } from '@/utils/workspaceSync';
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -184,25 +185,38 @@ export const App: React.FC = () => {
     return () => clearTimeout(t);
   }, [keepOriginalsTweak]);
 
-  // Initial data loading from IndexedDB
+  // Load device data immediately, then reconcile with the authenticated Discord account.
+  // If cloud sync fails, local work remains available and is never cleared.
   useEffect(() => {
+    let cancelled = false;
     const loadData = async () => {
       try {
-        const storedPacks = await getAllPacksFromDB();
-        // Keep the workspace strictly device-local. An empty database means empty;
-        // never re-seed deleted/imported packs or projects on the next launch.
+        const [storedPacks, storedModpacks] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
+        if (cancelled) return;
         setInstalledPacks(storedPacks);
-
-        const storedModpacks = await getAllModpacksFromDB();
         setMyModpacks(storedModpacks);
 
+        if (getDiscordAuth()?.token) {
+          try {
+            const synced = await syncWorkspaceOnStartup();
+            if (cancelled) return;
+            setInstalledPacks(synced.packs);
+            setMyModpacks(synced.projects);
+            if (synced.imported > 0 || synced.uploaded > 0) {
+              showToast(`Cloud sync complete: restored ${synced.imported}, backed up ${synced.uploaded} workspace item(s).`, 6500);
+            }
+          } catch (syncErr) {
+            console.error('[WorkspaceSync] Cloud sync failed; keeping local data:', describeError(syncErr));
+            if (!cancelled) showToast(`Cloud backup not complete: ${describeError(syncErr)}. Your device data was kept.`, 9000);
+          }
+        }
       } catch (err) {
         console.error('[Aippy] Initialization error:', describeError(err));
-        showToast(`Could not load your saved packs: ${describeError(err)}`);
+        if (!cancelled) showToast(`Could not load your saved packs: ${describeError(err)}`);
       }
     };
-
-    loadData();
+    void loadData();
+    return () => { cancelled = true; };
   }, []);
 
   // Toggle selection for pack merge
@@ -274,6 +288,15 @@ export const App: React.FC = () => {
       setInstalledPacks(await getAllPacksFromDB());
     } catch (err) {
       console.error('[Import] Could not refresh list:', describeError(err));
+    }
+
+    // Back up successful imports. A cloud error must not undo or hide the local save.
+    const savedPacks = trulyNew.filter(p => persisted + memoryOnly > 0);
+    if (savedPacks.length > 0 && getDiscordAuth()?.token) {
+      void Promise.all(savedPacks.map(pack => syncPackToCloud(pack))).catch(err => {
+        console.error('[WorkspaceSync] Pack backup failed:', describeError(err));
+        showToast(`Pack(s) saved on this device, but cloud backup failed: ${describeError(err)}`, 9000);
+      });
     }
 
     const skipped = newPacks.length - trulyNew.length;
@@ -441,6 +464,12 @@ export const App: React.FC = () => {
         await saveModpackToDB(result);
         const updatedModpacks = await getAllModpacksFromDB();
         setMyModpacks(updatedModpacks);
+        if (getDiscordAuth()?.token) {
+          void syncProjectToCloud(result).catch(err => {
+            console.error('[WorkspaceSync] Project backup failed:', describeError(err));
+            showToast(`Project saved locally, but cloud backup failed: ${describeError(err)}`, 9000);
+          });
+        }
       } catch (saveErr) {
         // The merged file itself is fine — only the history entry failed to save.
         console.error('[Aippy] Could not save merge to history:', describeError(saveErr));
@@ -681,6 +710,12 @@ export const App: React.FC = () => {
     console.log('[Delete Pack] Deleting pack:', id);
     try {
       await deletePackFromDB(id);
+      if (getDiscordAuth()?.token) {
+        void deleteWorkspaceItemFromCloud('pack', id).catch(err => {
+          console.error('[WorkspaceSync] Cloud pack delete failed:', describeError(err));
+          showToast(`Pack deleted locally, but cloud copy could not be removed: ${describeError(err)}`, 9000);
+        });
+      }
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
       setSelectedPackIds((prev) => prev.filter((x) => x !== id));
@@ -698,6 +733,11 @@ export const App: React.FC = () => {
     try {
       for (const id of ids) {
         await deletePackFromDB(id);
+        if (getDiscordAuth()?.token) {
+          void deleteWorkspaceItemFromCloud('pack', id).catch(err => {
+            console.error('[WorkspaceSync] Cloud pack delete failed:', describeError(err));
+          });
+        }
       }
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
@@ -911,6 +951,12 @@ export const App: React.FC = () => {
     triggerHaptic(50);
     try {
       await deleteModpackFromDB(id);
+      if (getDiscordAuth()?.token) {
+        void deleteWorkspaceItemFromCloud('project', id).catch(err => {
+          console.error('[WorkspaceSync] Cloud project delete failed:', describeError(err));
+          showToast(`Project deleted locally, but cloud copy could not be removed: ${describeError(err)}`, 9000);
+        });
+      }
       const updated = await getAllModpacksFromDB();
       setMyModpacks(updated);
       if (activeModpack?.id === id) {
@@ -927,6 +973,12 @@ export const App: React.FC = () => {
   // Update an existing modpack in storage and UI state (e.g. after customization)
   const handleUpdateModpack = async (updated: MergedModpack) => {
     await saveModpackToDB(updated);
+    if (getDiscordAuth()?.token) {
+      void syncProjectToCloud(updated).catch(err => {
+        console.error('[WorkspaceSync] Project update backup failed:', describeError(err));
+        showToast(`Project updated locally, but cloud backup failed: ${describeError(err)}`, 9000);
+      });
+    }
     setMyModpacks((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     if (activeModpack?.id === updated.id) {
       setActiveModpack(updated);
