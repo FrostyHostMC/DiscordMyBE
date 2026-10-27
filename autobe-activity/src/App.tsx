@@ -750,17 +750,21 @@ export const App: React.FC = () => {
     }
   };
 
-  // Delete all packs
+  // Delete all source packs without accidentally deleting saved projects.
   const handleDeleteAllPacks = async () => {
     triggerHaptic(50);
     try {
-      await clearAllDB();
+      const packs = await getAllPacksFromDB();
+      if (getDiscordAuth()?.token) {
+        for (const pack of packs) await deleteWorkspaceItemFromCloud('pack', pack.id);
+      }
+      for (const pack of packs) await deletePackFromDB(pack.id);
       setInstalledPacks([]);
       setSelectedPackIds([]);
-      showToast('All packs removed from workspace');
+      showToast('All source packs removed from this workspace');
     } catch (err) {
       console.error('[Delete All] Error:', err);
-      showToast(`Failed to clear storage: ${describeError(err)}`);
+      showToast(`Could not fully delete packs: ${describeError(err)}`, 9000);
     }
   };
 
@@ -995,13 +999,19 @@ export const App: React.FC = () => {
   const handleClearDemoData = async () => {
     triggerHaptic(90);
     try {
+      // Remove cloud copies first so the next startup cannot resurrect explicitly cleared data.
+      if (getDiscordAuth()?.token) {
+        const [packs, projects] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
+        for (const pack of packs) await deleteWorkspaceItemFromCloud('pack', pack.id);
+        for (const project of projects) await deleteWorkspaceItemFromCloud('project', project.id);
+      }
       await clearAllDB();
       setInstalledPacks([]);
       setMyModpacks([]);
       setSelectedPackIds([]);
       showToast('Cleared all addons and modpacks data.');
     } catch (err) {
-      showToast(`Failed to clear data: ${describeError(err)}`);
+      showToast(`Could not fully clear workspace data: ${describeError(err)}`, 9000);
     }
   };
 
