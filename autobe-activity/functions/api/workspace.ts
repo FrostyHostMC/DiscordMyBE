@@ -118,6 +118,26 @@ async function pruneExpiredWorkspaceItems(env: Env): Promise<void> {
       await deleteR2Prefix(env, `private-workspaces/${item.userId}/projects/${encodeURIComponent(item.id)}/`);
     }
   }
+
+  // Remove seven-day-old orphan files too, but retain every file namespace belonging
+  // to an active metadata row. Community uploads use different prefixes and are excluded.
+  const active = await env.DB.prepare(
+    'SELECT user_id AS userId, item_type AS type, item_id AS id FROM private_workspace_items'
+  ).all<{ userId: string; type: ItemType; id: string }>();
+  const activePrefixes = (active.results || []).map(item => item.type === 'pack'
+    ? `private-workspaces/${item.userId}/packs/${encodeURIComponent(item.id)}`
+    : `private-workspaces/${item.userId}/projects/${encodeURIComponent(item.id)}/`);
+
+  let cursor: string | undefined;
+  do {
+    const page = await env.BUCKET.list({ prefix: 'private-workspaces/', limit: 1000, cursor });
+    const staleKeys = page.objects
+      .filter(object => object.uploaded && object.uploaded.getTime() < cutoff
+        && !activePrefixes.some(prefix => object.key.startsWith(prefix)))
+      .map(object => object.key);
+    if (staleKeys.length) await env.BUCKET.delete(staleKeys);
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
 }
 
 function validItem(item: unknown): item is WorkspaceItem {
