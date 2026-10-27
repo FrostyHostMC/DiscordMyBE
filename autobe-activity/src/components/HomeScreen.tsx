@@ -23,6 +23,7 @@ interface HomeScreenProps {
   modpacks: MergedModpack[];
   installedPacks: AddonPack[];
   welcomeName?: string;
+  isReturningUser?: boolean;
 }
 
 const formatBytes = (bytes: number): string => {
@@ -46,7 +47,8 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
   libraryCount,
   modpacks,
   installedPacks,
-  welcomeName
+  welcomeName,
+  isReturningUser = true
 }) => {
   const behaviorCount = installedPacks.filter((p) => p.type === 'Behavior Pack').length;
   const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
@@ -63,7 +65,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#A78BDB]">Discord connected</p>
-            <p className="truncate text-sm font-bold text-white">Welcome back, {welcomeName}</p>
+            <p className="truncate text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {welcomeName}</p>
           </div>
         </div>
       )}
