@@ -162,6 +162,17 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   })) });
 };
 
+/** Mark this Discord account active without re-uploading every binary file. */
+export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+  const auth = await authenticatedUser(request, env);
+  if (isResponse(auth)) return auth;
+  await ensureTable(env);
+  const now = Date.now();
+  await env.DB.prepare('UPDATE private_workspace_items SET updated_at = ? WHERE user_id = ?')
+    .bind(now, auth.id).run();
+  return json({ touched: true, updatedAt: now });
+};
+
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   const auth = await authenticatedUser(request, env);
   if (isResponse(auth)) return auth;
