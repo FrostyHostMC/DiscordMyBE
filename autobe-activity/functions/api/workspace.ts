@@ -86,6 +86,40 @@ function isResponse(value: { id: string } | Response): value is Response {
   return value instanceof Response;
 }
 
+const PRIVATE_WORKSPACE_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
+
+async function deleteR2Prefix(env: Env, prefix: string): Promise<void> {
+  let cursor: string | undefined;
+  do {
+    const page = await env.BUCKET.list({ prefix, limit: 1000, cursor });
+    if (page.objects.length) await env.BUCKET.delete(page.objects.map(object => object.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+}
+
+/**
+ * Expire old private workspaces for every account, not just the account making
+ * this request. Public/community objects live under other prefixes and are never touched.
+ * R2 lifecycle rules provide the unattended binary-file expiry; this removes matching
+ * D1 metadata and any remaining per-user objects on the next workspace API request.
+ */
+async function pruneExpiredWorkspaceItems(env: Env): Promise<void> {
+  const cutoff = Date.now() - PRIVATE_WORKSPACE_RETENTION_MS;
+  const expired = await env.DB.prepare(
+    'SELECT user_id AS userId, item_type AS type, item_id AS id FROM private_workspace_items WHERE updated_at < ?'
+  ).bind(cutoff).all<{ userId: string; type: ItemType; id: string }>();
+
+  for (const item of expired.results || []) {
+    await env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ? AND updated_at < ?')
+      .bind(item.userId, item.type, item.id, cutoff).run();
+    if (item.type === 'pack') {
+      await env.BUCKET.delete(`private-workspaces/${item.userId}/packs/${encodeURIComponent(item.id)}`);
+    } else {
+      await deleteR2Prefix(env, `private-workspaces/${item.userId}/projects/${encodeURIComponent(item.id)}/`);
+    }
+  }
+}
+
 function validItem(item: unknown): item is WorkspaceItem {
   if (!item || typeof item !== 'object') return false;
   const value = item as Partial<WorkspaceItem>;
@@ -99,6 +133,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
   const auth = await authenticatedUser(request, env);
   if (isResponse(auth)) return auth;
   await ensureTable(env);
+  await pruneExpiredWorkspaceItems(env);
   const rows = await env.DB.prepare(
     'SELECT item_type AS type, item_id AS id, payload, updated_at AS updatedAt FROM private_workspace_items WHERE user_id = ? ORDER BY updated_at ASC'
   ).bind(auth.id).all<{ type: ItemType; id: string; payload: string; updatedAt: number }>();
@@ -122,6 +157,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
   if (!body.items.every(validItem)) return json({ error: 'One or more workspace items are invalid or too large.' }, 400);
 
   await ensureTable(env);
+  await pruneExpiredWorkspaceItems(env);
   const now = Date.now();
   const statements = body.items.map(item => env.DB.prepare(`
     INSERT INTO private_workspace_items (user_id, item_type, item_id, payload, updated_at)
@@ -143,6 +179,7 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: 'Provide a valid type=pack|project and id.' }, 400);
   }
   await ensureTable(env);
+  await pruneExpiredWorkspaceItems(env);
   await env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?')
     .bind(auth.id, type, id).run();
   if (type === 'pack') {
