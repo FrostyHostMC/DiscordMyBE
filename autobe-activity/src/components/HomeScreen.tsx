@@ -62,7 +62,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
       {displayName && (
         <div className="flex items-center gap-3 rounded-xl border border-[#762BFF]/30 bg-gradient-to-r from-[#171027] to-[#100D18] px-4 py-3">
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {displayName}</p>
+            <p className="whitespace-normal break-all text-sm font-bold text-white">{isReturningUser ? 'Welcome back' : 'Welcome'}, {displayName}</p>
           </div>
         </div>
       )}
