@@ -233,7 +233,7 @@ function AccessGate() {
           ) : (
             <button
               onClick={() => { setMessage('Retrying Discord connection…'); setState('checking'); setAttempt((value) => value + 1); }}
-              className="mt-5 rounded-xl bg-purple-700 px-5 py-3 text-sm font-bold"
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#762BFF] to-[#5D21C9] px-5 py-3.5 text-sm font-bold text-white shadow-[0_8px_24px_rgba(118,43,255,0.24)] transition hover:brightness-110 active:scale-[0.98]"
             >
               <ShieldCheck className="h-4 w-4" /> Try again
             </button>
