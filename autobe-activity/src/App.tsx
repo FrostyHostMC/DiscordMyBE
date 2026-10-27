@@ -271,9 +271,11 @@ export const App: React.FC = () => {
     let persisted = 0;
     let memoryOnly = 0;
     let firstError: string | null = null;
+    const successfullySaved: AddonPack[] = [];
     for (const p of trulyNew) {
       try {
         const where = await savePackToDB(p);
+        successfullySaved.push(p);
         if (where === 'saved') persisted++;
         else memoryOnly++;
       } catch (err) {
@@ -291,9 +293,8 @@ export const App: React.FC = () => {
     }
 
     // Back up successful imports. A cloud error must not undo or hide the local save.
-    const savedPacks = trulyNew.filter(p => persisted + memoryOnly > 0);
-    if (savedPacks.length > 0 && getDiscordAuth()?.token) {
-      void Promise.all(savedPacks.map(pack => syncPackToCloud(pack))).catch(err => {
+    if (successfullySaved.length > 0 && getDiscordAuth()?.token) {
+      void Promise.all(successfullySaved.map(pack => syncPackToCloud(pack))).catch(err => {
         console.error('[WorkspaceSync] Pack backup failed:', describeError(err));
         showToast(`Pack(s) saved on this device, but cloud backup failed: ${describeError(err)}`, 9000);
       });
