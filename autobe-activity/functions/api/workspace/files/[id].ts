@@ -28,7 +28,12 @@ async function authorize(request: Request, env: Env): Promise<string | Response>
     if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
     const memberRes = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
     if (memberRes.status === 404) return json({ error: 'Join the AutoBE server and get the required role.' }, 403);
-    if (!memberRes.ok) return json({ error: 'Could not verify the required Discord role.' }, 502);
+    if (memberRes.status === 401) return json({ error: 'AutoBE cloud backup is not configured correctly: the Discord bot token is invalid or expired.' }, 503);
+    if (memberRes.status === 403) return json({ error: 'AutoBE cloud backup cannot check roles: the Discord bot needs permission to view server members.' }, 503);
+    if (!memberRes.ok) {
+      console.error('[Workspace files] Discord member lookup failed with status:', memberRes.status);
+      return json({ error: 'Discord role verification is temporarily unavailable. Your local workspace is unchanged; cloud backup was not completed.' }, 502);
+    }
     const member = await memberRes.json() as { roles?: string[] };
     if (!member.roles?.includes(env.DISCORD_REQUIRED_ROLE_ID)) return json({ error: 'You need the required AutoBE role.' }, 403);
     return me.id;
