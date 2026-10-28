@@ -9,8 +9,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
-import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from '../src/utils/assetCollision.ts';
-import { applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
+import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
