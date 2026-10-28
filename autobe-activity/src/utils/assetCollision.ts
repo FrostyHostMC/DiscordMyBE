@@ -70,3 +70,26 @@ export async function planBinaryAssetCollisions(
   }
   return pathMap;
 }
+
+export async function applyVanillaAssetResolutions(
+  targetZip: JSZip,
+  packs: Array<{ id: string; name: string; type: string; fileBlob?: Blob }>,
+  conflicts: Array<{ type: string; resolution: string; identifier: string; packB: { id: string; name: string } }>,
+  packType: string,
+  diagnostics: string[]
+): Promise<void> {
+  for (const conflict of conflicts) {
+    if (conflict.type !== 'vanilla_asset' || conflict.resolution !== 'keep_b') continue;
+    const winner = packs.find(pack => pack.id === conflict.packB.id && pack.type === packType);
+    if (!winner?.fileBlob) continue;
+    const sourceZip = await JSZip.loadAsync(winner.fileBlob);
+    const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === conflict.identifier.toLowerCase());
+    const sourceFile = sourcePath ? sourceZip.file(sourcePath) : null;
+    if (!sourceFile) {
+      diagnostics.push(`WARNING VANILLA_OVERRIDE_CHOICE [${conflict.identifier}]: Selected add-on "${winner.name}" no longer contains this asset; kept the existing merged version.`);
+      continue;
+    }
+    targetZip.file(conflict.identifier, await sourceFile.async('uint8array'));
+    diagnostics.push(`INFO VANILLA_OVERRIDE_CHOICE [${conflict.identifier}]: Kept the version supplied by "${winner.name}" as requested.`);
+  }
+}
