@@ -14,7 +14,7 @@ import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 import { validateMergedArchive } from './mergedArchiveValidation';
-import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from './assetCollision';
+import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { applyFeatureRegistry } from './featureRegistry';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
