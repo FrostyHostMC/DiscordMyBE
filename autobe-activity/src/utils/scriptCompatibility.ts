@@ -45,9 +45,7 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
     if (componentsAt >= 0) {
       const componentsOpen = body.indexOf('{', componentsAt);
       const componentsClose = matchingBrace(body, componentsOpen);
-      if (componentsClose >= 0) {
-        topLevelBody = body.slice(0, componentsAt) + body.slice(componentsClose + 1);
-      }
+      if (componentsClose >= 0) topLevelBody = body.slice(0, componentsAt) + body.slice(componentsClose + 1);
     }
     const topLevelProperties = [...topLevelBody
       .replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/g, '""')
@@ -107,6 +105,34 @@ function repairRecognizableLegacyItemStacks(source: string, path: string, diagno
   return { source: updated, changed: true };
 }
 
+/**
+ * Guard statically-addressed Bedrock event signals without depending on an
+ * allow-list of event names. Optional chaining is applied to every member in
+ * the world/system event path and to subscribe itself, so an absent API in an
+ * older target runtime does not abort the entire script module at load time.
+ *
+ * Computed event access (for example world.afterEvents[eventName]) cannot be
+ * safely rewritten without evaluating the expression, so it is left intact and
+ * surfaced as a diagnostic instead of guessed at.
+ */
+function guardEventSubscriptions(source: string, path: string, diagnostics: string[]): { source: string; changed: boolean } {
+  const computedAccess = /\b(?:world|system)\s*(?:\.\s*(?:afterEvents|beforeEvents)|\?\.\s*(?:afterEvents|beforeEvents))\s*\[/;
+  if (computedAccess.test(source)) {
+    diagnostics.push('Computed Script API event access in ' + path + ' was not auto-rewritten. Verify the event exists before subscribing; AutoBE will not guess dynamic event names.');
+  }
+
+  const pattern = /\b([A-Za-z_$][\w$]*)((?:\s*(?:\?\.|\.)\s*[A-Za-z_$][\w$]*)+)\s*(?:\?\.|\.)\s*subscribe\s*(?:\?\.)?\s*\(/g;
+  let changed = false;
+  const updated = source.replace(pattern, (match: string, root: string, chain: string) => {
+    if (!/(?:\.|\?\.)\s*(?:afterEvents|beforeEvents)(?:\.|\?\.)/.test(chain)) return match;
+    changed = true;
+    const safeChain = chain.replace(/\s*(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)/g, (_part: string, name: string) => '?.' + name);
+    return root + '?.' + safeChain.replace(/^\?\./, '') + '?.subscribe?.(';
+  });
+  if (changed) diagnostics.push('Guarded statically-addressed Script API event subscriptions in ' + path + ' without an event-name allow-list.');
+  return { source: updated, changed };
+}
+
 export async function guardUnavailableEventSubscriptions(zip: JSZip, diagnostics?: string[]): Promise<number> {
   const report = (message: string) => {
     if (diagnostics) diagnostics.push(message);
@@ -114,7 +140,7 @@ export async function guardUnavailableEventSubscriptions(zip: JSZip, diagnostics
   };
   const targets: string[] = [];
   zip.forEach((path, file) => {
-    if (!file.dir && path.toLowerCase().endsWith('.js')) targets.push(path);
+    if (!file.dir && /\.(?:[cm]?js)$/i.test(path)) targets.push(path);
   });
 
   let changedFiles = 0;
@@ -122,16 +148,12 @@ export async function guardUnavailableEventSubscriptions(zip: JSZip, diagnostics
     const file = zip.file(path);
     if (!file) continue;
     const original = await file.async('text');
-    let updated = original.replace(
-      /(\b[A-Za-z_$][\w$]*)\.(afterEvents|beforeEvents)\.([A-Za-z_$][\w$]*)(?:\.([A-Za-z_$][\w$]*))?\.subscribe\s*\(/g,
-      (_match, root: string, phase: string, eventGroup: string, eventName?: string) =>
-        eventName
-          ? root + '.' + phase + '.' + eventGroup + '?.' + eventName + '?.subscribe?.('
-          : root + '.' + phase + '.' + eventGroup + '?.subscribe?.(',
-    );
-    updated = repairRecognizableLegacyItemStacks(updated, path, diagnostics ?? []).source;
-    if (updated !== original) {
-      zip.file(path, updated);
+    const localDiagnostics: string[] = [];
+    const guarded = guardEventSubscriptions(original, path, localDiagnostics);
+    const repaired = repairRecognizableLegacyItemStacks(guarded.source, path, localDiagnostics);
+    for (const message of localDiagnostics) report(message);
+    if (repaired.source !== original) {
+      zip.file(path, repaired.source);
       changedFiles++;
       report('Applied generic Script API compatibility repairs in ' + path + '.');
     }
