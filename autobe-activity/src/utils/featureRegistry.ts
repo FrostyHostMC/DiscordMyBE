@@ -20,10 +20,10 @@ const DEFINITION_ROOTS = [
 ];
 
 const REFERENCE_KEYS = new Set([
-  'identifier', 'item', 'item_name', 'name', 'result', 'input', 'output',
+  'identifier', 'item', 'item_name', 'result', 'input', 'output',
   'block', 'blocks', 'entity', 'entities', 'spawn_entity', 'target',
-  'loot_table', 'table', 'on_use', 'place_on', 'destroy_speeds',
-  'components', 'spawnable_entities', 'trades', 'equipment'
+  'loot_table', 'table', 'place_on', 'destroy_speeds',
+  'spawnable_entities', 'equipment'
 ]);
 
 function isDefinitionPath(path: string): boolean {
@@ -51,9 +51,9 @@ function collectDefinitions(zip: JSZip): Promise<Definition[]> {
 function collectKnownReferences(value: any, idMap: Map<string, string>, key = ''): any {
   if (typeof value === 'string') {
     if (REFERENCE_KEYS.has(key) && idMap.has(value)) return idMap.get(value)!;
-    // Bedrock recipes/loot tables sometimes place item identifiers in arrays
-    // whose parent key is a schema-defined reference collection.
-    if (['items', 'ingredients', 'input', 'output', 'results', 'pool'].includes(key) && idMap.has(value)) return idMap.get(value)!;
+    // Known recipe ingredient entries use an `item` property, while loot-table
+    // entries use `type: item` plus `name`; do not rewrite arbitrary `name` fields.
+    if (key === 'name' && idMap.has(value)) return idMap.get(value)!;
     return value;
   }
   if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key));
