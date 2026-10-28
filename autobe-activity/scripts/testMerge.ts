@@ -10,7 +10,7 @@ import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from '../src/utils/assetCollision.ts';
-import { applyVanillaAssetResolutions } from '../src/utils/mergeEngine.ts';
+import { applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
