@@ -386,11 +386,11 @@ await (async () => {
 await (async () => {
   const source = new JSZip();
   const target = new JSZip();
-  source.file('textures/entity/shared.png', new Uint8Array([9, 8, 7]));
-  target.file('textures/entity/shared.png', new Uint8Array([1, 2, 3]));
+  source.file('textures/my_addon/shared.png', new Uint8Array([9, 8, 7]));
+  target.file('textures/my_addon/shared.png', new Uint8Array([1, 2, 3]));
   const diagnostics: string[] = [];
   const pathMap = await planBinaryAssetCollisions(source, target, 'Second Pack', undefined, diagnostics);
-  assert.equal(pathMap.get('textures/entity/shared.png'), 'textures/entity/shared__second_pack.png');
+  assert.equal(pathMap.get('textures/my_addon/shared.png'), 'textures/my_addon/shared__second_pack.png');
   assert.equal(diagnostics.length, 1);
   const rewritten = rewriteAssetReferences('{"textures":{"default":"textures/entity/shared"}}', pathMap);
   assert.ok(rewritten.includes('textures/entity/shared__second_pack'));
