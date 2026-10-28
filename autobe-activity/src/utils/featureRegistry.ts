@@ -48,19 +48,19 @@ function collectDefinitions(zip: JSZip): Promise<Definition[]> {
   return Promise.all(jobs).then(items => items.filter((x): x is Definition => !!x));
 }
 
-function collectKnownReferences(value: any, idMap: Map<string, string>, key = ''): any {
+function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any): any {
   if (typeof value === 'string') {
     if (REFERENCE_KEYS.has(key) && idMap.has(value)) return idMap.get(value)!;
-    // Known recipe ingredient entries use an `item` property, while loot-table
-    // entries use `type: item` plus `name`; do not rewrite arbitrary `name` fields.
-    if (key === 'name' && idMap.has(value)) return idMap.get(value)!;
+    // Loot tables reference an item through { type: "item", name: "namespace:id" }.
+    // A generic display/name field is not an identifier and must remain untouched.
+    if (key === 'name' && parent?.type === 'item' && idMap.has(value)) return idMap.get(value)!;
     return value;
   }
-  if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key));
+  if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key, parent));
   if (!value || typeof value !== 'object') return value;
   const out: Record<string, any> = {};
   for (const [childKey, child] of Object.entries(value)) {
-    out[childKey] = collectKnownReferences(child, idMap, childKey);
+    out[childKey] = collectKnownReferences(child, idMap, childKey, value);
   }
   return out;
 }
