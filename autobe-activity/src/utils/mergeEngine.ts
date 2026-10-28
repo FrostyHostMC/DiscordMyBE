@@ -740,9 +740,15 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       detail: subpackSelections && subpackSelections.length > 0 ? subpackSelections.map(s => `${s.pack} -> ${s.variant}`).join('; ') : 'No subpack variants selected'
     }]
   };
-  const issueLines = mergeDiagnostics.length
-    ? mergeDiagnostics.map((message, index) => `${index + 1}. ${message}`)
-    : ['No merge or archive validation issues were detected by AutoBE checks.'];
+  const sourceFindingLines = structuredFindings.filter(issue => issue.origin === 'source').map(issue => `${issue.id}. [${issue.severity.toUpperCase()} ${issue.code}] ${issue.path}: ${issue.message}`);
+  const mergeFindingLines = structuredFindings.filter(issue => issue.origin !== 'source').map(issue => `${issue.id}. [${issue.severity.toUpperCase()} ${issue.code}] ${issue.path || 'Merge pipeline'}: ${issue.message}`);
+  const issueLines = [
+    'SOURCE ADD-ON FINDINGS (present before merging)',
+    ...(sourceFindingLines.length ? sourceFindingLines : ['None detected by current checks.']),
+    '',
+    'MERGE / OUTPUT FINDINGS',
+    ...(mergeFindingLines.length ? mergeFindingLines : ['None detected by current checks.'])
+  ];
   const diagnosticsText = [
     'AUTOBE MERGE DIAGNOSTICS',
     '=======================',
