@@ -53,7 +53,7 @@ export interface MergedModpack {
   outputBlob?: Blob;
   // Small JSON files for the combined .mcaddon. The combined file itself is built on demand
   // (see ensureCombinedBlob) so merging never holds an extra full copy in memory.
-  combinedExtras?: { manifestJson: string; reportJson: string; diagnosticsText: string };
+  combinedExtras?: { manifestJson: string; reportJson: string; diagnosticsText?: string };
   outputFileName: string;
 }
 
