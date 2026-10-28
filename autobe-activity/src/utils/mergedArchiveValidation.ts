@@ -51,8 +51,43 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     return IMAGE_EXTENSIONS.some(ext => paths.has(clean + ext));
   };
 
-  const visit = (value: any, sourcePath: string, key = '', insideTextureMap = false): void => {
+  const isResourcePack = /resource pack/i.test(label);
+  const geometryIds = new Set<string>();
+  const animationIds = new Set<string>();
+  const renderControllerIds = new Set<string>();
+  if (isResourcePack) {
+    for (const entry of jsonEntries) {
+      const geometry = entry.data?.['minecraft:geometry'];
+      const geometryList = Array.isArray(geometry) ? geometry : geometry ? [geometry] : [];
+      for (const item of geometryList) {
+        const id = item?.description?.identifier;
+        if (typeof id === 'string') geometryIds.add(id);
+      }
+      const animations = entry.data?.animations;
+      if (animations && typeof animations === 'object' && !Array.isArray(animations)) {
+        for (const id of Object.keys(animations)) animationIds.add(id);
+      }
+      const controllers = entry.data?.render_controllers;
+      if (controllers && typeof controllers === 'object' && !Array.isArray(controllers)) {
+        for (const id of Object.keys(controllers)) renderControllerIds.add(id);
+      }
+    }
+  }
+
+  const visit = (value: any, sourcePath: string, key = '', insideTextureMap = false, parentKey = ''): void => {
     if (!value || typeof value !== 'object') {
+      if (typeof value === 'string' && isResourcePack) {
+        const refId = value.trim();
+        if (key === 'geometry' && /^geometry\\./.test(refId) && !geometryIds.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching geometry definition was found in this resource pack.' });
+        }
+        if (parentKey === 'animations' && /^(animation|controller\\.animation)\\./.test(refId) && !animationIds.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching animation definition was found in this resource pack.' });
+        }
+        if (parentKey === 'render_controllers' && /^controller\\.render\\./.test(refId) && !renderControllerIds.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching render-controller definition was found in this resource pack.' });
+        }
+      }
       if (typeof value === 'string' && (insideTextureMap || /texture/i.test(key))) {
         const ref = value.trim();
         // Only validate explicit pack-relative paths. Namespaced aliases such
@@ -69,10 +104,10 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
       return;
     }
     if (Array.isArray(value)) {
-      for (const item of value) visit(item, sourcePath, key, insideTextureMap);
+      for (const item of value) visit(item, sourcePath, key, insideTextureMap, parentKey);
       return;
     }
-    for (const [childKey, childValue] of Object.entries(value)) visit(childValue, sourcePath, childKey, insideTextureMap || /textures/i.test(childKey));
+    for (const [childKey, childValue] of Object.entries(value)) visit(childValue, sourcePath, childKey, insideTextureMap || /textures/i.test(childKey), key);
   };
 
   for (const entry of jsonEntries) visit(entry.data, entry.path);
