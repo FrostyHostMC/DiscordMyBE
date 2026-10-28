@@ -320,7 +320,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum): void {
   for (const t of accum.textPaths) zip.file(t.path, t.data);
   for (const b of accum.binaryPaths) zip.file(b.path, b.data);
 }
-async function applyVanillaAssetResolutions(
+export async function applyVanillaAssetResolutions(
   targetZip: JSZip,
   packs: AddonPack[],
   conflicts: ConflictItem[],
