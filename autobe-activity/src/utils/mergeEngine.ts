@@ -836,7 +836,7 @@ export async function ensureCombinedBlob(
   }
   if (entries.length === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
   if (modpack.combinedExtras) {
-    entries.push({ name: '_autobe_diagnostics.txt', data: modpack.combinedExtras.diagnosticsText });
+    entries.push({ name: '_autobe_diagnostics.txt', data: modpack.combinedExtras.diagnosticsText || 'AutoBE diagnostics were not recorded for this saved merge. Re-merge the source add-ons to generate a full troubleshooting log.' });
     entries.push({ name: '_autobe_merge_manifest.json', data: modpack.combinedExtras.manifestJson });
     entries.push({ name: '_autobe_merge_report.json', data: modpack.combinedExtras.reportJson });
   }
