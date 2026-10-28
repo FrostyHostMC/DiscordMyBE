@@ -10,6 +10,7 @@ import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from '../src/utils/assetCollision.ts';
+import { applyVanillaAssetResolutions } from '../src/utils/mergeEngine.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -443,4 +444,31 @@ await (async () => {
   assert.equal(assetConflict?.packB.name, 'Red Sword');
   assert.equal(assetConflict?.resolution, 'keep_a');
   console.log('✓ preflight finds conflicting vanilla asset overrides and identifies both add-ons');
+})();
+
+await (async () => {
+  const target = new JSZip();
+  target.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const winnerZip = new JSZip();
+  winnerZip.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const winnerBlob = await winnerZip.generateAsync({ type: 'blob' });
+  const diagnostics: string[] = [];
+  await applyVanillaAssetResolutions(
+    target,
+    [{ id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: winnerBlob } as any],
+    [{
+      id: 'asset-conflict',
+      type: 'vanilla_asset',
+      identifier: 'textures/items/diamond_sword.png',
+      packA: { id: 'pack-a', name: 'Blue Sword' },
+      packB: { id: 'pack-b', name: 'Red Sword' },
+      resolution: 'keep_b'
+    }] as any,
+    'Resource Pack',
+    diagnostics
+  );
+  const chosen = await target.file('textures/items/diamond_sword.png')!.async('uint8array');
+  assert.deepEqual([...chosen], [9, 8, 7], 'keep_b must replace the actual final asset bytes');
+  assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
+  console.log('✓ vanilla override choice changes the actual final asset bytes');
 })();
