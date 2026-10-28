@@ -497,3 +497,30 @@ await (async () => {
   assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
   console.log('✓ vanilla override choice changes the actual final asset bytes');
 })();
+
+await (async () => {
+  const target = new JSZip();
+  target.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const blueZip = new JSZip();
+  blueZip.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const redZip = new JSZip();
+  redZip.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const diagnostics: string[] = [];
+  await applyVanillaAssetResolutions(
+    target,
+    [
+      { id: 'pack-a', name: 'Blue Sword', type: 'Resource Pack', fileBlob: await blueZip.generateAsync({ type: 'blob' }) } as any,
+      { id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: await redZip.generateAsync({ type: 'blob' }) } as any
+    ],
+    [{
+      id: 'asset-conflict-a', type: 'vanilla_asset', identifier: 'textures/items/diamond_sword.png',
+      packA: { id: 'pack-a', name: 'Blue Sword' }, packB: { id: 'pack-b', name: 'Red Sword' }, resolution: 'keep_a'
+    }] as any,
+    'Resource Pack',
+    diagnostics
+  );
+  const chosen = await target.file('textures/items/diamond_sword.png')!.async('uint8array');
+  assert.deepEqual([...chosen], [1, 2, 3], 'keep_a must replace the actual final asset bytes');
+  assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
+  console.log('✓ keep Pack A also changes the actual final asset bytes');
+})();
