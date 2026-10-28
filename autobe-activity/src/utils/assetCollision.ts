@@ -2,6 +2,19 @@ import JSZip from 'jszip';
 
 const BINARY_ASSET_EXTENSIONS = /\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|m4a|bin|materialbin)$/i;
 
+// Vanilla-facing paths must keep their expected names; blindly renaming them can break Minecraft references.
+const VANILLA_OVERRIDE_PATHS = [
+  /^textures\/(items|item|blocks|block|entity|models|environment|particle)\//i,
+  /^textures\/gui\//i,
+  /^textures\/models\/armor\//i,
+  /^textures\/entity\/armor\//i
+];
+
+export function isVanillaOverridePath(path: string): boolean {
+  const normalized = path.replace(/\\/g, '/').replace(/^\.\//, '');
+  return VANILLA_OVERRIDE_PATHS.some(pattern => pattern.test(normalized));
+}
+
 export function uniqueAssetPath(targetZip: JSZip, originalPath: string, sourceLabel: string): string {
   const slash = originalPath.lastIndexOf('/');
   const dir = slash >= 0 ? originalPath.slice(0, slash + 1) : '';
@@ -46,6 +59,10 @@ export async function planBinaryAssetCollisions(
       existing.async('uint8array')
     ]);
     if (incomingBytes.length === existingBytes.length && incomingBytes.every((byte, index) => byte === existingBytes[index])) continue;
+    if (isVanillaOverridePath(normalizedPath)) {
+      diagnostics?.push('WARNING VANILLA_ASSET_CONFLICT [' + normalizedPath + ']: Multiple add-ons change a vanilla-facing asset. AutoBE will not rename this path because Minecraft may rely on its original name. An explicit keep-this-add-on choice is required; current merge order determines the temporary winner.');
+      continue;
+    }
     const renamed = uniqueAssetPath(targetZip, normalizedPath, sourceLabel);
     pathMap.set(sourcePath, renamed);
     pathMap.set(normalizedPath, renamed);
