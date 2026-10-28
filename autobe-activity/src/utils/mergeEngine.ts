@@ -204,9 +204,50 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
+function uniqueAssetPath(targetZip: JSZip, originalPath: string, sourceLabel: string): string {
+  const slash = originalPath.lastIndexOf('/');
+  const dir = slash >= 0 ? originalPath.slice(0, slash + 1) : '';
+  const filename = slash >= 0 ? originalPath.slice(slash + 1) : originalPath;
+  const dot = filename.lastIndexOf('.');
+  const stem = dot > 0 ? filename.slice(0, dot) : filename;
+  const ext = dot > 0 ? filename.slice(dot) : '';
+  const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 18) || 'addon';
+  let candidate = `${dir}${stem}__${slug}${ext}`;
+  let suffix = 2;
+  while (targetZip.file(candidate)) candidate = `${dir}${stem}__${slug}_${suffix++}${ext}`;
+  return candidate;
+}
+
+function rewriteAssetReferences(text: string, pathMap: Map<string, string>): string {
+  let output = text;
+  // Longest first prevents a short path from partially rewriting a longer one.
+  const replacements = [...pathMap.entries()].sort((a, b) => b[0].length - a[0].length);
+  for (const [oldPath, newPath] of replacements) {
+    output = output.split(oldPath).join(newPath);
+    const oldWithoutExtension = oldPath.replace(/\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+    const newWithoutExtension = newPath.replace(/\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+    if (oldWithoutExtension !== oldPath) output = output.split(oldWithoutExtension).join(newWithoutExtension);
+  }
+  return output;
+}
+
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics?: string[]): Promise<void> {
   await expandBrarchiveFiles(zip, diagnostics);
   await guardUnavailableEventSubscriptions(zip, diagnostics);
+  const assetPathMap = new Map<string, string>();
+  const binaryExtensions = /\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|m4a|bin|materialbin)$/i;
+  for (const [sourcePath, sourceFile] of Object.entries(zip.files)) {
+    if (sourceFile.dir || !binaryExtensions.test(sourcePath)) continue;
+    const normalizedPath = pathTransform ? pathTransform(sourcePath) : sourcePath;
+    const existing = targetZip.file(normalizedPath);
+    if (!existing) continue;
+    const [incomingBytes, existingBytes] = await Promise.all([sourceFile.async('uint8array'), existing.async('uint8array')]);
+    if (incomingBytes.length === existingBytes.length && incomingBytes.every((byte, index) => byte === existingBytes[index])) continue;
+    const renamed = uniqueAssetPath(targetZip, normalizedPath, sourceLabel);
+    assetPathMap.set(sourcePath, renamed);
+    assetPathMap.set(normalizedPath, renamed);
+    diagnostics?.push(`WARNING ASSET_PATH_COLLISION [${normalizedPath}]: Different add-ons supplied different binary assets at the same path. Preserved this add-on's file as ${renamed} and rewrote explicit matching references where found.`);
+  }
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -219,7 +260,8 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     // (applySubpackSelection), so anything left under subpacks/ is an unselected
     // variant and is excluded to avoid duplicate/merged variant content.
     if (lower.startsWith('subpacks/')) continue;
-    const outPath = pathTransform ? pathTransform(path) : path;
+    const transformedPath = pathTransform ? pathTransform(path) : path;
+    const outPath = assetPathMap.get(path) || assetPathMap.get(transformedPath) || transformedPath;
     const targetPath = definitionOutputPath(targetZip, outPath, sourceLabel);
     if (ARRAY_MERGE_FILES.has(lower)) {
       try {
@@ -270,12 +312,14 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       }
     } else if (renameMap && renameMap.size > 0 && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
       let txt = await fileObj.async('text');
+      txt = rewriteAssetReferences(txt, assetPathMap);
       for (const [oldId, newId] of renameMap.entries()) {
         txt = txt.split(oldId).join(newId);
       }
       targetZip.file(targetPath, txt);
     } else if (lower.endsWith('.json') || lower.endsWith('.mcfunction')) {
-      targetZip.file(targetPath, await fileObj.async('text'));
+      const txt = rewriteAssetReferences(await fileObj.async('text'), assetPathMap);
+      targetZip.file(targetPath, txt);
     } else if (lower.endsWith('.js')) {
       // JS files must be copied as binary to preserve UTF-8 encoding
       targetZip.file(outPath, await fileObj.async('uint8array'));
