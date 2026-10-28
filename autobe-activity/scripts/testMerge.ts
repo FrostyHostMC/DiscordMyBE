@@ -9,7 +9,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
-import { planBinaryAssetCollisions, rewriteAssetReferences } from '../src/utils/assetCollision.ts';
+import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -400,5 +400,8 @@ await (async () => {
   identicalTarget.file('textures/entity/same.png', new Uint8Array([4, 5, 6]));
   const identicalMap = await planBinaryAssetCollisions(identicalSource, identicalTarget, 'Third Pack', undefined, []);
   assert.equal(identicalMap.size, 0, 'identical assets should not be renamed');
+  assert.equal(isVanillaOverridePath('textures/items/diamond_sword.png'), true, 'vanilla-facing item textures must not be renamed');
+  assert.equal(isVanillaOverridePath('textures/entity/custom_beast.png'), true, 'entity texture overrides should be treated conservatively as vanilla-facing');
+  assert.equal(isVanillaOverridePath('textures/my_addon/custom_icon.png'), false, 'custom namespace-like asset paths can use collision renaming');
   console.log('✓ colliding binary assets get deterministic paths, references are repaired, identical assets are reused');
 })();
