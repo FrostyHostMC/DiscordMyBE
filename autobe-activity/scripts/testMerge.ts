@@ -359,7 +359,10 @@ await (async () => {
     'minecraft:client_entity': {
       description: {
         identifier: 'test:example',
-        textures: { default: 'textures/entity/missing_texture' }
+        textures: { default: 'textures/entity/missing_texture' },
+        geometry: { default: 'geometry.missing' },
+        animations: { idle: 'animation.missing' },
+        render_controllers: ['controller.render.missing']
       }
     }
   }));
@@ -368,6 +371,9 @@ await (async () => {
   const issues = await validateMergedArchive(zip, 'Test Resource Pack');
   assert.ok(issues.some(issue => issue.code === 'INVALID_JSON' && issue.path === 'items/broken.json'));
   assert.ok(issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/missing_texture')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_GEOMETRY_REFERENCE' && issue.message.includes('geometry.missing')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_ANIMATION_REFERENCE' && issue.message.includes('animation.missing')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_RENDER_CONTROLLER_REFERENCE' && issue.message.includes('controller.render.missing')));
   assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
   console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
 })();
