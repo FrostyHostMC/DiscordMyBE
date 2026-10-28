@@ -105,13 +105,13 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     if (!value || typeof value !== 'object') {
       if (typeof value === 'string' && isResourcePack) {
         const refId = value.trim();
-        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\\./.test(refId) && !geometryIds.has(refId)) {
+        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\./.test(refId) && !geometryIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching geometry definition was found in this resource pack.' });
         }
-        if (parentKey === 'animations' && /^(animation|controller\\.animation)\\./.test(refId) && !animationIds.has(refId)) {
+        if (parentKey === 'animations' && /^(animation|controller\.animation)\./.test(refId) && !animationIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching animation definition was found in this resource pack.' });
         }
-        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\\.render\\./.test(refId) && !renderControllerIds.has(refId)) {
+        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\.render\./.test(refId) && !renderControllerIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching render-controller definition was found in this resource pack.' });
         }
       }
