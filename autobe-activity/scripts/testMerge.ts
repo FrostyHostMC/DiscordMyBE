@@ -367,9 +367,12 @@ await (async () => {
     }
   }));
   zip.file('items/broken.json', '{ invalid json');
+  zip.file('items/first.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'test:duplicate' } } }));
+  zip.file('items/second.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'test:duplicate' } } }));
   zip.file('textures/entity/present.png', new Uint8Array([1, 2, 3]));
   const issues = await validateMergedArchive(zip, 'Test Resource Pack');
   assert.ok(issues.some(issue => issue.code === 'INVALID_JSON' && issue.path === 'items/broken.json'));
+  assert.ok(issues.some(issue => issue.code === 'DUPLICATE_IDENTIFIER' && issue.message.includes('test:duplicate')));
   assert.ok(issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/missing_texture')));
   assert.ok(issues.some(issue => issue.code === 'MISSING_GEOMETRY_REFERENCE' && issue.message.includes('geometry.missing')));
   assert.ok(issues.some(issue => issue.code === 'MISSING_ANIMATION_REFERENCE' && issue.message.includes('animation.missing')));
