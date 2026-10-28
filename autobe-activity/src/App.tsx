@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
 import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { vibrate } from '@aippy/runtime/device';
 import { Info, X } from 'lucide-react';
@@ -93,6 +94,26 @@ export const App: React.FC = () => {
 
   // Merging runtime states
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
+
+  const detectVanillaAssetConflicts = async (packs: AddonPack[]): Promise<ConflictItem[]> => {
+    const candidates = new Map<string, Array<{ pack: AddonPack; bytes: Uint8Array }>>();
+    const isVanillaAsset = (path: string) => { const p = path.toLowerCase(); return p.startsWith('textures/items/') || p.startsWith('textures/item/') || p.startsWith('textures/blocks/') || p.startsWith('textures/block/') || p.startsWith('textures/entity/') || p.startsWith('textures/models/') || p.startsWith('textures/environment/') || p.startsWith('textures/particle/') || p.startsWith('textures/gui/'); };
+    for (const pack of packs) {
+      if (!pack.fileBlob) continue;
+      const zip = await JSZip.loadAsync(pack.fileBlob);
+      for (const [path, file] of Object.entries(zip.files)) {
+        if (file.dir || !isVanillaAsset(path) || !['.png','.tga','.jpg','.jpeg','.webp'].some(ext => path.toLowerCase().endsWith(ext))) continue;
+        const list = candidates.get(path) || []; list.push({ pack, bytes: await file.async('uint8array') }); candidates.set(path, list);
+      }
+    }
+    const found: ConflictItem[] = [];
+    for (const [path, entries] of candidates) for (let i = 0; i < entries.length; i++) for (let j = i + 1; j < entries.length; j++) {
+      const a = entries[i], b = entries[j];
+      if (a.pack.id === b.pack.id || (a.bytes.length === b.bytes.length && a.bytes.every((v, k) => v === b.bytes[k]))) continue;
+      found.push({ id: 'vanilla_asset:' + path + ':' + a.pack.id + ':' + b.pack.id, type: 'vanilla_asset', identifier: path, packA: { id: a.pack.id, name: a.pack.name }, packB: { id: b.pack.id, name: b.pack.name }, resolution: 'keep_a' });
+    }
+    return found;
+  };
   const [mergePlan, setMergePlan] = useState<MergePlan | null>(null);
   const [mergeStep, setMergeStep] = useState<string>('Reading addons');
   const [mergeProgress, setMergeProgress] = useState<number>(0);
@@ -415,14 +436,13 @@ export const App: React.FC = () => {
       return;
     }
 
-    // Check for identifier conflicts
+    // Combine identifier conflicts with byte-different vanilla asset overrides.
     const detected = await detectConflicts(packsToMerge);
-    if (detected.some((conflict) => conflict.type === 'vanilla_asset') || (detected.length > 0 && !autoMerge)) {
-      setConflicts(detected);
-      setScreen('conflicts');
-    } else {
-      openScriptCheck(packsToMerge);
-    }
+    const vanillaAssets = await detectVanillaAssetConflicts(packsToMerge);
+    const allConflicts = [...detected, ...vanillaAssets];
+    setConflicts(allConflicts);
+    if (allConflicts.some((conflict) => conflict.type === 'vanilla_asset') || (allConflicts.length > 0 && !autoMerge)) setScreen('conflicts');
+    else openScriptCheck(packsToMerge);
   };
 
   const doRunMergeProcess = async (
