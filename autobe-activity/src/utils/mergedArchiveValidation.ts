@@ -44,6 +44,29 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     }
   }
 
+  const identifiers = new Map<string, string[]>();
+  const identifierRoots = ['minecraft:item', 'minecraft:entity', 'minecraft:block', 'minecraft:client_entity', 'minecraft:attachable'];
+  for (const entry of jsonEntries) {
+    for (const root of identifierRoots) {
+      const identifier = entry.data?.[root]?.description?.identifier;
+      if (typeof identifier !== 'string' || !identifier.trim()) continue;
+      const key = root + ':' + identifier;
+      const files = identifiers.get(key) || [];
+      files.push(entry.path);
+      identifiers.set(key, files);
+    }
+  }
+  for (const [key, files] of identifiers) {
+    if (files.length > 1) {
+      add({
+        severity: 'warning',
+        code: 'DUPLICATE_IDENTIFIER',
+        path: files.join(', '),
+        message: '[' + label + '] Identifier "' + key.slice(key.indexOf(':') + 1) + '" is still defined by multiple files: ' + files.join(', ') + '. Minecraft may use only one definition or the content may conflict.'
+      });
+    }
+  }
+
   const existsAsImage = (reference: string): boolean => {
     const clean = reference.replace(/^\.?\//, '').replace(/\\/g, '/').toLowerCase();
     if (paths.has(clean)) return true;
