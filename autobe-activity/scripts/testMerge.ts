@@ -8,6 +8,7 @@ import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
+import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -347,4 +348,25 @@ await (async () => {
   assert.ok(preserved.includes('const item = {'));
   assert.ok(unsafeDiagnostics.some(message => message.includes('was not rewritten')));
   console.log('✓ legacy plain-object ItemStacks are converted only when recognized; unknown components are preserved with diagnostics');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  zip.file('entity/example.entity.json', JSON.stringify({
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: {
+        identifier: 'test:example',
+        textures: { default: 'textures/entity/missing_texture' }
+      }
+    }
+  }));
+  zip.file('items/broken.json', '{ invalid json');
+  zip.file('textures/entity/present.png', new Uint8Array([1, 2, 3]));
+  const issues = await validateMergedArchive(zip, 'Test Resource Pack');
+  assert.ok(issues.some(issue => issue.code === 'INVALID_JSON' && issue.path === 'items/broken.json'));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/missing_texture')));
+  assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
+  console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
 })();
