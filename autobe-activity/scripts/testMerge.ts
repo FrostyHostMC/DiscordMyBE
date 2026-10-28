@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { sanitizeJsonString } from '../src/utils/addonParser.ts';
+import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
@@ -425,4 +425,22 @@ await (async () => {
   assert.equal(recipe['minecraft:recipe_shaped'].result.item, newId);
   assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
   console.log('✓ feature registry renames colliding custom identifiers and repairs source-owned recipe references');
+})();
+
+await (async () => {
+  const packA = new JSZip();
+  packA.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const packB = new JSZip();
+  packB.file('textures/items/diamond_sword.png', new Uint8Array([3, 2, 1]));
+  const conflicts = await detectConflicts([
+    { id: 'pack-a', name: 'Blue Sword', type: 'Resource Pack', fileBlob: await packA.generateAsync({ type: 'blob' }) } as any,
+    { id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: await packB.generateAsync({ type: 'blob' }) } as any
+  ]);
+  const assetConflict = conflicts.find(conflict => conflict.type === 'vanilla_asset');
+  assert.ok(assetConflict, 'different bytes at the same vanilla asset path should require a choice');
+  assert.equal(assetConflict?.identifier, 'textures/items/diamond_sword.png');
+  assert.equal(assetConflict?.packA.name, 'Blue Sword');
+  assert.equal(assetConflict?.packB.name, 'Red Sword');
+  assert.equal(assetConflict?.resolution, 'keep_a');
+  console.log('✓ preflight finds conflicting vanilla asset overrides and identifies both add-ons');
 })();
