@@ -149,7 +149,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         {/* Filter buttons */}
         {conflicts.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            {['all', 'entity', 'item', 'block', 'recipe'].map((t) => (
+            {['all', 'entity', 'item', 'block', 'recipe', 'vanilla_asset'].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -216,13 +216,14 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => onUpdateResolution(c.id, 'prefix_all')}
+                    disabled={c.type === 'vanilla_asset'}
                     className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition-all text-center truncate ${
-                      c.resolution === 'prefix_all'
+                      c.type === 'vanilla_asset' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
                         ? 'bg-[#762BFF] text-white border-[#A855F7] shadow-[0_0_10px_rgba(118,43,255,0.4)]'
                         : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
                     }`}
                   >
-                    Prefix & Keep Both
+                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : 'Prefix & Keep Both'}
                   </button>
                   <button
                     type="button"
