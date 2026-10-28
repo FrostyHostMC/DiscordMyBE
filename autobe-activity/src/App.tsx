@@ -1103,7 +1103,7 @@ export const App: React.FC = () => {
           }}
           onAutoPrefixAll={() => {
             setConflicts((prev) =>
-              prev.map((c) => ({ ...c, resolution: 'prefix_all' }))
+              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
             );
             showToast('All conflicts resolved with automatic namespace prefixes.');
           }}
@@ -1357,7 +1357,7 @@ export const App: React.FC = () => {
                     }}
                     onAutoPrefixAll={() => {
                       setConflicts((prev) =>
-                        prev.map((c) => ({ ...c, resolution: 'prefix_all' }))
+                        prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
                       );
                       showToast('All conflicts resolved with automatic namespace prefixes.');
                     }}
