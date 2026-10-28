@@ -82,7 +82,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     if (!value || typeof value !== 'object') {
       if (typeof value === 'string' && isResourcePack) {
         const refId = value.trim();
-        if (key === 'geometry' && /^geometry\\./.test(refId) && !geometryIds.has(refId)) {
+        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\\./.test(refId) && !geometryIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching geometry definition was found in this resource pack.' });
         }
         if (parentKey === 'animations' && /^(animation|controller\\.animation)\\./.test(refId) && !animationIds.has(refId)) {
