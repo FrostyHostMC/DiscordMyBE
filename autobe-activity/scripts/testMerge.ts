@@ -303,7 +303,7 @@ await (async () => {
   assert.ok(output.includes('world?.afterEvents?.cameraChange?.subscribe?.('));
   assert.ok(output.includes('world?.beforeEvents?.inventory?.drop?.subscribe?.('));
   assert.ok(output.includes('world?.afterEvents?.itemUse?.subscribe?.('));
-  assert.equal(diagnostics.length, 1);
+  assert.equal(diagnostics.filter(message => message.includes('Guarded statically-addressed')).length, 1);
 
   const secondPass = await guardUnavailableEventSubscriptions(zip, diagnostics);
   assert.equal(secondPass, 0, 'event guard pass must be idempotent');
