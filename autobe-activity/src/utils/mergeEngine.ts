@@ -705,9 +705,45 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       detail: subpackSelections && subpackSelections.length > 0 ? subpackSelections.map(s => `${s.pack} -> ${s.variant}`).join('; ') : 'No subpack variants selected'
     }]
   };
+  const issueLines = mergeDiagnostics.length
+    ? mergeDiagnostics.map((message, index) => `${index + 1}. ${message}`)
+    : ['No merge or archive validation issues were detected by AutoBE checks.'];
+  const diagnosticsText = [
+    'AUTOBE MERGE DIAGNOSTICS',
+    '=======================',
+    `Modpack: ${modpackName}`,
+    `Created: ${mergeMeta.mergedAt}`,
+    `Source add-on packs: ${packs.length}`,
+    `Output packs: ${outputs.length}`,
+    '',
+    'WHAT THIS MEANS',
+    '---------------',
+    mergeDiagnostics.length
+      ? `AutoBE recorded ${mergeDiagnostics.length} finding(s). Some may be warnings from the original add-ons rather than problems caused by merging. This report cannot confirm that the pack works in Minecraft; use the findings below to investigate.`
+      : 'AutoBE did not detect a problem in the checks it currently runs. This does not guarantee every add-on feature works in Minecraft.',
+    '',
+    'SOURCE ADD-ONS',
+    '--------------',
+    ...packs.map((pack, index) => `${index + 1}. ${pack.name} (${pack.type})${pack.sourceFileName ? ` — ${pack.sourceFileName}` : ''}`),
+    '',
+    'GENERATED PACKS',
+    '---------------',
+    ...(outputs.length ? outputs.map((output, index) => `${index + 1}. ${output.fileName} — ${output.label}`) : ['No output packs were generated.']),
+    '',
+    'FINDINGS',
+    '--------',
+    ...issueLines,
+    '',
+    'HOW TO SEND THIS LOG',
+    '--------------------',
+    'Send this file together with the Minecraft Content Log and a short note describing what does not work. Include the original add-ons if possible. Do not include passwords, access tokens, or private account information.',
+    '',
+    'AutoBE reports only issues detectable by its current checks. Creator-side problems and Minecraft runtime behavior may require additional evidence.'
+  ].join('\\n');
   const combinedExtras = {
     manifestJson: JSON.stringify(mergeMeta, null, 2),
     reportJson: JSON.stringify(report, null, 2),
+    diagnosticsText,
   };
   onProgress?.('Finalizing...', 100);
   // NOTE: the combined .mcaddon is NOT built here any more. Building it right after the outputs
@@ -753,6 +789,7 @@ export async function ensureCombinedBlob(
   }
   if (entries.length === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
   if (modpack.combinedExtras) {
+    entries.push({ name: '_autobe_diagnostics.txt', data: modpack.combinedExtras.diagnosticsText });
     entries.push({ name: '_autobe_merge_manifest.json', data: modpack.combinedExtras.manifestJson });
     entries.push({ name: '_autobe_merge_report.json', data: modpack.combinedExtras.reportJson });
   }
