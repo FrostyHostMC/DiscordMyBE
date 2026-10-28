@@ -721,7 +721,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
   const supportId = `AUTOBE-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${packs.length}-${outputs.length}`;
   const structuredFindings = mergeDiagnostics.map((message, index) => {
-    const match = message.match(/^(ERROR|WARNING|WARN|INFO)\\s+([A-Z0-9_]+)\\s+\\[([^\\]]+)\\]:\\s*(.*)$/i);
+    const match = message.match(/^(ERROR|WARNING|WARN|INFO)\s+([A-Z0-9_]+)\s+\[([^\]]+)\]:\s*(.*)$/i);
     return match
       ? { id: index + 1, severity: match[1].toLowerCase(), code: match[2], path: match[3], message: match[4] }
       : { id: index + 1, severity: /error|failed|invalid|crash/i.test(message) ? 'error' : 'warning', code: 'MERGE_DIAGNOSTIC', path: '', message };
