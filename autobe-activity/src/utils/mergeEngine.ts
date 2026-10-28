@@ -675,10 +675,36 @@ export async function executeMergePacks(packs: AddonPack[], options: {
 
   // Compact merge summary embedded in the final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
+  const supportId = `AUTOBE-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${packs.length}-${outputs.length}`;
+  const structuredFindings = mergeDiagnostics.map((message, index) => {
+    const match = message.match(/^(ERROR|WARNING|WARN|INFO)\\s+([A-Z0-9_]+)\\s+\\[([^\\]]+)\\]:\\s*(.*)$/i);
+    return match
+      ? { id: index + 1, severity: match[1].toLowerCase(), code: match[2], path: match[3], message: match[4] }
+      : { id: index + 1, severity: /error|failed|invalid|crash/i.test(message) ? 'error' : 'warning', code: 'MERGE_DIAGNOSTIC', path: '', message };
+  });
   const report = {
     tool: 'AutoBE Mobile Modpack Tool by StoneByte',
+    reportVersion: 2,
+    supportId,
     generatedAt: new Date().toISOString(),
     modpackName,
+    sourcePacks: packs.map(pack => ({
+      name: pack.name,
+      type: pack.type,
+      version: pack.version,
+      sourceFileName: pack.sourceFileName || '',
+      minEngineVersion: pack.minEngineVersion || '',
+      scriptVersion: pack.scriptVersion || ''
+    })),
+    outputs: outputs.map(output => ({
+      fileName: output.fileName,
+      label: output.label,
+      type: output.type,
+      sizeBytes: output.size,
+      sourcePackCount: output.packCount,
+      achievementsDisabled: output.achievementsDisabled
+    })),
+    findings: structuredFindings,
     checks: [{
       name: 'Source packs',
       status: 'ok',
@@ -711,8 +737,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const diagnosticsText = [
     'AUTOBE MERGE DIAGNOSTICS',
     '=======================',
+    `Support ID: ${supportId}`,
     `Modpack: ${modpackName}`,
     `Created: ${mergeMeta.mergedAt}`,
+    `Report version: 2`,
     `Source add-on packs: ${packs.length}`,
     `Output packs: ${outputs.length}`,
     '',
@@ -733,6 +761,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     'FINDINGS',
     '--------',
     ...issueLines,
+    '',
+    'SUPPORT BUNDLE DETAILS',
+    '----------------------',
+    'The companion _autobe_merge_report.json contains structured findings, pack versions, generated output sizes, and issue paths for deeper analysis.',
     '',
     'HOW TO SEND THIS LOG',
     '--------------------',
