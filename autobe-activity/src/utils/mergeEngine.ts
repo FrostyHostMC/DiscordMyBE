@@ -320,9 +320,33 @@ function writeAccum(zip: JSZip, accum: MergeAccum): void {
   for (const t of accum.textPaths) zip.file(t.path, t.data);
   for (const b of accum.binaryPaths) zip.file(b.path, b.data);
 }
+async function applyVanillaAssetResolutions(
+  targetZip: JSZip,
+  packs: AddonPack[],
+  conflicts: ConflictItem[],
+  packType: AddonPack['type'],
+  diagnostics: string[]
+): Promise<void> {
+  for (const conflict of conflicts) {
+    if (conflict.type !== 'vanilla_asset' || conflict.resolution !== 'keep_b') continue;
+    const winner = packs.find(pack => pack.id === conflict.packB.id && pack.type === packType);
+    if (!winner?.fileBlob) continue;
+    const sourceZip = await JSZip.loadAsync(winner.fileBlob);
+    const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === conflict.identifier.toLowerCase());
+    const sourceFile = sourcePath ? sourceZip.file(sourcePath) : null;
+    if (!sourceFile) {
+      diagnostics.push(`WARNING VANILLA_OVERRIDE_CHOICE [${conflict.identifier}]: Selected add-on "${winner.name}" no longer contains this asset; kept the existing merged version.`);
+      continue;
+    }
+    targetZip.file(conflict.identifier, await sourceFile.async('uint8array'));
+    diagnostics.push(`INFO VANILLA_OVERRIDE_CHOICE [${conflict.identifier}]: Kept the version supplied by "${winner.name}" as requested.`);
+  }
+}
+
 function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<string, Map<string, string>> {
   const renameMaps = new Map<string, Map<string, string>>();
   for (const c of conflicts) {
+    if (c.type === 'vanilla_asset') continue;
     if (c.resolution === 'prefix_all' || autoPrefix && c.resolution !== 'keep_a' && c.resolution !== 'keep_b') {
       const prefix = c.packB.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 10);
       let map = renameMaps.get(c.packB.id);
@@ -427,6 +451,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       zip.files = {} as typeof zip.files;
     }
     writeAccum(rpZip, accum);
+    await applyVanillaAssetResolutions(rpZip, packs, conflicts, 'Resource Pack', mergeDiagnostics);
     // Port of AutoBE Part 16 RP passes: identifier-based definition merging,
     // subpack HUD merging, and player-entity repair / variable injection.
     await mergeDefinitionsByIdentifier(rpZip, mergeDiagnostics);
@@ -553,6 +578,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
     }
     writeAccum(bpZip, accum);
+    await applyVanillaAssetResolutions(bpZip, packs, conflicts, 'Behavior Pack', mergeDiagnostics);
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
     await mergeDefinitionsByIdentifier(bpZip, mergeDiagnostics);
