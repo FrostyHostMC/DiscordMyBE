@@ -13,6 +13,7 @@ import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
+import { validateMergedArchive } from './mergedArchiveValidation';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -421,6 +422,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await mergeDefinitionsByIdentifier(rpZip, mergeDiagnostics);
     await mergeSubpackHudFiles(rpZip);
     await applyPlayerEntityPass(rpZip);
+    const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
+    mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
     const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
     
     // Collect capabilities from all source packs
@@ -626,6 +629,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     onProgress?.('Unifying cross-group content', 62);
     await yieldToUI();
     await unifyCrossGroupBps(builtBps.map(b => b.zip));
+  }
+  for (const b of builtBps) {
+    const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
+    mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
   }
   for (const b of builtBps) {
     const blobData = await b.zip.generateAsync({
