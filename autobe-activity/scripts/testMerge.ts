@@ -405,3 +405,24 @@ await (async () => {
   assert.equal(isVanillaOverridePath('textures/my_addon/custom_icon.png'), false, 'custom namespace-like asset paths can use collision renaming');
   console.log('✓ colliding binary assets get deterministic paths, references are repaired, identical assets are reused');
 })();
+
+await (async () => {
+  const { applyFeatureRegistry } = await import('../src/utils/featureRegistry.ts');
+  const first = new JSZip();
+  first.file('items/ak47.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'guns:ak47' }, components: {} } }));
+  first.file('recipes/ak47.json', JSON.stringify({ 'minecraft:recipe_shaped': { description: { identifier: 'guns:ak47_recipe' }, key: { A: { item: 'guns:ak47' } }, result: { item: 'guns:ak47', count: 1 } } }));
+  const second = new JSZip();
+  second.file('items/ak47.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'guns:ak47' }, components: {} } }));
+  second.file('recipes/ak47.json', JSON.stringify({ 'minecraft:recipe_shaped': { description: { identifier: 'guns:ak47_recipe2' }, key: { A: { item: 'guns:ak47' } }, result: { item: 'guns:ak47', count: 1 } } }));
+  const diagnostics: string[] = [];
+  const changed = await applyFeatureRegistry(second, first, 'Second Guns Pack', diagnostics);
+  assert.equal(changed, 2);
+  const item = JSON.parse(await second.file('items/ak47.json')!.async('text'));
+  const recipe = JSON.parse(await second.file('recipes/ak47.json')!.async('text'));
+  const newId = item['minecraft:item'].description.identifier;
+  assert.equal(newId, 'guns_autobe_2:ak47');
+  assert.equal(recipe['minecraft:recipe_shaped'].key.A.item, newId);
+  assert.equal(recipe['minecraft:recipe_shaped'].result.item, newId);
+  assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
+  console.log('✓ feature registry renames colliding custom identifiers and repairs source-owned recipe references');
+})();
