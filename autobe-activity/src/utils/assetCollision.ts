@@ -74,13 +74,14 @@ export async function planBinaryAssetCollisions(
 export async function applyVanillaAssetResolutions(
   targetZip: JSZip,
   packs: Array<{ id: string; name: string; type: string; fileBlob?: Blob }>,
-  conflicts: Array<{ type: string; resolution: string; identifier: string; packB: { id: string; name: string } }>,
+  conflicts: Array<{ type: string; resolution: string; identifier: string; packA: { id: string; name: string }; packB: { id: string; name: string } }>,
   packType: string,
   diagnostics: string[]
 ): Promise<void> {
   for (const conflict of conflicts) {
-    if (conflict.type !== 'vanilla_asset' || conflict.resolution !== 'keep_b') continue;
-    const winner = packs.find(pack => pack.id === conflict.packB.id && pack.type === packType);
+    if (conflict.type !== 'vanilla_asset' || (conflict.resolution !== 'keep_a' && conflict.resolution !== 'keep_b')) continue;
+    const selected = conflict.resolution === 'keep_b' ? conflict.packB : conflict.packA;
+    const winner = packs.find(pack => pack.id === selected.id && pack.type === packType);
     if (!winner?.fileBlob) continue;
     const sourceZip = await JSZip.loadAsync(winner.fileBlob);
     const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === conflict.identifier.toLowerCase());
