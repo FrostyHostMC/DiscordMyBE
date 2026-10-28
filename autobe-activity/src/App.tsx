@@ -417,7 +417,7 @@ export const App: React.FC = () => {
 
     // Check for identifier conflicts
     const detected = await detectConflicts(packsToMerge);
-    if (detected.length > 0 && !autoMerge) {
+    if (detected.some((conflict) => conflict.type === 'vanilla_asset') || (detected.length > 0 && !autoMerge)) {
       setConflicts(detected);
       setScreen('conflicts');
     } else {
