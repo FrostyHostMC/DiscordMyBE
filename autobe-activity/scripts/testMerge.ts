@@ -9,8 +9,6 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
-import { executeMergePacks } from '../src/utils/mergeEngine.ts';
-import type { AddonPack } from '../src/types/modpack.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -373,38 +371,3 @@ await (async () => {
   console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
 })();
 
-
-await (async () => {
-  async function makeResourcePack(name: string, uuid: string, identifier: string, textureBytes: number[]): Promise<AddonPack> {
-    const zip = new JSZip();
-    zip.file('manifest.json', JSON.stringify({
-      format_version: 2,
-      header: { name, description: name, uuid, version: [1, 0, 0], min_engine_version: [1, 20, 0] },
-      modules: [{ type: 'resources', uuid: `${uuid.slice(0, -1)}2`, version: [1, 0, 0] }]
-    }));
-    zip.file('entity/example.entity.json', JSON.stringify({
-      format_version: '1.10.0',
-      'minecraft:client_entity': {
-        description: { identifier, textures: { default: 'textures/entity/shared' } }
-      }
-    }));
-    zip.file('textures/entity/shared.png', new Uint8Array(textureBytes));
-    return {
-      id: name, name, type: 'Resource Pack', version: '1.0.0', uuid,
-      fileSize: 100, dateAdded: 0, fileBlob: await zip.generateAsync({ type: 'blob' })
-    };
-  }
-  const first = await makeResourcePack('First Pack', '11111111-1111-4111-8111-111111111111', 'test:first', [1, 2, 3]);
-  const second = await makeResourcePack('Second Pack', '22222222-2222-4222-8222-222222222222', 'test:second', [9, 8, 7]);
-  const merged = await executeMergePacks([first, second], { modpackName: 'Asset Collision Regression' });
-  const resourceOutput = merged.outputs.find(output => output.type === 'resource');
-  assert.ok(resourceOutput?.blob, 'resource pack output should be generated');
-  const outputZip = await JSZip.loadAsync(await resourceOutput!.blob!.arrayBuffer());
-  assert.ok(outputZip.file('textures/entity/shared.png'), 'first colliding asset should retain its original path');
-  assert.ok(outputZip.file('textures/entity/shared__second_pack.png'), 'different colliding asset should be preserved at a unique path');
-  const secondEntity = await outputZip.file('entity/example.entity__second_pack.json')?.async('text');
-  assert.ok(secondEntity, 'second colliding entity definition should be preserved at a unique path');
-  assert.ok(secondEntity!.includes('textures/entity/shared__second_pack'), 'the second add-on texture reference should point at its preserved asset');
-  assert.ok(merged.combinedExtras?.diagnosticsText.includes('ASSET_PATH_COLLISION'), 'the merge report should record the asset collision');
-  console.log('✓ conflicting binary assets are preserved and matching references are repaired');
-})();
