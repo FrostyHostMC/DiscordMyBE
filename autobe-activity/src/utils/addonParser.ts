@@ -377,9 +377,9 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
-        const lower = path.toLowerCase().replace(/\\\\/g, '/');
-        const vanillaAsset = /^textures\\/(items?|blocks?|entity|models|environment|particle|gui)\\//i.test(lower)
-          && /\\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
+        const lower = path.toLowerCase().replace(/\\/g, '/');
+        const vanillaAsset = /^textures\/(items?|blocks?|entity|models|environment|particle|gui)\//i.test(lower)
+          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
         if (vanillaAsset) {
           const bytes = await fileObj.async('uint8array');
           const existing = assetMap.get(lower);
