@@ -224,8 +224,8 @@ function rewriteAssetReferences(text: string, pathMap: Map<string, string>): str
   const replacements = [...pathMap.entries()].sort((a, b) => b[0].length - a[0].length);
   for (const [oldPath, newPath] of replacements) {
     output = output.split(oldPath).join(newPath);
-    const oldWithoutExtension = oldPath.replace(/\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-    const newWithoutExtension = newPath.replace(/\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+    const oldWithoutExtension = oldPath.replace(/\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
+    const newWithoutExtension = newPath.replace(/\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
     if (oldWithoutExtension !== oldPath) output = output.split(oldWithoutExtension).join(newWithoutExtension);
   }
   return output;
@@ -235,7 +235,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
   await expandBrarchiveFiles(zip, diagnostics);
   await guardUnavailableEventSubscriptions(zip, diagnostics);
   const assetPathMap = new Map<string, string>();
-  const binaryExtensions = /\\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|m4a|bin|materialbin)$/i;
+  const binaryExtensions = /\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|m4a|bin|materialbin)$/i;
   for (const [sourcePath, sourceFile] of Object.entries(zip.files)) {
     if (sourceFile.dir || !binaryExtensions.test(sourcePath)) continue;
     const normalizedPath = pathTransform ? pathTransform(sourcePath) : sourcePath;
