@@ -9,6 +9,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
+import { planBinaryAssetCollisions, rewriteAssetReferences } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -371,3 +372,24 @@ await (async () => {
   console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
 })();
 
+
+
+await (async () => {
+  const source = new JSZip();
+  const target = new JSZip();
+  source.file('textures/entity/shared.png', new Uint8Array([9, 8, 7]));
+  target.file('textures/entity/shared.png', new Uint8Array([1, 2, 3]));
+  const diagnostics: string[] = [];
+  const pathMap = await planBinaryAssetCollisions(source, target, 'Second Pack', undefined, diagnostics);
+  assert.equal(pathMap.get('textures/entity/shared.png'), 'textures/entity/shared__second_pack.png');
+  assert.equal(diagnostics.length, 1);
+  const rewritten = rewriteAssetReferences('{"textures":{"default":"textures/entity/shared"}}', pathMap);
+  assert.ok(rewritten.includes('textures/entity/shared__second_pack'));
+  const identicalSource = new JSZip();
+  const identicalTarget = new JSZip();
+  identicalSource.file('textures/entity/same.png', new Uint8Array([4, 5, 6]));
+  identicalTarget.file('textures/entity/same.png', new Uint8Array([4, 5, 6]));
+  const identicalMap = await planBinaryAssetCollisions(identicalSource, identicalTarget, 'Third Pack', undefined, []);
+  assert.equal(identicalMap.size, 0, 'identical assets should not be renamed');
+  console.log('✓ colliding binary assets get deterministic paths, references are repaired, identical assets are reused');
+})();
