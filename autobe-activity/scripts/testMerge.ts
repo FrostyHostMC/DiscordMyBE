@@ -402,7 +402,7 @@ await (async () => {
   const outputZip = await JSZip.loadAsync(await resourceOutput!.blob!.arrayBuffer());
   assert.ok(outputZip.file('textures/entity/shared.png'), 'first colliding asset should retain its original path');
   assert.ok(outputZip.file('textures/entity/shared__second_pack.png'), 'different colliding asset should be preserved at a unique path');
-  const secondEntity = await outputZip.file('entity/example__second_pack.entity.json')?.async('text');
+  const secondEntity = await outputZip.file('entity/example.entity__second_pack.json')?.async('text');
   assert.ok(secondEntity, 'second colliding entity definition should be preserved at a unique path');
   assert.ok(secondEntity!.includes('textures/entity/shared__second_pack'), 'the second add-on texture reference should point at its preserved asset');
   assert.ok(merged.combinedExtras?.diagnosticsText.includes('ASSET_PATH_COLLISION'), 'the merge report should record the asset collision');
