@@ -382,7 +382,8 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
         if (vanillaAsset) {
           const bytes = await fileObj.async('uint8array');
-          const existing = assetMap.get(lower);
+          const assetKey = `${pack.type}:${lower}`;
+          const existing = assetMap.get(assetKey);
           if (existing && existing.packId !== pack.id
             && (existing.bytes.length !== bytes.length || existing.bytes.some((byte, index) => byte !== bytes[index]))) {
             conflicts.push({
@@ -394,7 +395,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
               resolution: 'keep_a'
             });
           } else if (!existing) {
-            assetMap.set(lower, { packId: pack.id, packName: pack.name, bytes });
+            assetMap.set(assetKey, { packId: pack.id, packName: pack.name, bytes });
           }
         }
         if (!lower.endsWith('.json')) continue;
