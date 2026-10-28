@@ -59,7 +59,7 @@ export interface MergedModpack {
 
 export interface ConflictItem {
   id: string;
-  type: 'entity' | 'item' | 'block' | 'recipe' | 'loot_table' | 'animation_controller' | 'render_controller';
+  type: 'entity' | 'item' | 'block' | 'recipe' | 'loot_table' | 'animation_controller' | 'render_controller' | 'vanilla_asset';
   identifier: string;
   packA: { id: string; name: string };
   packB: { id: string; name: string };
