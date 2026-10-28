@@ -110,7 +110,7 @@ test('render-controller deltas preserve independent fields without mixing confli
   ]);
   assert.deepEqual(merged['controller.render.sword'].textures, ['texture.blue_sword']);
   assert.equal(merged['controller.render.sword'].geometry, 'geometry.blue_sword');
-  assert.equal(merged['controller.render.sword'].materials, 'material.default');
+  assert.deepEqual(merged['controller.render.sword'].materials, ['material.default']);
   assert.deepEqual(merged['controller.render.other_sword'].textures, ['texture.other_sword']);
 });
 
