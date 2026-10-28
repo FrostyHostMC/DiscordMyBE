@@ -1125,7 +1125,7 @@ export const App: React.FC = () => {
             setConflicts((prev) =>
               prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
             );
-            showToast('All conflicts resolved with automatic namespace prefixes.');
+            showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
           }}
           onProceedMerge={() => {
             openScriptCheck(getSelectedPacks());
@@ -1379,7 +1379,7 @@ export const App: React.FC = () => {
                       setConflicts((prev) =>
                         prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
                       );
-                      showToast('All conflicts resolved with automatic namespace prefixes.');
+                      showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
                     }}
                     onProceedMerge={() => {
                       navigateTab('workspace');
