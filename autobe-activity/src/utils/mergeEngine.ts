@@ -417,6 +417,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
+      mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
@@ -524,6 +526,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         }
         if (!entry) entry = 'scripts/main.js';
       }
+      const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
+      mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
