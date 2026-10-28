@@ -121,9 +121,10 @@ function guardEventSubscriptions(source: string, path: string, diagnostics: stri
     diagnostics.push('Computed Script API event access in ' + path + ' was not auto-rewritten. Verify the event exists before subscribing; AutoBE will not guess dynamic event names.');
   }
 
-  const pattern = /\b(world|system)((?:\s*(?:\?\.|\.)\s*[A-Za-z_$][\w$]*)+)\s*(?:\?\.|\.)\s*subscribe\s*(?:\?\.)?\s*\(/g;
+  const pattern = /\b([A-Za-z_$][\w$]*)((?:\s*(?:\?\.|\.)\s*[A-Za-z_$][\w$]*)+)\s*(?:\?\.|\.)\s*subscribe\s*(?:\?\.)?\s*\(/g;
   let changed = false;
-  const updated = source.replace(pattern, (_match, root: string, chain: string) => {
+  const updated = source.replace(pattern, (match: string, root: string, chain: string) => {
+    if (!/(?:\.|\?\.)\s*(?:afterEvents|beforeEvents)(?:\.|\?\.)/.test(chain)) return match;
     changed = true;
     const safeChain = chain.replace(/\s*(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)/g, (_part: string, name: string) => '?.' + name);
     return root + '?.' + safeChain.replace(/^\?\./, '') + '?.subscribe?.(';
