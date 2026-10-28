@@ -88,6 +88,32 @@ test('player animation/controller files merge named entries instead of last-pack
   JSON.parse(JSON.stringify(merged));
 });
 
+test('render-controller deltas preserve independent fields without mixing conflicting texture arrays', () => {
+  const merged = mergeJsonForFile('render_controllers/player.render_controllers.json', [
+    {
+      format_version: '1.8.0',
+      'controller.render.sword': {
+        geometry: 'geometry.blue_sword',
+        textures: ['texture.blue_sword'],
+        materials: ['material.default']
+      }
+    },
+    {
+      format_version: '1.8.0',
+      'controller.render.sword': {
+        geometry: 'geometry.red_sword',
+        textures: ['texture.red_sword'],
+        materials: ['material.emissive']
+      },
+      'controller.render.other_sword': { textures: ['texture.other_sword'] }
+    }
+  ]);
+  assert.deepEqual(merged['controller.render.sword'].textures, ['texture.blue_sword']);
+  assert.equal(merged['controller.render.sword'].geometry, 'geometry.blue_sword');
+  assert.equal(merged['controller.render.sword'].materials, 'material.default');
+  assert.deepEqual(merged['controller.render.other_sword'].textures, ['texture.other_sword']);
+});
+
 console.log('Merge regression tests passed.');
 
 
