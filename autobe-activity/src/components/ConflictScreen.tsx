@@ -56,6 +56,8 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         return `Both packs define the block "${c.identifier}". Prefixing keeps both blocks distinct in the creative inventory and recipes.`;
       case 'recipe':
         return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe takes priority or let AutoBE namespace both.`;
+      case 'vanilla_asset':
+        return `Both "${c.packA.name}" and "${c.packB.name}" supply different bytes for the same vanilla-facing asset path. Minecraft expects this path to stay unchanged, so AutoBE cannot safely rename it. Choose which add-on's file should be used in the final pack.`;
       default:
         return `Duplicate definition detected for "${c.identifier}". AutoBE can auto-prefix the second pack's definitions to prevent overwrites.`;
     }
