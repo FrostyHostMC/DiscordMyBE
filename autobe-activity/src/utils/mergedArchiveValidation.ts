@@ -67,6 +67,10 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
       if (animations && typeof animations === 'object' && !Array.isArray(animations)) {
         for (const id of Object.keys(animations)) animationIds.add(id);
       }
+      const animationControllers = entry.data?.animation_controllers;
+      if (animationControllers && typeof animationControllers === 'object' && !Array.isArray(animationControllers)) {
+        for (const id of Object.keys(animationControllers)) animationIds.add(id);
+      }
       const controllers = entry.data?.render_controllers;
       if (controllers && typeof controllers === 'object' && !Array.isArray(controllers)) {
         for (const id of Object.keys(controllers)) renderControllerIds.add(id);
@@ -84,7 +88,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         if (parentKey === 'animations' && /^(animation|controller\\.animation)\\./.test(refId) && !animationIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching animation definition was found in this resource pack.' });
         }
-        if (parentKey === 'render_controllers' && /^controller\\.render\\./.test(refId) && !renderControllerIds.has(refId)) {
+        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\\.render\\./.test(refId) && !renderControllerIds.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching render-controller definition was found in this resource pack.' });
         }
       }
