@@ -51,9 +51,9 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     return IMAGE_EXTENSIONS.some(ext => paths.has(clean + ext));
   };
 
-  const visit = (value: any, sourcePath: string, key = ''): void => {
+  const visit = (value: any, sourcePath: string, key = '', insideTextureMap = false): void => {
     if (!value || typeof value !== 'object') {
-      if (typeof value === 'string' && /texture/i.test(key)) {
+      if (typeof value === 'string' && (insideTextureMap || /texture/i.test(key))) {
         const ref = value.trim();
         // Only validate explicit pack-relative paths. Namespaced aliases such
         // as "texture.item_name" and "textures.foo" are not file paths.
@@ -69,10 +69,10 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
       return;
     }
     if (Array.isArray(value)) {
-      for (const item of value) visit(item, sourcePath, key);
+      for (const item of value) visit(item, sourcePath, key, insideTextureMap);
       return;
     }
-    for (const [childKey, childValue] of Object.entries(value)) visit(childValue, sourcePath, childKey);
+    for (const [childKey, childValue] of Object.entries(value)) visit(childValue, sourcePath, childKey, insideTextureMap || /textures/i.test(childKey));
   };
 
   for (const entry of jsonEntries) visit(entry.data, entry.path);
