@@ -14,7 +14,7 @@ import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 import { validateMergedArchive } from './mergedArchiveValidation';
-import { planBinaryAssetCollisions, rewriteAssetReferences } from './assetCollision';
+import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath } from './assetCollision';
 import { applyFeatureRegistry } from './featureRegistry';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -206,7 +206,7 @@ function writeBinaryIfFirst(targetZip: JSZip, accum: MergeAccum, path: string, d
  * reload it.
  */
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics?: string[]): Promise<void> {
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics?: string[], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>): Promise<void> {
   await expandBrarchiveFiles(zip, diagnostics);
   await guardUnavailableEventSubscriptions(zip, diagnostics);
   const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
@@ -214,6 +214,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
     if (fileObj.dir) continue;
+    if (sourcePackId && vanillaAssetWinners && isVanillaOverridePath(path) && vanillaAssetWinners.has(path) && vanillaAssetWinners.get(path) !== sourcePackId) continue;
     // Skip every manifest (root AND nested copies from subfolders) and macOS junk.
     const base = lower.substring(lower.lastIndexOf('/') + 1);
     if (base === 'manifest.json' || lower.includes('__macosx')) continue;
@@ -411,6 +412,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const plan = buildMergePlan(packs);
   const mergeDiagnostics: string[] = [];
   const renameMaps = buildRenameMaps(conflicts, autoPrefix);
+  const vanillaAssetWinners = new Map<string, string>();
+  for (const conflict of conflicts) {
+    if (conflict.type !== 'vanilla_asset') continue;
+    const winner = conflict.resolution === 'keep_b' ? conflict.packB.id : conflict.packA.id;
+    vanillaAssetWinners.set(conflict.identifier, winner);
+  }
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
   const iconBytes = await findFirstPackIcon(packs);
   const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
@@ -446,7 +453,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       if (registryChanges) mergeDiagnostics.push(`FEATURE_REGISTRY_SUMMARY [${pack.name}]: repaired identifiers/references in ${registryChanges} JSON file(s).`);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
@@ -558,7 +565,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
