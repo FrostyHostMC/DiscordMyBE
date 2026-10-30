@@ -201,16 +201,21 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         continue;
       }
       if (base === 'player.animation_controllers.json' || base === 'player.render_controllers.json' || base === 'player.animation.json') {
-        // First-wins per named entry: deep-merging two incompatible animation
-        // state machines produces broken results.
+        // Keep independent named definitions and non-conflicting object keys.
+        // Render-controller arrays are semantic choices (textures/geometry/materials),
+        // not additive lists: unioning them can render two incompatible rigs at once.
         if (!(key in merged)) {
-          merged[key] = value;
-        } else if (merged[key] && typeof merged[key] === 'object' && value && typeof value === 'object') {
-          if (Array.isArray(merged[key]) && Array.isArray(value)) {
-            merged[key] = removeDuplicates([...merged[key], ...value]);
-          } else if (!Array.isArray(merged[key]) && !Array.isArray(value)) {
-            for (const [sk, sv] of Object.entries(value)) {
-              if (!(sk in merged[key])) merged[key][sk] = sv;
+          merged[key] = structuredClone(value);
+        } else if (merged[key] && typeof merged[key] === 'object' && value && typeof value === 'object' &&
+                   !Array.isArray(merged[key]) && !Array.isArray(value)) {
+          for (const [sk, sv] of Object.entries(value)) {
+            if (!(sk in merged[key])) merged[key][sk] = structuredClone(sv);
+            else if (base !== 'player.render_controllers.json' &&
+                     merged[key][sk] && sv && typeof merged[key][sk] === 'object' &&
+                     typeof sv === 'object' && !Array.isArray(merged[key][sk]) && !Array.isArray(sv)) {
+              for (const [nestedKey, nestedValue] of Object.entries(sv as Record<string, unknown>)) {
+                if (!(nestedKey in merged[key][sk])) merged[key][sk][nestedKey] = structuredClone(nestedValue);
+              }
             }
           }
         }

@@ -53,13 +53,13 @@ export interface MergedModpack {
   outputBlob?: Blob;
   // Small JSON files for the combined .mcaddon. The combined file itself is built on demand
   // (see ensureCombinedBlob) so merging never holds an extra full copy in memory.
-  combinedExtras?: { manifestJson: string; reportJson: string };
+  combinedExtras?: { manifestJson: string; reportJson: string; diagnosticsText?: string };
   outputFileName: string;
 }
 
 export interface ConflictItem {
   id: string;
-  type: 'entity' | 'item' | 'block' | 'recipe' | 'loot_table' | 'animation_controller' | 'render_controller';
+  type: 'entity' | 'item' | 'block' | 'recipe' | 'loot_table' | 'animation_controller' | 'render_controller' | 'vanilla_asset';
   identifier: string;
   packA: { id: string; name: string };
   packB: { id: string; name: string };

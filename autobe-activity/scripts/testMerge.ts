@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { sanitizeJsonString } from '../src/utils/addonParser.ts';
+import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
 import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
@@ -8,6 +8,8 @@ import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
+import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
+import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
@@ -84,6 +86,32 @@ test('player animation/controller files merge named entries instead of last-pack
     ['overlay_third_person']
   );
   JSON.parse(JSON.stringify(merged));
+});
+
+test('render-controller deltas preserve independent fields without mixing conflicting texture arrays', () => {
+  const merged = mergeJsonForFile('render_controllers/player.render_controllers.json', [
+    {
+      format_version: '1.8.0',
+      'controller.render.sword': {
+        geometry: 'geometry.blue_sword',
+        textures: ['texture.blue_sword'],
+        materials: ['material.default']
+      }
+    },
+    {
+      format_version: '1.8.0',
+      'controller.render.sword': {
+        geometry: 'geometry.red_sword',
+        textures: ['texture.red_sword'],
+        materials: ['material.emissive']
+      },
+      'controller.render.other_sword': { textures: ['texture.other_sword'] }
+    }
+  ]);
+  assert.deepEqual(merged['controller.render.sword'].textures, ['texture.blue_sword']);
+  assert.equal(merged['controller.render.sword'].geometry, 'geometry.blue_sword');
+  assert.deepEqual(merged['controller.render.sword'].materials, ['material.default']);
+  assert.deepEqual(merged['controller.render.other_sword'].textures, ['texture.other_sword']);
 });
 
 console.log('Merge regression tests passed.');
@@ -347,4 +375,156 @@ await (async () => {
   assert.ok(preserved.includes('const item = {'));
   assert.ok(unsafeDiagnostics.some(message => message.includes('was not rewritten')));
   console.log('✓ legacy plain-object ItemStacks are converted only when recognized; unknown components are preserved with diagnostics');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  zip.file('entity/example.entity.json', JSON.stringify({
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: {
+        identifier: 'test:example',
+        textures: { default: 'textures/entity/missing_texture' },
+        geometry: { default: 'geometry.missing' },
+        animations: { idle: 'animation.missing' },
+        render_controllers: ['controller.render.missing']
+      }
+    }
+  }));
+  zip.file('items/broken.json', '{ invalid json');
+  zip.file('items/first.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'test:duplicate' } } }));
+  zip.file('items/second.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'test:duplicate' } } }));
+  zip.file('textures/entity/present.png', new Uint8Array([1, 2, 3]));
+  const issues = await validateMergedArchive(zip, 'Test Resource Pack');
+  assert.ok(issues.some(issue => issue.code === 'INVALID_JSON' && issue.path === 'items/broken.json'));
+  assert.ok(issues.some(issue => issue.code === 'DUPLICATE_IDENTIFIER' && issue.message.includes('test:duplicate')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/missing_texture')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_GEOMETRY_REFERENCE' && issue.message.includes('geometry.missing')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_ANIMATION_REFERENCE' && issue.message.includes('animation.missing')));
+  assert.ok(issues.some(issue => issue.code === 'MISSING_RENDER_CONTROLLER_REFERENCE' && issue.message.includes('controller.render.missing')));
+  assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
+  console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
+})();
+
+
+
+await (async () => {
+  const source = new JSZip();
+  const target = new JSZip();
+  source.file('textures/my_addon/shared.png', new Uint8Array([9, 8, 7]));
+  target.file('textures/my_addon/shared.png', new Uint8Array([1, 2, 3]));
+  const diagnostics: string[] = [];
+  const pathMap = await planBinaryAssetCollisions(source, target, 'Second Pack', undefined, diagnostics);
+  assert.equal(pathMap.get('textures/my_addon/shared.png'), 'textures/my_addon/shared__second_pack.png');
+  assert.equal(diagnostics.length, 1);
+  const rewritten = rewriteAssetReferences('{"textures":{"default":"textures/my_addon/shared"}}', pathMap);
+  assert.ok(rewritten.includes('textures/my_addon/shared__second_pack'));
+  const identicalSource = new JSZip();
+  const identicalTarget = new JSZip();
+  identicalSource.file('textures/entity/same.png', new Uint8Array([4, 5, 6]));
+  identicalTarget.file('textures/entity/same.png', new Uint8Array([4, 5, 6]));
+  const identicalMap = await planBinaryAssetCollisions(identicalSource, identicalTarget, 'Third Pack', undefined, []);
+  assert.equal(identicalMap.size, 0, 'identical assets should not be renamed');
+  assert.equal(isVanillaOverridePath('textures/items/diamond_sword.png'), true, 'vanilla-facing item textures must not be renamed');
+  assert.equal(isVanillaOverridePath('textures/entity/custom_beast.png'), true, 'entity texture overrides should be treated conservatively as vanilla-facing');
+  assert.equal(isVanillaOverridePath('textures/my_addon/custom_icon.png'), false, 'custom namespace-like asset paths can use collision renaming');
+  console.log('✓ colliding binary assets get deterministic paths, references are repaired, identical assets are reused');
+})();
+
+await (async () => {
+  const { applyFeatureRegistry } = await import('../src/utils/featureRegistry.ts');
+  const first = new JSZip();
+  first.file('items/ak47.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'guns:ak47' }, components: {} } }));
+  first.file('recipes/ak47.json', JSON.stringify({ 'minecraft:recipe_shaped': { description: { identifier: 'guns:ak47_recipe' }, key: { A: { item: 'guns:ak47' } }, result: { item: 'guns:ak47', count: 1 } } }));
+  const second = new JSZip();
+  second.file('items/ak47.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'guns:ak47' }, components: {} } }));
+  second.file('recipes/ak47.json', JSON.stringify({ 'minecraft:recipe_shaped': { description: { identifier: 'guns:ak47_recipe2' }, key: { A: { item: 'guns:ak47' } }, result: { item: 'guns:ak47', count: 1 }, metadata: { name: 'guns:ak47' } } }));
+  second.file('loot_tables/test.json', JSON.stringify({ pools: [{ entries: [{ type: 'item', name: 'guns:ak47' }] }] }));
+  const diagnostics: string[] = [];
+  const changed = await applyFeatureRegistry(second, first, 'Second Guns Pack', diagnostics);
+  assert.equal(changed, 3);
+  const item = JSON.parse(await second.file('items/ak47.json')!.async('text'));
+  const recipe = JSON.parse(await second.file('recipes/ak47.json')!.async('text'));
+  const newId = item['minecraft:item'].description.identifier;
+  assert.equal(newId, 'guns_autobe_2:ak47');
+  assert.equal(recipe['minecraft:recipe_shaped'].key.A.item, newId);
+  assert.equal(recipe['minecraft:recipe_shaped'].result.item, newId);
+  assert.equal(recipe['minecraft:recipe_shaped'].metadata.name, 'guns:ak47', 'unrelated name fields must not be rewritten');
+  const loot = JSON.parse(await second.file('loot_tables/test.json')!.async('text'));
+  assert.equal(loot.pools[0].entries[0].name, newId, 'loot-table item references should be repaired');
+  assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
+  console.log('✓ feature registry renames colliding custom identifiers and repairs source-owned recipe references');
+})();
+
+await (async () => {
+  const packA = new JSZip();
+  packA.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const packB = new JSZip();
+  packB.file('textures/items/diamond_sword.png', new Uint8Array([3, 2, 1]));
+  const conflicts = await detectConflicts([
+    { id: 'pack-a', name: 'Blue Sword', type: 'Resource Pack', fileBlob: await packA.generateAsync({ type: 'blob' }) } as any,
+    { id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: await packB.generateAsync({ type: 'blob' }) } as any
+  ]);
+  const assetConflict = conflicts.find(conflict => conflict.type === 'vanilla_asset');
+  assert.ok(assetConflict, 'different bytes at the same vanilla asset path should require a choice');
+  assert.equal(assetConflict?.identifier, 'textures/items/diamond_sword.png');
+  assert.equal(assetConflict?.packA.name, 'Blue Sword');
+  assert.equal(assetConflict?.packB.name, 'Red Sword');
+  assert.equal(assetConflict?.resolution, 'keep_a');
+  console.log('✓ preflight finds conflicting vanilla asset overrides and identifies both add-ons');
+})();
+
+await (async () => {
+  const target = new JSZip();
+  target.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const winnerZip = new JSZip();
+  winnerZip.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const winnerBlob = await winnerZip.generateAsync({ type: 'blob' });
+  const diagnostics: string[] = [];
+  await applyVanillaAssetResolutions(
+    target,
+    [{ id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: winnerBlob } as any],
+    [{
+      id: 'asset-conflict',
+      type: 'vanilla_asset',
+      identifier: 'textures/items/diamond_sword.png',
+      packA: { id: 'pack-a', name: 'Blue Sword' },
+      packB: { id: 'pack-b', name: 'Red Sword' },
+      resolution: 'keep_b'
+    }] as any,
+    'Resource Pack',
+    diagnostics
+  );
+  const chosen = await target.file('textures/items/diamond_sword.png')!.async('uint8array');
+  assert.deepEqual([...chosen], [9, 8, 7], 'keep_b must replace the actual final asset bytes');
+  assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
+  console.log('✓ vanilla override choice changes the actual final asset bytes');
+})();
+
+await (async () => {
+  const target = new JSZip();
+  target.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const blueZip = new JSZip();
+  blueZip.file('textures/items/diamond_sword.png', new Uint8Array([1, 2, 3]));
+  const redZip = new JSZip();
+  redZip.file('textures/items/diamond_sword.png', new Uint8Array([9, 8, 7]));
+  const diagnostics: string[] = [];
+  await applyVanillaAssetResolutions(
+    target,
+    [
+      { id: 'pack-a', name: 'Blue Sword', type: 'Resource Pack', fileBlob: await blueZip.generateAsync({ type: 'blob' }) } as any,
+      { id: 'pack-b', name: 'Red Sword', type: 'Resource Pack', fileBlob: await redZip.generateAsync({ type: 'blob' }) } as any
+    ],
+    [{
+      id: 'asset-conflict-a', type: 'vanilla_asset', identifier: 'textures/items/diamond_sword.png',
+      packA: { id: 'pack-a', name: 'Blue Sword' }, packB: { id: 'pack-b', name: 'Red Sword' }, resolution: 'keep_a'
+    }] as any,
+    'Resource Pack',
+    diagnostics
+  );
+  const chosen = await target.file('textures/items/diamond_sword.png')!.async('uint8array');
+  assert.deepEqual([...chosen], [1, 2, 3], 'keep_a must replace the actual final asset bytes');
+  assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
+  console.log('✓ keep Pack A also changes the actual final asset bytes');
 })();

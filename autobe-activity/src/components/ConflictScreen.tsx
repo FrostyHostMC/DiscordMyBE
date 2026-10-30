@@ -56,6 +56,8 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         return `Both packs define the block "${c.identifier}". Prefixing keeps both blocks distinct in the creative inventory and recipes.`;
       case 'recipe':
         return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe takes priority or let AutoBE namespace both.`;
+      case 'vanilla_asset':
+        return `Both "${c.packA.name}" and "${c.packB.name}" supply different bytes for the same vanilla-facing asset path. Minecraft expects this path to stay unchanged, so AutoBE cannot safely rename it. Choose which add-on's file should be used in the final pack.`;
       default:
         return `Duplicate definition detected for "${c.identifier}". AutoBE can auto-prefix the second pack's definitions to prevent overwrites.`;
     }
@@ -147,7 +149,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         {/* Filter buttons */}
         {conflicts.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            {['all', 'entity', 'item', 'block', 'recipe'].map((t) => (
+            {['all', 'entity', 'item', 'block', 'recipe', 'vanilla_asset'].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -214,13 +216,14 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => onUpdateResolution(c.id, 'prefix_all')}
+                    disabled={c.type === 'vanilla_asset'}
                     className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition-all text-center truncate ${
-                      c.resolution === 'prefix_all'
+                      c.type === 'vanilla_asset' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
                         ? 'bg-[#762BFF] text-white border-[#A855F7] shadow-[0_0_10px_rgba(118,43,255,0.4)]'
                         : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
                     }`}
                   >
-                    Prefix & Keep Both
+                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : 'Prefix & Keep Both'}
                   </button>
                   <button
                     type="button"

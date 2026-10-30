@@ -368,15 +368,37 @@ export async function parseAddonArchive(
 export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[]> {
   const conflicts: ConflictItem[] = [];
   const identifierMap = new Map<string, { packId: string; packName: string; type: ConflictItem['type'] }>();
+  const assetMap = new Map<string, { packId: string; packName: string; bytes: Uint8Array }>();
 
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     try {
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      // Scan entities, items, blocks, recipes
+      // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
-        if (fileObj.dir || !path.endsWith('.json')) continue;
-        const lower = path.toLowerCase();
+        if (fileObj.dir) continue;
+        const lower = path.toLowerCase().replace(/\\/g, '/');
+        const vanillaAsset = /^textures\/(items?|blocks?|entity|models|environment|particle|gui)\//i.test(lower)
+          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
+        if (vanillaAsset) {
+          const bytes = await fileObj.async('uint8array');
+          const assetKey = `${pack.type}:${lower}`;
+          const existing = assetMap.get(assetKey);
+          if (existing && existing.packId !== pack.id
+            && (existing.bytes.length !== bytes.length || existing.bytes.some((byte, index) => byte !== bytes[index]))) {
+            conflicts.push({
+              id: generateUUID(),
+              type: 'vanilla_asset',
+              identifier: path,
+              packA: { id: existing.packId, name: existing.packName },
+              packB: { id: pack.id, name: pack.name },
+              resolution: 'keep_a'
+            });
+          } else if (!existing) {
+            assetMap.set(assetKey, { packId: pack.id, packName: pack.name, bytes });
+          }
+        }
+        if (!lower.endsWith('.json')) continue;
         let cat: ConflictItem['type'] | null = null;
         if (lower.includes('entities/')) cat = 'entity';
         else if (lower.includes('items/')) cat = 'item';

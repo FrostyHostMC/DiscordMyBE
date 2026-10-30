@@ -93,6 +93,7 @@ export const App: React.FC = () => {
 
   // Merging runtime states
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
+
   const [mergePlan, setMergePlan] = useState<MergePlan | null>(null);
   const [mergeStep, setMergeStep] = useState<string>('Reading addons');
   const [mergeProgress, setMergeProgress] = useState<number>(0);
@@ -415,14 +416,11 @@ export const App: React.FC = () => {
       return;
     }
 
-    // Check for identifier conflicts
+    // Vanilla overrides are detected by detectConflicts and always require an explicit choice.
     const detected = await detectConflicts(packsToMerge);
-    if (detected.length > 0 && !autoMerge) {
-      setConflicts(detected);
-      setScreen('conflicts');
-    } else {
-      openScriptCheck(packsToMerge);
-    }
+    setConflicts(detected);
+    if (detected.some((conflict) => conflict.type === 'vanilla_asset') || (detected.length > 0 && !autoMerge)) setScreen('conflicts');
+    else openScriptCheck(packsToMerge);
   };
 
   const doRunMergeProcess = async (
@@ -1103,9 +1101,9 @@ export const App: React.FC = () => {
           }}
           onAutoPrefixAll={() => {
             setConflicts((prev) =>
-              prev.map((c) => ({ ...c, resolution: 'prefix_all' }))
+              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
             );
-            showToast('All conflicts resolved with automatic namespace prefixes.');
+            showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
           }}
           onProceedMerge={() => {
             openScriptCheck(getSelectedPacks());
@@ -1357,9 +1355,9 @@ export const App: React.FC = () => {
                     }}
                     onAutoPrefixAll={() => {
                       setConflicts((prev) =>
-                        prev.map((c) => ({ ...c, resolution: 'prefix_all' }))
+                        prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
                       );
-                      showToast('All conflicts resolved with automatic namespace prefixes.');
+                      showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
                     }}
                     onProceedMerge={() => {
                       navigateTab('workspace');
