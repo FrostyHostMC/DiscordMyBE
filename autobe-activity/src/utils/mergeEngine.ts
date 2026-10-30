@@ -341,7 +341,7 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<st
 }
 export function scriptModuleOutputPath(slug: string, originalPath: string): string {
   const normalized = originalPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-  return \`scripts/\${slug}/_pack/\${normalized}\`;
+  return 'scripts/' + slug + '/_pack/' + normalized;
 }
 function slugify(name: string, id: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
