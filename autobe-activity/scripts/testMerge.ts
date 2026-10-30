@@ -7,6 +7,7 @@ import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText } from '../src/utils/scriptNamespacing.ts';
+import { scriptModuleOutputPath } from '../src/utils/mergeEngine.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
@@ -15,6 +16,13 @@ function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('script modules are isolated per addon without breaking their relative directory tree', () => {
+  assert.equal(scriptModuleOutputPath('addon_a', 'scripts/main.js'), 'scripts/addon_a/_pack/scripts/main.js');
+  assert.equal(scriptModuleOutputPath('addon_a', './scripts/lib/helper.js'), 'scripts/addon_a/_pack/scripts/lib/helper.js');
+  assert.equal(scriptModuleOutputPath('addon_b', 'main.js'), 'scripts/addon_b/_pack/main.js');
+  assert.equal(scriptModuleOutputPath('addon_b', 'scripts\\\\lib\\\\helper.js'), 'scripts/addon_b/_pack/scripts/lib/helper.js');
+});
 
 test('JSONC comments are stripped without changing strings', () => {
   const input = `{
