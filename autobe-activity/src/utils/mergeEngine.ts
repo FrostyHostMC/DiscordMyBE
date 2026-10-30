@@ -8,7 +8,7 @@ import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { applyPlayerEntityPass } from './playerEntityFix';
-import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
+import { makePackNs, namespaceScriptDirAsync, scriptModuleOutputPath } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
@@ -339,6 +339,7 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<st
   }
   return renameMaps;
 }
+
 function slugify(name: string, id: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
   return base || id.replace(/-/g, '').slice(0, 8);
@@ -542,7 +543,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => /\\.(?:[cm]?js)$/i.test(p) ? scriptModuleOutputPath(slug, p) : p : undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
@@ -551,7 +552,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         // per-pack namespace token so merged scripts cannot collide.
         await namespaceScriptDirAsync(bpZip, `scripts/${slug}`, makePackNs(pack.name));
         // Ensure the entry file lands under the slug folder even if missing
-        const entryPath = entry.startsWith('scripts/') ? `scripts/${slug}/${entry.slice('scripts/'.length)}` : `scripts/${slug}/${entry}`;
+        const entryPath = scriptModuleOutputPath(slug, entry);
         if (!bpZip.file(entryPath)) {
           bpZip.file(entryPath, '// (empty entry)\n');
         }
