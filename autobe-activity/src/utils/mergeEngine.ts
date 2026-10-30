@@ -8,7 +8,7 @@ import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { applyPlayerEntityPass } from './playerEntityFix';
-import { makePackNs, namespaceScriptDirAsync } from './scriptNamespacing';
+import { makePackNs, namespaceScriptDirAsync, scriptModuleOutputPath } from './scriptNamespacing';
 import { mergeJsonForFile } from './smartJsonMerge';
 import { stableUUID } from '@/utils/stableUuid';
 import { expandBrarchiveFiles } from './brarchive';
@@ -339,10 +339,7 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<st
   }
   return renameMaps;
 }
-export function scriptModuleOutputPath(slug: string, originalPath: string): string {
-  const normalized = originalPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
-  return 'scripts/' + slug + '/_pack/' + normalized;
-}
+
 function slugify(name: string, id: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
   return base || id.replace(/-/g, '').slice(0, 8);
