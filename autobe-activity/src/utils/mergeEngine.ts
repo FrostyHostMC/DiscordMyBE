@@ -542,7 +542,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       }
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => p.toLowerCase().startsWith('scripts/') ? `scripts/${slug}/${p.slice('scripts/'.length)}` : p : undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), isScriptGroup ? p => /\\.(?:[cm]?js)$/i.test(p) ? `scripts/${slug}/_pack/${p.replace(/^\\/+/, '')}` : p : undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
       if (isScriptGroup) {
@@ -551,7 +551,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         // per-pack namespace token so merged scripts cannot collide.
         await namespaceScriptDirAsync(bpZip, `scripts/${slug}`, makePackNs(pack.name));
         // Ensure the entry file lands under the slug folder even if missing
-        const entryPath = entry.startsWith('scripts/') ? `scripts/${slug}/${entry.slice('scripts/'.length)}` : `scripts/${slug}/${entry}`;
+        const normalizedEntry = entry.replace(/\\\\/g, '/').replace(/^\\.\\//, '').replace(/^\\/+/, '');
+        const entryPath = `scripts/${slug}/_pack/${normalizedEntry}`;
         if (!bpZip.file(entryPath)) {
           bpZip.file(entryPath, '// (empty entry)\n');
         }
