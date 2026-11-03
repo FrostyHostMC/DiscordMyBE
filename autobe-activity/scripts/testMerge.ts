@@ -176,7 +176,7 @@ test('same item component can combine non-conflicting component properties', () 
 await (async () => {
   // Exercise the same post-accumulation pass used by executeMergePacks.
   const zip = new JSZip();
-  zip.file('items/utility_item.json', JSON.stringify({
+  const original = JSON.stringify({
     format_version: '1.20.0',
     'minecraft:item': {
       description: { identifier: 'demo:utility_item' },
@@ -185,8 +185,8 @@ await (async () => {
         'minecraft:max_stack_size': 16
       }
     }
-  }));
-  zip.file('items/utility_item_extra.json', JSON.stringify({
+  });
+  const alternative = JSON.stringify({
     format_version: '1.20.0',
     'minecraft:item': {
       description: { identifier: 'demo:utility_item' },
@@ -195,16 +195,45 @@ await (async () => {
         'minecraft:max_stack_size': 64
       }
     }
-  }));
-  await mergeDefinitionsByIdentifier(zip);
+  });
+  zip.file('items/utility_item.json', original);
+  zip.file('items/utility_item_extra.json', alternative);
+  const diagnostics: string[] = [];
+  await mergeDefinitionsByIdentifier(zip, diagnostics);
   const paths = Object.keys(zip.files).filter(p => p.startsWith('items/') && !zip.files[p].dir);
   assert.equal(paths.length, 1);
-  const result = JSON.parse(await zip.file(paths[0])!.async('text'));
+  const active = await zip.file(paths[0])!.async('text');
+  assert.equal(active, original, 'a conflicting definition must not alter the active original');
+  const result = JSON.parse(active);
   assert.equal(result['minecraft:item'].description.identifier, 'demo:utility_item');
   assert.deepEqual(result['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
+  assert.equal(result['minecraft:item'].components['minecraft:food'], undefined);
+  assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 16);
+  const backup = Object.keys(zip.files).find(p => p.startsWith('_autobe_conflicts/') && p.includes('utility_item_extra.json'));
+  assert.ok(backup, 'the alternative must be saved for review');
+  assert.equal(await zip.file(backup)!.async('text'), alternative, 'the backup must retain the full alternative');
+  assert.ok(diagnostics.some(message => message.includes('DEFINITION_CONFLICT')));
+  console.log('✓ incompatible duplicate item definitions are kept for manual review');
+})();
+
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('items/utility_item.json', JSON.stringify({
+    'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:icon': { texture: 'utility_item' } } }
+  }));
+  zip.file('items/utility_item_extra.json', JSON.stringify({
+    'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:food': { nutrition: 2, can_always_eat: true } } }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics);
+  const result = JSON.parse(await zip.file('items/utility_item.json')!.async('text'));
+  assert.deepEqual(result['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
   assert.deepEqual(result['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true });
-  assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 64);
-  console.log('✓ full ZIP merge combines duplicate item identifiers from separate paths');
+  assert.equal(zip.file('items/utility_item_extra.json'), null);
+  assert.ok(!diagnostics.some(message => message.includes('DEFINITION_CONFLICT')));
+  assert.ok(!Object.keys(zip.files).some(p => p.startsWith('_autobe_conflicts/') && !zip.files[p].dir));
+  console.log('✓ compatible duplicate item definitions combine non-conflicting components');
 })();
 
 
@@ -236,8 +265,8 @@ await (async () => {
   const count = await expandBrarchiveFiles(zip);
   assert.equal(count, 2);
   assert.equal(zip.file('__brarchive/items/fiery/greatsword.brarchive'), null);
-  assert.ok(zip.file('items/fiery/greatsword/copper_greatsword.json'));
-  assert.ok(zip.file('items/fiery/greatsword/wooden_greatsword.json'));
+  assert.ok(zip.file('items/fiery/copper_greatsword.json'));
+  assert.ok(zip.file('items/fiery/wooden_greatsword.json'));
   console.log('✓ packed .brarchive item definitions are expanded into Bedrock JSON paths');
 })();
 
@@ -252,7 +281,6 @@ await (async () => {
     bytes.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26], 0);
     const view = new DataView(bytes.buffer);
     view.setUint32(8, entries.length, true);
-    view.setUint32(12, 1, true);
     let offset = 0;
     entries.forEach(([name, data], index) => {
       const record = 16 + index * 256;
@@ -268,15 +296,18 @@ await (async () => {
   };
   const same = new TextEncoder().encode('same');
   const different = new TextEncoder().encode('different');
-  zip.file('items/collision/kept.json', same);
+  zip.file('items/kept.json', same);
   zip.file('__brarchive/items/collision.brarchive', makeArchive([
     ['kept.json', same],
     ['kept.json', different]
   ]));
-  await assert.rejects(expandBrarchiveFiles(zip, diagnostics), /Packed file conflicts with existing file/);
-  assert.deepEqual(Array.from(await zip.file('items/collision/kept.json')!.async('uint8array')), Array.from(same));
-  assert.ok(diagnostics.some(message => message.includes('Identical packed entry')));
-  console.log('✓ .brarchive expansion accepts identical entries and rejects conflicting data');
+  const count = await expandBrarchiveFiles(zip, diagnostics);
+  assert.equal(count, 1, 'identical payload should be skipped, distinct collision preserved');
+  assert.deepEqual(Array.from(await zip.file('items/kept.json')!.async('uint8array')), Array.from(same));
+  assert.deepEqual(Array.from(await zip.file('items/kept.autobe-2.json')!.async('uint8array')), Array.from(different));
+  assert.ok(diagnostics.some(message => message.includes('Duplicate identical archive entry skipped')));
+  assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
+  console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
 })();
 
 
@@ -301,7 +332,7 @@ await (async () => {
       description: { ...identical['minecraft:attachable'].description, identifier: 'minecraft:stick' }
     }
   }));
-  zip.file('attachables/stick(Copy).json', JSON.stringify({
+  const alternative = JSON.stringify({
     ...identical,
     'minecraft:attachable': {
       description: {
@@ -310,13 +341,17 @@ await (async () => {
         geometry: { default: 'geometry.custom_item' }
       }
     }
-  }));
+  });
+  zip.file('attachables/stick(Copy).json', alternative);
   await mergeDefinitionsByIdentifier(zip, diagnostics);
   assert.ok(zip.file('attachables/apple.json'));
   assert.equal(zip.file('attachables/apple(Copy).json'), null);
   assert.ok(zip.file('attachables/stick.json'));
-  assert.ok(zip.file('attachables/stick(Copy).json'));
-  assert.ok(diagnostics.some(message => message.includes('Conflicting attachables share identifier "minecraft:stick"')));
+  assert.equal(zip.file('attachables/stick(Copy).json'), null);
+  const backup = Object.keys(zip.files).find(p => p.startsWith('_autobe_conflicts/') && p.includes('stick(Copy).json'));
+  assert.ok(backup, 'the incompatible attachable must be saved for review');
+  assert.equal(await zip.file(backup)!.async('text'), alternative, 'the attachable backup must remain intact');
+  assert.ok(diagnostics.some(message => message.includes('DEFINITION_CONFLICT')));
   console.log('✓ identical attachables deduplicate while incompatible visual rigs remain explicit');
 })();
 
