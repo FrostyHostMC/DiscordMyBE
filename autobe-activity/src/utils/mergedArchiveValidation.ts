@@ -44,12 +44,21 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     }
   }
 
+  const isResourcePack = /resource pack/i.test(label);
+  const isBehaviorPack = /behavior/i.test(label);
   const identifiers = new Map<string, string[]>();
   const identifierRoots = ['minecraft:item', 'minecraft:entity', 'minecraft:block', 'minecraft:client_entity', 'minecraft:attachable'];
   for (const entry of jsonEntries) {
     for (const root of identifierRoots) {
       const identifier = entry.data?.[root]?.description?.identifier;
       if (typeof identifier !== 'string' || !identifier.trim()) continue;
+      // A behavior player and its client player are complementary. Only an
+      // entity definition in the matching pack's entity folder participates.
+      if (identifier === 'minecraft:player' && (root === 'minecraft:entity' || root === 'minecraft:client_entity')) {
+        const path = entry.path.toLowerCase().replace(/\\/g, '/');
+        if (root === 'minecraft:client_entity' && (!path.startsWith('entity/') || isBehaviorPack)) continue;
+        if (root === 'minecraft:entity' && (!path.startsWith('entities/') || isResourcePack)) continue;
+      }
       const key = root + ':' + identifier;
       const files = identifiers.get(key) || [];
       files.push(entry.path);
@@ -74,7 +83,6 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     return IMAGE_EXTENSIONS.some(ext => paths.has(clean + ext));
   };
 
-  const isResourcePack = /resource pack/i.test(label);
   const geometryIds = new Set<string>();
   const animationIds = new Set<string>();
   const renderControllerIds = new Set<string>();

@@ -435,8 +435,16 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               </select>
             </div>
 
-            <div className="sm:col-span-2 pt-1 border-t border-[#30263F]/50 text-[11px] text-[#AAA3BB]">
-              Identifier conflicts are reviewed before merging.
+            <div className="flex items-center justify-between sm:col-span-2 pt-1 border-t border-[#30263F]/50">
+              <span className="text-[11px] text-[#AAA3BB]">
+                Automatic Identifier Conflict Resolution (Auto-Prefix)
+              </span>
+              <input
+                type="checkbox"
+                checked={config.autoPrefix}
+                onChange={(e) => setConfig({ ...config, autoPrefix: e.target.checked })}
+                className="rounded accent-[#762BFF]"
+              />
             </div>
           </div>
         )}

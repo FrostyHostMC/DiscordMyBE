@@ -33,6 +33,8 @@ import { useSFX } from '@/hooks/useSFX';
 const tweaks = aippyTweaks(tweaksConfig);
 
 interface SettingsScreenProps {
+  autoMerge: boolean;
+  onToggleAutoMerge: () => void;
   keepOriginals: boolean;
   onToggleKeepOriginals: () => void;
   onOpenAbout: () => void;
@@ -121,6 +123,8 @@ const SwitchToggle: React.FC<{ on: boolean; onClick: () => void; label: string }
 );
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  autoMerge,
+  onToggleAutoMerge,
   keepOriginals,
   onToggleKeepOriginals,
   onOpenAbout,
@@ -204,6 +208,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 space-y-3 max-w-3xl mx-auto w-full">
         {activeCategory === 'general' && (
           <>
+            <SettingRow
+              icon={<Zap className="w-5 h-5 text-[#A855F7]" />}
+              title="Automatic Conflict Resolution"
+              sub="Automatically prefix colliding identifiers to prevent overwriting content"
+              right={<SwitchToggle on={autoMerge} onClick={onToggleAutoMerge} label="Auto Merge" />}
+            />
             <SettingRow
               icon={<ShieldCheck className="w-5 h-5 text-[#A855F7]" />}
               title="Retain Source Packs"

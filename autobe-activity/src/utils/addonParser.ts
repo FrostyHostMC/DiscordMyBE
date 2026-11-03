@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { AddonPack, ConflictItem } from '@/types/modpack';
-import { expandBrarchiveFiles } from './brarchive';
+import { mergeAdditions } from './conservativeMerge';
 
 export interface ParseResult {
   packs: AddonPack[];
@@ -196,7 +196,7 @@ export async function parseAddonArchive(
     // Only consider manifests at the root or one level deep
     // Ignore manifests in subfolders like "unused-assets/manifest.json"
     const pathParts = relativePath.split('/');
-    if (pathParts[pathParts.length - 1].toLowerCase() === 'manifest.json' && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
+    if (lower.endsWith('manifest.json') && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
       manifestPaths.push(relativePath);
     }
   });
@@ -368,14 +368,14 @@ export async function parseAddonArchive(
 // Scans packs for duplicate identifiers and builds conflicts list
 export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[]> {
   const conflicts: ConflictItem[] = [];
-  const identifierMap = new Map<string, { packId: string; packName: string; content: string }>();
+  const identifierMap = new Map<string, { packId: string; packName: string; type: ConflictItem['type']; data: any }>();
   const assetMap = new Map<string, { packId: string; packName: string; bytes: Uint8Array }>();
+  const playersByScope = new Map<string, Array<{ packId: string; packName: string; path: string; data: any }>>();
 
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     try {
       const zip = await JSZip.loadAsync(pack.fileBlob);
-      await expandBrarchiveFiles(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
@@ -401,6 +401,36 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           }
         }
         if (!lower.endsWith('.json')) continue;
+
+        // minecraft:player is a vanilla override, not a custom identifier to
+        // prefix. Compare actual definitions under the relevant pack root,
+        // independently of file name; BP and RP definitions are separate.
+        const playerRoot = pack.type === 'Resource Pack' && lower.startsWith('entity/')
+          ? 'minecraft:client_entity'
+          : pack.type === 'Behavior Pack' && lower.startsWith('entities/') ? 'minecraft:entity' : null;
+        if (playerRoot) {
+          try {
+            const playerData = JSON.parse(sanitizeJsonString(await fileObj.async('text')));
+            if (playerData?.[playerRoot]?.description?.identifier === 'minecraft:player') {
+              const scope = `${pack.type}:${playerRoot}`;
+              const previous = playersByScope.get(scope) || [];
+              for (const first of previous) {
+                // Identical JSON is a redundant copy, not a content conflict.
+                const forward = mergeAdditions(first.data, playerData);
+                const reverse = mergeAdditions(playerData, first.data);
+                if (!forward.changed && !forward.conflicts.length && !reverse.changed && !reverse.conflicts.length) continue;
+                conflicts.push({
+                  id: generateUUID(), type: 'entity', identifier: 'minecraft:player',
+                  packA: { id: first.packId, name: first.packName, path: first.path },
+                  packB: { id: pack.id, name: pack.name, path }, resolution: 'keep_a'
+                });
+              }
+              previous.push({ packId: pack.id, packName: pack.name, path, data: playerData });
+              playersByScope.set(scope, previous);
+              continue;
+            }
+          } catch { /* Invalid JSON is reported by archive validation. */ }
+        }
         let cat: ConflictItem['type'] | null = null;
         if (lower.includes('entities/')) cat = 'entity';
         else if (lower.includes('items/')) cat = 'item';
@@ -414,22 +444,20 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         try {
           const txt = await fileObj.async('text');
           const json = JSON.parse(sanitizeJsonString(txt));
-          let definitions: Array<[string, unknown]> = [];
-          if (cat === 'animation_controller') definitions = Object.entries(json.animation_controllers || {});
-          else if (cat === 'render_controller') definitions = Object.entries(json.render_controllers || {});
-          else {
-            const root = cat === 'recipe'
-              ? Object.entries(json).find(([key]) => key.startsWith('minecraft:recipe_'))?.[1] as any
-              : json[`minecraft:${cat}`];
-            if (root?.description?.identifier) definitions = [[root.description.identifier, root]];
-          }
-          for (const [ident, definition] of definitions) {
-            if (!ident || ident === 'minecraft:player') continue;
-            const key = `${pack.type}:${cat}:${ident}`;
-            const content = JSON.stringify(definition);
-            const existing = identifierMap.get(key);
-            if (existing) {
-              if (existing.packId !== pack.id && existing.content !== content) {
+          let ident = '';
+          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;
+          else if (cat === 'item') ident = json['minecraft:item']?.description?.identifier;
+          else if (cat === 'block') ident = json['minecraft:block']?.description?.identifier;
+          else if (cat === 'recipe') ident = json['minecraft:recipe_shaped']?.description?.identifier || json['minecraft:recipe_shapeless']?.description?.identifier;
+          else if (cat === 'animation_controller') ident = Object.keys(json.animation_controllers || {})[0];
+          else if (cat === 'render_controller') ident = Object.keys(json.render_controllers || {})[0];
+
+          if (ident && ident !== 'minecraft:player') {
+            const identifierKey = `${pack.type}:${cat}:${ident}`;
+            if (identifierMap.has(identifierKey)) {
+              const existing = identifierMap.get(identifierKey)!;
+              const comparison = mergeAdditions(existing.data, json);
+              if (existing.packId !== pack.id && (comparison.changed || comparison.conflicts.length > 0)) {
                 conflicts.push({
                   id: generateUUID(),
                   type: cat,
@@ -440,15 +468,15 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
                 });
               }
             } else {
-              identifierMap.set(key, { packId: pack.id, packName: pack.name, content });
+              identifierMap.set(identifierKey, { packId: pack.id, packName: pack.name, type: cat, data: json });
             }
           }
         } catch {
           // ignore individual json parse errors
         }
       }
-    } catch (error) {
-      throw new Error(`Could not scan ${pack.name}: ${error instanceof Error ? error.message : String(error)}`);
+    } catch {
+      // ignore
     }
   }
 

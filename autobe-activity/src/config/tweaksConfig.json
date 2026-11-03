@@ -23,6 +23,14 @@
     "type": "color",
     "value": "#A855F7"
   },
+  "autoMergeConflicts": {
+    "index": 3,
+    "name": "Auto Merge",
+    "description": "Combine compatible changes automatically; preserve unresolved conflicts for review",
+    "group": "merger",
+    "type": "boolean",
+    "value": true
+  },
   "keepOriginals": {
     "index": 4,
     "name": "Keep Originals",

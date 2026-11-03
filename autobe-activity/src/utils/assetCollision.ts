@@ -31,12 +31,18 @@ export function uniqueAssetPath(targetZip: JSZip, originalPath: string, sourceLa
 
 export function rewriteAssetReferences(text: string, pathMap: Map<string, string>): string {
   let output = text;
+  const replacePath = (oldPath: string, newPath: string) => {
+    const escaped = oldPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Do not rewrite a longer path merely because it begins with this one.
+    const expression = new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}(?![A-Za-z0-9_./-])`, 'g');
+    output = output.replace(expression, (_match, before) => before + newPath);
+  };
   const replacements = [...pathMap.entries()].sort((a, b) => b[0].length - a[0].length);
   for (const [oldPath, newPath] of replacements) {
-    output = output.split(oldPath).join(newPath);
+    replacePath(oldPath, newPath);
     const oldWithoutExtension = oldPath.replace(/\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
     const newWithoutExtension = newPath.replace(/\.(png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
-    if (oldWithoutExtension !== oldPath) output = output.split(oldWithoutExtension).join(newWithoutExtension);
+    if (oldWithoutExtension !== oldPath) replacePath(oldWithoutExtension, newWithoutExtension);
   }
   return output;
 }

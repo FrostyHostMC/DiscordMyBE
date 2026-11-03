@@ -30,8 +30,8 @@ export const ConflictDiffViewer: React.FC<ConflictDiffViewerProps> = ({ conflict
       const packA = findPack(conflict.packA.id, conflict.packA.name);
       const packB = findPack(conflict.packB.id, conflict.packB.name);
       const [textA, textB] = await Promise.all([
-        loadDefinitionText(packA, conflict.type, conflict.identifier),
-        loadDefinitionText(packB, conflict.type, conflict.identifier)
+        loadDefinitionText(packA, conflict.type, conflict.identifier, conflict.packA.path),
+        loadDefinitionText(packB, conflict.type, conflict.identifier, conflict.packB.path)
       ]);
       if (cancelled) return;
       if (!textA && !textB) {
@@ -48,7 +48,7 @@ export const ConflictDiffViewer: React.FC<ConflictDiffViewerProps> = ({ conflict
     return () => {
       cancelled = true;
     };
-  }, [conflict.id, conflict.type, conflict.identifier, conflict.packA.id, conflict.packA.name, conflict.packB.id, conflict.packB.name, packs]);
+  }, [conflict.id, conflict.type, conflict.identifier, conflict.packA.id, conflict.packA.name, conflict.packA.path, conflict.packB.id, conflict.packB.name, conflict.packB.path, packs]);
 
   if (unavailable) {
     return (

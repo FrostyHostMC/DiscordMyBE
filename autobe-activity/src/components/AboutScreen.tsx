@@ -86,7 +86,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
             </div>
             <div>
               <div className="text-xs font-bold text-white">Smart Conflict Detection</div>
-              <div className="text-[11px] text-[#AAA3BB]">Review conflicting identifiers and group script API versions</div>
+              <div className="text-[11px] text-[#AAA3BB]">Automatic namespace prefixing and script API isolation</div>
             </div>
           </div>
 

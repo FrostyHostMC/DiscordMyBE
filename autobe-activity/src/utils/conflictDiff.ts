@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { AddonPack, ConflictItem } from '@/types/modpack';
+import { sanitizeJsonString } from './addonParser';
 
 /**
  * Advanced conflict diff support: extracts the raw JSON definition that caused
@@ -18,10 +19,11 @@ const TYPE_FOLDERS: Partial<Record<ConflictItem['type'], string>> = {
 export async function loadDefinitionText(
   pack: AddonPack | undefined,
   type: ConflictItem['type'],
-  identifier: string
+  identifier: string,
+  sourcePath?: string
 ): Promise<string | null> {
   if (!pack?.fileBlob) return null;
-  const folder = TYPE_FOLDERS[type];
+  const folder = type === 'entity' && pack.type === 'Resource Pack' ? 'entity/' : TYPE_FOLDERS[type];
   if (!folder) return null;
 
   let zip: JSZip;
@@ -29,6 +31,11 @@ export async function loadDefinitionText(
     zip = await JSZip.loadAsync(pack.fileBlob);
   } catch {
     return null;
+  }
+
+  if (sourcePath) {
+    const selected = zip.file(sourcePath);
+    if (selected && !selected.dir) return selected.async('text');
   }
 
   const idTail = (identifier.split(':').pop() || '').toLowerCase().replace(/[^a-z0-9_.]/g, '');
@@ -42,6 +49,14 @@ export async function loadDefinitionText(
       text = await fileObj.async('text');
     } catch {
       continue;
+    }
+    if (type === 'entity' && identifier === 'minecraft:player') {
+      try {
+        const json = JSON.parse(sanitizeJsonString(text));
+        const root = pack.type === 'Resource Pack' ? 'minecraft:client_entity' : 'minecraft:entity';
+        if (json?.[root]?.description?.identifier !== identifier) continue;
+        return text;
+      } catch { continue; }
     }
     if (text.includes(identifier)) {
       zip.files = {} as typeof zip.files;

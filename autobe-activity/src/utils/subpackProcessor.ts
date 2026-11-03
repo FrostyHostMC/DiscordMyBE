@@ -1,7 +1,6 @@
 import JSZip from 'jszip';
 import { AddonPack } from '@/types/modpack';
 import { sanitizeJsonString } from './addonParser';
-import { expandBrarchiveFiles } from './brarchive';
 
 /**
  * Port of AutoBE._start_process subpack handling:
@@ -11,7 +10,6 @@ import { expandBrarchiveFiles } from './brarchive';
  */
 export async function applySubpackSelection(blob: Blob, folderName: string): Promise<Blob> {
   const zip = await JSZip.loadAsync(blob);
-  await expandBrarchiveFiles(zip);
   const out = new JSZip();
 
   // Discover the subpack folders that physically exist in the archive so we can
@@ -52,11 +50,7 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
 
   let extractedCount = 0;
   let skippedCount = 0;
-  // Copy the base first, then overlay the selected variant regardless of ZIP order.
-  const ordered = Object.entries(zip.files).sort(([a], [b]) =>
-    Number(a.toLowerCase().startsWith('subpacks/')) - Number(b.toLowerCase().startsWith('subpacks/'))
-  );
-  for (const [path, f] of ordered) {
+  for (const [path, f] of Object.entries(zip.files)) {
     if (f.dir) continue;
     const lower = path.toLowerCase();
     if (lower === 'manifest.json') {

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
+  Sparkles,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -15,7 +16,9 @@ import { ConflictDiffViewer } from './ConflictDiffViewer';
 
 interface ConflictScreenProps {
   conflicts: ConflictItem[];
+  autoMerge: boolean;
   onUpdateResolution: (conflictId: string, resolution: ConflictItem['resolution']) => void;
+  onAutoPrefixAll: () => void;
   onProceedMerge: () => void;
   onBack: () => void;
   packs?: AddonPack[];
@@ -23,7 +26,9 @@ interface ConflictScreenProps {
 
 export const ConflictScreen: React.FC<ConflictScreenProps> = ({
   conflicts,
+  autoMerge,
   onUpdateResolution,
+  onAutoPrefixAll,
   onProceedMerge,
   onBack,
   packs = []
@@ -44,17 +49,18 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
   const getExplanation = (c: ConflictItem) => {
     switch (c.type) {
       case 'entity':
+        if (c.identifier === 'minecraft:player') return `These files both define minecraft:player in the same type of entity folder. AutoBE combines compatible additions within one output; if values conflict, it keeps an active version and saves the alternative for review. Separate behavior outputs retain their own files.`;
         return `Both "${c.packA.name}" and "${c.packB.name}" register the custom entity identifier "${c.identifier}". In Bedrock, having duplicate entity names causes one pack's mobs to overwrite the other.`;
       case 'item':
-        return `Both packs define the item "${c.identifier}". Choose the definition to keep; the other add-on may rely on its own version.`;
+        return `Both packs define the item "${c.identifier}". Auto-prefixing adds a unique namespace prefix so players can spawn both custom items.`;
       case 'block':
-        return `Both packs define the block "${c.identifier}". Choose the definition to keep; the other add-on may rely on its own version.`;
+        return `Both packs define the block "${c.identifier}". Prefixing keeps both blocks distinct in the creative inventory and recipes.`;
       case 'recipe':
-        return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe to keep.`;
+        return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe takes priority or let AutoBE namespace both.`;
       case 'vanilla_asset':
         return `Both "${c.packA.name}" and "${c.packB.name}" supply different bytes for the same vanilla-facing asset path. Minecraft expects this path to stay unchanged, so AutoBE cannot safely rename it. Choose which add-on's file should be used in the final pack.`;
       default:
-        return `Duplicate definition detected for "${c.identifier}". Choose which definition to keep.`;
+        return `Duplicate definition detected for "${c.identifier}". AutoBE can auto-prefix the second pack's definitions to prevent overwrites.`;
     }
   };
 
@@ -84,6 +90,18 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
           </div>
         </div>
 
+        <div className="flex items-center gap-2">
+          {conflicts.some(c => c.type !== 'vanilla_asset' && c.identifier !== 'minecraft:player') && (
+            <button
+              type="button"
+              onClick={onAutoPrefixAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.3)] active:scale-95 transition-all"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Auto-Prefix All</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Main Content */}
@@ -114,7 +132,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
               <span>Script API Major Version Difference</span>
             </div>
             <p className="text-[11px] text-amber-200/90 leading-relaxed">
-              AutoBE groups compatible versions into separate behavior packs. Test all groups together in Minecraft; splitting cannot guarantee runtime compatibility.
+              AutoBE detected multiple @minecraft/server versions across packs. AutoBE will automatically split them into isolated behavior packs so each version executes independently without crashing.
             </p>
           </div>
         )}
@@ -124,7 +142,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
           <div className="p-3.5 rounded-xl bg-[#100D18] border border-[#30263F] flex items-start gap-3">
             <HelpCircle className="w-4 h-4 text-[#A855F7] shrink-0 mt-0.5" />
             <div className="text-xs text-[#AAA3BB] leading-relaxed">
-              <strong className="text-white">Review each conflict:</strong> Choosing a pack removes the other definition. Both add-ons may refer to it, so this can change gameplay. If neither version can be discarded, keep the add-ons separate or reconcile them manually.
+              <strong className="text-white">Identifier conflicts:</strong> Multiple add-ons can define the same identifier. Review the findings below; vanilla player definitions are never automatically prefixed.
             </div>
           </div>
         )}
@@ -153,6 +171,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         <div className="space-y-2.5">
           {filteredConflicts.map((c, idx) => {
             const isExpanded = expandedId === c.id;
+            const isPlayer = c.type === 'entity' && c.identifier === 'minecraft:player';
             return (
               <div
                 key={c.id}
@@ -189,13 +208,28 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
 
                 {/* Conflict participants */}
                 <div className="flex items-center justify-between text-[11px] text-[#AAA3BB] bg-[#15111F] px-2.5 py-1.5 rounded-lg border border-[#30263F]/60">
-                  <span className="truncate max-w-[45%] text-white font-medium">{c.packA.name}</span>
+                  <span title={c.packA.path} className="truncate max-w-[45%] text-white font-medium">{c.packA.name}{c.packA.path ? ` — ${c.packA.path}` : ''}</span>
                   <span className="text-[#716885] font-mono text-[10px]">vs</span>
-                  <span className="truncate max-w-[45%] text-white font-medium">{c.packB.name}</span>
+                  <span title={c.packB.path} className="truncate max-w-[45%] text-white font-medium">{c.packB.name}{c.packB.path ? ` — ${c.packB.path}` : ''}</span>
                 </div>
 
-                {/* Resolution Selector */}
-                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                {/* Player overrides cannot be made independent by renaming. */}
+                {isPlayer ? (
+                  <div className="text-[10px] leading-relaxed text-amber-200">Compatible additions are combined. Conflicting player values are preserved for manual review; minecraft:player is never prefixed.</div>
+                ) : (
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateResolution(c.id, 'prefix_all')}
+                    disabled={c.type === 'vanilla_asset'}
+                    className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition-all text-center truncate ${
+                      c.type === 'vanilla_asset' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
+                        ? 'bg-[#762BFF] text-white border-[#A855F7] shadow-[0_0_10px_rgba(118,43,255,0.4)]'
+                        : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
+                    }`}
+                  >
+                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : 'Prefix & Keep Both'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onUpdateResolution(c.id, 'keep_a')}
@@ -219,6 +253,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                     Keep Pack B
                   </button>
                 </div>
+                )}
               </div>
             );
           })}

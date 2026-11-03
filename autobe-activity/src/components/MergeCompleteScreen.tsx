@@ -102,6 +102,15 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Unresolved collisions need attention before the combined add-on can be
+  // expected to preserve every feature. Backups are not active definitions.
+  let reviewFindings: Array<{ code: string; path: string; message: string }> = [];
+  try {
+    const report = JSON.parse(modpack.combinedExtras?.reportJson || '{}');
+    const reviewCodes = new Set(['DEFINITION_CONFLICT', 'FILE_PATH_CONFLICT', 'SHARED_FILE_CONFLICT', 'CROSS_GROUP_PLAYER_CONFLICT', 'SCRIPT_DEPENDENCY_CONFLICT', 'PACKED_ARCHIVE_NOT_SCANNED']);
+    reviewFindings = (report.findings || []).filter((finding: any) => reviewCodes.has(finding.code));
+  } catch { /* Older saved projects may not include a report. */ }
+
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
     if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -129,7 +138,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         </button>
         <span className="text-xs font-mono text-emerald-400 font-semibold flex items-center gap-1">
           <CheckCircle2 className="w-3.5 h-3.5" />
-          <span>Merge Successful</span>
+          <span>{reviewFindings.length ? 'Review Required' : 'Merge Complete'}</span>
         </span>
       </div>
 
@@ -139,12 +148,22 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <CheckCircle2 className="w-8 h-8 text-white stroke-[2.5]" />
         </div>
         <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
-          Packs Consolidated Successfully
+          {reviewFindings.length ? 'Pack created with conflicts' : 'Packs Consolidated'}
         </h2>
         <p className="text-xs text-[#AAA3BB] mt-1 max-w-sm">
-          Merged {modpack.totalPacks} addons with generated manifests and UUIDs.
+          Combined {modpack.totalPacks} add-on packs and preserved files wherever possible.
         </p>
       </div>
+
+      {reviewFindings.length > 0 && (
+        <div role="alert" className="p-4 rounded-xl bg-amber-950/30 border border-amber-600/70 text-amber-100 mb-4 text-xs space-y-2">
+          <div className="font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {reviewFindings.length} conflict(s) need review</div>
+          <p>Some add-on features may be missing or overridden until these conflicts are resolved.</p>
+          {reviewFindings.some(finding => ['DEFINITION_CONFLICT', 'FILE_PATH_CONFLICT', 'SHARED_FILE_CONFLICT'].includes(finding.code)) && <p>Alternatives saved under <span className="font-mono">_autobe_conflicts/</span> are not active in Minecraft.</p>}
+          <ul className="list-disc pl-5 space-y-1">{reviewFindings.slice(0, 3).map((finding, index) => <li key={index}>{finding.path || finding.code}</li>)}</ul>
+          <p>Open <span className="font-mono">_autobe_diagnostics.txt</span> in the combined bundle for details.</p>
+        </div>
+      )}
 
       {/* Summary Card */}
       <div className="p-4 rounded-xl bg-[#100D18] border border-[#30263F] space-y-3 mb-4">

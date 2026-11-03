@@ -61,8 +61,8 @@ export interface ConflictItem {
   id: string;
   type: 'entity' | 'item' | 'block' | 'recipe' | 'loot_table' | 'animation_controller' | 'render_controller' | 'vanilla_asset';
   identifier: string;
-  packA: { id: string; name: string };
-  packB: { id: string; name: string };
+  packA: { id: string; name: string; path?: string };
+  packB: { id: string; name: string; path?: string };
   resolution: 'prefix_all' | 'keep_a' | 'keep_b';
 }
 
