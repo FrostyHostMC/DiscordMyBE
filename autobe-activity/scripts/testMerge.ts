@@ -236,8 +236,8 @@ await (async () => {
   const count = await expandBrarchiveFiles(zip);
   assert.equal(count, 2);
   assert.equal(zip.file('__brarchive/items/fiery/greatsword.brarchive'), null);
-  assert.ok(zip.file('items/fiery/copper_greatsword.json'));
-  assert.ok(zip.file('items/fiery/wooden_greatsword.json'));
+  assert.ok(zip.file('items/fiery/greatsword/copper_greatsword.json'));
+  assert.ok(zip.file('items/fiery/greatsword/wooden_greatsword.json'));
   console.log('✓ packed .brarchive item definitions are expanded into Bedrock JSON paths');
 })();
 
@@ -252,6 +252,7 @@ await (async () => {
     bytes.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26], 0);
     const view = new DataView(bytes.buffer);
     view.setUint32(8, entries.length, true);
+    view.setUint32(12, 1, true);
     let offset = 0;
     entries.forEach(([name, data], index) => {
       const record = 16 + index * 256;
@@ -267,18 +268,15 @@ await (async () => {
   };
   const same = new TextEncoder().encode('same');
   const different = new TextEncoder().encode('different');
-  zip.file('items/kept.json', same);
+  zip.file('items/collision/kept.json', same);
   zip.file('__brarchive/items/collision.brarchive', makeArchive([
     ['kept.json', same],
     ['kept.json', different]
   ]));
-  const count = await expandBrarchiveFiles(zip, diagnostics);
-  assert.equal(count, 1, 'identical payload should be skipped, distinct collision preserved');
-  assert.deepEqual(Array.from(await zip.file('items/kept.json')!.async('uint8array')), Array.from(same));
-  assert.deepEqual(Array.from(await zip.file('items/kept.autobe-2.json')!.async('uint8array')), Array.from(different));
-  assert.ok(diagnostics.some(message => message.includes('Duplicate identical archive entry skipped')));
-  assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
-  console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
+  await assert.rejects(expandBrarchiveFiles(zip, diagnostics), /Packed file conflicts with existing file/);
+  assert.deepEqual(Array.from(await zip.file('items/collision/kept.json')!.async('uint8array')), Array.from(same));
+  assert.ok(diagnostics.some(message => message.includes('Identical packed entry')));
+  console.log('✓ .brarchive expansion accepts identical entries and rejects conflicting data');
 })();
 
 
