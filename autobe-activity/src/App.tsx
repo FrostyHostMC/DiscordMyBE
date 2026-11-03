@@ -68,7 +68,6 @@ const tweaks = aippyTweaks(tweaksConfig);
 
 export const App: React.FC = () => {
   // Tweaks parameters at component top level
-  const autoMergeTweak = tweaks.autoMergeConflicts.useState();
   const keepOriginalsTweak = tweaks.keepOriginals.useState();
   const hapticTweak = tweaks.hapticEnabled.useState();
   const soundTweak = tweaks.soundEnabled.useState();
@@ -88,7 +87,6 @@ export const App: React.FC = () => {
   const [activeModpack, setActiveModpack] = useState<MergedModpack | null>(null);
 
   // Settings states
-  const [autoMerge, setAutoMerge] = useState<boolean>(true);
   const [keepOriginals, setKeepOriginals] = useState<boolean>(true);
 
   // Merging runtime states
@@ -178,11 +176,6 @@ export const App: React.FC = () => {
   };
 
   // Sync settings with tweaks
-  useEffect(() => {
-    const t = setTimeout(() => setAutoMerge(autoMergeTweak), 0);
-    return () => clearTimeout(t);
-  }, [autoMergeTweak]);
-
   useEffect(() => {
     const t = setTimeout(() => setKeepOriginals(keepOriginalsTweak), 0);
     return () => clearTimeout(t);
@@ -417,9 +410,15 @@ export const App: React.FC = () => {
     }
 
     // Vanilla overrides are detected by detectConflicts and always require an explicit choice.
-    const detected = await detectConflicts(packsToMerge);
+    let detected: ConflictItem[];
+    try {
+      detected = await detectConflicts(packsToMerge);
+    } catch (err) {
+      showToast(`Could not scan the selected packs: ${describeError(err)}`, 10000);
+      return;
+    }
     setConflicts(detected);
-    if (detected.some((conflict) => conflict.type === 'vanilla_asset') || (detected.length > 0 && !autoMerge)) setScreen('conflicts');
+    if (detected.length > 0) setScreen('conflicts');
     else openScriptCheck(packsToMerge);
   };
 
@@ -448,7 +447,6 @@ export const App: React.FC = () => {
       const result = await executeMergePacks(packsToMerge, {
         modpackName: mergedName,
         conflicts: confList,
-        autoPrefix: autoMerge,
         scriptConflicts: scriptConflictsRef.current,
         onProgress: (step, pct) => {
           setMergeStep(step);
@@ -557,7 +555,8 @@ export const App: React.FC = () => {
           processed.push(await applySubpackToPack(p, variant));
         } catch (err) {
           console.error('[Aippy] Subpack processing failed:', describeError(err));
-          processed.push(p);
+          showToast(`Could not apply the selected subpack: ${describeError(err)}`, 10000);
+          return;
         }
       } else {
         processed.push(p);
@@ -1092,18 +1091,11 @@ export const App: React.FC = () => {
       {screen === 'conflicts' && (
         <ConflictScreen
           conflicts={conflicts}
-          autoMerge={autoMerge}
           packs={getSelectedPacks()}
           onUpdateResolution={(cid, res) => {
             setConflicts((prev) =>
               prev.map((c) => (c.id === cid ? { ...c, resolution: res } : c))
             );
-          }}
-          onAutoPrefixAll={() => {
-            setConflicts((prev) =>
-              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
-            );
-            showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
           }}
           onProceedMerge={() => {
             openScriptCheck(getSelectedPacks());
@@ -1346,18 +1338,11 @@ export const App: React.FC = () => {
                 {currentTab === 'conflicts_tool' && (
                   <ConflictScreen
                     conflicts={conflicts}
-                    autoMerge={autoMerge}
                     packs={installedPacks}
                     onUpdateResolution={(cid, res) => {
                       setConflicts((prev) =>
                         prev.map((c) => (c.id === cid ? { ...c, resolution: res } : c))
                       );
-                    }}
-                    onAutoPrefixAll={() => {
-                      setConflicts((prev) =>
-                        prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' ? 'keep_a' : 'prefix_all' }))
-                      );
-                      showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
                     }}
                     onProceedMerge={() => {
                       navigateTab('workspace');
@@ -1391,12 +1376,6 @@ export const App: React.FC = () => {
                 {/* 8. Settings */}
                 {currentTab === 'settings' && (
                   <SettingsScreen
-                    autoMerge={autoMerge}
-                    onToggleAutoMerge={() => {
-                      triggerHaptic(40);
-                      handleSoundTap();
-                      setAutoMerge(!autoMerge);
-                    }}
                     keepOriginals={keepOriginals}
                     onToggleKeepOriginals={() => {
                       triggerHaptic(40);

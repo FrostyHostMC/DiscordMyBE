@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { AddonPack, ConflictItem } from '@/types/modpack';
+import { expandBrarchiveFiles } from './brarchive';
 
 export interface ParseResult {
   packs: AddonPack[];
@@ -195,7 +196,7 @@ export async function parseAddonArchive(
     // Only consider manifests at the root or one level deep
     // Ignore manifests in subfolders like "unused-assets/manifest.json"
     const pathParts = relativePath.split('/');
-    if (lower.endsWith('manifest.json') && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
+    if (pathParts[pathParts.length - 1].toLowerCase() === 'manifest.json' && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
       manifestPaths.push(relativePath);
     }
   });
@@ -367,13 +368,14 @@ export async function parseAddonArchive(
 // Scans packs for duplicate identifiers and builds conflicts list
 export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[]> {
   const conflicts: ConflictItem[] = [];
-  const identifierMap = new Map<string, { packId: string; packName: string; type: ConflictItem['type'] }>();
+  const identifierMap = new Map<string, { packId: string; packName: string; content: string }>();
   const assetMap = new Map<string, { packId: string; packName: string; bytes: Uint8Array }>();
 
   for (const pack of packs) {
     if (!pack.fileBlob) continue;
     try {
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      await expandBrarchiveFiles(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
@@ -412,37 +414,41 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         try {
           const txt = await fileObj.async('text');
           const json = JSON.parse(sanitizeJsonString(txt));
-          let ident = '';
-          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;
-          else if (cat === 'item') ident = json['minecraft:item']?.description?.identifier;
-          else if (cat === 'block') ident = json['minecraft:block']?.description?.identifier;
-          else if (cat === 'recipe') ident = json['minecraft:recipe_shaped']?.description?.identifier || json['minecraft:recipe_shapeless']?.description?.identifier;
-          else if (cat === 'animation_controller') ident = Object.keys(json.animation_controllers || {})[0];
-          else if (cat === 'render_controller') ident = Object.keys(json.render_controllers || {})[0];
-
-          if (ident && ident !== 'minecraft:player') {
-            if (identifierMap.has(ident)) {
-              const existing = identifierMap.get(ident)!;
-              if (existing.packId !== pack.id) {
+          let definitions: Array<[string, unknown]> = [];
+          if (cat === 'animation_controller') definitions = Object.entries(json.animation_controllers || {});
+          else if (cat === 'render_controller') definitions = Object.entries(json.render_controllers || {});
+          else {
+            const root = cat === 'recipe'
+              ? Object.entries(json).find(([key]) => key.startsWith('minecraft:recipe_'))?.[1] as any
+              : json[`minecraft:${cat}`];
+            if (root?.description?.identifier) definitions = [[root.description.identifier, root]];
+          }
+          for (const [ident, definition] of definitions) {
+            if (!ident || ident === 'minecraft:player') continue;
+            const key = `${pack.type}:${cat}:${ident}`;
+            const content = JSON.stringify(definition);
+            const existing = identifierMap.get(key);
+            if (existing) {
+              if (existing.packId !== pack.id && existing.content !== content) {
                 conflicts.push({
                   id: generateUUID(),
                   type: cat,
                   identifier: ident,
                   packA: { id: existing.packId, name: existing.packName },
                   packB: { id: pack.id, name: pack.name },
-                  resolution: 'prefix_all'
+                  resolution: 'keep_a'
                 });
               }
             } else {
-              identifierMap.set(ident, { packId: pack.id, packName: pack.name, type: cat });
+              identifierMap.set(key, { packId: pack.id, packName: pack.name, content });
             }
           }
         } catch {
           // ignore individual json parse errors
         }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      throw new Error(`Could not scan ${pack.name}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

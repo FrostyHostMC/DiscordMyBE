@@ -142,7 +142,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           Packs Consolidated Successfully
         </h2>
         <p className="text-xs text-[#AAA3BB] mt-1 max-w-sm">
-          Merged {modpack.totalPacks} addons with automatic manifest, UUID and namespace resolution.
+          Merged {modpack.totalPacks} addons with generated manifests and UUIDs.
         </p>
       </div>
 

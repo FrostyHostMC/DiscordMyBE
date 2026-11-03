@@ -45,8 +45,8 @@ export const ScriptCheckScreen: React.FC<ScriptCheckScreenProps> = ({
   for (const g of plan.scriptGroups) {
     rows.push({
       icon: <ScrollText className="w-4 h-4 text-fuchsia-400" />,
-      label: `Behavior (Script API v${g.major})`,
-      file: `behavior_pack_v${g.major}.mcpack`,
+      label: g.major ? `Behavior (Script API v${g.major}${g.track === 'beta' ? ' beta' : ''})` : 'Behavior (Scripts)',
+      file: g.fileName,
       packs: g.packs,
       accent: 'border-fuchsia-500/30'
     });
@@ -75,7 +75,7 @@ export const ScriptCheckScreen: React.FC<ScriptCheckScreenProps> = ({
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 pb-32 max-w-3xl mx-auto w-full">
         <p className="text-xs text-[#AAA3BB] leading-relaxed">
-          Your addons will be partitioned into isolated packages so differing Script API versions remain fully compatible without runtime collisions.
+          Add-ons are grouped by Script API version and stability. Separate groups still need to be tested together in Minecraft.
         </p>
 
         {/* Summary pill */}

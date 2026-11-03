@@ -3,7 +3,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   HelpCircle,
-  Sparkles,
   ArrowRight,
   ChevronDown,
   ChevronUp,
@@ -16,9 +15,7 @@ import { ConflictDiffViewer } from './ConflictDiffViewer';
 
 interface ConflictScreenProps {
   conflicts: ConflictItem[];
-  autoMerge: boolean;
   onUpdateResolution: (conflictId: string, resolution: ConflictItem['resolution']) => void;
-  onAutoPrefixAll: () => void;
   onProceedMerge: () => void;
   onBack: () => void;
   packs?: AddonPack[];
@@ -26,9 +23,7 @@ interface ConflictScreenProps {
 
 export const ConflictScreen: React.FC<ConflictScreenProps> = ({
   conflicts,
-  autoMerge,
   onUpdateResolution,
-  onAutoPrefixAll,
   onProceedMerge,
   onBack,
   packs = []
@@ -51,15 +46,15 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
       case 'entity':
         return `Both "${c.packA.name}" and "${c.packB.name}" register the custom entity identifier "${c.identifier}". In Bedrock, having duplicate entity names causes one pack's mobs to overwrite the other.`;
       case 'item':
-        return `Both packs define the item "${c.identifier}". Auto-prefixing adds a unique namespace prefix so players can spawn both custom items.`;
+        return `Both packs define the item "${c.identifier}". Choose the definition to keep; the other add-on may rely on its own version.`;
       case 'block':
-        return `Both packs define the block "${c.identifier}". Prefixing keeps both blocks distinct in the creative inventory and recipes.`;
+        return `Both packs define the block "${c.identifier}". Choose the definition to keep; the other add-on may rely on its own version.`;
       case 'recipe':
-        return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe takes priority or let AutoBE namespace both.`;
+        return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe to keep.`;
       case 'vanilla_asset':
         return `Both "${c.packA.name}" and "${c.packB.name}" supply different bytes for the same vanilla-facing asset path. Minecraft expects this path to stay unchanged, so AutoBE cannot safely rename it. Choose which add-on's file should be used in the final pack.`;
       default:
-        return `Duplicate definition detected for "${c.identifier}". AutoBE can auto-prefix the second pack's definitions to prevent overwrites.`;
+        return `Duplicate definition detected for "${c.identifier}". Choose which definition to keep.`;
     }
   };
 
@@ -89,18 +84,6 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {conflicts.length > 0 && (
-            <button
-              type="button"
-              onClick={onAutoPrefixAll}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.3)] active:scale-95 transition-all"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Auto-Prefix All</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Main Content */}
@@ -131,7 +114,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
               <span>Script API Major Version Difference</span>
             </div>
             <p className="text-[11px] text-amber-200/90 leading-relaxed">
-              AutoBE detected multiple @minecraft/server versions across packs. AutoBE will automatically split them into isolated behavior packs so each version executes independently without crashing.
+              AutoBE groups compatible versions into separate behavior packs. Test all groups together in Minecraft; splitting cannot guarantee runtime compatibility.
             </p>
           </div>
         )}
@@ -141,7 +124,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
           <div className="p-3.5 rounded-xl bg-[#100D18] border border-[#30263F] flex items-start gap-3">
             <HelpCircle className="w-4 h-4 text-[#A855F7] shrink-0 mt-0.5" />
             <div className="text-xs text-[#AAA3BB] leading-relaxed">
-              <strong className="text-white">AutoBE Namespace Protection:</strong> When multiple addons register items or entities with the exact same identifier, one overwrites the other. AutoBE resolves this by auto-prefixing identifiers so both addons can be played together.
+              <strong className="text-white">Review each conflict:</strong> Choosing a pack removes the other definition. Both add-ons may refer to it, so this can change gameplay. If neither version can be discarded, keep the add-ons separate or reconcile them manually.
             </div>
           </div>
         )}
@@ -212,19 +195,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                 </div>
 
                 {/* Resolution Selector */}
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
-                  <button
-                    type="button"
-                    onClick={() => onUpdateResolution(c.id, 'prefix_all')}
-                    disabled={c.type === 'vanilla_asset'}
-                    className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition-all text-center truncate ${
-                      c.type === 'vanilla_asset' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
-                        ? 'bg-[#762BFF] text-white border-[#A855F7] shadow-[0_0_10px_rgba(118,43,255,0.4)]'
-                        : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
-                    }`}
-                  >
-                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : 'Prefix & Keep Both'}
-                  </button>
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
                   <button
                     type="button"
                     onClick={() => onUpdateResolution(c.id, 'keep_a')}

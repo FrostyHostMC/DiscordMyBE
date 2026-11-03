@@ -88,6 +88,6 @@ export async function namespaceScriptDirAsync(
 }
 /** Normalize an addon's script path into its isolated merged output tree. */
 export function scriptModuleOutputPath(slug: string, originalPath: string): string {
-  const normalized = originalPath.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
+  const normalized = originalPath.replace(/\\+/g, '/').replace(/^\.\//, '').replace(/^\/+/, '');
   return 'scripts/' + slug + '/_pack/' + normalized;
 }
