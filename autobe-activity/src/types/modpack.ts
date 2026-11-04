@@ -43,6 +43,8 @@ export interface MergedModpack {
   iconDataUrl?: string;
   description: string;
   outputs?: MergedOutput[];
+  /** Internal component archives retained only when a combined bundle is enabled without separate downloads. */
+  bundleParts?: MergedOutput[];
   includedPacks: Array<{
     name: string;
     type: string;
