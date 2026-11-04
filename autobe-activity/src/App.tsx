@@ -134,8 +134,10 @@ export const App: React.FC = () => {
     packs: AddonPack[];
     confList: ConflictItem[];
     nameOverride?: string;
+    targetEngine?: string;
   } | null>(null);
   const scriptConflictsRef = useRef<Record<string, string[]>>({});
+  const pendingTargetEngineRef = useRef<string>('1.20.0');
 
   // File import ref
   const globalFileInputRef = useRef<HTMLInputElement>(null);
@@ -411,6 +413,7 @@ export const App: React.FC = () => {
   };
 
   const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
+    pendingTargetEngineRef.current = customConfig?.targetEngine || '1.20.0';
     triggerHaptic(50);
     handleSoundTap();
     const selected = getSelectedPacks();
@@ -447,7 +450,8 @@ export const App: React.FC = () => {
   const doRunMergeProcess = async (
     packsToMerge: AddonPack[],
     confList: ConflictItem[] = [],
-    modpackNameOverride?: string
+    modpackNameOverride?: string,
+    targetEngine?: string
   ) => {
     // Log the exact source set so reports can prove which library items entered this merge.
     mergeLogger.info('Starting merge execution', JSON.stringify({
@@ -468,6 +472,7 @@ export const App: React.FC = () => {
 
       const result = await executeMergePacks(packsToMerge, {
         modpackName: mergedName,
+        targetEngine: targetEngine || '1.20.0',
         conflicts: confList,
         autoPrefix: autoMerge,
         scriptConflicts: scriptConflictsRef.current,
@@ -549,7 +554,8 @@ export const App: React.FC = () => {
   const runMergeProcess = async (
     packsToMerge: AddonPack[],
     confList: ConflictItem[] = [],
-    modpackNameOverride?: string
+    modpackNameOverride?: string,
+    targetEngine?: string
   ) => {
     // Make sure every pack's file is loaded (no-op if already loaded by the merge flow).
     try {
@@ -583,12 +589,12 @@ export const App: React.FC = () => {
     );
     console.log('[MergeStart] Unique packs with subpacks after dedup:', uniqueWithSubpacks.length);
     if (uniqueWithSubpacks.length > 0) {
-      pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride };
+      pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride, targetEngine };
       setSubpackPromptPacks(uniqueWithSubpacks);
       return;
     }
 
-    await doRunMergeProcess(packsToMerge, confList, modpackNameOverride);
+    await doRunMergeProcess(packsToMerge, confList, modpackNameOverride, targetEngine);
   };
 
   const handleSubpackConfirm = async (selections: Record<string, string>) => {
@@ -616,7 +622,7 @@ export const App: React.FC = () => {
       }
     }
 
-    await doRunMergeProcess(processed, pending.confList, pending.nameOverride);
+    await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine);
   };
 
   const handleSubpackCancel = () => {
@@ -1159,7 +1165,7 @@ export const App: React.FC = () => {
           onContinue={() => {
             triggerHaptic(50);
             handleSoundTap();
-            runMergeProcess(getSelectedPacks(), conflicts);
+            runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current);
           }}
           onBack={() => setScreen('main')}
         />
