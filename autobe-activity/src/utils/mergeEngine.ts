@@ -508,7 +508,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       if (isScriptGroup) {
-        const normalizeScriptPath = (value: string) => value.replace(/\\\\/g, '/').replace(/^\\.\\//, '').replace(/^\\/+/, '').replace(/\\/+/g, '/');
+        const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
         const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\\.(?:[cm]?js)$/i.test(path));
         const byNormalizedPath = new Map(files.map(([path]) => [normalizeScriptPath(path).toLowerCase(), path]));
         const requestedEntry = entry ? normalizeScriptPath(entry) : '';
