@@ -52,7 +52,7 @@ export function rewriteStaticScriptIdentifierReferences(
     let closed = false;
     while (i < source.length) {
       const current = source[i];
-      if (current === '\\\\' && i + 1 < source.length) {
+      if (current === '\\' && i + 1 < source.length) {
         value += current + source[i + 1];
         i += 2;
         continue;
@@ -72,7 +72,7 @@ export function rewriteStaticScriptIdentifierReferences(
           else if (source[i] === "'" || source[i] === '"' || source[i] === '`') {
             const innerQuote = source[i++];
             while (i < source.length && source[i] !== innerQuote) {
-              if (source[i] === '\\\\') i++;
+              if (source[i] === '\\') i++;
               i++;
             }
           }
