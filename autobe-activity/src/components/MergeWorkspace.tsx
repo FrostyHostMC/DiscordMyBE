@@ -450,8 +450,11 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               >
                 <option value="1.20.0">Minecraft Bedrock 1.20+</option>
                 <option value="1.21.0">Minecraft Bedrock 1.21+</option>
-                <option value="1.21.50">Minecraft Bedrock 1.21.50 (Latest)</option>
+                <option value="1.21.50">Minecraft Bedrock 1.21.50</option>
               </select>
+              <p className="mt-1 text-[10px] leading-relaxed text-[#8F879F]">
+                This sets the minimum game version in the generated packs. If an add-on requires a newer version, AutoBE keeps that requirement and explains why in the merge report.
+              </p>
             </div>
 
             <div className="flex items-center justify-between sm:col-span-2 pt-1 border-t border-[#30263F]/50">
