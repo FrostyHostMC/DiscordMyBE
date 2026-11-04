@@ -54,7 +54,7 @@ import { MergingScreen } from '@/components/MergingScreen';
 import { MergeCompleteScreen } from '@/components/MergeCompleteScreen';
 import { ModpackDetailsScreen } from '@/components/ModpackDetailsScreen';
 import { SettingsScreen } from '@/components/SettingsScreen';
-import { AboutScreen } from '@/components/AboutScreen';
+import { HelpCenterScreen } from '@/components/HelpCenterScreen';
 import { LibraryScreen } from '@/components/LibraryScreen';
 import { MyPacksScreen } from '@/components/MyPacksScreen';
 import { PackExtractTool } from '@/components/PackExtractTool';
@@ -1439,7 +1439,7 @@ export const App: React.FC = () => {
 
                 {/* 9. Help / About */}
                 {currentTab === 'about' && (
-                  <AboutScreen onBack={() => navigateTab('overview')} />
+                  <HelpCenterScreen onBack={() => navigateTab('overview')} />
                 )}
               </main>
 
