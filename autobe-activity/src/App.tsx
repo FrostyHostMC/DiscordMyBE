@@ -778,7 +778,6 @@ export const App: React.FC = () => {
       if (remaining.length === 0) {
         setInstalledPacks([]);
         setSelectedPackIds([]);
-        showToast('All source packs removed from this workspace');
       }
     } catch (err) {
       console.error('[Delete All] Error:', err);
