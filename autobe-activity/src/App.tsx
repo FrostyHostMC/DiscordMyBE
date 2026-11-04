@@ -489,7 +489,7 @@ export const App: React.FC = () => {
         }
       });
 
-      if (!result || (!result.outputBlob && !(result.outputs && result.outputs.some((o) => o.blob)))) {
+      if (!result || (!result.outputBlob && !(result.outputs && result.outputs.some((o) => o.blob)) && !(result.bundleParts && result.bundleParts.some((o) => o.blob)))) {
         throw new Error('Merge completed but no output files were generated');
       }
 
@@ -706,7 +706,7 @@ export const App: React.FC = () => {
     const source: MergedModpack =
       justCompletedModpack && modpack.id === justCompletedModpack.id ? justCompletedModpack : modpack;
     let blob: Blob | undefined = source.outputBlob;
-    if (!blob && source.outputs?.some((o) => o.blob)) {
+    if (!blob && (source.bundleParts?.some((o) => o.blob) || source.outputs?.some((o) => o.blob))) {
       try {
         updateTransfer('Building .mcaddon', 0);
         blob = await ensureCombinedBlob(source, (pct) => updateTransfer('Building .mcaddon', pct));
@@ -920,7 +920,7 @@ export const App: React.FC = () => {
     try {
       // Get the blob
       let blob = justCompletedModpack.outputBlob;
-      if (!blob && justCompletedModpack.outputs?.some((o) => o.blob)) {
+      if (!blob && (justCompletedModpack.bundleParts?.some((o) => o.blob) || justCompletedModpack.outputs?.some((o) => o.blob))) {
         updateTransfer('Building modpack', 0);
         blob = await ensureCombinedBlob(justCompletedModpack, (pct) => updateTransfer('Building modpack', pct));
       }
