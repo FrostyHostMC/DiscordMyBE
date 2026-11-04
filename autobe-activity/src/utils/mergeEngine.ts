@@ -5,6 +5,7 @@ import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/mo
 import { generateUUID, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
 import { resolveTargetEngineVersion } from './targetEngine';
+import { selectMergeOutputs } from './outputOptions';
 import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
@@ -680,8 +681,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     });
   }
 
-  // Keep component archives private to the bundle when separate downloads are disabled.
-  const outputs: MergedOutput[] = generateSeparatePacks ? bundleParts : [];
+  // Separate download availability and private bundle components are selected together.
+  const selectedOutputs = selectMergeOutputs(bundleParts, generateAddon, generateSeparatePacks);
+  const outputs = selectedOutputs.outputs;
 
   // --- Package everything into one .mcaddon ---
   onProgress?.('Resolving conflicts', 70);
@@ -828,7 +830,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     createdAt: Date.now(),
     description: description || `All-in-one Bedrock Modpack created with AutoBE. Combines ${packs.length} addons.`,
     outputs,
-    ...(generateAddon && !generateSeparatePacks ? { bundleParts } : {}),
+    ...(selectedOutputs.bundleParts ? { bundleParts: selectedOutputs.bundleParts } : {}),
     combinedExtras,
     outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
     generateAddon,
