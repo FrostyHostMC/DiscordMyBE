@@ -326,6 +326,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   version?: string;
   /** User-selected minimum Bedrock engine version for generated manifests. */
   targetEngine?: string;
+  generateAddon?: boolean;
+  generateSeparatePacks?: boolean;
   conflicts?: ConflictItem[];
   autoPrefix?: boolean;
   onProgress?: MergeProgressCallback;
@@ -342,6 +344,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     description,
     version = '1.0.0',
     targetEngine = '1.20.0',
+    generateAddon = true,
+    generateSeparatePacks = true,
     conflicts = [],
     autoPrefix = true,
     onProgress,
@@ -823,6 +827,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     outputs,
     combinedExtras,
     outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
+    generateAddon,
+    generateSeparatePacks,
     includedPacks: packs.map(p => ({
       name: p.name,
       type: p.type,
@@ -842,6 +848,7 @@ export async function ensureCombinedBlob(
   modpack: MergedModpack,
   onProgress?: (percent: number) => void
 ): Promise<Blob> {
+  if (modpack.generateAddon === false) throw new Error('This project was configured for individual .mcpack files only; combined .mcaddon generation is disabled.');
   if (modpack.outputBlob) return modpack.outputBlob;
   const entries: StoreZipEntry[] = [];
   for (const o of modpack.outputs ?? []) {
