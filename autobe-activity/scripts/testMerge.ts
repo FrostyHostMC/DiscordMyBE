@@ -675,7 +675,7 @@ await (async () => {
     "const weaponId = 'arsenal:weapon';",
     "`const dynamicId = ${weaponId} arsenal:weapon`;",
     "// arsenal:weapon comment should not be rewritten"
-  ].join('\\n'));
+  ].join('\n'));
   incoming.file('functions/give_weapon.mcfunction', 'give @s arsenal:weapon 1');
   const diagnostics: string[] = [];
   const changed = await applyFeatureRegistry(incoming, first, 'Incoming Arsenal', diagnostics);
@@ -697,5 +697,6 @@ await (async () => {
   const command = await incoming.file('functions/give_weapon.mcfunction')!.async('text');
   assert.ok(command.includes(expected));
   assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
+  assert.ok(diagnostics.some(message => message.includes('DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE')));
   console.log('✓ feature registry repairs item, recipe, loot-table and attachable Molang references together');
 })();
