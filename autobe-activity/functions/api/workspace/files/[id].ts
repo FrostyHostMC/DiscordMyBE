@@ -16,17 +16,36 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   status,
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store, max-age=0', 'vary': 'Authorization' },
 });
+async function discordApiFetch(url: string, init: RequestInit): Promise<Response> {
+  // Discord can briefly rate-limit or return transient gateway errors while several
+  // pack archives are being backed up. Respect Retry-After / retry_after before failing.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(url, init);
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 2) return response;
+    let delayMs = Number(response.headers.get('retry-after')) * 1000;
+    if (response.status === 429) {
+      try {
+        const body = await response.clone().json() as { retry_after?: number };
+        if (Number.isFinite(body.retry_after)) delayMs = body.retry_after! * 1000;
+      } catch { /* use Retry-After header or bounded fallback */ }
+    }
+    if (!Number.isFinite(delayMs) || delayMs <= 0) delayMs = 500 * (attempt + 1);
+    await new Promise(resolve => setTimeout(resolve, Math.min(Math.max(delayMs, 250), 10000)));
+  }
+  return fetch(url, init);
+}
+
 async function authorize(request: Request, env: Env): Promise<string | Response> {
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) return json({ error: 'Private workspace access is not configured.' }, 503);
   const token = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return json({ error: 'Discord authentication is required.' }, 401);
   try {
-    const meRes = await fetch('https://discord.com/api/v10/users/@me', { headers: { authorization: `Bearer ${token}` } });
+    const meRes = await discordApiFetch('https://discord.com/api/v10/users/@me', { headers: { authorization: `Bearer ${token}` } });
     if (meRes.status === 401) return json({ error: 'Discord session expired. Reopen AutoBE.' }, 401);
     if (!meRes.ok) return json({ error: 'Discord account verification failed.' }, 502);
     const me = await meRes.json() as { id?: string };
     if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
-    const memberRes = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+    const memberRes = await discordApiFetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
     if (memberRes.status === 404) return json({ error: 'Join the AutoBE server and get the required role.' }, 403);
     if (memberRes.status === 401) return json({ error: 'AutoBE cloud backup is not configured correctly: the Discord bot token is invalid or expired.' }, 503);
     if (memberRes.status === 403) return json({ error: 'AutoBE cloud backup cannot check roles: the Discord bot needs permission to view server members.' }, 503);
