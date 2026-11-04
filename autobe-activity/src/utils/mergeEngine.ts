@@ -98,7 +98,7 @@ export function resolveTargetEngineVersion(
   diagnostics: string[],
   outputLabel: string
 ): string {
-  const requested = /^\\d+\\.\\d+(?:\\.\\d+)?$/.test(targetEngine || '')
+  const requested = /^\d+\.\d+(?:\.\d+)?$/.test(targetEngine || '')
     ? (targetEngine!.split('.').length === 2 ? `${targetEngine}.0` : targetEngine!)
     : '1.20.0';
   const sourceMinimum = highestVersion(sourceVersions.filter(Boolean).length ? sourceVersions.filter(Boolean) : ['1.13.0']);
