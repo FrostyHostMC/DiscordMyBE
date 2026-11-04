@@ -135,9 +135,11 @@ export const App: React.FC = () => {
     confList: ConflictItem[];
     nameOverride?: string;
     targetEngine?: string;
+    outputOptions?: Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>;
   } | null>(null);
   const scriptConflictsRef = useRef<Record<string, string[]>>({});
   const pendingTargetEngineRef = useRef<string>('1.20.0');
+  const pendingOutputOptionsRef = useRef<Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>>({ generateAddon: true, generateSeparatePacks: true });
 
   // File import ref
   const globalFileInputRef = useRef<HTMLInputElement>(null);
@@ -414,6 +416,7 @@ export const App: React.FC = () => {
 
   const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
     pendingTargetEngineRef.current = customConfig?.targetEngine || '1.20.0';
+    pendingOutputOptionsRef.current = { generateAddon: customConfig?.generateAddon ?? true, generateSeparatePacks: customConfig?.generateSeparatePacks ?? true };
     triggerHaptic(50);
     handleSoundTap();
     const selected = getSelectedPacks();
@@ -451,7 +454,8 @@ export const App: React.FC = () => {
     packsToMerge: AddonPack[],
     confList: ConflictItem[] = [],
     modpackNameOverride?: string,
-    targetEngine?: string
+    targetEngine?: string,
+    outputOptions: Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'> = { generateAddon: true, generateSeparatePacks: true }
   ) => {
     // Log the exact source set so reports can prove which library items entered this merge.
     mergeLogger.info('Starting merge execution', JSON.stringify({
@@ -473,6 +477,8 @@ export const App: React.FC = () => {
       const result = await executeMergePacks(packsToMerge, {
         modpackName: mergedName,
         targetEngine: targetEngine || '1.20.0',
+        generateAddon: outputOptions.generateAddon,
+        generateSeparatePacks: outputOptions.generateSeparatePacks,
         conflicts: confList,
         autoPrefix: autoMerge,
         scriptConflicts: scriptConflictsRef.current,
@@ -555,7 +561,8 @@ export const App: React.FC = () => {
     packsToMerge: AddonPack[],
     confList: ConflictItem[] = [],
     modpackNameOverride?: string,
-    targetEngine?: string
+    targetEngine?: string,
+    outputOptions: Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'> = { generateAddon: true, generateSeparatePacks: true }
   ) => {
     // Make sure every pack's file is loaded (no-op if already loaded by the merge flow).
     try {
@@ -589,12 +596,12 @@ export const App: React.FC = () => {
     );
     console.log('[MergeStart] Unique packs with subpacks after dedup:', uniqueWithSubpacks.length);
     if (uniqueWithSubpacks.length > 0) {
-      pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride, targetEngine };
+      pendingMergeRef.current = { packs: packsToMerge, confList, nameOverride: modpackNameOverride, targetEngine, outputOptions };
       setSubpackPromptPacks(uniqueWithSubpacks);
       return;
     }
 
-    await doRunMergeProcess(packsToMerge, confList, modpackNameOverride, targetEngine);
+    await doRunMergeProcess(packsToMerge, confList, modpackNameOverride, targetEngine, outputOptions);
   };
 
   const handleSubpackConfirm = async (selections: Record<string, string>) => {
@@ -622,7 +629,7 @@ export const App: React.FC = () => {
       }
     }
 
-    await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine);
+    await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine, pending.outputOptions);
   };
 
   const handleSubpackCancel = () => {
@@ -684,6 +691,7 @@ export const App: React.FC = () => {
 
   // Download combined .mcaddon
   const handleInstallToMinecraft = async (modpack: MergedModpack | null = justCompletedModpack) => {
+    if (modpack?.generateAddon === false) { showToast('This project was configured without a combined .mcaddon. Download its separate .mcpack files instead.'); return; }
     if (!beginTransfer('install', 'Preparing .mcaddon')) return;
     triggerHaptic(60);
     handleSoundTap();
@@ -900,6 +908,7 @@ export const App: React.FC = () => {
   };
 
   const handlePublishModpack = async (communityIconDataUrl?: string | null) => {
+    if (justCompletedModpack?.generateAddon === false) { showToast('Community publishing requires a combined .mcaddon. Enable Combined Addon in the workspace and merge again.'); return; }
     if (!justCompletedModpack || !beginTransfer('publish', 'Building modpack')) return;
 
     console.log('[Publish] Starting publish for modpack:', justCompletedModpack.name);
@@ -1165,7 +1174,7 @@ export const App: React.FC = () => {
           onContinue={() => {
             triggerHaptic(50);
             handleSoundTap();
-            runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current);
+            runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current, pendingOutputOptionsRef.current);
           }}
           onBack={() => setScreen('main')}
         />
