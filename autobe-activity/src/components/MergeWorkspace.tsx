@@ -556,15 +556,27 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
 
           <button
             type="button"
+            disabled={isImporting}
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#15111F] hover:bg-[#201A2E] border border-[#30263F] text-xs font-bold text-white transition-all active:scale-95"
-            title="Import Addon Archives (.mcpack, .mcaddon, .zip)"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-60 disabled:cursor-wait border border-[#A855F7]/50 text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.25)] transition-all active:scale-95"
+            title="Add more Behavior Packs and Resource Packs (.mcpack, .mcaddon, .zip). Existing packs will stay in your workspace."
+            aria-label="Add more packs"
           >
-            <UploadCloud className="w-3.5 h-3.5 text-[#A855F7]" />
-            <span className="hidden xs:inline">Import</span>
+            <UploadCloud className="w-4 h-4" />
+            <span>{isImporting ? 'Adding…' : 'Add Packs'}</span>
           </button>
         </div>
       </div>
+
+      {importStatus && (
+        <div
+          className="mx-4 sm:mx-6 mt-3 px-3 py-2 rounded-lg bg-[#15111F] border border-[#762BFF]/40 text-xs text-purple-200"
+          role="status"
+          aria-live="polite"
+        >
+          {importStatus}
+        </div>
+      )}
 
       {/* Main Content Area: Responsive Dual Columns or Tabbed Lists */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24">
