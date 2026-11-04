@@ -1036,7 +1036,7 @@ export const App: React.FC = () => {
   const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
 
   return (
-    <div className="relative w-full h-[100dvh] min-h-[100svh] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
+    <div className="relative w-full h-[100dvh] min-h-[100svh] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
       {/* Hidden Global File Input */}
       <input
         ref={globalFileInputRef}
