@@ -580,7 +580,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <span>Add Folder</span>
           </button>
         </div>
-        </div>
       </div>
 
       {importStatus && (
