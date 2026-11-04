@@ -636,7 +636,7 @@ test('script identifier rewriting changes static strings but leaves comments and
     "`const dynamic = ${itemId} guns:ak47`;",
     "// guns:ak47 should remain in this comment",
     "/* guns:ak47 should remain here too */"
-  ].join('\\n');
+  ].join('\n');
   const output = rewriteStaticScriptIdentifierReferences(source, map);
   assert.ok(output.includes("'guns_autobe_2:ak47'"));
   assert.ok(output.includes('"guns_autobe_2:ak47"'));
