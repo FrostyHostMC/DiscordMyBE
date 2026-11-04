@@ -4,6 +4,7 @@ import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
 import { generateUUID, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
+import { resolveTargetEngineVersion } from './targetEngine';
 import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
@@ -87,27 +88,6 @@ function highestVersion(versions: string[]): string {
   return compareVersions(highest, '1.13.0') < 0 ? '1.13.0' : highest;
 }
 
-/**
- * The selected Bedrock version is the user's requested minimum target, not a
- * compatibility downgrade. A source pack that requires a newer engine raises
- * the generated manifest minimum and produces a clear diagnostic.
- */
-export function resolveTargetEngineVersion(
-  targetEngine: string | undefined,
-  sourceVersions: string[],
-  diagnostics: string[],
-  outputLabel: string
-): string {
-  const requested = /^\d+\.\d+(?:\.\d+)?$/.test(targetEngine || '')
-    ? (targetEngine!.split('.').length === 2 ? `${targetEngine}.0` : targetEngine!)
-    : '1.20.0';
-  const sourceMinimum = highestVersion(sourceVersions.filter(Boolean).length ? sourceVersions.filter(Boolean) : ['1.13.0']);
-  const effective = compareVersions(sourceMinimum, requested) > 0 ? sourceMinimum : requested;
-  if (compareVersions(sourceMinimum, requested) > 0) {
-    diagnostics.push(`WARNING TARGET_ENGINE_RAISED [${outputLabel}]: You selected Bedrock ${requested}, but at least one included add-on requires ${sourceMinimum}. This output declares ${effective} as its minimum; it cannot make newer add-ons compatible with older game versions.`);
-  }
-  return effective;
-}
 
 /** Major version of @minecraft/server dependency (fallback handled by caller). */
 export function getScriptMajor(pack: AddonPack): number | null {
