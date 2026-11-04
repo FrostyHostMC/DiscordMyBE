@@ -579,13 +579,13 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       bpZip.file(scriptEntry, `// AutoBE combined script entry\n${imports}\n`);
       mergeDiagnostics.push('INFO SCRIPT_PATHS_RELOCATED: Multiple script packs share an output; their script folders were separated while script contents were preserved. Review script references to resources outside those folders.');
     }
+    const label = type === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       groupPacks.map(p => p.minEngineVersion || ''),
       mergeDiagnostics,
       label
     );
-    const label = type === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
     const fileName = type === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
 
     // Dependencies: every BP depends on the shared RP
