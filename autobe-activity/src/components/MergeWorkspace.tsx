@@ -27,7 +27,7 @@ interface MergeWorkspaceProps {
   onTogglePack: (id: string) => void;
   onSelectAll: () => void;
   onClearSelection: () => void;
-  onStartMergeFlow: (config: MergeSessionConfig) => void;
+  onStartMergeFlow: (config: MergeSessionConfig, orderedPackIds: string[]) => void;
   onImportPacks: (newPacks: AddonPack[]) => Promise<number> | void;
   onDeletePack: (id: string) => void;
   onDeleteSelectedPacks: (ids: string[]) => void;
@@ -55,21 +55,38 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   const [showConfig, setShowConfig] = useState(false);
 
   // Ordered pack list for merge precedence
-  const [packOrder, setPackOrder] = useState<string[]>(() => installedPacks.map((p) => p.id));
+  const [packOrder, setPackOrder] = useState<string[]>(() => {
+    const incoming = installedPacks.map((p) => p.id);
+    try {
+      const saved = JSON.parse(localStorage.getItem('autobe.packOrder') || '[]');
+      if (Array.isArray(saved)) {
+        const valid = saved.filter((id): id is string => typeof id === 'string' && incoming.includes(id));
+        return [...valid, ...incoming.filter(id => !valid.includes(id))];
+      }
+    } catch {
+      // Fall back to the current library order when saved priority is unavailable.
+    }
+    return incoming;
+  });
 
-  // Sync pack order when installedPacks changes
+  // Preserve the user's precedence across navigation and reloads while pruning
+  // deleted packs and appending newly imported packs in their arrival order.
   React.useEffect(() => {
-    const t = setTimeout(() => {
-      setPackOrder((prev) => {
-        const existing = new Set(prev);
-        const incoming = installedPacks.map((p) => p.id);
-        const preserved = prev.filter((id) => incoming.includes(id));
-        const newlyAdded = incoming.filter((id) => !existing.has(id));
-        return [...preserved, ...newlyAdded];
-      });
-    }, 0);
-    return () => clearTimeout(t);
+    const incoming = installedPacks.map((p) => p.id);
+    setPackOrder(prev => {
+      const valid = prev.filter(id => incoming.includes(id));
+      const next = [...valid, ...incoming.filter(id => !valid.includes(id))];
+      return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
+    });
   }, [installedPacks]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('autobe.packOrder', JSON.stringify(packOrder));
+    } catch {
+      // Priority still applies for the current session if storage is unavailable.
+    }
+  }, [packOrder]);
 
   // Project configuration
   const [config, setConfig] = useState<MergeSessionConfig>({
@@ -388,7 +405,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <button
               type="button"
               disabled={selectedPackIds.length === 0}
-              onClick={() => onStartMergeFlow(config)}
+              onClick={() => onStartMergeFlow(config, orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id))}
               className="px-4 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-40 text-xs font-bold text-white transition-all shadow-[0_0_15px_rgba(118,43,255,0.4)] active:scale-95 flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
