@@ -404,7 +404,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
 
             <button
               type="button"
-              disabled={selectedPackIds.length === 0}
+              disabled={selectedPackIds.length === 0 || (!config.generateAddon && !config.generateSeparatePacks)}
               onClick={() => onStartMergeFlow(config, orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id))}
               className="px-4 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-40 text-xs font-bold text-white transition-all shadow-[0_0_15px_rgba(118,43,255,0.4)] active:scale-95 flex items-center gap-1.5"
             >
@@ -455,6 +455,18 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               <p className="mt-1 text-[10px] leading-relaxed text-[#8F879F]">
                 This sets the minimum game version in the generated packs. If an add-on requires a newer version, AutoBE keeps that requirement and explains why in the merge report.
               </p>
+            </div>
+
+            <div className="sm:col-span-2 rounded-lg border border-[#30263F] bg-[#100D18] p-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0"><div className="text-[11px] font-semibold text-white">Combined Addon (.mcaddon)</div><p className="text-[10px] text-[#8F879F]">One installable bundle containing the generated packs.</p></div>
+                <input type="checkbox" checked={config.generateAddon} onChange={(e) => setConfig({ ...config, generateAddon: e.target.checked })} className="rounded accent-[#762BFF] shrink-0" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0"><div className="text-[11px] font-semibold text-white">Separate Pack Files (.mcpack)</div><p className="text-[10px] text-[#8F879F]">Also make each generated Resource/Behavior pack available to download separately.</p></div>
+                <input type="checkbox" checked={config.generateSeparatePacks} onChange={(e) => setConfig({ ...config, generateSeparatePacks: e.target.checked })} className="rounded accent-[#762BFF] shrink-0" />
+              </div>
+              {!config.generateAddon && !config.generateSeparatePacks && <p className="text-[10px] text-red-300">Choose at least one output format to start a merge.</p>}
             </div>
 
             <div className="flex items-center justify-between sm:col-span-2 pt-1 border-t border-[#30263F]/50">

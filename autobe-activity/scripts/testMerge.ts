@@ -9,6 +9,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
+import { selectMergeOutputs } from '../src/utils/outputOptions.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
@@ -588,3 +589,31 @@ await (async () => {
   assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
   console.log('✓ keep Pack A also changes the actual final asset bytes');
 })();
+
+
+test('combined-only mode keeps internal bundle parts without exposing separate downloads', () => {
+  const parts = [{ id: 'part-1', fileName: 'resource_pack.mcpack' }] as any;
+  const selected = selectMergeOutputs(parts, true, false);
+  assert.deepEqual(selected.outputs, []);
+  assert.equal(selected.bundleParts, parts);
+});
+
+test('separate-only mode exposes .mcpack outputs without retaining a bundle copy', () => {
+  const parts = [{ id: 'part-1', fileName: 'resource_pack.mcpack' }] as any;
+  const selected = selectMergeOutputs(parts, false, true);
+  assert.equal(selected.outputs, parts);
+  assert.equal(selected.bundleParts, undefined);
+});
+
+test('combined and separate mode exposes individual outputs and uses them as bundle parts', () => {
+  const parts = [{ id: 'part-1', fileName: 'resource_pack.mcpack' }] as any;
+  const selected = selectMergeOutputs(parts, true, true);
+  assert.equal(selected.outputs, parts);
+  assert.equal(selected.bundleParts, undefined);
+});
+
+test('disabled output modes produce no artifacts', () => {
+  const selected = selectMergeOutputs([], false, false);
+  assert.deepEqual(selected.outputs, []);
+  assert.equal(selected.bundleParts, undefined);
+});
