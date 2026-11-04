@@ -91,8 +91,18 @@ export function rewriteStaticScriptIdentifierReferences(
       output += source.slice(start);
       break;
     }
-    if (quote === '`') output += quote + value + quote;
+    if (quote === '`') output += quote + rewriteIdentifierTokens(value, renameMap) + quote;
     else output += quote + rewriteIdentifierTokens(value, renameMap) + quote;
   }
   return output;
+}
+
+
+/** True when a dynamic template literal contains an identifier that could not be safely rewritten. */
+export function hasDynamicTemplateIdentifierReference(source: string, renameMap?: Map<string, string>): boolean {
+  if (!renameMap?.size) return false;
+  const templates = source.match(/`(?:\\.|[^`\\])*`/gs) || [];
+  return templates.some(template =>
+    template.includes('${') && [...renameMap.keys()].some(identifier => template.includes(identifier))
+  );
 }
