@@ -23,9 +23,11 @@ const REFERENCE_KEYS = new Set([
 const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|command|function)/i;
 
 function isDefinitionPath(path: string): boolean {
-  const p = path.toLowerCase().replace(/\\/g, '/');
-  return /(^|\\/)(items|blocks|entities|entity|attachables|recipes|loot_tables|spawn_rules)\\//.test(p) ||
-    /(^|\\/)(items|blocks|entities|entity|attachables|recipes)\\.json$/.test(p);
+  const normalized = path.replaceAll('\\\\', '/').toLowerCase();
+  const segments = normalized.split('/');
+  const folder = segments.length > 1 ? segments[segments.length - 2] : '';
+  return new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']).has(folder) ||
+    new Set(['items.json', 'blocks.json', 'entities.json', 'entity.json', 'attachables.json', 'recipes.json']).has(segments[segments.length - 1]);
 }
 
 function collectDefinitions(zip: JSZip): Promise<Definition[]> {
