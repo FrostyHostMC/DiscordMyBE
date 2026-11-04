@@ -55,6 +55,10 @@ export interface MergedModpack {
   // (see ensureCombinedBlob) so merging never holds an extra full copy in memory.
   combinedExtras?: { manifestJson: string; reportJson: string; diagnosticsText?: string };
   outputFileName: string;
+  /** Whether the combined .mcaddon should be offered for install/publish. */
+  generateAddon?: boolean;
+  /** Whether component .mcpack files should be offered as individual downloads. */
+  generateSeparatePacks?: boolean;
 }
 
 export interface ConflictItem {
