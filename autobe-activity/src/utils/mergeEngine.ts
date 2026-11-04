@@ -499,7 +499,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
               externalUuidDeps.set(dep.uuid, dep);
             }
           }
-          const scriptModule = (manifest.modules || []).find((m: any) => m.type === 'script');
+          const scriptModule = (manifest.modules || []).find((m: any) => String(m?.type || '').toLowerCase() === 'script');
           if (scriptModule?.entry) entry = String(scriptModule.entry).replace(/^\.\//, '');
         }
       } catch {
@@ -509,7 +509,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       if (isScriptGroup) {
         const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
-        const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\\.(?:[cm]?js)$/i.test(path));
+        const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\.(?:[cm]?js)$/i.test(path));
         const byNormalizedPath = new Map(files.map(([path]) => [normalizeScriptPath(path).toLowerCase(), path]));
         const requestedEntry = entry ? normalizeScriptPath(entry) : '';
         let resolvedEntry = requestedEntry ? byNormalizedPath.get(requestedEntry.toLowerCase()) : undefined;
@@ -521,8 +521,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         if (!resolvedEntry && !requestedEntry) {
           const preferred = ['scripts/main.js', 'main.js', 'scripts/index.js', 'index.js'];
           resolvedEntry = preferred.map(path => byNormalizedPath.get(path)).find((path): path is string => !!path);
-          if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
         }
+        // A stale or incorrectly cased manifest path may still identify a
+        // single unambiguous script file. Never guess when multiple candidates exist.
+        if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
         if (!resolvedEntry) {
           const available = files.slice(0, 8).map(([path]) => path).join(', ') || 'no JavaScript files found';
           throw new Error(`Script entry "${entry || '(missing)'}" could not be resolved in "${pack.name}". Available script files: ${available}. The original pack was not modified.`);
