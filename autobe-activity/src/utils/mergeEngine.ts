@@ -505,11 +505,32 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       } catch {
         mergeDiagnostics.push(`WARNING SOURCE_MANIFEST [${pack.name}]: Could not read the original manifest; review output dependencies.`);
       }
-      if (isScriptGroup && !entry) entry = 'scripts/main.js';
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      if (isScriptGroup && (!entry || !zip.file(entry))) {
-        throw new Error(`Script entry ${entry || '(missing)'} was not found in ${pack.name}. The source pack was left unchanged.`);
+      if (isScriptGroup) {
+        const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
+        const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\\.(?:[cm]?js)$/i.test(path));
+        const byNormalizedPath = new Map(files.map(([path]) => [normalizeScriptPath(path).toLowerCase(), path]));
+        const requestedEntry = entry ? normalizeScriptPath(entry) : '';
+        let resolvedEntry = requestedEntry ? byNormalizedPath.get(requestedEntry.toLowerCase()) : undefined;
+        if (!resolvedEntry && requestedEntry) {
+          const basename = requestedEntry.split('/').pop()?.toLowerCase();
+          const basenameMatches = files.map(([path]) => path).filter(path => path.split('/').pop()?.toLowerCase() === basename);
+          if (basenameMatches.length === 1) resolvedEntry = basenameMatches[0];
+        }
+        if (!resolvedEntry && !requestedEntry) {
+          const preferred = ['scripts/main.js', 'main.js', 'scripts/index.js', 'index.js'];
+          resolvedEntry = preferred.map(path => byNormalizedPath.get(path)).find((path): path is string => !!path);
+          if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
+        }
+        if (!resolvedEntry) {
+          const available = files.slice(0, 8).map(([path]) => path).join(', ') || 'no JavaScript files found';
+          throw new Error(`Script entry "${entry || '(missing)'}" could not be resolved in "${pack.name}". Available script files: ${available}. The original pack was not modified.`);
+        }
+        if (resolvedEntry !== entry) {
+          mergeDiagnostics.push(`WARNING SCRIPT_ENTRY_PATH_RESOLVED [${pack.name}]: Manifest entry "${entry || '(missing)'}" resolved to "${resolvedEntry}" in the source archive.`);
+        }
+        entry = resolvedEntry;
       }
       const transform = relocateScripts
         ? (p: string) => /^(?:scripts\/)/i.test(p) || /\.(?:[cm]?js)$/i.test(p) ? scriptModuleOutputPath(slug, p) : p
