@@ -1,3 +1,5 @@
+import { authorizeWorkspaceRequest, type WorkspaceDiscordEnv } from './_shared/discordWorkspaceAuth';
+
 /**
  * Private per-Discord-account workspace API.
  *
@@ -9,13 +11,9 @@
  * The owner ID is always obtained from Discord, never from a request parameter/body.
  * Community data uses separate tables/keys and is not touched here.
  */
-interface Env {
+interface Env extends WorkspaceDiscordEnv {
   DB: D1Database;
   BUCKET: R2Bucket;
-  DISCORD_CLIENT_ID: string;
-  DISCORD_BOT_TOKEN: string;
-  DISCORD_GUILD_ID: string;
-  DISCORD_REQUIRED_ROLE_ID: string;
 }
 
 type ItemType = 'pack' | 'project';
@@ -36,44 +34,6 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
     'vary': 'Authorization',
   },
 });
-
-async function authenticatedUser(request: Request, env: Env): Promise<{ id: string } | Response> {
-  if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
-    return json({ error: 'Private workspace access is not configured.' }, 503);
-  }
-  const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
-  if (!match) return json({ error: 'Discord authentication is required.' }, 401);
-
-  try {
-    const meResponse = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: { authorization: `Bearer ${match[1]}` },
-    });
-    if (meResponse.status === 401) return json({ error: 'Discord session expired. Reopen AutoBE.' }, 401);
-    if (!meResponse.ok) return json({ error: 'Discord account verification failed.' }, 502);
-    const me = await meResponse.json() as { id?: string };
-    if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
-
-    const memberResponse = await fetch(
-      `https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`,
-      { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
-    );
-    if (memberResponse.status === 404) return json({ error: 'Join the AutoBE server and get the required role.' }, 403);
-    if (memberResponse.status === 401) return json({ error: 'AutoBE cloud backup is not configured correctly: the Discord bot token is invalid or expired.' }, 503);
-    if (memberResponse.status === 403) return json({ error: 'AutoBE cloud backup cannot check roles: the Discord bot needs permission to view server members.' }, 503);
-    if (!memberResponse.ok) {
-      console.error('[Workspace] Discord member lookup failed with status:', memberResponse.status);
-      return json({ error: 'Discord role verification is temporarily unavailable. Your local workspace is unchanged; cloud backup was not completed.' }, 502);
-    }
-    const member = await memberResponse.json() as { roles?: string[] };
-    if (!Array.isArray(member.roles) || !member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID)) {
-      return json({ error: 'You need the required AutoBE role to access your private workspace.' }, 403);
-    }
-    return { id: me.id };
-  } catch (error) {
-    console.error('[Workspace] Discord verification failed:', error);
-    return json({ error: 'Could not verify your Discord account. Please retry.' }, 502);
-  }
-}
 
 async function ensureTable(env: Env): Promise<void> {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS private_workspace_items (
@@ -155,7 +115,7 @@ function validItem(item: unknown): item is WorkspaceItem {
 }
 
 export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
-  const auth = await authenticatedUser(request, env);
+  const auth = await authorizeWorkspaceRequest(request, env);
   if (isResponse(auth)) return auth;
   await ensureTable(env);
   await pruneExpiredWorkspaceItems(env);
@@ -169,7 +129,7 @@ export const onRequestGet: PagesFunction<Env> = async ({ request, env }) => {
 
 /** Mark this Discord account active without re-uploading every binary file. */
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  const auth = await authenticatedUser(request, env);
+  const auth = await authorizeWorkspaceRequest(request, env);
   if (isResponse(auth)) return auth;
   await ensureTable(env);
   const now = Date.now();
@@ -179,7 +139,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
-  const auth = await authenticatedUser(request, env);
+  const auth = await authorizeWorkspaceRequest(request, env);
   if (isResponse(auth)) return auth;
   let body: { items?: unknown };
   try {
@@ -205,7 +165,7 @@ export const onRequestPut: PagesFunction<Env> = async ({ request, env }) => {
 };
 
 export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
-  const auth = await authenticatedUser(request, env);
+  const auth = await authorizeWorkspaceRequest(request, env);
   if (isResponse(auth)) return auth;
   const url = new URL(request.url);
 
