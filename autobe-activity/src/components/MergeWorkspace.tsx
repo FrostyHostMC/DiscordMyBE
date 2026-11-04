@@ -31,6 +31,7 @@ interface MergeWorkspaceProps {
   onImportPacks: (newPacks: AddonPack[]) => Promise<number> | void;
   onDeletePack: (id: string) => void;
   onDeleteSelectedPacks: (ids: string[]) => void;
+  onDeleteAllPacks: () => void;
   onNavigateTab: (tab: any) => void;
 }
 
@@ -44,6 +45,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   onImportPacks,
   onDeletePack,
   onDeleteSelectedPacks,
+  onDeleteAllPacks,
   onNavigateTab
 }) => {
   // Tabs & Filters
@@ -510,15 +512,10 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               : 'Select All'}
           </button>
 
-          {selectedPackIds.length > 0 && (
+          {installedPacks.length > 0 && (
             <button
               type="button"
-              onClick={() => {
-                console.log('[Delete All Button] Clicked, selectedPackIds:', selectedPackIds);
-                // Discord Activities sandbox blocks confirm(), so delete directly
-                console.log('[Delete All Button] Calling onDeleteSelectedPacks');
-                onDeleteSelectedPacks(selectedPackIds);
-              }}
+              onClick={onDeleteAllPacks}
               className="text-xs font-semibold text-red-400 hover:text-red-300 px-2 py-1"
             >
               Delete All
