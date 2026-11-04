@@ -137,6 +137,7 @@ export const App: React.FC = () => {
     targetEngine?: string;
   } | null>(null);
   const scriptConflictsRef = useRef<Record<string, string[]>>({});
+  const pendingTargetEngineRef = useRef<string>('1.20.0');
 
   // File import ref
   const globalFileInputRef = useRef<HTMLInputElement>(null);
@@ -412,6 +413,7 @@ export const App: React.FC = () => {
   };
 
   const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
+    pendingTargetEngineRef.current = customConfig?.targetEngine || '1.20.0';
     triggerHaptic(50);
     handleSoundTap();
     const selected = getSelectedPacks();
@@ -1163,7 +1165,7 @@ export const App: React.FC = () => {
           onContinue={() => {
             triggerHaptic(50);
             handleSoundTap();
-            runMergeProcess(getSelectedPacks(), conflicts);
+            runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current);
           }}
           onBack={() => setScreen('main')}
         />
