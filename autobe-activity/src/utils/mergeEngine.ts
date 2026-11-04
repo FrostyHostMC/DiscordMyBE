@@ -16,6 +16,7 @@ import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePat
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
+import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -173,14 +174,9 @@ function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: strin
 
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
-/** Replace a whole identifier only, not a longer unrelated identifier. */
+/** Replace exact identifier tokens; script files are limited to static string literals. */
 function rewriteIdentifierReferences(text: string, renameMap?: Map<string, string>): string {
-  let out = text;
-  for (const [oldId, newId] of renameMap || []) {
-    const escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    out = out.replace(new RegExp(`(^|[^A-Za-z0-9_.:-])${escaped}(?![A-Za-z0-9_.:-])`, 'g'), (_m, before) => before + newId);
-  }
-  return out;
+  return rewriteIdentifierTokens(text, renameMap);
 }
 
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>): Promise<void> {
@@ -196,9 +192,19 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const outPath = assetPathMap.get(path) || assetPathMap.get(transformedPath) || transformedPath;
     const original = await fileObj.async('uint8array');
     let bytes = original;
-    if ((assetPathMap.size || renameMap?.size) && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
+    const isStructuredText = /\.(json|mcfunction|molang|material)$/i.test(lower);
+    const isScriptText = /\.(js|mjs|cjs|ts)$/i.test(lower);
+    if ((assetPathMap.size || renameMap?.size) && (isStructuredText || isScriptText)) {
       const originalText = await fileObj.async('text');
-      const updated = rewriteIdentifierReferences(rewriteAssetReferences(originalText, assetPathMap), renameMap);
+      let updated = isStructuredText
+        ? rewriteIdentifierReferences(rewriteAssetReferences(originalText, assetPathMap), renameMap)
+        : originalText;
+      if (isScriptText && renameMap?.size) {
+        if (hasDynamicTemplateIdentifierReference(updated, renameMap)) {
+          diagnostics.push(`WARNING DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE [${sourceLabel}:${path}]: A dynamic template literal contains a prefixed identifier. AutoBE left that expression unchanged because its runtime value cannot be safely inferred.`);
+        }
+        updated = rewriteStaticScriptIdentifierReferences(updated, renameMap);
+      }
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
@@ -283,19 +289,29 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
 }
 function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<string, Map<string, string>> {
   const renameMaps = new Map<string, Map<string, string>>();
-  for (const c of conflicts) {
-    if (c.type === 'vanilla_asset' || c.identifier === 'minecraft:player') continue;
-    if (c.resolution === 'prefix_all' || autoPrefix && c.resolution !== 'keep_a' && c.resolution !== 'keep_b') {
-      const prefix = c.packB.name.toLowerCase().replace(/[^a-z0-9]/g, '_').slice(0, 10);
-      let map = renameMaps.get(c.packB.id);
-      if (!map) {
-        map = new Map();
-        renameMaps.set(c.packB.id, map);
-      }
-      const parts = c.identifier.split(':');
-      const newIdent = parts.length > 1 ? `${parts[0]}_${prefix}:${parts[1]}` : `${prefix}_${c.identifier}`;
-      map.set(c.identifier, newIdent);
+  const occupied = new Set(conflicts.map(conflict => conflict.identifier));
+  for (const conflict of conflicts) {
+    if (conflict.type === 'vanilla_asset' || conflict.identifier === 'minecraft:player') continue;
+    if (conflict.resolution !== 'prefix_all' && (!autoPrefix || conflict.resolution === 'keep_a' || conflict.resolution === 'keep_b')) continue;
+
+    let map = renameMaps.get(conflict.packB.id);
+    if (!map) {
+      map = new Map();
+      renameMaps.set(conflict.packB.id, map);
     }
+    if (map.has(conflict.identifier)) continue;
+
+    const prefixName = conflict.packB.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 8) || 'addon';
+    const packToken = conflict.packB.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6) || 'pack';
+    const colon = conflict.identifier.indexOf(':');
+    const namespace = colon >= 0 ? conflict.identifier.slice(0, colon) : 'custom';
+    const path = colon >= 0 ? conflict.identifier.slice(colon + 1) : conflict.identifier;
+    const baseNamespace = `${namespace}_${prefixName}_${packToken}`;
+    let candidate = `${baseNamespace}:${path}`;
+    let suffix = 2;
+    while (occupied.has(candidate)) candidate = `${baseNamespace}_${suffix++}:${path}`;
+    occupied.add(candidate);
+    map.set(conflict.identifier, candidate);
   }
   return renameMaps;
 }
