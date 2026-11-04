@@ -32,6 +32,8 @@ body {
 /* Keep fixed navigation and full-screen dialogs clear of device cutouts. */
 :root {
   --autobe-safe-top: env(safe-area-inset-top, 0px);
+  /* Discord's Activity title/Leave chrome overlays the webview on mobile and desktop. */
+  --autobe-discord-chrome-top: clamp(3.25rem, 7dvh, 4.25rem);
   --autobe-safe-right: env(safe-area-inset-right, 0px);
   --autobe-safe-bottom: env(safe-area-inset-bottom, 0px);
   --autobe-safe-left: env(safe-area-inset-left, 0px);
