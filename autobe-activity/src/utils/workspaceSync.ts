@@ -17,7 +17,7 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   }
   return response.json() as Promise<T>;
 }
-const CLOUD_METADATA_BUDGET = 220 * 1024;
+const CLOUD_METADATA_BUDGET = 240 * 1024;
 
 function stripOversizedInlineImages(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(stripOversizedInlineImages);
@@ -38,22 +38,20 @@ function stripOversizedInlineImages(value: unknown): unknown {
 function compactProjectExtras(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
   const extras = { ...(value as Record<string, unknown>) };
-  // The full diagnostics are already embedded in the downloadable combined
-  // archive. Keep the report when reasonably sized; otherwise retain its
-  // review findings so the restored project can still show unresolved conflicts.
-  if (typeof extras.diagnosticsText === 'string' && extras.diagnosticsText.length > 48 * 1024) {
-    delete extras.diagnosticsText;
-  }
-  if (typeof extras.reportJson === 'string' && extras.reportJson.length > 64 * 1024) {
+  // Full diagnostics and the complete report are already preserved in the
+  // downloadable combined .mcaddon. Cloud metadata only needs the findings
+  // used by the restored project's conflict-review indicator.
+  delete extras.diagnosticsText;
+  if (typeof extras.reportJson === 'string') {
     try {
       const report = JSON.parse(extras.reportJson) as { findings?: unknown[] };
       extras.reportJson = JSON.stringify({
         findings: (report.findings || []).slice(0, 250).map((finding: any) => ({
           code: finding?.code,
-          path: finding?.path,
+          path: typeof finding?.path === 'string' ? finding.path.slice(0, 1000) : '',
           message: typeof finding?.message === 'string' ? finding.message.slice(0, 1200) : '',
         })),
-        truncated: true,
+        truncated: (report.findings || []).length > 250,
       });
     } catch {
       delete extras.reportJson;
@@ -64,13 +62,23 @@ function compactProjectExtras(value: unknown): unknown {
 function assertCloudMetadataSize(data: Record<string, unknown>, label: string): Record<string, unknown> {
   const bytes = new TextEncoder().encode(JSON.stringify(data)).byteLength;
   if (bytes > CLOUD_METADATA_BUDGET) {
-    throw new Error(`${label} metadata is ${Math.ceil(bytes / 1024)} KB after removing large inline icons; cloud metadata is limited to 256 KB. Your local copy and addon files are safe.`);
+    throw new Error(`${label} metadata is ${Math.ceil(bytes / 1024)} KB after compaction; the server limit is 256 KB. Full output files remain stored separately and your local copy is safe. Your local copy and addon files are safe.`);
   }
   return data;
 }
 function packData(pack: AddonPack): Record<string, unknown> {
   const { fileBlob: _fileBlob, ...data } = pack; void _fileBlob;
   return assertCloudMetadataSize(stripOversizedInlineImages(data) as Record<string, unknown>, `Pack "${pack.name}"`);
+}
+function stripProjectIcons(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripProjectIcons);
+  if (!value || typeof value !== 'object') return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (/^(?:iconDataUrl|icon_data_url)$/i.test(key)) continue;
+    result[key] = stripProjectIcons(child);
+  }
+  return result;
 }
 function projectData(project: MergedModpack): Record<string, unknown> {
   const { outputBlob: _outputBlob, outputs, ...data } = project; void _outputBlob;
@@ -79,7 +87,12 @@ function projectData(project: MergedModpack): Record<string, unknown> {
     ...(data.combinedExtras ? { combinedExtras: compactProjectExtras(data.combinedExtras) } : {}),
     outputs: (outputs || []).map(({ blob: _blob, ...out }) => { void _blob; return out; }),
   };
-  return assertCloudMetadataSize(stripOversizedInlineImages(metadata) as Record<string, unknown>, `Project "${project.name}"`);
+  // Source-pack icons are useful locally but are not required to restore a
+  // project: the output files and the compact included-pack descriptors are
+  // stored separately. Remove every embedded image from project cloud metadata
+  // so several individually-small data URLs cannot collectively exceed D1's cap.
+  const withoutProjectIcons = stripProjectIcons(metadata);
+  return assertCloudMetadataSize(withoutProjectIcons as Record<string, unknown>, `Project "${project.name}"`);
 }
 async function putFile(url: string, blob: Blob): Promise<void> {
   const response = await fetch(url, { method: 'PUT', headers: headers({ 'content-type': blob.type || 'application/octet-stream' }), body: blob, cache: 'no-store' });
