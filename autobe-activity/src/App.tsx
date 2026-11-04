@@ -399,21 +399,30 @@ export const App: React.FC = () => {
   };
 
   // Start merge flow
-  const handleStartMergeFlow = async (customConfig?: MergeSessionConfig) => {
+  const handleStartMergeFlow = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
     // Ignore extra taps while the first one is still loading packs.
     if (mergeStartingRef.current) return;
     mergeStartingRef.current = true;
     try {
-      await handleStartMergeFlowInner(customConfig);
+      await handleStartMergeFlowInner(customConfig, orderedPackIds);
     } finally {
       mergeStartingRef.current = false;
     }
   };
 
-  const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig) => {
+  const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
     triggerHaptic(50);
     handleSoundTap();
     const selected = getSelectedPacks();
+    const priority = new Map((orderedPackIds || []).map((id, index) => [id, index]));
+    selected.sort((a, b) => {
+      const ai = priority.get(a.id);
+      const bi = priority.get(b.id);
+      if (ai !== undefined && bi !== undefined) return ai - bi;
+      if (ai !== undefined) return -1;
+      if (bi !== undefined) return 1;
+      return 0;
+    });
     if (selected.length === 0) {
       showToast('Please select at least one pack to merge.');
       return;
