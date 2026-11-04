@@ -323,7 +323,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
         ref={fileInputRef}
         type="file"
         multiple
-        accept=".mcpack,.mcaddon,.zip"
         onChange={handleFilesChosen}
         className="hidden"
       />
@@ -554,17 +553,30 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             </button>
           )}
 
-          <button
-            type="button"
-            disabled={isImporting}
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-60 disabled:cursor-wait border border-[#A855F7]/50 text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.25)] transition-all active:scale-95"
-            title="Add more Behavior Packs and Resource Packs (.mcpack, .mcaddon, .zip). Existing packs will stay in your workspace."
-            aria-label="Add more packs"
-          >
-            <UploadCloud className="w-4 h-4" />
-            <span>{isImporting ? 'Adding…' : 'Add Packs'}</span>
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-60 disabled:cursor-wait border border-[#A855F7]/50 text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.25)] transition-all active:scale-95"
+              title="Select .mcpack, .mcaddon, or .zip files. Existing packs will stay in your workspace."
+              aria-label="Add pack files"
+            >
+              <UploadCloud className="w-4 h-4" />
+              <span>{isImporting ? 'Adding…' : 'Add Files'}</span>
+            </button>
+            <button
+              type="button"
+              disabled={isImporting}
+              onClick={() => folderInputRef.current?.click()}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#15111F] hover:bg-[#201A2E] disabled:opacity-60 disabled:cursor-wait border border-[#30263F] text-xs font-semibold text-white transition-all active:scale-95"
+              title="Select a folder containing Bedrock addon packs."
+              aria-label="Add pack folder"
+            >
+              <FolderOpen className="w-4 h-4" />
+              <span>Add Folder</span>
+            </button>
+          </div>
         </div>
       </div>
 
