@@ -1,6 +1,6 @@
 import type JSZip from 'jszip';
 import { sanitizeJsonString } from './addonParser';
-import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
+import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 
 type Definition = { path: string; root: string; identifier: string; data: any };
 
@@ -145,6 +145,9 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
         }
       } else if (/\\.(js|mjs|cjs|ts)$/i.test(lower)) {
         const original = await file.async('text');
+        if (hasDynamicTemplateIdentifierReference(original, idMap)) {
+          diagnostics.push(`WARNING DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE [${sourceLabel}:${path}]: A dynamic template literal contains a renamed identifier. AutoBE left that expression unchanged because its runtime value cannot be safely inferred.`);
+        }
         const output = rewriteStaticScriptIdentifierReferences(original, idMap);
         if (output !== original) {
           sourceZip.file(path, output);
