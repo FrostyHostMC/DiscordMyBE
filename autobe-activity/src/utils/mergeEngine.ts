@@ -87,6 +87,28 @@ function highestVersion(versions: string[]): string {
   return compareVersions(highest, '1.13.0') < 0 ? '1.13.0' : highest;
 }
 
+/**
+ * The selected Bedrock version is the user's requested minimum target, not a
+ * compatibility downgrade. A source pack that requires a newer engine raises
+ * the generated manifest minimum and produces a clear diagnostic.
+ */
+export function resolveTargetEngineVersion(
+  targetEngine: string | undefined,
+  sourceVersions: string[],
+  diagnostics: string[],
+  outputLabel: string
+): string {
+  const requested = /^\\d+\\.\\d+(?:\\.\\d+)?$/.test(targetEngine || '')
+    ? (targetEngine!.split('.').length === 2 ? `${targetEngine}.0` : targetEngine!)
+    : '1.20.0';
+  const sourceMinimum = highestVersion(sourceVersions.filter(Boolean).length ? sourceVersions.filter(Boolean) : ['1.13.0']);
+  const effective = compareVersions(sourceMinimum, requested) > 0 ? sourceMinimum : requested;
+  if (compareVersions(sourceMinimum, requested) > 0) {
+    diagnostics.push(`WARNING TARGET_ENGINE_RAISED [${outputLabel}]: You selected Bedrock ${requested}, but at least one included add-on requires ${sourceMinimum}. This output declares ${effective} as its minimum; it cannot make newer add-ons compatible with older game versions.`);
+  }
+  return effective;
+}
+
 /** Major version of @minecraft/server dependency (fallback handled by caller). */
 export function getScriptMajor(pack: AddonPack): number | null {
   if (!pack.hasScripts) return null;
@@ -322,6 +344,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   modpackName: string;
   description?: string;
   version?: string;
+  /** User-selected minimum Bedrock engine version for generated manifests. */
+  targetEngine?: string;
   conflicts?: ConflictItem[];
   autoPrefix?: boolean;
   onProgress?: MergeProgressCallback;
@@ -337,6 +361,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     modpackName,
     description,
     version = '1.0.0',
+    targetEngine = '1.20.0',
     conflicts = [],
     autoPrefix = true,
     onProgress,
@@ -401,7 +426,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await mergeSubpackHudFiles(rpZip);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
     mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
-    const minEngine = highestVersion(plan.rp.map(p => p.minEngineVersion || '1.20.0'));
+    const minEngine = resolveTargetEngineVersion(
+      targetEngine,
+      plan.rp.map(p => p.minEngineVersion || ''),
+      mergeDiagnostics,
+      'Resource Pack'
+    );
     
     // Collect capabilities from all source packs
     const allCapabilities = new Set<string>();
@@ -569,7 +599,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       bpZip.file(scriptEntry, `// AutoBE combined script entry\n${imports}\n`);
       mergeDiagnostics.push('INFO SCRIPT_PATHS_RELOCATED: Multiple script packs share an output; their script folders were separated while script contents were preserved. Review script references to resources outside those folders.');
     }
-    const minEngine = highestVersion(groupPacks.map(p => p.minEngineVersion || '1.20.0'));
+    const minEngine = resolveTargetEngineVersion(
+      targetEngine,
+      groupPacks.map(p => p.minEngineVersion || ''),
+      mergeDiagnostics,
+      label
+    );
     const label = type === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
     const fileName = type === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
 
