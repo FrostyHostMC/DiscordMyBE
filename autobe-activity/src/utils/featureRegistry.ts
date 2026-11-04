@@ -57,19 +57,19 @@ function rewriteEmbeddedIdentifierTokens(value: string, idMap: Map<string, strin
   return output;
 }
 
-function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any): any {
+function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any, parentKey = ''): any {
   if (typeof value === 'string') {
     if (REFERENCE_KEYS.has(key) && idMap.has(value)) return idMap.get(value)!;
     if (key === 'name' && parent?.type === 'item' && idMap.has(value)) return idMap.get(value)!;
-    if (EXPRESSION_KEYS.test(key)) return rewriteEmbeddedIdentifierTokens(value, idMap);
+    if (EXPRESSION_KEYS.test(key) || parentKey === 'transitions') return rewriteEmbeddedIdentifierTokens(value, idMap);
     return value;
   }
-  if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key, parent));
+  if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key, parent, parentKey));
   if (!value || typeof value !== 'object') return value;
   const out: Record<string, any> = {};
   for (const [childKey, child] of Object.entries(value)) {
     const mappedKey = idMap.get(childKey) || childKey;
-    out[mappedKey] = collectKnownReferences(child, idMap, childKey, value);
+    out[mappedKey] = collectKnownReferences(child, idMap, childKey, value, key);
   }
   return out;
 }
