@@ -39,7 +39,7 @@ import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
-import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud, deleteWorkspaceItemsFromCloud } from '@/utils/workspaceSync';
+import { syncWorkspaceOnStartup, syncPackToCloud, syncPacksToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud, deleteWorkspaceItemsFromCloud } from '@/utils/workspaceSync';
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -300,7 +300,15 @@ export const App: React.FC = () => {
 
     // Back up successful imports. A cloud error must not undo or hide the local save.
     if (successfullySaved.length > 0 && getDiscordAuth()?.token) {
-      void Promise.all(successfullySaved.map(pack => syncPackToCloud(pack))).catch(err => {
+      void syncPacksToCloud(successfullySaved).then(result => {
+        if (result.failed.length > 0) {
+          console.error('[WorkspaceSync] Pack backup failures:', result.failed);
+          const first = result.failed[0];
+          showToast(`${result.saved} of ${successfullySaved.length} pack(s) backed up. ${result.failed.length} cloud backup(s) failed; first: ${first.name} — ${first.error}`, 12000);
+        } else {
+          showToast(`All ${result.saved} imported pack(s) backed up to your cloud workspace.`, 7000);
+        }
+      }).catch(err => {
         console.error('[WorkspaceSync] Pack backup failed:', describeError(err));
         showToast(`Pack(s) saved on this device, but cloud backup failed: ${describeError(err)}`, 9000);
       });
