@@ -1036,7 +1036,7 @@ export const App: React.FC = () => {
   const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
 
   return (
-    <div className="relative w-full h-screen bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
+    <div className="relative w-full h-[100dvh] min-h-[100svh] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
       {/* Hidden Global File Input */}
       <input
         ref={globalFileInputRef}
@@ -1212,7 +1212,7 @@ export const App: React.FC = () => {
 
       {/* Main Studio Viewport */}
       {screen === 'main' && (
-        <div className="flex w-full h-full overflow-hidden">
+        <div className="flex w-full flex-1 min-h-0 min-w-0 overflow-hidden">
           {/* Permanent Desktop Left Sidebar */}
           <div className="hidden md:flex shrink-0 h-full">
             <AppSidebar
@@ -1249,7 +1249,7 @@ export const App: React.FC = () => {
           )}
 
           {/* Center Content Workspace */}
-          <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+          <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
             {/* Top Bar with Breadcrumbs & Quick Actions */}
             <TopBar
               currentTab={currentTab}
@@ -1261,8 +1261,8 @@ export const App: React.FC = () => {
             />
 
             {/* Central Work Viewport */}
-            <div className="flex flex-1 min-h-0 overflow-hidden">
-              <main className="flex-1 min-w-0 overflow-y-auto">
+            <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+              <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
                 {/* 1. Overview */}
                 {(currentTab === 'overview' || currentTab === 'home') && (
                   <HomeScreen
