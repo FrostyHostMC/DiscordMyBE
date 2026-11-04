@@ -172,7 +172,7 @@ export const AppSidebar: React.FC<SidebarProps> = ({
                         : 'text-[#AAA3BB] hover:text-white hover:bg-[#15111F] border border-transparent'
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <span className={isActive ? 'text-[#A855F7]' : 'text-[#847A9B]'}>
                         {item.icon}
                       </span>
@@ -268,7 +268,7 @@ export const TopBar: React.FC<TopBarProps> = ({
   };
 
   return (
-    <header className="flex items-center justify-between px-3 sm:px-5 pt-[max(3rem,env(safe-area-inset-top))] pb-2.5 md:pt-2.5 bg-[#100D18] border-b border-[#30263F]/70 shrink-0 z-20">
+    <header className="flex items-center justify-between gap-2 px-3 sm:px-5 pt-[max(0.65rem,env(safe-area-inset-top))] pb-2.5 md:pt-2.5 bg-[#100D18] border-b border-[#30263F]/70 shrink-0 z-20 min-h-12">
       {/* Left: Mobile Nav toggle + Breadcrumb */}
       <div className="flex items-center gap-2.5 min-w-0">
         <button
@@ -280,7 +280,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <Menu className="w-4 h-4" />
         </button>
 
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <div className="md:hidden flex items-center gap-1.5 shrink-0">
             <BrandMark size="w-6 h-6" />
           </div>
