@@ -54,9 +54,10 @@ export const ModpackDetailsScreen: React.FC<ModpackDetailsScreenProps> = ({
       };
     }
     updated = { ...updated, outputFileName: `${custom.name.replace(/\s+/g, '_')}.mcaddon` };
-    if (updated.outputs && updated.outputs.length > 0) {
+    const componentPacks = updated.bundleParts || updated.outputs || [];
+    if (componentPacks.length > 0) {
       const rewrittenOutputs = await Promise.all(
-        updated.outputs.map(async (out) => {
+        componentPacks.map(async (out) => {
           if (!out.blob) return out;
           try {
             const blob = await customizeSingleMcpackBlob(out.blob, custom);
@@ -67,7 +68,9 @@ export const ModpackDetailsScreen: React.FC<ModpackDetailsScreenProps> = ({
           }
         })
       );
-      updated = { ...updated, outputs: rewrittenOutputs };
+      updated = updated.bundleParts
+        ? { ...updated, bundleParts: rewrittenOutputs }
+        : { ...updated, outputs: rewrittenOutputs };
     }
     updated = { ...updated, name: custom.name, description: custom.description };
     await saveModpackToDB(updated);
