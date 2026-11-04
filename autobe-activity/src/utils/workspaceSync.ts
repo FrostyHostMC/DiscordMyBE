@@ -61,8 +61,16 @@ export async function syncProjectToCloud(project: MergedModpack): Promise<void> 
   }
   await saveRemote([{ id: project.id, type: 'project', data: projectData(hydrated) }]);
 }
+export async function deleteWorkspaceItemsFromCloud(items: Array<{ type: 'pack' | 'project'; id: string }>): Promise<void> {
+  if (items.length === 0) return;
+  await api('/api/workspace', {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ items }),
+  });
+}
 export async function deleteWorkspaceItemFromCloud(type: 'pack' | 'project', id: string): Promise<void> {
-  await api(`/api/workspace?type=${type}&id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  await deleteWorkspaceItemsFromCloud([{ type, id }]);
 }
 export async function syncWorkspaceOnStartup(): Promise<{ packs: AddonPack[]; projects: MergedModpack[]; imported: number; uploaded: number }> {
   const remote = await api<{ items: RemoteItem[] }>('/api/workspace');

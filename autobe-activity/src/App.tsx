@@ -39,7 +39,7 @@ import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
-import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud } from '@/utils/workspaceSync';
+import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud, deleteWorkspaceItemsFromCloud } from '@/utils/workspaceSync';
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -747,18 +747,22 @@ export const App: React.FC = () => {
     }
 
     const auth = getDiscordAuth();
+    let cloudError: string | null = null;
     if (auth?.token) {
-      const cloudResults = await Promise.allSettled(
-        uniqueIds.map((id) => deleteWorkspaceItemFromCloud('pack', id))
-      );
-      const failedCloud = cloudResults.filter((result) => result.status === 'rejected').length;
-      if (failedLocal > 0 || failedCloud > 0) {
-        showToast(`Deleted locally where possible. ${failedLocal} local deletion(s) and ${failedCloud} cloud cleanup(s) need attention.`, 9000);
-        return;
+      try {
+        await deleteWorkspaceItemsFromCloud(uniqueIds.map((id) => ({ type: 'pack' as const, id })));
+      } catch (err) {
+        cloudError = describeError(err);
+        console.error('[Delete Selected] Cloud cleanup failed:', cloudError);
       }
     }
-    if (failedLocal > 0) showToast(`Could not delete ${failedLocal} pack(s). Please retry.`, 8000);
-    else showToast(`${uniqueIds.length} selected pack(s) removed from workspace`);
+    if (failedLocal > 0 || cloudError) {
+      const localMessage = failedLocal > 0 ? `${failedLocal} local deletion(s) failed` : 'All local copies deleted';
+      const cloudMessage = cloudError ? `Cloud cleanup failed: ${cloudError}` : 'Cloud copies deleted';
+      showToast(`${localMessage}. ${cloudMessage}. Retry cloud cleanup if needed.`, 12000);
+      return;
+    }
+    showToast(`${uniqueIds.length} selected pack(s) removed from workspace`);
   };
 
   // Delete every source pack, regardless of the current selection. Saved projects

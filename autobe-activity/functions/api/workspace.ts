@@ -208,24 +208,52 @@ export const onRequestDelete: PagesFunction<Env> = async ({ request, env }) => {
   const auth = await authenticatedUser(request, env);
   if (isResponse(auth)) return auth;
   const url = new URL(request.url);
-  const type = url.searchParams.get('type');
-  const id = url.searchParams.get('id');
-  if ((type !== 'pack' && type !== 'project') || !id || id.length > 200) {
-    return json({ error: 'Provide a valid type=pack|project and id.' }, 400);
-  }
-  await ensureTable(env);
-  await env.DB.prepare('DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?')
-    .bind(auth.id, type, id).run();
-  if (type === 'pack') {
-    await env.BUCKET.delete(`private-workspaces/${auth.id}/packs/${encodeURIComponent(id)}`);
+
+  // Bulk requests authenticate once and are scoped to the verified Discord user.
+  // R2 objects are removed before metadata so a partial storage failure is retryable.
+  let items: Array<{ type: ItemType; id: string }>;
+  if (request.headers.get('content-type')?.includes('application/json')) {
+    let body: { items?: unknown };
+    try { body = await request.json() as { items?: unknown }; }
+    catch { return json({ error: 'Request body must be valid JSON.' }, 400); }
+    if (!Array.isArray(body.items) || body.items.length < 1 || body.items.length > 100) {
+      return json({ error: 'Send between 1 and 100 workspace items to delete.' }, 400);
+    }
+    if (!body.items.every((item) => !!item && typeof item === 'object'
+      && ((item as { type?: unknown }).type === 'pack' || (item as { type?: unknown }).type === 'project')
+      && typeof (item as { id?: unknown }).id === 'string'
+      && (item as { id: string }).id.length > 0
+      && (item as { id: string }).id.length <= 200)) {
+      return json({ error: 'One or more workspace item identifiers are invalid.' }, 400);
+    }
+    items = body.items as Array<{ type: ItemType; id: string }>;
   } else {
-    const prefix = `private-workspaces/${auth.id}/projects/${encodeURIComponent(id)}/`;
-    let cursor: string | undefined;
-    do {
-      const page = await env.BUCKET.list({ prefix, limit: 1000, cursor });
-      if (page.objects.length) await env.BUCKET.delete(page.objects.map((object) => object.key));
-      cursor = page.truncated ? page.cursor : undefined;
-    } while (cursor);
+    const type = url.searchParams.get('type');
+    const id = url.searchParams.get('id');
+    if ((type !== 'pack' && type !== 'project') || !id || id.length > 200) {
+      return json({ error: 'Provide a valid type=pack|project and id, or a JSON items array.' }, 400);
+    }
+    items = [{ type, id }];
   }
-  return json({ deleted: true });
+
+  const uniqueItems = [...new Map(items.map(item => [`${item.type}:${item.id}`, item])).values()];
+  await ensureTable(env);
+
+  try {
+    for (const item of uniqueItems) {
+      if (item.type === 'pack') {
+        await env.BUCKET.delete(`private-workspaces/${auth.id}/packs/${encodeURIComponent(item.id)}`);
+      } else {
+        await deleteR2Prefix(env, `private-workspaces/${auth.id}/projects/${encodeURIComponent(item.id)}/`);
+      }
+    }
+    await env.DB.batch(uniqueItems.map(item => env.DB.prepare(
+      'DELETE FROM private_workspace_items WHERE user_id = ? AND item_type = ? AND item_id = ?'
+    ).bind(auth.id, item.type, item.id)));
+  } catch (error) {
+    console.error('[Workspace] Bulk cloud deletion failed:', error);
+    return json({ error: 'Cloud deletion did not fully complete. Local copies remain deleted; retry cloud cleanup from AutoBE.' }, 502);
+  }
+
+  return json({ deleted: uniqueItems.length });
 };
