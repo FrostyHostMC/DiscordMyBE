@@ -1228,7 +1228,7 @@ export const App: React.FC = () => {
 
           {/* Slide-out Mobile Drawer */}
           {isMobileDrawerOpen && (
-            <div className="fixed inset-0 z-50 md:hidden flex">
+            <div className="fixed left-0 right-0 top-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] bottom-[env(safe-area-inset-bottom,0px)] z-50 md:hidden flex min-h-0">
               <div
                 className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
                 onClick={() => setIsMobileDrawerOpen(false)}
