@@ -77,7 +77,7 @@ export async function authorizeWorkspaceRequest(request: Request, env: Workspace
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
     return json({ error: 'Private workspace access is not configured.' }, 503);
   }
-  const token = (request.headers.get('authorization') || '').match(/^Bearer\\s+(.+)$/i)?.[1];
+  const token = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i)?.[1];
   if (!token) return json({ error: 'Discord authentication is required.' }, 401);
   try {
     const key = await fingerprint(token, env);
