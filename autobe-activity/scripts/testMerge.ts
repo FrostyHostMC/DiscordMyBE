@@ -9,6 +9,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
+import { executeMergePacks, ensureCombinedBlob } from '../src/utils/mergeEngine.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
@@ -587,4 +588,37 @@ await (async () => {
   assert.deepEqual([...chosen], [1, 2, 3], 'keep_a must replace the actual final asset bytes');
   assert.ok(diagnostics.some(message => message.includes('VANILLA_OVERRIDE_CHOICE')));
   console.log('✓ keep Pack A also changes the actual final asset bytes');
+})();
+
+
+await (async () => {
+  const source = new JSZip();
+  source.file('manifest.json', JSON.stringify({
+    format_version: 2,
+    header: { name: 'Output option test', description: '', uuid: '11111111-1111-4111-8111-111111111111', version: [1, 0, 0], min_engine_version: [1, 20, 0] },
+    modules: [{ type: 'resources', uuid: '22222222-2222-4222-8222-222222222222', version: [1, 0, 0] }]
+  }));
+  source.file('textures/test.txt', 'resource payload');
+  const fileBlob = await source.generateAsync({ type: 'blob' });
+  const pack = {
+    id: 'output-option-pack', name: 'Output Option Test', type: 'Resource Pack',
+    version: '1.0.0', uuid: '11111111-1111-4111-8111-111111111111',
+    minEngineVersion: '1.20.0', fileSize: fileBlob.size, dateAdded: 1, fileBlob
+  } as any;
+
+  const combinedOnly = await executeMergePacks([pack], {
+    modpackName: 'Combined Only', generateAddon: true, generateSeparatePacks: false
+  });
+  assert.equal(combinedOnly.outputs?.length, 0, 'separate downloads must not be exposed when disabled');
+  assert.equal(combinedOnly.bundleParts?.length, 1, 'combined archive must retain its internal component pack');
+  const combinedBlob = await ensureCombinedBlob(combinedOnly);
+  assert.ok(combinedBlob.size > 0, 'combined-only mode must still build a valid bundle');
+
+  const separateOnly = await executeMergePacks([pack], {
+    modpackName: 'Separate Only', generateAddon: false, generateSeparatePacks: true
+  });
+  assert.equal(separateOnly.outputs?.length, 1, 'separate mode must expose the component .mcpack');
+  assert.equal(separateOnly.bundleParts, undefined, 'separate-only mode must not retain a duplicate internal bundle list');
+  await assert.rejects(() => ensureCombinedBlob(separateOnly), /combined .mcaddon generation is disabled/);
+  console.log('✓ output options control actual downloadable artifacts while preserving combined bundle contents');
 })();
