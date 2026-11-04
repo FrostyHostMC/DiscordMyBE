@@ -125,9 +125,9 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-y-auto px-4 sm:px-6 pt-5 pb-24 max-w-2xl mx-auto w-full">
+    <div className="flex flex-col flex-1 min-h-0 bg-[#08070D] text-white select-none overflow-y-auto overscroll-contain px-4 sm:px-6 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] max-w-2xl mx-auto w-full" style={{ WebkitOverflowScrolling: "touch" }}>
       {/* Top Bar */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#30263F]/70">
+      <div className="sticky top-0 z-20 flex items-center justify-between pb-3 pt-1 border-b border-[#30263F]/70 bg-[#08070D]/95 backdrop-blur-sm">
         <button
           type="button"
           onClick={onDone}
@@ -311,7 +311,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
       </div>
 
       {/* Action Buttons */}
-      <div className="flex flex-col sm:flex-row gap-2.5">
+      <div className="flex flex-col sm:flex-row gap-2.5 pb-2">
         <button
           type="button"
           onClick={onInstallToMinecraft}
