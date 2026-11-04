@@ -223,7 +223,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             Generated Outputs
           </span>
           <span className="text-[#AAA3BB] text-[10px]">
-            Tap any output to download individual .mcpack
+            {modpack.generateSeparatePacks === false ? 'Individual .mcpack downloads are disabled for this project.' : 'Tap any output to download individual .mcpack'}
           </span>
         </div>
 
