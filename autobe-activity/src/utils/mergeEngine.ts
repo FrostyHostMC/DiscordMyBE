@@ -12,6 +12,9 @@ import { stableUUID } from '@/utils/stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
+import { expandBrarchiveFiles } from './brarchive';
+import { applyFeatureRegistry } from './featureRegistry';
+import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -381,9 +384,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging resource pack ${i + 1}/${plan.rp.length}`, 10 + 20 * ((i + 1) / plan.rp.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
+      if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
+      await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics);
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
@@ -473,6 +479,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       onProgress?.(`Merging behavior pack ${pi + 1}/${groupPacks.length}`, type === 'behavior_data' ? 40 + 20 * ((pi + 1) / groupPacks.length) : 50 + 15 * ((pi + 1) / groupPacks.length));
       await yieldToUI();
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
+      if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before behavior merging.`);
       if (packs.filter(p => p.type === 'Behavior Pack').length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
       const slug = `${slugify(pack.name, pack.id)}_${pi + 1}`;
       const isScriptGroup = type === 'behavior_script';
@@ -499,7 +507,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
               externalUuidDeps.set(dep.uuid, dep);
             }
           }
-          const scriptModule = (manifest.modules || []).find((m: any) => m.type === 'script');
+          const scriptModule = (manifest.modules || []).find((m: any) => ['script', 'javascript'].includes(String(m?.type || '').toLowerCase()));
           if (scriptModule?.entry) entry = String(scriptModule.entry).replace(/^\.\//, '');
         }
       } catch {
@@ -509,7 +517,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       if (isScriptGroup) {
         const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
-        const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\\.(?:[cm]?js)$/i.test(path));
+        const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\.(?:[cm]?js)$/i.test(path));
         const byNormalizedPath = new Map(files.map(([path]) => [normalizeScriptPath(path).toLowerCase(), path]));
         const requestedEntry = entry ? normalizeScriptPath(entry) : '';
         let resolvedEntry = requestedEntry ? byNormalizedPath.get(requestedEntry.toLowerCase()) : undefined;
@@ -521,8 +529,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         if (!resolvedEntry && !requestedEntry) {
           const preferred = ['scripts/main.js', 'main.js', 'scripts/index.js', 'index.js'];
           resolvedEntry = preferred.map(path => byNormalizedPath.get(path)).find((path): path is string => !!path);
-          if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
         }
+        // A stale or incorrectly cased manifest path may still identify a
+        // single unambiguous script file. Never guess when multiple candidates exist.
+        if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
         if (!resolvedEntry) {
           const available = files.slice(0, 8).map(([path]) => path).join(', ') || 'no JavaScript files found';
           throw new Error(`Script entry "${entry || '(missing)'}" could not be resolved in "${pack.name}". Available script files: ${available}. The original pack was not modified.`);
@@ -535,11 +545,16 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const transform = relocateScripts
         ? (p: string) => /^(?:scripts\/)/i.test(p) || /\.(?:[cm]?js)$/i.test(p) ? scriptModuleOutputPath(slug, p) : p
         : undefined;
+      await applyFeatureRegistry(zip, bpZip, pack.name, mergeDiagnostics);
       await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), transform, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
       zip.files = {} as typeof zip.files;
       if (isScriptGroup && entry) scriptEntries.push(relocateScripts ? scriptModuleOutputPath(slug, entry) : entry);
     }
     writeAccum(bpZip, accum, mergeDiagnostics);
+    if (type === 'behavior_script') {
+      const repairedScripts = await guardUnavailableEventSubscriptions(bpZip, mergeDiagnostics);
+      if (repairedScripts) mergeDiagnostics.push(`INFO SCRIPT_COMPATIBILITY_REPAIRS: Applied ${repairedScripts} generic compatibility repair(s) to merged script files.`);
+    }
     await applyVanillaAssetResolutions(bpZip, packs, conflicts, 'Behavior Pack', mergeDiagnostics);
     // Port of AutoBE Part 16: merge duplicate-identifier entity/item/block
     // definitions instead of letting later packs silently overwrite earlier ones.
