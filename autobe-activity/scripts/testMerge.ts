@@ -8,6 +8,7 @@ import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
+import { resolveTargetEngineVersion } from '../src/utils/mergeEngine.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
@@ -15,6 +16,25 @@ function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('selected Bedrock target is written as the minimum when source packs support it', () => {
+  const diagnostics: string[] = [];
+  assert.equal(resolveTargetEngineVersion('1.21.50', ['1.20.0', '1.21.0'], diagnostics, 'Behavior'), '1.21.50');
+  assert.deepEqual(diagnostics, []);
+});
+
+test('source pack minimum raises an older selected target instead of falsely downgrading compatibility', () => {
+  const diagnostics: string[] = [];
+  assert.equal(resolveTargetEngineVersion('1.20.0', ['1.20.0', '1.21.50'], diagnostics, 'Resource Pack'), '1.21.50');
+  assert.equal(diagnostics.length, 1);
+  assert.match(diagnostics[0], /TARGET_ENGINE_RAISED/);
+});
+
+test('invalid or missing Bedrock target safely falls back to 1.20.0', () => {
+  const diagnostics: string[] = [];
+  assert.equal(resolveTargetEngineVersion('latest', [], diagnostics, 'Behavior'), '1.20.0');
+  assert.equal(resolveTargetEngineVersion(undefined, [], diagnostics, 'Behavior'), '1.20.0');
+});
 
 test('script modules are isolated per addon without breaking their relative directory tree', () => {
   assert.equal(scriptModuleOutputPath('addon_a', 'scripts/main.js'), 'scripts/addon_a/_pack/scripts/main.js');
