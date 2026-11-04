@@ -48,7 +48,10 @@ function collectDefinitions(zip: JSZip): Promise<Definition[]> {
   return Promise.all(jobs).then(items => items.filter((x): x is Definition => !!x));
 }
 
-function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any): any {
+function rewriteEmbeddedIdentifierTokens(value: string, idMap: Map<string, string>): string {
+  let output = value;
+  for (const [oldId, newId] of [...idMap.entries()].sort((a, b) => b[0].length - a[0].length)) {
+    const escaped = oldId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any): any {
   if (typeof value === 'string') {
     if (REFERENCE_KEYS.has(key) && idMap.has(value)) return idMap.get(value)!;
     // Loot tables reference an item through { type: "item", name: "namespace:id" }.
@@ -61,6 +64,29 @@ function collectKnownReferences(value: any, idMap: Map<string, string>, key = ''
   const out: Record<string, any> = {};
   for (const [childKey, child] of Object.entries(value)) {
     out[childKey] = collectKnownReferences(child, idMap, childKey, value);
+  }
+  return out;
+}');
+    const expression = new RegExp(`(^|[^A-Za-z0-9_.:-])${escaped}(?![A-Za-z0-9_.:-])`, 'g');
+    output = output.replace(expression, (_match, before) => before + newId);
+  }
+  return output;
+}
+
+function collectKnownReferences(value: any, idMap: Map<string, string>, key = '', parent?: any): any {
+  if (typeof value === 'string') {
+    if ((REFERENCE_KEYS.has(key) || EXPRESSION_KEYS.test(key)) && idMap.has(value)) return idMap.get(value)!;
+    if (key === 'name' && parent?.type === 'item' && idMap.has(value)) return idMap.get(value)!;
+    // Molang and animation expressions often embed an identifier in a larger string.
+    if (EXPRESSION_KEYS.test(key)) return rewriteEmbeddedIdentifierTokens(value, idMap);
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(item => collectKnownReferences(item, idMap, key, parent));
+  if (!value || typeof value !== 'object') return value;
+  const out: Record<string, any> = {};
+  for (const [childKey, child] of Object.entries(value)) {
+    const mappedKey = idMap.get(childKey) || childKey;
+    out[mappedKey] = collectKnownReferences(child, idMap, childKey, value);
   }
   return out;
 }
