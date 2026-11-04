@@ -49,14 +49,23 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
       const result = mergeAdditions(merged, entry.data);
       // Different attachable rigs must never be combined just because their
       // individual fields happen to be disjoint.
-      const incompatible = result.conflicts.length > 0 || (entry.kind === 'attachable' && result.changed);
-      if (incompatible) {
+      // Attachable definitions describe one complete visual rig. Combining
+      // disjoint fields from two rigs can create invalid geometry/texture wiring,
+      // so keep that category atomic. For item/block/entity definitions, retain
+      // safe additions even when one or more individual values disagree.
+      const atomicRigConflict = entry.kind === 'attachable' && (result.changed || result.conflicts.length > 0);
+      if (atomicRigConflict) {
         const backup = preserveConflict(zip, entry.path, entry.bytes, 'definitions');
-        diagnostics.push(`WARNING DEFINITION_CONFLICT [${entry.identifier}]: ${entry.path} conflicts with ${first.path} at ${result.conflicts.slice(0, 5).join(', ') || 'attachable rig'}. Kept the first definition active and saved the other as ${backup}; manual review is required.`);
+        diagnostics.push(`WARNING DEFINITION_CONFLICT [${entry.identifier}]: ${entry.path} contains an incompatible attachable rig relative to ${first.path}. Kept the first rig active and saved the complete alternative as ${backup}; manual review is required.`);
       } else {
         merged = result.value;
         changed ||= result.changed;
-        if (result.changed) diagnostics.push(`INFO DEFINITION_MERGED [${entry.identifier}]: Added non-conflicting fields from ${entry.path} to ${first.path}.`);
+        if (result.conflicts.length > 0) {
+          const backup = preserveConflict(zip, entry.path, entry.bytes, 'definitions');
+          diagnostics.push(`WARNING DEFINITION_PARTIAL_CONFLICT [${entry.identifier}]: Kept compatible additions from ${entry.path} in ${first.path}; retained the first value at ${result.conflicts.slice(0, 5).join(', ')} and saved the complete incoming definition as ${backup} for review.`);
+        } else if (result.changed) {
+          diagnostics.push(`INFO DEFINITION_MERGED [${entry.identifier}]: Added non-conflicting fields from ${entry.path} to ${first.path}.`);
+        }
       }
       zip.remove(entry.path);
     }

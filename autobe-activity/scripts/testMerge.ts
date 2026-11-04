@@ -225,17 +225,18 @@ await (async () => {
   const paths = Object.keys(zip.files).filter(p => p.startsWith('items/') && !zip.files[p].dir);
   assert.equal(paths.length, 1);
   const active = await zip.file(paths[0])!.async('text');
-  assert.equal(active, original, 'a conflicting definition must not alter the active original');
   const result = JSON.parse(active);
   assert.equal(result['minecraft:item'].description.identifier, 'demo:utility_item');
   assert.deepEqual(result['minecraft:item'].components['minecraft:icon'], { texture: 'utility_item' });
-  assert.equal(result['minecraft:item'].components['minecraft:food'], undefined);
-  assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 16);
+  assert.deepEqual(result['minecraft:item'].components['minecraft:food'], { nutrition: 2, can_always_eat: true },
+    'non-conflicting components must survive even when another field conflicts');
+  assert.equal(result['minecraft:item'].components['minecraft:max_stack_size'], 16,
+    'the conflicting scalar keeps the priority winner');
   const backup = Object.keys(zip.files).find(p => p.startsWith('_autobe_conflicts/') && p.includes('utility_item_extra.json'));
   assert.ok(backup, 'the alternative must be saved for review');
   assert.equal(await zip.file(backup)!.async('text'), alternative, 'the backup must retain the full alternative');
-  assert.ok(diagnostics.some(message => message.includes('DEFINITION_CONFLICT')));
-  console.log('✓ incompatible duplicate item definitions are kept for manual review');
+  assert.ok(diagnostics.some(message => message.includes('DEFINITION_PARTIAL_CONFLICT')));
+  console.log('✓ conflicting item definitions keep safe additions and preserve the full alternative for review');
 })();
 
 
