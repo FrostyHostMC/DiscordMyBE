@@ -16,6 +16,7 @@ import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePat
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
+import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -173,14 +174,9 @@ function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: strin
 
 const yieldToUI = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0));
 
-/** Replace a whole identifier only, not a longer unrelated identifier. */
+/** Replace exact identifier tokens; script files are limited to static string literals. */
 function rewriteIdentifierReferences(text: string, renameMap?: Map<string, string>): string {
-  let out = text;
-  for (const [oldId, newId] of renameMap || []) {
-    const escaped = oldId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    out = out.replace(new RegExp(`(^|[^A-Za-z0-9_.:-])${escaped}(?![A-Za-z0-9_.:-])`, 'g'), (_m, before) => before + newId);
-  }
-  return out;
+  return rewriteIdentifierTokens(text, renameMap);
 }
 
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>): Promise<void> {
@@ -196,9 +192,14 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const outPath = assetPathMap.get(path) || assetPathMap.get(transformedPath) || transformedPath;
     const original = await fileObj.async('uint8array');
     let bytes = original;
-    if ((assetPathMap.size || renameMap?.size) && (lower.endsWith('.json') || lower.endsWith('.mcfunction'))) {
+    const isStructuredText = /\.(json|mcfunction|molang|material)$/i.test(lower);
+    const isScriptText = /\.(js|mjs|cjs|ts)$/i.test(lower);
+    if ((assetPathMap.size || renameMap?.size) && (isStructuredText || isScriptText)) {
       const originalText = await fileObj.async('text');
-      const updated = rewriteIdentifierReferences(rewriteAssetReferences(originalText, assetPathMap), renameMap);
+      let updated = isStructuredText
+        ? rewriteIdentifierReferences(rewriteAssetReferences(originalText, assetPathMap), renameMap)
+        : originalText;
+      if (isScriptText && renameMap?.size) updated = rewriteStaticScriptIdentifierReferences(updated, renameMap);
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
