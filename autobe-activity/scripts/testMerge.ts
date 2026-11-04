@@ -10,6 +10,7 @@ import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
 import { selectMergeOutputs } from '../src/utils/outputOptions.ts';
+import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from '../src/utils/identifierReferences.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
@@ -617,3 +618,72 @@ test('disabled output modes produce no artifacts', () => {
   assert.deepEqual(selected.outputs, []);
   assert.equal(selected.bundleParts, undefined);
 });
+
+
+test('identifier token rewriting updates embedded Molang references without changing longer IDs', () => {
+  const map = new Map([['guns:ak47', 'guns_autobe_2:ak47']]);
+  const source = "query.is_item_name_any('slot.weapon.mainhand', 0, 'guns:ak47') && 'guns:ak470'";
+  const output = rewriteIdentifierTokens(source, map);
+  assert.ok(output.includes("'guns_autobe_2:ak47'"));
+  assert.ok(output.includes("'guns:ak470'"));
+});
+
+test('script identifier rewriting changes static strings but leaves comments and dynamic templates alone', () => {
+  const map = new Map([['guns:ak47', 'guns_autobe_2:ak47']]);
+  const source = [
+    "const itemId = 'guns:ak47';",
+    'const alsoItemId = "guns:ak47";',
+    "`const dynamic = ${itemId} guns:ak47`;",
+    "// guns:ak47 should remain in this comment",
+    "/* guns:ak47 should remain here too */"
+  ].join('\\n');
+  const output = rewriteStaticScriptIdentifierReferences(source, map);
+  assert.ok(output.includes("'guns_autobe_2:ak47'"));
+  assert.ok(output.includes('"guns_autobe_2:ak47"'));
+  assert.ok(output.includes('${itemId} guns:ak47'));
+  assert.ok(output.includes('// guns:ak47 should remain in this comment'));
+  assert.ok(output.includes('/* guns:ak47 should remain here too */'));
+});
+
+await (async () => {
+  const { applyFeatureRegistry } = await import('../src/utils/featureRegistry.ts');
+  const first = new JSZip();
+  first.file('items/weapon.json', JSON.stringify({
+    'minecraft:item': { description: { identifier: 'arsenal:weapon' }, components: {} }
+  }));
+  const incoming = new JSZip();
+  incoming.file('items/weapon.json', JSON.stringify({
+    'minecraft:item': { description: { identifier: 'arsenal:weapon' }, components: {} }
+  }));
+  incoming.file('recipes/weapon.json', JSON.stringify({
+    'minecraft:recipe_shaped': {
+      description: { identifier: 'arsenal:weapon_recipe' },
+      key: { A: { item: 'arsenal:weapon' } },
+      result: { item: 'arsenal:weapon' }
+    }
+  }));
+  incoming.file('loot_tables/weapon.json', JSON.stringify({
+    pools: [{ entries: [{ type: 'item', name: 'arsenal:weapon' }] }]
+  }));
+  incoming.file('attachables/weapon.json', JSON.stringify({
+    'minecraft:attachable': {
+      description: { identifier: 'arsenal:weapon_attachable' },
+      scripts: { pre_animation: ["query.is_item_name_any('slot.weapon.mainhand', 0, 'arsenal:weapon')"] }
+    }
+  }));
+  const diagnostics: string[] = [];
+  const changed = await applyFeatureRegistry(incoming, first, 'Incoming Arsenal', diagnostics);
+  assert.equal(changed, 4);
+  const expected = 'arsenal_autobe_2:weapon';
+  const item = JSON.parse(await incoming.file('items/weapon.json')!.async('text'));
+  assert.equal(item['minecraft:item'].description.identifier, expected);
+  const recipe = JSON.parse(await incoming.file('recipes/weapon.json')!.async('text'));
+  assert.equal(recipe['minecraft:recipe_shaped'].key.A.item, expected);
+  assert.equal(recipe['minecraft:recipe_shaped'].result.item, expected);
+  const loot = JSON.parse(await incoming.file('loot_tables/weapon.json')!.async('text'));
+  assert.equal(loot.pools[0].entries[0].name, expected);
+  const attachable = JSON.parse(await incoming.file('attachables/weapon.json')!.async('text'));
+  assert.ok(attachable['minecraft:attachable'].scripts.pre_animation[0].includes(expected));
+  assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
+  console.log('✓ feature registry repairs item, recipe, loot-table and attachable Molang references together');
+})();
