@@ -176,7 +176,7 @@ export const ModpackDetailsScreen: React.FC<ModpackDetailsScreenProps> = ({
         </div>
 
         {/* Merged Outputs */}
-        {modpack.outputs && modpack.outputs.length > 0 && (
+        {modpack.generateSeparatePacks !== false && modpack.outputs && modpack.outputs.length > 0 && (
           <div className="space-y-2">
             <h3 className="text-xs font-bold text-white uppercase tracking-wider">
               Output Packages
