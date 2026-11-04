@@ -53,6 +53,20 @@ export async function syncPackToCloud(pack: AddonPack): Promise<void> {
   await putFile(`/api/workspace/files/${encodeURIComponent(pack.id)}`, hydrated.fileBlob);
   await saveRemote([{ id: pack.id, type: 'pack', data: packData(pack) }]);
 }
+/** Back up a batch in sequence to avoid bursting Discord's role/member verification API. */
+export async function syncPacksToCloud(packs: AddonPack[]): Promise<{ saved: number; failed: Array<{ name: string; error: string }> }> {
+  let saved = 0;
+  const failed: Array<{ name: string; error: string }> = [];
+  for (const pack of packs) {
+    try {
+      await syncPackToCloud(pack);
+      saved++;
+    } catch (error) {
+      failed.push({ name: pack.name, error: error instanceof Error ? error.message : String(error) });
+    }
+  }
+  return { saved, failed };
+}
 export async function syncProjectToCloud(project: MergedModpack): Promise<void> {
   const hydrated = await loadModpackFiles(project);
   if (hydrated.outputBlob) await putFile(`/api/workspace/files/${encodeURIComponent(project.id)}?kind=combined&key=combined`, hydrated.outputBlob);
