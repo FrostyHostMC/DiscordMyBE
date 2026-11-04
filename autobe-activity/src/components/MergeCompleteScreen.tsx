@@ -228,7 +228,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         </div>
 
         {/* Combined .mcaddon Main Card */}
-        <div className="p-3.5 rounded-xl bg-[#15111F] border border-[#762BFF]/60 flex items-center justify-between gap-3 shadow-[0_0_15px_rgba(118,43,255,0.15)]">
+        {modpack.generateAddon !== false && <div className="p-3.5 rounded-xl bg-[#15111F] border border-[#762BFF]/60 flex items-center justify-between gap-3 shadow-[0_0_15px_rgba(118,43,255,0.15)]">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-10 h-10 rounded-lg bg-[#762BFF]/20 border border-[#762BFF]/40 flex items-center justify-center shrink-0">
               <Layers className="w-5 h-5 text-[#A855F7]" />
@@ -247,10 +247,10 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           </div>
 
 
-        </div>
+        </div>}
 
         {/* Individual Outputs List (.mcpack) */}
-        {modpack.outputs && modpack.outputs.length > 0 && (
+        {modpack.generateSeparatePacks !== false && modpack.outputs && modpack.outputs.length > 0 && (
           <div className="space-y-2 pt-1">
             {modpack.outputs.map((out) => {
               const isResource = out.type === 'resource';
@@ -312,7 +312,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-2.5 pb-2">
-        <button
+        {modpack.generateAddon !== false && <button
           type="button"
           onClick={onInstallToMinecraft}
           disabled={activeTransfer !== null}
@@ -323,9 +323,9 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <span className="relative z-10 flex items-center justify-center gap-2 min-w-0">
             {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'} {transferProgress}%</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
           </span>
-        </button>
+        </button>}
 
-        {onPublish && (
+        {modpack.generateAddon !== false && onPublish && (
           <button
             type="button"
             onClick={() => setShowPublishOptions(true)}
