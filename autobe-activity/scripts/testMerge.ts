@@ -671,9 +671,15 @@ await (async () => {
       scripts: { pre_animation: ["query.is_item_name_any('slot.weapon.mainhand', 0, 'arsenal:weapon')"] }
     }
   }));
+  incoming.file('scripts/weapon.js', [
+    "const weaponId = 'arsenal:weapon';",
+    "`const dynamicId = ${weaponId} arsenal:weapon`;",
+    "// arsenal:weapon comment should not be rewritten"
+  ].join('\\n'));
+  incoming.file('functions/give_weapon.mcfunction', 'give @s arsenal:weapon 1');
   const diagnostics: string[] = [];
   const changed = await applyFeatureRegistry(incoming, first, 'Incoming Arsenal', diagnostics);
-  assert.equal(changed, 4);
+  assert.equal(changed, 6);
   const expected = 'arsenal_autobe_2:weapon';
   const item = JSON.parse(await incoming.file('items/weapon.json')!.async('text'));
   assert.equal(item['minecraft:item'].description.identifier, expected);
@@ -684,6 +690,12 @@ await (async () => {
   assert.equal(loot.pools[0].entries[0].name, expected);
   const attachable = JSON.parse(await incoming.file('attachables/weapon.json')!.async('text'));
   assert.ok(attachable['minecraft:attachable'].scripts.pre_animation[0].includes(expected));
+  const script = await incoming.file('scripts/weapon.js')!.async('text');
+  assert.ok(script.includes("'arsenal_autobe_2:weapon'"));
+  assert.ok(script.includes('${weaponId} arsenal:weapon'), 'dynamic template literals are intentionally left for diagnostics/manual review');
+  assert.ok(script.includes('// arsenal:weapon comment should not be rewritten'));
+  const command = await incoming.file('functions/give_weapon.mcfunction')!.async('text');
+  assert.ok(command.includes(expected));
   assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
   console.log('✓ feature registry repairs item, recipe, loot-table and attachable Molang references together');
 })();
