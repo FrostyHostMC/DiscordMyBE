@@ -286,7 +286,9 @@ export async function parseAddonArchive(
       for (const dep of manifest.dependencies || []) {
         const moduleName = dep?.module_name;
         if (!['@minecraft/server', '@minecraft/server-ui', '@minecraft/server-gametest'].includes(moduleName)) continue;
-        hasScripts = true;
+        // A Script API dependency alone does not make this a script pack.
+        // The manifest must declare a script module; otherwise ordinary data packs
+        // can be incorrectly routed into the script merger and fail on a missing entry.
         const rawVersion = Array.isArray(dep.version) ? dep.version.join('.') : String(dep.version || '');
         if (!rawVersion) continue;
         const key = moduleName === '@minecraft/server' ? 'server' : moduleName === '@minecraft/server-ui' ? 'ui' : 'gametest';
