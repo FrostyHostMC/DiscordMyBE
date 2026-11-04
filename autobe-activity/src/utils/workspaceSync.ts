@@ -17,12 +17,69 @@ async function api<T>(url: string, init: RequestInit = {}): Promise<T> {
   }
   return response.json() as Promise<T>;
 }
+const CLOUD_METADATA_BUDGET = 220 * 1024;
+
+function stripOversizedInlineImages(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripOversizedInlineImages);
+  if (!value || typeof value !== 'object') return value;
+  const result: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    // Icons are presentation-only. Large data URLs can make a small project
+    // metadata record exceed the server's 256 KiB limit; omit only the image,
+    // retaining all pack/project identity and merge information.
+    if (/^(?:iconDataUrl|icon_data_url)$/i.test(key)
+      && typeof child === 'string'
+      && child.startsWith('data:image/')
+      && child.length > 24 * 1024) continue;
+    result[key] = stripOversizedInlineImages(child);
+  }
+  return result;
+}
+function compactProjectExtras(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const extras = { ...(value as Record<string, unknown>) };
+  // The full diagnostics are already embedded in the downloadable combined
+  // archive. Keep the report when reasonably sized; otherwise retain its
+  // review findings so the restored project can still show unresolved conflicts.
+  if (typeof extras.diagnosticsText === 'string' && extras.diagnosticsText.length > 48 * 1024) {
+    delete extras.diagnosticsText;
+  }
+  if (typeof extras.reportJson === 'string' && extras.reportJson.length > 64 * 1024) {
+    try {
+      const report = JSON.parse(extras.reportJson) as { findings?: unknown[] };
+      extras.reportJson = JSON.stringify({
+        findings: (report.findings || []).slice(0, 250).map((finding: any) => ({
+          code: finding?.code,
+          path: finding?.path,
+          message: typeof finding?.message === 'string' ? finding.message.slice(0, 1200) : '',
+        })),
+        truncated: true,
+      });
+    } catch {
+      delete extras.reportJson;
+    }
+  }
+  return extras;
+}
+function assertCloudMetadataSize(data: Record<string, unknown>, label: string): Record<string, unknown> {
+  const bytes = new TextEncoder().encode(JSON.stringify(data)).byteLength;
+  if (bytes > CLOUD_METADATA_BUDGET) {
+    throw new Error(`${label} metadata is ${Math.ceil(bytes / 1024)} KB after removing large inline icons; cloud metadata is limited to 256 KB. Your local copy and addon files are safe.`);
+  }
+  return data;
+}
 function packData(pack: AddonPack): Record<string, unknown> {
-  const { fileBlob: _fileBlob, ...data } = pack; void _fileBlob; return data;
+  const { fileBlob: _fileBlob, ...data } = pack; void _fileBlob;
+  return assertCloudMetadataSize(stripOversizedInlineImages(data) as Record<string, unknown>, `Pack "${pack.name}"`);
 }
 function projectData(project: MergedModpack): Record<string, unknown> {
   const { outputBlob: _outputBlob, outputs, ...data } = project; void _outputBlob;
-  return { ...data, outputs: (outputs || []).map(({ blob: _blob, ...out }) => { void _blob; return out; }) };
+  const metadata = {
+    ...data,
+    ...(data.combinedExtras ? { combinedExtras: compactProjectExtras(data.combinedExtras) } : {}),
+    outputs: (outputs || []).map(({ blob: _blob, ...out }) => { void _blob; return out; }),
+  };
+  return assertCloudMetadataSize(stripOversizedInlineImages(metadata) as Record<string, unknown>, `Project "${project.name}"`);
 }
 async function putFile(url: string, blob: Blob): Promise<void> {
   const response = await fetch(url, { method: 'PUT', headers: headers({ 'content-type': blob.type || 'application/octet-stream' }), body: blob, cache: 'no-store' });
