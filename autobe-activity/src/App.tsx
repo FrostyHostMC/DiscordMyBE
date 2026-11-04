@@ -727,41 +727,62 @@ export const App: React.FC = () => {
     }
   };
 
-  // Delete selected packs
+  // Remove selected source packs locally first. Cloud cleanup is best-effort:
+  // a transient network failure must never block deleting the device copies.
   const handleDeleteSelectedPacks = async (ids: string[]) => {
     triggerHaptic(50);
-    console.log('[Delete Selected] Deleting packs:', ids);
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length === 0) return;
+    console.log('[Delete Selected] Deleting packs:', uniqueIds);
+    const localResults = await Promise.allSettled(uniqueIds.map((id) => deletePackFromDB(id)));
+    const failedLocal = localResults.filter((result) => result.status === 'rejected').length;
+
     try {
-      // Delete cloud copies first so a failed request cannot be mistaken for success.
-      if (getDiscordAuth()?.token) {
-        for (const id of ids) await deleteWorkspaceItemFromCloud('pack', id);
-      }
-      for (const id of ids) await deletePackFromDB(id);
       const updated = await getAllPacksFromDB();
       setInstalledPacks(updated);
-      setSelectedPackIds([]);
-      showToast(`${ids.length} pack(s) removed from workspace`);
+      const remainingIds = new Set(updated.map((pack) => pack.id));
+      setSelectedPackIds((previous) => previous.filter((id) => remainingIds.has(id)));
     } catch (err) {
-      console.error('[Delete Selected] Error:', err);
-      showToast('Failed to delete some packs');
+      console.error('[Delete Selected] Could not refresh workspace:', describeError(err));
     }
+
+    const auth = getDiscordAuth();
+    if (auth?.token) {
+      const cloudResults = await Promise.allSettled(
+        uniqueIds.map((id) => deleteWorkspaceItemFromCloud('pack', id))
+      );
+      const failedCloud = cloudResults.filter((result) => result.status === 'rejected').length;
+      if (failedLocal > 0 || failedCloud > 0) {
+        showToast(`Deleted locally where possible. ${failedLocal} local deletion(s) and ${failedCloud} cloud cleanup(s) need attention.`, 9000);
+        return;
+      }
+    }
+    if (failedLocal > 0) showToast(`Could not delete ${failedLocal} pack(s). Please retry.`, 8000);
+    else showToast(`${uniqueIds.length} selected pack(s) removed from workspace`);
   };
 
-  // Delete all source packs without accidentally deleting saved projects.
+  // Delete every source pack, regardless of the current selection. Saved projects
+  // are intentionally kept; cloud failures cannot interrupt local workspace cleanup.
   const handleDeleteAllPacks = async () => {
     triggerHaptic(50);
     try {
       const packs = await getAllPacksFromDB();
-      if (getDiscordAuth()?.token) {
-        for (const pack of packs) await deleteWorkspaceItemFromCloud('pack', pack.id);
+      if (packs.length === 0) {
+        setInstalledPacks([]);
+        setSelectedPackIds([]);
+        showToast('Workspace is already empty');
+        return;
       }
-      for (const pack of packs) await deletePackFromDB(pack.id);
-      setInstalledPacks([]);
-      setSelectedPackIds([]);
-      showToast('All source packs removed from this workspace');
+      await handleDeleteSelectedPacks(packs.map((pack) => pack.id));
+      const remaining = await getAllPacksFromDB();
+      if (remaining.length === 0) {
+        setInstalledPacks([]);
+        setSelectedPackIds([]);
+        showToast('All source packs removed from this workspace');
+      }
     } catch (err) {
       console.error('[Delete All] Error:', err);
-      showToast(`Could not fully delete packs: ${describeError(err)}`, 9000);
+      showToast(`Could not delete all packs: ${describeError(err)}`, 9000);
     }
   };
 
@@ -1274,6 +1295,7 @@ export const App: React.FC = () => {
                     onImportPacks={handleImportPacks}
                     onDeletePack={handleDeletePack}
                     onDeleteSelectedPacks={handleDeleteSelectedPacks}
+                    onDeleteAllPacks={handleDeleteAllPacks}
                     onNavigateTab={navigateTab}
                   />
                 )}
