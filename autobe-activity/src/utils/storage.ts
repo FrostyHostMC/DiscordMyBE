@@ -217,7 +217,7 @@ export async function deletePackFromDB(id: string): Promise<void> {
 export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
   // Save project metadata and generated files together. Files are stored as ArrayBuffers
   // because Discord's mobile webview can be less reliable with Blob values in IndexedDB.
-  const { outputBlob, outputs, ...metadata } = modpack;
+  const { outputBlob, outputs, bundleParts, ...metadata } = modpack;
   const storedProject = {
     ...metadata,
     __autobeStoredAt: Date.now(),
@@ -225,6 +225,7 @@ export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
       void _blob;
       return out;
     }),
+    ...(bundleParts ? { bundleParts: bundleParts.map(({ blob: _blob, ...out }) => { void _blob; return out; }) } : {}),
   };
   const files: StoredFile[] = [];
   if (outputBlob) files.push({
@@ -232,7 +233,7 @@ export async function saveModpackToDB(modpack: MergedModpack): Promise<void> {
     fileData: await outputBlob.arrayBuffer(),
     fileType: outputBlob.type || 'application/vnd.minecraft.mcaddon',
   });
-  for (const output of outputs || []) {
+  for (const output of bundleParts || outputs || []) {
     if (!output.blob) continue;
     files.push({
       id: projectOutputKey(modpack.id, output.id),
@@ -270,7 +271,12 @@ export async function loadModpackFiles(modpack: MergedModpack): Promise<MergedMo
       blob: new Blob([stored.fileData], { type: stored.fileType || 'application/octet-stream' }),
     };
   }));
-  return { ...modpack, ...(outputBlob ? { outputBlob } : {}), outputs };
+  const bundleParts = modpack.bundleParts ? await Promise.all(modpack.bundleParts.map(async output => {
+    if (output.blob) return output;
+    const stored = await run<StoredFile | undefined>(STORE_FILES, 'readonly', tx => tx.objectStore(STORE_FILES).get(projectOutputKey(modpack.id, output.id))) as StoredFile | undefined;
+    return stored?.fileData ? { ...output, blob: new Blob([stored.fileData], { type: stored.fileType || 'application/octet-stream' }) } : output;
+  })) : undefined;
+  return { ...modpack, ...(outputBlob ? { outputBlob } : {}), outputs, ...(bundleParts ? { bundleParts } : {}) };
 }
 
 export async function getAllModpacksFromDB(): Promise<MergedModpack[]> {
