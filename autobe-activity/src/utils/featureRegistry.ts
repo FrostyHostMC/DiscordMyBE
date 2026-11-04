@@ -1,5 +1,6 @@
 import type JSZip from 'jszip';
 import { sanitizeJsonString } from './addonParser';
+import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 
 type Definition = { path: string; root: string; identifier: string; data: any };
 
@@ -20,7 +21,7 @@ const REFERENCE_KEYS = new Set([
   'animation_controllers', 'render_controllers', 'particle_effect', 'effect',
   'sound', 'sounds', 'controller', 'controllers'
 ]);
-const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|command|function)/i;
+const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|pre_animation|initialize|animate|on_entry|on_exit|command|function)/i;
 
 function isDefinitionPath(path: string): boolean {
   const normalized = path.replaceAll('\\\\', '/').toLowerCase();
@@ -119,29 +120,46 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
   let changedFiles = 0;
   const paths: string[] = [];
   sourceZip.forEach((path, file) => {
-    if (!file.dir && path.toLowerCase().endsWith('.json')) paths.push(path);
+    if (!file.dir) paths.push(path);
   });
   for (const path of paths) {
     const file = sourceZip.file(path);
     if (!file) continue;
+    const lower = path.toLowerCase();
     try {
-      const data = JSON.parse(sanitizeJsonString(await file.async('text')));
-      const rewritten = collectKnownReferences(data, idMap);
-      let didChange = false;
-      for (const root of DEFINITION_ROOTS) {
-        const id = rewritten?.[root]?.description?.identifier;
-        if (typeof id === 'string' && idMap.has(id)) {
-          rewritten[root].description.identifier = idMap.get(id);
-          didChange = true;
+      if (lower.endsWith('.json')) {
+        const data = JSON.parse(sanitizeJsonString(await file.async('text')));
+        const rewritten = collectKnownReferences(data, idMap);
+        let didChange = false;
+        for (const root of DEFINITION_ROOTS) {
+          const id = rewritten?.[root]?.description?.identifier;
+          if (typeof id === 'string' && idMap.has(id)) {
+            rewritten[root].description.identifier = idMap.get(id);
+            didChange = true;
+          }
+        }
+        const output = JSON.stringify(rewritten, null, 2);
+        if (didChange || output !== JSON.stringify(data, null, 2)) {
+          sourceZip.file(path, output);
+          changedFiles++;
+        }
+      } else if (/\\.(js|mjs|cjs|ts)$/i.test(lower)) {
+        const original = await file.async('text');
+        const output = rewriteStaticScriptIdentifierReferences(original, idMap);
+        if (output !== original) {
+          sourceZip.file(path, output);
+          changedFiles++;
+        }
+      } else if (/\\.(mcfunction|molang|material)$/i.test(lower)) {
+        const original = await file.async('text');
+        const output = rewriteIdentifierTokens(original, idMap);
+        if (output !== original) {
+          sourceZip.file(path, output);
+          changedFiles++;
         }
       }
-      const output = JSON.stringify(rewritten, null, 2);
-      if (didChange || output !== JSON.stringify(data, null, 2)) {
-        sourceZip.file(path, output);
-        changedFiles++;
-      }
     } catch {
-      // Invalid JSON remains untouched; archive validation reports it.
+      // Invalid or unsupported source remains intact; archive validation reports malformed JSON.
     }
   }
   return changedFiles;
