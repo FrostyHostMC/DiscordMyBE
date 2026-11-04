@@ -24,7 +24,7 @@ const REFERENCE_KEYS = new Set([
 const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|pre_animation|initialize|animate|on_entry|on_exit|command|function)/i;
 
 function isDefinitionPath(path: string): boolean {
-  const normalized = path.replaceAll('\\\\', '/').toLowerCase();
+  const normalized = path.replaceAll('\\', '/').toLowerCase();
   const segments = normalized.split('/');
   const folder = segments.length > 1 ? segments[segments.length - 2] : '';
   return new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']).has(folder) ||
@@ -143,7 +143,7 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
           sourceZip.file(path, output);
           changedFiles++;
         }
-      } else if (/\\.(js|mjs|cjs|ts)$/i.test(lower)) {
+      } else if (/\.(js|mjs|cjs|ts)$/i.test(lower)) {
         const original = await file.async('text');
         if (hasDynamicTemplateIdentifierReference(original, idMap)) {
           diagnostics.push(`WARNING DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE [${sourceLabel}:${path}]: A dynamic template literal contains a renamed identifier. AutoBE left that expression unchanged because its runtime value cannot be safely inferred.`);
@@ -153,7 +153,7 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
           sourceZip.file(path, output);
           changedFiles++;
         }
-      } else if (/\\.(mcfunction|molang|material)$/i.test(lower)) {
+      } else if (/\.(mcfunction|molang|material)$/i.test(lower)) {
         const original = await file.async('text');
         const output = rewriteIdentifierTokens(original, idMap);
         if (output !== original) {
