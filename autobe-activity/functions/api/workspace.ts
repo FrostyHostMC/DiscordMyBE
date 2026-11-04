@@ -37,6 +37,25 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
   },
 });
 
+async function discordApiFetch(url: string, init: RequestInit): Promise<Response> {
+  // Discord can briefly rate-limit or return transient gateway errors while several
+  // pack archives are being backed up. Respect Retry-After / retry_after before failing.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const response = await fetch(url, init);
+    if (![429, 500, 502, 503, 504].includes(response.status) || attempt === 2) return response;
+    let delayMs = Number(response.headers.get('retry-after')) * 1000;
+    if (response.status === 429) {
+      try {
+        const body = await response.clone().json() as { retry_after?: number };
+        if (Number.isFinite(body.retry_after)) delayMs = body.retry_after! * 1000;
+      } catch { /* use Retry-After header or bounded fallback */ }
+    }
+    if (!Number.isFinite(delayMs) || delayMs <= 0) delayMs = 500 * (attempt + 1);
+    await new Promise(resolve => setTimeout(resolve, Math.min(Math.max(delayMs, 250), 10000)));
+  }
+  return fetch(url, init);
+}
+
 async function authenticatedUser(request: Request, env: Env): Promise<{ id: string } | Response> {
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
     return json({ error: 'Private workspace access is not configured.' }, 503);
@@ -45,7 +64,7 @@ async function authenticatedUser(request: Request, env: Env): Promise<{ id: stri
   if (!match) return json({ error: 'Discord authentication is required.' }, 401);
 
   try {
-    const meResponse = await fetch('https://discord.com/api/v10/users/@me', {
+    const meResponse = await discordApiFetch('https://discord.com/api/v10/users/@me', {
       headers: { authorization: `Bearer ${match[1]}` },
     });
     if (meResponse.status === 401) return json({ error: 'Discord session expired. Reopen AutoBE.' }, 401);
@@ -53,7 +72,7 @@ async function authenticatedUser(request: Request, env: Env): Promise<{ id: stri
     const me = await meResponse.json() as { id?: string };
     if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
 
-    const memberResponse = await fetch(
+    const memberResponse = await discordApiFetch(
       `https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`,
       { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } },
     );
