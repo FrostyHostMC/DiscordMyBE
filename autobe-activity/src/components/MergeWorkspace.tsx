@@ -647,7 +647,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
         <button
           type="button"
           disabled={selectedPackIds.length === 0}
-          onClick={() => onStartMergeFlow(config)}
+          onClick={() => onStartMergeFlow(config, orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id))}
           className="flex-1 max-w-[200px] py-2.5 rounded-xl bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-40 text-xs font-bold text-white transition-all shadow-[0_0_15px_rgba(118,43,255,0.4)] active:scale-95 flex items-center justify-center gap-1.5"
         >
           <Sparkles className="w-3.5 h-3.5" />
