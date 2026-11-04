@@ -252,35 +252,58 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
     for (const entry of group.entries.slice(1)) {
       if (sameBytes(first.data, entry.data)) continue;
       try {
+        let conflictDetails: string[] = [];
         if (group.kind === 'lang') {
           const values = new Map<string, string>();
           const lines = (text: string) => text.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#') && line.includes('='));
-          for (const line of lines(lang)) { const i = line.indexOf('='); values.set(line.slice(0, i).trim(), line.slice(i + 1)); }
-          const additions: string[] = [];
-          let conflict = false;
-          for (const line of lines(decoder.decode(entry.data))) {
-            const i = line.indexOf('='); const key = line.slice(0, i).trim(), value = line.slice(i + 1);
-            if (values.has(key) && values.get(key) !== value) conflict = true;
-            else if (!values.has(key)) { additions.push(line); values.set(key, value); }
+          for (const line of lines(lang)) {
+            const i = line.indexOf('=');
+            values.set(line.slice(0, i).trim(), line.slice(i + 1));
           }
-          if (conflict) throw new Error('different translation values');
-          if (additions.length) { lang += `${lang.endsWith('\n') ? '' : '\n'}${additions.join('\n')}\n`; changed = true; }
+          const additions: string[] = [];
+          for (const line of lines(decoder.decode(entry.data))) {
+            const i = line.indexOf('=');
+            const key = line.slice(0, i).trim();
+            const value = line.slice(i + 1);
+            if (values.has(key) && values.get(key) !== value) conflictDetails.push(key);
+            else if (!values.has(key)) {
+              additions.push(line);
+              values.set(key, value);
+            }
+          }
+          if (additions.length) {
+            lang += `${lang.endsWith('\n') ? '' : '\n'}${additions.join('\n')}\n`;
+            changed = true;
+          }
         } else {
-          if (!parsedReady) { parsed = JSON.parse(sanitizeJsonString(decoder.decode(first.data))); parsedReady = true; }
+          if (!parsedReady) {
+            parsed = JSON.parse(sanitizeJsonString(decoder.decode(first.data)));
+            parsedReady = true;
+          }
           const other = JSON.parse(sanitizeJsonString(decoder.decode(entry.data)));
           if (group.kind === 'array' && Array.isArray(parsed) && Array.isArray(other)) {
             const fingerprints = new Set(parsed.map((value: any) => JSON.stringify(value)));
-            for (const value of other) if (!fingerprints.has(JSON.stringify(value))) { parsed.push(value); fingerprints.add(JSON.stringify(value)); changed = true; }
+            for (const value of other) {
+              if (!fingerprints.has(JSON.stringify(value))) {
+                parsed.push(value);
+                fingerprints.add(JSON.stringify(value));
+                changed = true;
+              }
+            }
           } else {
             const merged = mergeAdditions(parsed, other);
-            if (merged.conflicts.length) throw new Error(`different values at ${merged.conflicts.slice(0, 4).join(', ')}`);
             parsed = merged.value;
             changed ||= merged.changed;
+            conflictDetails = merged.conflicts;
           }
+        }
+        if (conflictDetails.length) {
+          const backup = preserveConflict(zip, path, entry.original, entry.source);
+          diagnostics.push(`WARNING SHARED_FILE_PARTIAL_CONFLICT [${path}]: Kept compatible additions from ${entry.source}; retained the first values at ${conflictDetails.slice(0, 5).join(', ')} and saved the complete incoming file as ${backup} for review.`);
         }
       } catch (error) {
         const backup = preserveConflict(zip, path, entry.original, entry.source);
-        diagnostics.push(`WARNING SHARED_FILE_CONFLICT [${path}]: Kept the first version active; ${entry.source}'s version was saved as ${backup} for manual review (${error instanceof Error ? error.message : String(error)}).`);
+        diagnostics.push(`WARNING SHARED_FILE_CONFLICT [${path}]: Kept the active version; ${entry.source}'s file was saved as ${backup} for manual review (${error instanceof Error ? error.message : String(error)}).`);
       }
     }
     if (changed) resultBytes = new TextEncoder().encode(group.kind === 'lang' ? lang : JSON.stringify(parsed, null, 2));
