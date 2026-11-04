@@ -16,7 +16,7 @@ import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePat
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
-import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
+import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
@@ -199,7 +199,12 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       let updated = isStructuredText
         ? rewriteIdentifierReferences(rewriteAssetReferences(originalText, assetPathMap), renameMap)
         : originalText;
-      if (isScriptText && renameMap?.size) updated = rewriteStaticScriptIdentifierReferences(updated, renameMap);
+      if (isScriptText && renameMap?.size) {
+        if (hasDynamicTemplateIdentifierReference(updated, renameMap)) {
+          diagnostics.push(`WARNING DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE [${sourceLabel}:${path}]: A dynamic template literal contains a prefixed identifier. AutoBE left that expression unchanged because its runtime value cannot be safely inferred.`);
+        }
+        updated = rewriteStaticScriptIdentifierReferences(updated, renameMap);
+      }
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
