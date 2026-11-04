@@ -89,7 +89,14 @@ export const App: React.FC = () => {
 
   // Settings states
   const [autoMerge, setAutoMerge] = useState<boolean>(true);
-  const [keepOriginals, setKeepOriginals] = useState<boolean>(true);
+  const [keepOriginals, setKeepOriginals] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem('autobe.keepOriginals');
+      return stored === null ? true : stored === 'true';
+    } catch {
+      return true;
+    }
+  });
 
   // Merging runtime states
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
@@ -184,8 +191,13 @@ export const App: React.FC = () => {
   }, [autoMergeTweak]);
 
   useEffect(() => {
-    const t = setTimeout(() => setKeepOriginals(keepOriginalsTweak), 0);
-    return () => clearTimeout(t);
+    try {
+      if (localStorage.getItem('autobe.keepOriginals') === null) {
+        setKeepOriginals(keepOriginalsTweak);
+      }
+    } catch {
+      // Keep the in-memory default when browser storage is unavailable.
+    }
   }, [keepOriginalsTweak]);
 
   // Load device data immediately, then reconcile with the authenticated Discord account.
@@ -463,9 +475,12 @@ export const App: React.FC = () => {
 
       mergeLogger.success('Merge completed successfully', result.outputFileName, packsToMerge.length, packsToMerge.map(p => p.name));
 
-      // Save to IndexedDB
+      // Persist the finished project before optionally removing its source packs.
+      // If project persistence fails, never remove the only reusable source copies.
+      let projectSaved = false;
       try {
         await saveModpackToDB(result);
+        projectSaved = true;
         const updatedModpacks = await getAllModpacksFromDB();
         setMyModpacks(updatedModpacks);
         if (getDiscordAuth()?.token) {
@@ -475,9 +490,37 @@ export const App: React.FC = () => {
           });
         }
       } catch (saveErr) {
-        // The merged file itself is fine — only the history entry failed to save.
         console.error('[Aippy] Could not save merge to history:', describeError(saveErr));
         showToast('Merged OK, but could not save it to your Projects list.');
+      }
+
+      if (!keepOriginals) {
+        if (!projectSaved) {
+          showToast('Original add-ons were kept because the merged project could not be saved.');
+        } else {
+          const sourceIds = [...new Set(packsToMerge.map(pack => pack.id))];
+          try {
+            // Remove cloud copies first so a later workspace sync cannot restore
+            // originals that the user explicitly chose not to retain.
+            if (getDiscordAuth()?.token) {
+              await deleteWorkspaceItemsFromCloud(sourceIds.map(id => ({ type: 'pack' as const, id })));
+            }
+            const removals = await Promise.allSettled(sourceIds.map(id => deletePackFromDB(id)));
+            const failed = removals.filter(item => item.status === 'rejected').length;
+            const remaining = await getAllPacksFromDB();
+            setInstalledPacks(remaining);
+            const remainingIds = new Set(remaining.map(pack => pack.id));
+            setSelectedPackIds(previous => previous.filter(id => remainingIds.has(id)));
+            if (failed > 0) {
+              showToast(`Merged successfully, but ${failed} original add-on(s) could not be removed from this device.`, 9000);
+            } else {
+              showToast(`Merged successfully. Removed ${sourceIds.length} original add-on(s) from your library.`, 6500);
+            }
+          } catch (cleanupError) {
+            console.error('[Merge] Could not remove original source packs:', describeError(cleanupError));
+            showToast(`Merged successfully, but original add-ons were kept because cleanup failed: ${describeError(cleanupError)}`, 9000);
+          }
+        }
       }
 
       setJustCompletedModpack(result);
@@ -1426,7 +1469,15 @@ export const App: React.FC = () => {
                     onToggleKeepOriginals={() => {
                       triggerHaptic(40);
                       handleSoundTap();
-                      setKeepOriginals(!keepOriginals);
+                      setKeepOriginals(previous => {
+                        const next = !previous;
+                        try {
+                          localStorage.setItem('autobe.keepOriginals', String(next));
+                        } catch {
+                          showToast('Could not save this preference on this device.', 6000);
+                        }
+                        return next;
+                      });
                     }}
                     onOpenAbout={openAbout}
                     onOpenToS={() => setScreen('tos')}
