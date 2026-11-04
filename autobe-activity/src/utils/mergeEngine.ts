@@ -365,7 +365,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const versionNums = version.split('.').map(x => parseInt(x, 10) || 0) as [number, number, number];
   const iconBytes = await findFirstPackIcon(packs);
   const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
-  const outputs: MergedOutput[] = [];
+  const bundleParts: MergedOutput[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -457,7 +457,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     const blobData = await rpZip.generateAsync({
       type: 'uint8array'
     });
-    outputs.push({
+    bundleParts.push({
       id: generateUUID(),
       label: 'Resource Pack',
       fileName: 'resource_pack.mcpack',
@@ -667,7 +667,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // Release this pack's in-memory zip as soon as its bytes are generated (lowers peak memory
     // on phones, where the webview is killed if memory gets too high).
     (b as { zip: unknown }).zip = null;
-    outputs.push({
+    bundleParts.push({
       id: generateUUID(),
       label: b.label,
       fileName: b.fileName,
@@ -679,6 +679,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       blob: new Blob([Uint8Array.from(blobData).buffer])
     });
   }
+
+  // Keep component archives private to the bundle when separate downloads are disabled.
+  const outputs: MergedOutput[] = generateSeparatePacks ? bundleParts : [];
 
   // --- Package everything into one .mcaddon ---
   onProgress?.('Resolving conflicts', 70);
@@ -701,7 +704,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
 
   // Compact merge summary embedded in the final .mcaddon for post-merge debugging.
   const conflictEntries = scriptConflicts ? Object.keys(scriptConflicts) : [];
-  const supportId = `AUTOBE-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${packs.length}-${outputs.length}`;
+  const supportId = `AUTOBE-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${packs.length}-${bundleParts.length}`;
   const structuredFindings = mergeDiagnostics.map((message, index) => {
     const match = message.match(/^(SOURCE BASELINE )?(ERROR|WARNING|WARN|INFO)\s+([A-Z0-9_]+)\s+\[(.+?)\]:\s*(.*)$/i);
     return match
@@ -722,7 +725,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       minEngineVersion: pack.minEngineVersion || '',
       scriptVersion: pack.scriptVersion || ''
     })),
-    outputs: outputs.map(output => ({
+    outputs: bundleParts.map(output => ({
       fileName: output.fileName,
       label: output.label,
       type: output.type,
@@ -814,7 +817,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   // needed a second full copy of the modpack in memory and got the app killed on phones.
   // It is built on demand by ensureCombinedBlob() when the user downloads / publishes it.
   const totalCalculatedSize = packs.reduce((sum, p) => sum + (p.fileSize || 10_000_000), 0);
-  const outputsTotal = outputs.reduce((sum, o) => sum + (o.size || 0), 0);
+  const outputsTotal = bundleParts.reduce((sum, o) => sum + (o.size || 0), 0);
   const finalSize = outputsTotal > 0 ? outputsTotal : totalCalculatedSize;
   const result: MergedModpack = {
     id: generateUUID(),
@@ -825,6 +828,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     createdAt: Date.now(),
     description: description || `All-in-one Bedrock Modpack created with AutoBE. Combines ${packs.length} addons.`,
     outputs,
+    ...(generateAddon && !generateSeparatePacks ? { bundleParts } : {}),
     combinedExtras,
     outputFileName: `${modpackName.replace(/\s+/g, '_')}.mcaddon`,
     generateAddon,
@@ -851,7 +855,7 @@ export async function ensureCombinedBlob(
   if (modpack.generateAddon === false) throw new Error('This project was configured for individual .mcpack files only; combined .mcaddon generation is disabled.');
   if (modpack.outputBlob) return modpack.outputBlob;
   const entries: StoreZipEntry[] = [];
-  for (const o of modpack.outputs ?? []) {
+  for (const o of modpack.bundleParts ?? modpack.outputs ?? []) {
     if (o.blob) entries.push({ name: o.fileName, data: o.blob });
   }
   if (entries.length === 0) throw new Error('The merged files are no longer in memory. Please merge again.');
