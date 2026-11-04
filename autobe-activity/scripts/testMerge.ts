@@ -677,9 +677,22 @@ await (async () => {
     "// arsenal:weapon comment should not be rewritten"
   ].join('\n'));
   incoming.file('functions/give_weapon.mcfunction', 'give @s arsenal:weapon 1');
+  incoming.file('animation_controllers/weapon.animation_controllers.json', JSON.stringify({
+    animation_controllers: {
+      'controller.animation.weapon': {
+        states: {
+          default: {
+            transitions: [{
+              equipped: "query.is_item_name_any('slot.weapon.mainhand', 0, 'arsenal:weapon')"
+            }]
+          }
+        }
+      }
+    }
+  }));
   const diagnostics: string[] = [];
   const changed = await applyFeatureRegistry(incoming, first, 'Incoming Arsenal', diagnostics);
-  assert.equal(changed, 6);
+  assert.equal(changed, 7);
   const expected = 'arsenal_autobe_2:weapon';
   const item = JSON.parse(await incoming.file('items/weapon.json')!.async('text'));
   assert.equal(item['minecraft:item'].description.identifier, expected);
@@ -696,6 +709,8 @@ await (async () => {
   assert.ok(script.includes('// arsenal:weapon comment should not be rewritten'));
   const command = await incoming.file('functions/give_weapon.mcfunction')!.async('text');
   assert.ok(command.includes(expected));
+  const controller = JSON.parse(await incoming.file('animation_controllers/weapon.animation_controllers.json')!.async('text'));
+  assert.ok(controller.animation_controllers['controller.animation.weapon'].states.default.transitions[0].equipped.includes(expected));
   assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
   assert.ok(diagnostics.some(message => message.includes('DYNAMIC_SCRIPT_IDENTIFIER_REFERENCE')));
   console.log('✓ feature registry repairs item, recipe, loot-table and attachable Molang references together');
