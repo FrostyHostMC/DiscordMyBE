@@ -217,7 +217,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingRow
               icon={<ShieldCheck className="w-5 h-5 text-[#A855F7]" />}
               title="Retain Source Packs"
-              sub="Keep individual input addons in the library after building modpack"
+              sub="When on, keep imported add-ons. When off, remove them after the merged project is saved."
               right={<SwitchToggle on={keepOriginals} onClick={onToggleKeepOriginals} label="Keep Originals" />}
             />
             <div className="p-3 rounded-xl bg-[#100D18] border border-[#30263F] text-xs text-[#AAA3BB] leading-relaxed">
