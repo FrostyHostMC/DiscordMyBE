@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
-import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -95,6 +95,42 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
   assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
   assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
+});
+
+test('player entity and player animation registration files enter the specialized merge pipeline', () => {
+  assert.equal(isPlayerAnimationStrategyFile('entity/player.entity.json'), true);
+  assert.equal(isPlayerAnimationStrategyFile('entity/player.json'), true);
+  assert.equal(isPlayerAnimationStrategyFile('animation_controllers/player.animation_controllers.json'), true);
+  assert.equal(isPlayerAnimationStrategyFile('animations/player.animation.json'), true);
+  assert.equal(isPlayerAnimationStrategyFile('animation_controllers/custom.animation_controllers.json'), false);
+
+  const merged = mergeJsonForFile('entity/player.entity.json', [
+    {
+      format_version: '1.10.0',
+      'minecraft:client_entity': {
+        description: {
+          identifier: 'minecraft:player',
+          animations: { base_walk: 'animation.base.walk' },
+          scripts: { animate: ['base_walk'] }
+        }
+      }
+    },
+    {
+      format_version: '1.10.0',
+      'minecraft:client_entity': {
+        description: {
+          identifier: 'minecraft:player',
+          animations: { addon_emote: 'animation.addon.emote' },
+          scripts: { animate: ['addon_emote'] }
+        }
+      }
+    }
+  ]);
+  const description = merged['minecraft:client_entity'].description;
+  assert.equal(description.animations.base_walk, 'animation.base.walk');
+  assert.equal(description.animations.addon_emote, 'animation.addon.emote');
+  assert.ok(description.scripts.animate.includes('base_walk'));
+  assert.ok(description.scripts.animate.includes('addon_emote'));
 });
 
 test('player animation/controller files merge named entries instead of last-pack overwrite', () => {
