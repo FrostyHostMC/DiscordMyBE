@@ -143,17 +143,16 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         </span>
       </div>
 
-      {/* Null progress companion: follows the real install, download, or publish transfer. */}
-      {activeTransfer !== null && (
-        <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
-          <NullProgress
-            progress={transferProgress}
-            status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
-            description="Your project is saved in Projects. You can also save the finished modpack directly to your device."
-            compact
-          />
-        </div>
-      )}
+      {/* Null stays on the completed bar, or walks with the real transfer percentage. */}
+      <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
+        <NullProgress
+          progress={activeTransfer === null ? 100 : transferProgress}
+          complete={activeTransfer === null}
+          status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
+          description="Your project is saved in Projects. You can also save the finished modpack directly to your device."
+          compact
+        />
+      </div>
 
       {/* Hero Badge */}
       <div className="flex flex-col items-center text-center my-6">
