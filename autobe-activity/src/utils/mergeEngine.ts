@@ -14,6 +14,7 @@ import { stableUUID } from '@/utils/stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
@@ -48,14 +49,9 @@ const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 
 function isStrategyMergeFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
-  const isPlayerAnimationFile = new Set([
-    'player.animation.json',
-    'player.animation_controllers.json',
-    'player.render_controllers.json'
-  ]).has(base);
   return STRATEGY_MERGE_FILES.has(normalized) ||
     (normalized.startsWith('ui/') && normalized.endsWith('.json')) ||
-    isPlayerAnimationFile;
+    isPlayerAnimationStrategyFile(normalized);
 }
 
 // --- Version utilities -------------------------------------------------
@@ -290,6 +286,15 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
+          } else if (group.kind === 'strategy' && isPlayerAnimationStrategyFile(path)) {
+            // Player animation definitions need their domain-aware merge rules.
+            // Generic conservative merging treats arrays and named definitions
+            // as opaque, dropping independent player registrations.
+            const conservative = mergeAdditions(parsed, other);
+            const specialized = mergeJsonForFile(path, [parsed, other]);
+            changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
+            parsed = specialized;
+            conflictDetails = conservative.conflicts;
           } else {
             const merged = mergeAdditions(parsed, other);
             parsed = merged.value;
