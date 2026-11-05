@@ -17,6 +17,7 @@ import {
   X
 } from 'lucide-react';
 import { MergedModpack, MergedOutput } from '@/types/modpack';
+import { NullProgress } from './NullProgress';
 
 interface MergeCompleteScreenProps {
   modpack: MergedModpack;
@@ -140,6 +141,17 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>{reviewFindings.length ? 'Review Required' : 'Merge Complete'}</span>
         </span>
+      </div>
+
+      {/* Null stays on the completed bar, or walks with the real transfer percentage. */}
+      <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
+        <NullProgress
+          progress={activeTransfer === null ? 100 : transferProgress}
+          complete={activeTransfer === null}
+          status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
+          description="Your project is saved in Projects. You can also save the finished modpack directly to your device."
+          compact
+        />
       </div>
 
       {/* Hero Badge */}
