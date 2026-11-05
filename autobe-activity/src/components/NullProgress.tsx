@@ -16,7 +16,7 @@ export const NullProgress: React.FC<NullProgressProps> = ({
   compact = false
 }) => {
   const value = Math.max(0, Math.min(100, Number.isFinite(progress) ? progress : 0));
-  const finished = complete || value >= 100;
+  const finished = complete;
 
   return (
     <section className={`w-full ${compact ? 'py-2' : 'py-5'}`} aria-label={`Modpack progress: ${Math.round(value)} percent`}>
@@ -73,9 +73,9 @@ export const NullProgress: React.FC<NullProgressProps> = ({
               <g className={finished ? 'null-point' : 'null-arm-b'}>
                 {finished ? (
                   <g>
-                    <path d="M53 54 L61 49 L72 29 L79 31 L76 42 L66 63 L57 68 Z" fill="#10091d" stroke="#4c1d75" strokeWidth="3"/>
-                    <path d="M73 30 L82 27 L81 34 L75 36 Z" fill="url(#null-purple)"/>
-                    <path d="M76 30 L83 28" stroke="#e9d5ff" strokeWidth="3" strokeLinecap="round"/>
+                    <path d="M53 54 L62 59 L73 73 L78 79 L72 85 L62 78 L52 68 Z" fill="#10091d" stroke="#4c1d75" strokeWidth="3"/>
+                    <path d="M76 77 L83 82 L79 87 L73 82 Z" fill="url(#null-purple)"/>
+                    <path d="M78 81 L84 85" stroke="#e9d5ff" strokeWidth="3" strokeLinecap="round"/>
                   </g>
                 ) : <path d="M53 54 L62 59 L73 73 L66 81 L52 68 Z" fill="#10091d" stroke="#3b1763" strokeWidth="3"/>}
               </g>
