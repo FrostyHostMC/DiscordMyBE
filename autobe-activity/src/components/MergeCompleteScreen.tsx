@@ -143,16 +143,15 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
         </span>
       </div>
 
-      {/* Null stays on the completed bar, or walks with the real transfer percentage. */}
-      <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
-        <NullProgress
-          progress={activeTransfer === null ? 100 : transferProgress}
-          complete={activeTransfer === null}
-          status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
-          description="Your project is saved in Projects. You can also save the finished modpack directly to your device."
-          compact
-        />
-      </div>
+      {activeTransfer !== null && (
+        <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
+          <NullProgress
+            progress={transferProgress}
+            status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
+            description="Your modpack is saved in Projects. You can also save it directly to your device."
+          />
+        </div>
+      )}
 
       {/* Hero Badge */}
       <div className="flex flex-col items-center text-center my-6">
@@ -324,16 +323,15 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
 
       {/* Action Buttons */}
       <div className="flex flex-col sm:flex-row gap-2.5 pb-2">
-        {modpack.generateAddon !== false && <button
+        {modpack.generateAddon !== false && activeTransfer !== 'install' && <button
           type="button"
           onClick={onInstallToMinecraft}
           disabled={activeTransfer !== null}
-          aria-label={activeTransfer === 'install' ? `${transferStatus} ${transferProgress}%` : 'Install Modpack'}
+          aria-label="Install Modpack"
           className="relative overflow-hidden flex-1 min-w-0 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#762BFF] hover:bg-[#853CFF] text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] border border-[#A855F7]/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait transition-colors"
         >
-          {activeTransfer === 'install' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-[#A855F7]/60 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
           <span className="relative z-10 flex items-center justify-center gap-2 min-w-0">
-            {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'} {transferProgress}%</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
+            <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>
           </span>
         </button>}
 
@@ -395,7 +393,6 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             <div className="flex gap-2">
               <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="flex-1 px-4 py-2.5 rounded-xl bg-[#15111F] border border-[#30263F] text-xs font-semibold text-[#AAA3BB] disabled:opacity-40">Cancel</button>
               <button type="button" disabled={activeTransfer !== null} onClick={async () => { setPublishError(null); const result = await onPublish?.(publishIcon); if (typeof result === 'string' && result) setPublishError(result); }} className="relative overflow-hidden flex-1 min-w-0 px-4 py-2.5 rounded-xl bg-[#10B981] hover:bg-[#059669] text-xs font-bold text-white disabled:opacity-70 disabled:cursor-wait inline-flex items-center justify-center gap-2 whitespace-nowrap">
-                {activeTransfer === 'publish' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-emerald-300/50 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
                 <span className="relative z-10 inline-flex items-center justify-center gap-2 min-w-0">
                   {activeTransfer === 'publish' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Publishing'} {transferProgress}%</span></> : <span>Publish modpack</span>}
                 </span>
