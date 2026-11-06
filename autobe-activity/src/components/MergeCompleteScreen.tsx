@@ -327,11 +327,11 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           type="button"
           onClick={onInstallToMinecraft}
           disabled={activeTransfer !== null}
-          aria-label={activeTransfer === 'install' ? `${transferStatus} ${transferProgress}%` : 'Install Modpack'}
+          aria-label="Install Modpack"
           className="relative overflow-hidden flex-1 min-w-0 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#762BFF] hover:bg-[#853CFF] text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] border border-[#A855F7]/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait transition-colors"
         >
           <span className="relative z-10 flex items-center justify-center gap-2 min-w-0">
-            {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'}...</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
+            <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>
           </span>
         </button>}
 
