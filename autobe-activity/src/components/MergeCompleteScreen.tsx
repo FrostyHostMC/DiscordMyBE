@@ -17,7 +17,6 @@ import {
   X
 } from 'lucide-react';
 import { MergedModpack, MergedOutput } from '@/types/modpack';
-import { NullProgress } from './NullProgress';
 
 interface MergeCompleteScreenProps {
   modpack: MergedModpack;
@@ -141,17 +140,6 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <CheckCircle2 className="w-3.5 h-3.5" />
           <span>{reviewFindings.length ? 'Review Required' : 'Merge Complete'}</span>
         </span>
-      </div>
-
-      {/* Null stays on the completed bar, or walks with the real transfer percentage. */}
-      <div className="my-3 rounded-2xl border border-[#65429a]/70 bg-[#100D18] px-3 sm:px-5">
-        <NullProgress
-          progress={activeTransfer === null ? 100 : transferProgress}
-          complete={activeTransfer === null}
-          status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
-          description="Your project is saved in Projects. You can also save the finished modpack directly to your device."
-          compact
-        />
       </div>
 
       {/* Hero Badge */}
@@ -331,9 +319,8 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           aria-label={activeTransfer === 'install' ? `${transferStatus} ${transferProgress}%` : 'Install Modpack'}
           className="relative overflow-hidden flex-1 min-w-0 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-[#762BFF] hover:bg-[#853CFF] text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] border border-[#A855F7]/40 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-wait transition-colors"
         >
-          {activeTransfer === 'install' && <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-[#A855F7]/60 transition-[width] duration-200" style={{ width: `${transferProgress}%` }} />}
           <span className="relative z-10 flex items-center justify-center gap-2 min-w-0">
-            {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'} {transferProgress}%</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
+            {activeTransfer === 'install' ? <><Loader2 className="w-4 h-4 shrink-0 animate-spin" /><span className="truncate">{transferStatus || 'Installing'}...</span></> : <><Download className="w-4 h-4 shrink-0" /><span>Install Modpack</span></>}
           </span>
         </button>}
 
