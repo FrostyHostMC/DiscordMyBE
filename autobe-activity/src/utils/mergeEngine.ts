@@ -587,8 +587,13 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         // A stale or incorrectly cased manifest path may still identify a
         // single unambiguous script file. Never guess when multiple candidates exist.
         if (!resolvedEntry && files.length === 1) resolvedEntry = files[0][0];
-        if (!resolvedEntry) {
-          const available = files.slice(0, 8).map(([path]) => path).join(', ') || 'no JavaScript files found';
+        if (!resolvedEntry && files.length === 0) {
+          // Some behavior packs contain valid data/functions but ship a stale
+          // script module declaration with no JavaScript payload. Keep all pack
+          // content and downgrade this to a warning; do not abort the merge.
+          mergeDiagnostics.push(`WARNING SCRIPT_ENTRY_MISSING [${pack.name}]: Manifest declares "${entry || '(missing)'}", but this archive contains no JavaScript files. The behavior data will still be merged; no script module will be emitted for this pack.`);
+        } else if (!resolvedEntry) {
+          const available = files.slice(0, 8).map(([path]) => path).join(', ');
           throw new Error(`Script entry "${entry || '(missing)'}" could not be resolved in "${pack.name}". Available script files: ${available}. The original pack was not modified.`);
         }
         if (resolvedEntry !== entry) {
@@ -605,7 +610,15 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       if (isScriptGroup && entry) scriptEntries.push(relocateScripts ? scriptModuleOutputPath(slug, entry) : entry);
     }
     writeAccum(bpZip, accum, mergeDiagnostics);
-    if (type === 'behavior_script') {
+    // A script group can contain packs whose manifests declare scripts but
+    // whose archives contain no JavaScript payload. If none of the group
+    // contributed a resolvable entry point, emit a normal data-only BP.
+    const outputType = type === 'behavior_script' && scriptEntries.length === 0 ? 'behavior_data' : type;
+    if (type === 'behavior_script' && outputType === 'behavior_data') {
+      sourceModuleDeps.clear();
+      mergeDiagnostics.push('WARNING SCRIPT_GROUP_EMPTY: No valid JavaScript entry points were found in this script group. Preserved its behavior data as a data-only pack.');
+    }
+    if (outputType === 'behavior_script') {
       const repairedScripts = await guardUnavailableEventSubscriptions(bpZip, mergeDiagnostics);
       if (repairedScripts) mergeDiagnostics.push(`INFO SCRIPT_COMPATIBILITY_REPAIRS: Applied ${repairedScripts} generic compatibility repair(s) to merged script files.`);
     }
@@ -617,20 +630,20 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // A lone script keeps its original path and contents. Multiple scripts need
     // one entry point, so preserve their relative trees under separate folders.
     let scriptEntry = scriptEntries[0];
-    if (type === 'behavior_script' && relocateScripts) {
+    if (outputType === 'behavior_script' && relocateScripts) {
       const imports = scriptEntries.map(entry => `import './${entry.replace(/^scripts\//, '')}';`).join('\n');
       scriptEntry = 'scripts/Stonebyte.js';
       bpZip.file(scriptEntry, `// AutoBE combined script entry\n${imports}\n`);
       mergeDiagnostics.push('INFO SCRIPT_PATHS_RELOCATED: Multiple script packs share an output; their script folders were separated while script contents were preserved. Review script references to resources outside those folders.');
     }
-    const label = type === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
+    const label = outputType === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       groupPacks.map(p => p.minEngineVersion || ''),
       mergeDiagnostics,
       label
     );
-    const fileName = type === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
+    const fileName = outputType === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
 
     // Dependencies: every BP depends on the shared RP
     const dependencies: any[] = [];
@@ -653,7 +666,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       modules,
       dependencies
     };
-    if (type === 'behavior_script') {
+    if (outputType === 'behavior_script') {
       modules.push({
         type: 'script',
         language: 'javascript',
@@ -670,15 +683,15 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     }
     if (sourceCapabilities.size) manifest.capabilities = [...sourceCapabilities];
     bpZip.file('manifest.json', JSON.stringify(manifest, null, 2));
-    const achievementsDisabled = type === 'behavior_script' || groupPacks.some(p => p.hasExperimental);
+    const achievementsDisabled = outputType === 'behavior_script' || groupPacks.some(p => p.hasExperimental);
 
     // Blob generation is deferred until cross-group unification has run.
     builtBps.push({
       zip: bpZip,
       label,
       fileName,
-      type,
-      scriptMajor: major,
+      type: outputType,
+      scriptMajor: outputType === 'behavior_script' ? major : undefined,
       packCount: groupPacks.length,
       achievementsDisabled
     });
