@@ -73,7 +73,7 @@ const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/mai
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
 assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, scriptB].sort());
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
-assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import\(/);
+assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/presets/test.json'));
 assert.equal(await rp.file('entity/player.entity.json')!.async('text'), player);
 const materials = JSON.parse(sanitizeJsonString(await rp.file('materials/entity.material')!.async('text')));
@@ -116,7 +116,9 @@ assert.equal(await (await JSZip.loadAsync(overlay)).file('ui/sample.json')!.asyn
 console.log('✓ selected subpack overrides the base regardless of archive order');
 
 const missing = await makePack('Behavior Pack', 'Missing entry', {}, '2.0.0');
-await assert.rejects(executeMergePacks([missing], { modpackName: 'Missing' }), /Missing script entry/);
+const missingResult = await executeMergePacks([missing], { modpackName: 'Missing' });
+assert.ok(missingResult.outputs?.some(output => output.type === 'behavior_data'), 'a stale script declaration without JavaScript must preserve data as a data-only pack');
+assert.ok(missingResult.combinedExtras?.diagnosticsText?.includes('SCRIPT_ENTRY_MISSING'), 'the missing entry must be reported clearly');
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');
