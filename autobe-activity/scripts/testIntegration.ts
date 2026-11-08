@@ -49,7 +49,8 @@ function archive(name: string, content: string): Uint8Array {
   return result;
 }
 
-const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","scripts":{"initialize":["variable.is_first_person = query.is_first_person;"]}}}}';
+const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
+const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
 const scriptB = 'world.afterEvents.playerSpawn.subscribe(event => console.log("handbook"));';
 const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', '__brarchive/cameras/presets.brarchive': archive('test.json', '{"preset":true}') }, '2.7.0');
@@ -61,6 +62,7 @@ const rpA = await makePack('Resource Pack', 'First RP', {
   'textures/item_texture.json': '{"texture_data":{"first":{"textures":"textures/custom/gem"}}}'
 });
 const rpB = await makePack('Resource Pack', 'Second RP', {
+  'entity/player.entity.json': playerOverlay,
   'materials/entity.material': '{"materials":{"second":{}}}',
   'textures/custom/gem.png': new Uint8Array([2]),
   'textures/item_texture.json': '{"texture_data":{"second":{"textures":"textures/custom/gem"}}}'
@@ -75,7 +77,12 @@ assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('te
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
 assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/presets/test.json'));
-assert.equal(await rp.file('entity/player.entity.json')!.async('text'), player);
+const mergedPlayer = JSON.parse(await rp.file('entity/player.entity.json')!.async('text'));
+const playerDescription = mergedPlayer['minecraft:client_entity'].description;
+assert.equal(playerDescription.animations.base_walk, 'animation.base.walk');
+assert.equal(playerDescription.animations.addon_emote, 'animation.addon.emote');
+assert.ok(playerDescription.scripts.animate.includes('base_walk'));
+assert.ok(playerDescription.scripts.animate.includes('addon_emote'));
 const materials = JSON.parse(sanitizeJsonString(await rp.file('materials/entity.material')!.async('text')));
 assert.deepEqual(Object.keys(materials.materials).sort(), ['first', 'second']);
 const atlas = JSON.parse(await rp.file('textures/item_texture.json')!.async('text'));
