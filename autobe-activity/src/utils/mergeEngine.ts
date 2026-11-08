@@ -1,6 +1,6 @@
 import assetsData from '../config/assets';
 import JSZip from 'jszip';
-import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
+import { buildStoreZip, type StoreZipEntry } from './storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
 import { generateUUID, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
