@@ -1,4 +1,4 @@
-import assetsData from "@/config/assets";
+import assetsData from '../config/assets';
 import JSZip from 'jszip';
 import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
@@ -10,7 +10,7 @@ import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { scriptModuleOutputPath } from './scriptNamespacing';
-import { stableUUID } from '@/utils/stableUuid';
+import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
