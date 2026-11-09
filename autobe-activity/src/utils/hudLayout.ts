@@ -112,10 +112,10 @@ function isFullScreenParent(value: any): boolean {
 
 function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
   const result: HudCandidate[] = [];
-  const visit = (value: any): void => {
+  const visit = (value: any, key = ''): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      value.forEach(visit);
+      value.forEach(item => visit(item));
       return;
     }
     if (Array.isArray(value.modifications)) {
@@ -129,7 +129,10 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             // Child offsets are relative to their parent. Only move controls
             // inserted into a statically full-screen parent; nested panels need
             // their own coordinate system and must not be guessed.
-            if (!isFullScreenParent(value)) continue;
+            // The canonical hud_screen.json root_panel inherits the screen-sized
+            // hud_content parent in Mojang's UI tree even when it omits size.
+            // Other parents must explicitly prove their full-screen dimensions.
+            if (key !== 'root_panel' && !isFullScreenParent(value)) continue;
             const target = reference.split('@').pop() || reference;
             const controlName = target.split('.').pop() || target;
             const definition = definitions.map(file => findDefinition(file, controlName)).find(Boolean) || {};
@@ -151,7 +154,7 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
         }
       }
     }
-    for (const child of Object.values(value)) visit(child);
+    for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
   };
   visit(hud);
   return result;
