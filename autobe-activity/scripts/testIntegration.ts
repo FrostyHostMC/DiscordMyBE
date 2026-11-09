@@ -98,6 +98,31 @@ assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
 
+// Real production-path regression: independent UI files and HUD patches from
+// separate packs must both survive the resource-pack merge.
+const uiPackA = await makePack('Resource Pack', 'HUD Coordinates', {
+  'ui/_ui_defs.json': JSON.stringify({ ui_defs: ['ui/coordinates.json'] }),
+  'ui/coordinates.json': JSON.stringify({ coordinates_panel: { type: 'panel', controls: [{ 'coords@hud.coords': {} }], bindings: [{ binding_name: '#position' }] } }),
+  'ui/hud_screen.json': JSON.stringify({ root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'coordinates@hud.coordinates_panel': {} }] }] } })
+});
+const uiPackB = await makePack('Resource Pack', 'HUD Weapon', {
+  'ui/_ui_defs.json': JSON.stringify({ ui_defs: ['ui/weapon.json'] }),
+  'ui/weapon.json': JSON.stringify({ weapon_panel: { type: 'panel', controls: [{ 'ammo@hud.ammo': {} }], bindings: [{ binding_name: '#ammo' }] } }),
+  'ui/hud_screen.json': JSON.stringify({ root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'weapon@hud.weapon_panel': {} }] }] } })
+});
+const uiMerged = await executeMergePacks([uiPackA, uiPackB], { modpackName: 'UI Compatibility' });
+const uiRp = await JSZip.loadAsync(uiMerged.outputs!.find(output => output.type === 'resource')!.blob!);
+const uiDefs = JSON.parse(await uiRp.file('ui/_ui_defs.json')!.async('text'));
+assert.deepEqual(uiDefs.ui_defs.sort(), ['ui/coordinates.json', 'ui/weapon.json']);
+const hud = JSON.parse(await uiRp.file('ui/hud_screen.json')!.async('text'));
+assert.equal(hud.root_panel.modifications.length, 2);
+const coordsUi = JSON.parse(await uiRp.file('ui/coordinates.json')!.async('text'));
+const weaponUi = JSON.parse(await uiRp.file('ui/weapon.json')!.async('text'));
+assert.equal(coordsUi.coordinates_panel.controls.length, 1);
+assert.equal(weaponUi.weapon_panel.controls.length, 1);
+assert.ok(!uiMerged.combinedExtras?.diagnosticsText?.includes('MISSING_UI_DEFINITION_FILE'));
+console.log('✓ independent HUD additions, UI definitions and custom UI files survive the complete resource-pack merge');
+
 // Conflict-screen Keep A / Keep B must select the winning definition rather
 // than allowing the later generic merge to combine the discarded definition.
 const keepA = await makePack('Behavior Pack', 'Keep A', {
