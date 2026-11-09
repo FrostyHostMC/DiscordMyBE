@@ -80,6 +80,28 @@ await (async () => {
   console.log('✓ registered UI files outside ui/ are discovered and merged with UI-aware semantics');
 })();
 
+test('multiple chest-screen UI add-ons retain each registered container screen modification', () => {
+  const merged = mergeJsonForFile('ui/chest_screen.json', [
+    { namespace: 'chest', small_chest_screen: {
+      '$temp_container_title|default': '$container_title',
+      modifications: [{ array_name: 'variables', operation: 'insert_back', value: [
+        { requires: "($temp_container_title = 'fixture:first')", '$screen_content': 'first.panel' }
+      ] }]
+    } },
+    { namespace: 'chest', small_chest_screen: {
+      '$temp_container_title|default': '$container_title',
+      modifications: [{ array_name: 'variables', operation: 'insert_back', value: [
+        { requires: "($temp_container_title = 'fixture:second')", '$screen_content': 'second.panel' }
+      ] }]
+    } }
+  ]);
+  const modifications = merged.small_chest_screen.modifications;
+  assert.equal(modifications.length, 2);
+  const conditions = modifications.flatMap((entry: any) => entry.value.map((item: any) => item.requires));
+  assert.ok(conditions.includes("($temp_container_title = 'fixture:first')"));
+  assert.ok(conditions.includes("($temp_container_title = 'fixture:second')"));
+});
+
 test('shared animation registries and item catalogs are recognized for strategy merging', () => {
   assert.equal(isAnimationRegistryStrategyFile('render_controllers/translucence.json'), true);
   assert.equal(isAnimationRegistryStrategyFile('animations/mobs/dragon.animation.json'), true);
