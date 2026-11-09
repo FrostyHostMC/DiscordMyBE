@@ -86,6 +86,28 @@ export function sanitizeJsonString(raw: string): string {
   return output;
 }
 
+/** Normalize a UI registration path relative to the resource-pack root. */
+export function normalizeRegisteredUiPath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').toLowerCase();
+}
+
+/** Read custom UI paths from every _ui_defs.json in a resource-pack archive. */
+export async function collectRegisteredUiPathsFromZip(zip: JSZip): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const [path, file] of Object.entries(zip.files)) {
+    if (file.dir || path.split('/').pop()?.toLowerCase() !== '_ui_defs.json') continue;
+    try {
+      const data = JSON.parse(sanitizeJsonString(await file.async('text')));
+      for (const entry of Array.isArray(data?.ui_defs) ? data.ui_defs : []) {
+        if (typeof entry === 'string' && entry.trim()) paths.add(normalizeRegisteredUiPath(entry.trim()));
+      }
+    } catch {
+      // Invalid registrations are reported by archive validation; do not guess paths.
+    }
+  }
+  return paths;
+}
+
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     try {
