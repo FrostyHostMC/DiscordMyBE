@@ -101,7 +101,11 @@ console.log('✓ real merge preserves scripts, player view, camera paths, materi
 const beta = await makePack('Behavior Pack', 'Beta', { 'scripts/main.js': '// beta' }, '2.9.0-beta');
 const plan = buildMergePlan([bpA, beta]);
 assert.equal(plan.scriptGroups.length, 2);
-assert.notEqual(plan.scriptGroups[0].fileName, plan.scriptGroups[1].fileName);
+assert.notEqual(plan.scriptGroups[0].beta, plan.scriptGroups[1].beta);
+assert.notEqual(
+  `behavior_pack_v${plan.scriptGroups[0].major}${plan.scriptGroups[0].beta ? '_preview' : ''}.mcpack`,
+  `behavior_pack_v${plan.scriptGroups[1].major}${plan.scriptGroups[1].beta ? '_preview' : ''}.mcpack`
+);
 console.log('✓ stable and beta Script API tracks stay in separate outputs');
 
 const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"a":{}}}}';
