@@ -63,7 +63,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         const source = await script.file.async('text');
         if (/\b(?:CustomForm|MessageBox|ObservableString|ObservableNumber|ObservableBoolean|ObservableUIRawMessage)\b/.test(source) &&
             /@minecraft\/server-ui/.test(source)) usesDdui = true;
-        if (/\.multiButtonRow\s*\(|\.button3WithOptions\s*\(/.test(source)) usesPreviewDdui = true;
+        if (/@minecraft\/server-ui/.test(source) && /\.multiButtonRow\s*\(|\.button3WithOptions\s*\(/.test(source)) usesPreviewDdui = true;
       } catch { /* archive read failures are reported by other validation passes */ }
     }
     const versionAtLeast = (value: unknown, minimum: [number, number, number]) => {
