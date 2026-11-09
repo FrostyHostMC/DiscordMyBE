@@ -302,17 +302,20 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
         let conflictDetails: string[] = [];
         const uiConflictDetails: string[] = [];
         if (group.kind === 'langlist') {
-          const baseValues = Array.isArray(JSON.parse(decoder.decode(first.data))) ? JSON.parse(decoder.decode(first.data)) : [];
+          if (!languageCodes) {
+            const baseValues = JSON.parse(decoder.decode(first.data));
+            if (!Array.isArray(baseValues)) throw new Error('base languages.json must contain an array of language codes');
+            languageCodes = baseValues.filter((value: unknown) => typeof value === 'string');
+          }
           const incomingValues = JSON.parse(decoder.decode(entry.data));
           if (!Array.isArray(incomingValues)) throw new Error('languages.json must contain an array of language codes');
-          const mergedValues = [...baseValues];
-          const known = new Set(baseValues.map((value: unknown) => String(value).toLowerCase()));
+          const known = new Set(languageCodes.map(value => value.trim().toLowerCase()));
           for (const value of incomingValues) {
             if (typeof value !== 'string' || !value.trim()) continue;
             const key = value.trim().toLowerCase();
-            if (!known.has(key)) { mergedValues.push(value); known.add(key); changed = true; }
+            if (!known.has(key)) { languageCodes.push(value); known.add(key); changed = true; }
           }
-          parsed = mergedValues;
+          parsed = languageCodes;
           parsedReady = true;
         } else if (group.kind === 'lang') {
           const values = new Map<string, string>();
