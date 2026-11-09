@@ -277,6 +277,7 @@ export function isAnimationRegistryStrategyFile(fileName: string): boolean {
 export function isCraftingItemCatalogStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   return normalized === 'crafting_item_catalog.json' ||
+    normalized === 'item_catalog/crafting_item_catalog.json' ||
     normalized.endsWith('/item_catalog/crafting_item_catalog.json');
 }
 
