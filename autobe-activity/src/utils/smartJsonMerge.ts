@@ -184,6 +184,13 @@ function mergeHudModifications(...lists: any[][]): any[] {
  * animation/controller registries. Collect these before ZIP writes so a later
  * pack cannot silently replace an earlier registration file.
  */
+/** Files whose semantics require the dedicated Bedrock JSON-UI merger. */
+export function isUiMergeStrategyFile(fileName: string): boolean {
+  const normalized = fileName.replace(/\\/g, '/').toLowerCase();
+  const base = normalized.substring(normalized.lastIndexOf('/') + 1);
+  return normalized.startsWith('ui/') && (base === 'hud_screen.json' || base === '_ui_defs.json');
+}
+
 export function isPlayerAnimationStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
