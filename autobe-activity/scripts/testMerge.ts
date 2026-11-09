@@ -79,6 +79,19 @@ test('HUD merge preserves ordered patches and removes only exact duplicates', ()
   JSON.parse(JSON.stringify(merged));
 });
 
+test('HUD and UI definition strategy merge preserves independent registrations', () => {
+  const hud = mergeJsonForFile('ui/hud_screen.json', [
+    { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'first@hud.first': {} }] }] } },
+    { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'second@hud.second': {} }] }] } },
+  ]);
+  assert.equal(hud.screen.modifications.length, 2);
+  const defs = mergeJsonForFile('ui/_ui_defs.json', [
+    { ui_defs: ['ui/first.json'] },
+    { ui_defs: ['ui/second.json', 'ui/first.json'] },
+  ]);
+  assert.deepEqual(defs.ui_defs, ['ui/first.json', 'ui/second.json']);
+});
+
 test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { panel: { visible: 'query.is_first_person', text: 'base label' } } },
