@@ -93,6 +93,26 @@ test('all UI JSON files preserve independent controls and bindings', () => {
   assert.equal(collision.panel.type, 'panel', 'later conflicting UI scalar must not replace the active definition');
   assert.equal(collision.panel.texture, 'textures/ui/first');
   assert.deepEqual(collision.panel.controls[0]['same@hud.control'], { offset: [0, 0], size: [20, 20] });
+  const uiConflicts: string[] = [];
+  const conflicted = mergeJsonForFile('ui/common.json', [
+    { panel: { texture: 'textures/ui/first' } },
+    { panel: { texture: 'textures/ui/second' } },
+  ], uiConflicts);
+  assert.equal(conflicted.panel.texture, 'textures/ui/first');
+  assert.ok(uiConflicts.some(path => path.includes('texture')));
+  const hudConflicts: string[] = [];
+  mergeJsonForFile('ui/hud_screen.json', [
+    { screen: { scale: 1, modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'a' }] } },
+    { screen: { scale: 2, modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'b' }] } },
+  ], hudConflicts);
+  assert.ok(hudConflicts.some(path => path.includes('scale')), 'HUD scalar collisions must be reported');
+
+});
+
+test('subpack UI paths are routed through the UI-specific strategy', () => {
+  const { isUiMergeStrategyFile } = require('../src/utils/smartJsonMerge.ts');
+  assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/hud_screen.json'), true);
+  assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/common.json'), true);
 });
 
 test('HUD and UI definition strategy merge preserves independent registrations', () => {
