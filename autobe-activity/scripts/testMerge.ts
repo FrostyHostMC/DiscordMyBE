@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
+import { sanitizeJsonString, detectConflicts, parseAddonArchive, collectRegisteredUiPathsFromZip } from '../src/utils/addonParser.ts';
+import { applySubpackSelection } from '../src/utils/subpackProcessor.ts';
 import { mergeJsonForFile, isUiMergeStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
@@ -20,6 +21,86 @@ function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+await (async () => {
+  const source = new JSZip();
+  source.file('manifest.json', JSON.stringify({
+    format_version: 2,
+    header: { name: 'Subpack UI Fixture', uuid: '11111111-1111-4111-8111-111111111111', version: [1, 0, 0], min_engine_version: [1, 26, 0] },
+    modules: [{ type: 'resources', uuid: '22222222-2222-4222-8222-222222222222', version: [1, 0, 0] }],
+    subpacks: [
+      { folder_name: 'fallenmarble', name: 'Fallen Marble UI', memory_tier: 0 },
+      { folder_name: 'normal', name: 'Normal UI', memory_tier: 1 }
+    ]
+  }));
+  source.file('ui/_ui_defs.json', JSON.stringify({ ui_defs: ['ui/custom_screen.json'] }));
+  source.file('ui/custom_screen.json', JSON.stringify({ namespace: 'fixture', screen: { type: 'panel' } }));
+  source.file('textures/ui/base.png', new Uint8Array([1]));
+  source.file('subpacks/fallenmarble/textures/ui/frame.png', new Uint8Array([2]));
+  source.file('subpacks/normal/textures/ui/frame.png', new Uint8Array([3]));
+  const sourceBlob = await source.generateAsync({ type: 'blob' });
+  const parsed = await parseAddonArchive(sourceBlob, 'subpack-ui.mcpack');
+  assert.equal(parsed.packs.length, 1);
+  assert.deepEqual(parsed.packs[0].subpacks?.map(item => item.folder), ['fallenmarble', 'normal'],
+    'standard folder_name entries must be recognized so the user can choose a variant');
+  const selected = await applySubpackSelection(parsed.packs[0].fileBlob!, 'fallenmarble');
+  const selectedZip = await JSZip.loadAsync(selected);
+  assert.ok(selectedZip.file('textures/ui/frame.png'), 'selected variant UI assets must be flattened to the pack root');
+  assert.equal((await selectedZip.file('textures/ui/frame.png')!.async('uint8array'))[0], 2);
+  assert.equal((await selectedZip.file('textures/ui/base.png')!.async('uint8array'))[0], 1);
+  assert.equal(selectedZip.file('subpacks/normal/textures/ui/frame.png'), null, 'unselected variant must not leak into output');
+  const manifest = JSON.parse(await selectedZip.file('manifest.json')!.async('text'));
+  assert.equal(manifest.subpacks, undefined, 'selected output must not prompt again');
+  await assert.rejects(
+    () => applySubpackSelection(parsed.packs[0].fileBlob!, 'missing_variant'),
+    /Selected subpack "missing_variant" was not found/,
+    'a missing requested variant must fail instead of silently substituting a different UI pack'
+  );
+  console.log('✓ standard Bedrock folder_name subpacks are detected and selected UI assets are retained');
+})();
+
+await (async () => {
+  const registryZip = new JSZip();
+  registryZip.file('ui/_ui_defs.json', JSON.stringify({
+    ui_defs: ['custom_screens/menu.json', 'ui/common_controls.json', './ui/relative_screen.json']
+  }));
+  const registered = await collectRegisteredUiPathsFromZip(registryZip);
+  assert.ok(registered.has('custom_screens/menu.json'),
+    'custom UI definitions outside the ui/ folder must be discovered');
+  assert.ok(registered.has('ui/common_controls.json'));
+  assert.ok(registered.has('ui/relative_screen.json'));
+
+  const merged = mergeJsonForFile('custom_screens/menu.json', [
+    { namespace: 'fixture', first_panel: { type: 'panel', controls: [{ first_button: { type: 'button' } }] } },
+    { namespace: 'fixture', second_panel: { type: 'panel', controls: [{ second_button: { type: 'button' } }] } }
+  ], [], true);
+  assert.ok(merged.first_panel);
+  assert.ok(merged.second_panel,
+    'registered custom UI files must use the UI merger even when they live outside ui/');
+  console.log('✓ registered UI files outside ui/ are discovered and merged with UI-aware semantics');
+})();
+
+test('multiple chest-screen UI add-ons retain each registered container screen modification', () => {
+  const merged = mergeJsonForFile('ui/chest_screen.json', [
+    { namespace: 'chest', small_chest_screen: {
+      '$temp_container_title|default': '$container_title',
+      modifications: [{ array_name: 'variables', operation: 'insert_back', value: [
+        { requires: "($temp_container_title = 'fixture:first')", '$screen_content': 'first.panel' }
+      ] }]
+    } },
+    { namespace: 'chest', small_chest_screen: {
+      '$temp_container_title|default': '$container_title',
+      modifications: [{ array_name: 'variables', operation: 'insert_back', value: [
+        { requires: "($temp_container_title = 'fixture:second')", '$screen_content': 'second.panel' }
+      ] }]
+    } }
+  ]);
+  const modifications = merged.small_chest_screen.modifications;
+  assert.equal(modifications.length, 2);
+  const conditions = modifications.flatMap((entry: any) => entry.value.map((item: any) => item.requires));
+  assert.ok(conditions.includes("($temp_container_title = 'fixture:first')"));
+  assert.ok(conditions.includes("($temp_container_title = 'fixture:second')"));
+});
 
 test('shared animation registries and item catalogs are recognized for strategy merging', () => {
   assert.equal(isAnimationRegistryStrategyFile('render_controllers/translucence.json'), true);

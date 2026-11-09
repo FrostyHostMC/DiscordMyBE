@@ -2,7 +2,7 @@ import assetsData from '../config/assets';
 import JSZip from 'jszip';
 import { buildStoreZip, type StoreZipEntry } from './storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
-import { generateUUID, sanitizeJsonString } from './addonParser';
+import { generateUUID, sanitizeJsonString, collectRegisteredUiPathsFromZip, normalizeRegisteredUiPath } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
 import { resolveTargetEngineVersion } from './targetEngine';
 import { selectMergeOutputs } from './outputOptions';
@@ -147,7 +147,7 @@ export function formatPlanSummary(plan: MergePlan): string {
 
 // --- Zip merge helpers -------------------------------------------------
 
-type SharedKind = 'array' | 'strategy' | 'deep' | 'lang';
+type SharedKind = 'array' | 'strategy' | 'deep' | 'lang' | 'ui';
 interface SharedEntry { data: Uint8Array; original: Uint8Array; source: string; }
 interface MergeAccum {
   shared: Map<string, { kind: SharedKind; entries: SharedEntry[] }>;
@@ -155,6 +155,21 @@ interface MergeAccum {
 }
 function newAccum(): MergeAccum {
   return { shared: new Map(), writtenBinaryPaths: new Set() };
+}
+
+/** Build one union before merging so a custom UI file is strategy-merged even
+ * when its first provider does not register it but a later pack does. */
+async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const pack of packs) {
+    if (!pack.fileBlob) continue;
+    const zip = await JSZip.loadAsync(pack.fileBlob);
+    await expandBrarchiveFiles(zip);
+    const packPaths = await collectRegisteredUiPathsFromZip(zip);
+    for (const path of packPaths) paths.add(path);
+    zip.files = {} as typeof zip.files;
+  }
+  return paths;
 }
 
 /** Alternative paths are only safe for definitions which Bedrock loads by ID. */
@@ -222,7 +237,7 @@ function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePac
   return false;
 }
 
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = []): Promise<void> {
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = [], registeredUiPaths: Set<string> = new Set()): Promise<void> {
   const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
@@ -254,8 +269,11 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       }
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
+    const normalizedOutputPath = normalizeRegisteredUiPath(outPath);
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
-      : isStrategyMergeFile(lower) ? 'strategy' : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
+      : isStrategyMergeFile(lower) ? 'strategy'
+      : registeredUiPaths.has(normalizedOutputPath) ? 'ui'
+      : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
       : lower.endsWith('.lang') ? 'lang' : undefined;
     if (sharedKind) {
       const group = accum.shared.get(outPath) || { kind: sharedKind, entries: [] };
@@ -338,12 +356,12 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
-          } else if (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isAnimationRegistryStrategyFile(path) || isCraftingItemCatalogStrategyFile(path) || isUiMergeStrategyFile(path))) {
+          } else if (group.kind === 'ui' || (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isAnimationRegistryStrategyFile(path) || isCraftingItemCatalogStrategyFile(path) || isUiMergeStrategyFile(path)))) {
             // Player registrations and Bedrock JSON-UI entry points have
             // ordered/domain-specific semantics. In particular, HUD patches
             // and ui_defs registrations must use their dedicated merger;
             // generic object merging silently drops these additions.
-            const specialized = mergeJsonForFile(path, [parsed, other], uiConflictDetails);
+            const specialized = mergeJsonForFile(path, [parsed, other], uiConflictDetails, group.kind === 'ui');
             changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
             parsed = specialized;
           } else {
@@ -486,6 +504,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
+    const registeredUiPaths = await collectRegisteredUiPaths(plan.rp);
     if (iconBytes) {
       rpZip.file(assetsData.IMAGE_FFEH, iconBytes);
       accum.writtenBinaryPaths.add(assetsData.IMAGE_FFEH);
@@ -502,7 +521,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts, registeredUiPaths);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
