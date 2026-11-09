@@ -49,26 +49,28 @@ function isPosition(value: unknown): value is HudPosition {
   return typeof value === 'string' && (HUD_POSITIONS as readonly string[]).includes(value);
 }
 
-function findDefinition(value: any, name: string, seen = new Set<any>()): Record<string, any> | undefined {
-  if (!value || typeof value !== 'object' || seen.has(value)) return undefined;
-  seen.add(value);
-  if (!Array.isArray(value)) {
-    for (const [key, child] of Object.entries(value)) {
-      if (key === name && child && typeof child === 'object' && !Array.isArray(child)) return child as Record<string, any>;
-    }
-    for (const child of Object.values(value)) {
-      const found = findDefinition(child, name, seen);
-      if (found) return found;
-    }
-  } else {
-    for (const child of value) {
-      const found = findDefinition(child, name, seen);
-      if (found) return found;
-    }
+function buildDefinitionIndex(definitions: any[]): Map<string, Record<string, any>> {
+  const index = new Map<string, Record<string, any>>();
+  for (const file of definitions) {
+    const namespace = typeof file?.namespace === 'string' ? file.namespace : '';
+    const visit = (value: any): void => {
+      if (!value || typeof value !== 'object') return;
+      if (Array.isArray(value)) {
+        value.forEach(visit);
+        return;
+      }
+      for (const [key, child] of Object.entries(value)) {
+        if (child && typeof child === 'object' && !Array.isArray(child)) {
+          if (namespace && !index.has(namespace + '.' + key)) index.set(namespace + '.' + key, child as Record<string, any>);
+          if (!index.has(key)) index.set(key, child as Record<string, any>);
+          visit(child);
+        }
+      }
+    };
+    visit(file);
   }
-  return undefined;
+  return index;
 }
-
 function numericPair(value: any): [number, number] | undefined {
   if (!Array.isArray(value) || value.length < 2 || !value.slice(0, 2).every((part: any) => typeof part === 'number' && Number.isFinite(part))) return undefined;
   return [value[0], value[1]];
@@ -112,6 +114,7 @@ function isFullScreenParent(value: any): boolean {
 
 function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
   const result: HudCandidate[] = [];
+  const definitionIndex = buildDefinitionIndex(definitions);
   const visit = (value: any, key = ''): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
@@ -135,7 +138,7 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             if (key !== 'root_panel' && !isFullScreenParent(value)) continue;
             const target = reference.split('@').pop() || reference;
             const controlName = target.split('.').pop() || target;
-            const definition = definitions.map(file => findDefinition(file, controlName)).find(Boolean) || {};
+            const definition = definitionIndex.get(target) || definitionIndex.get(controlName) || {};
             const effective = { ...definition, ...instance };
             const size = numericPair(effective.size);
             if (!size || size[0] <= 0 || size[1] <= 0 || size[0] > Math.min(...SCREEN_PROFILES.map(screen => screen.width)) * 0.85 || size[1] > Math.min(...SCREEN_PROFILES.map(screen => screen.height)) * 0.85) continue;
