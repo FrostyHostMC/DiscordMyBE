@@ -163,7 +163,7 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
     { panel: { visible: 'query.is_first_person', controls: [{ base: {} }], bindings: [{ binding_name: '#base' }] } },
     { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }], bindings: [{ binding_name: '#overlay' }] } },
   );
-  assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
+  assert.equal(result.panel.visible, 'query.is_first_person', 'conflicting subpack visibility must not hide the root HUD');
   assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
