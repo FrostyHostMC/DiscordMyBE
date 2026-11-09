@@ -19,7 +19,9 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
 
   for (const [archivePath, archiveFile] of archives) {
     const bytes = await archiveFile.async('uint8array');
-    if (bytes.length < 16 || !magic.every((value, index) => bytes[index] === value)) continue;
+    if (bytes.length < 16 || !magic.every((value, index) => bytes[index] === value)) {
+      throw new Error('Unsupported .brarchive format: ' + archivePath);
+    }
 
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const count = view.getUint32(8, true);
