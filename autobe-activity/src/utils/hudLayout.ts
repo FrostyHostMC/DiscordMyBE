@@ -160,6 +160,15 @@ export function resolveHudPlacements(
   const output = structuredClone(hud);
   const candidates = collectCandidates(output, definitions);
   const occupied: Rect[] = [];
+  if (candidates.length === 0) {
+    const hasPatches = (value: any): boolean => {
+      if (!value || typeof value !== 'object') return false;
+      if (Array.isArray(value)) return value.some(hasPatches);
+      if (Array.isArray(value.modifications) && value.modifications.some((patch: any) => patch?.array_name === 'controls')) return true;
+      return Object.values(value).some(hasPatches);
+    };
+    if (hasPatches(output)) unresolved.push('HUD controls were not auto-moved because their parent coordinate space or dimensions could not be proven safe');
+  }
   const moved: HudPlacementResult['moved'] = [];
   const unresolved: string[] = [];
 
