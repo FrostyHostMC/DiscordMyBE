@@ -589,10 +589,12 @@ await (async () => {
   assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
   zip.file('ui/_ui_defs.json', JSON.stringify({ ui_defs: ['ui/working.json', 'ui/missing.json'] }));
   zip.file('ui/working.json', JSON.stringify({}));
+  zip.file('ui/settings_screen.json', JSON.stringify({ legacy_menu: {} }));
   const uiIssues = await validateMergedArchive(zip, 'Test Resource Pack');
   assert.ok(uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/missing.json')));
   assert.ok(!uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/working.json')));
-  console.log('✓ merged archive validation reports malformed JSON, unresolved assets and missing registered UI files');
+  assert.ok(uiIssues.some(issue => issue.code === 'LEGACY_UI_ORE_UI_LIMIT' && issue.path === 'ui/settings_screen.json'));
+  console.log('✓ merged archive validation reports malformed JSON, unresolved assets, missing UI registrations and Ore UI legacy-menu limits');
 })();
 
 
