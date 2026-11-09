@@ -94,7 +94,7 @@ assert.notEqual(atlas.texture_data.first.textures, atlas.texture_data.second.tex
 assert.ok(rp.file(`${atlas.texture_data.second.textures}.png`));
 const manifest = JSON.parse(await bp.file('manifest.json')!.async('text'));
 assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@minecraft/server').version, '2.10.0');
-assert.ok(result.combinedExtras?.diagnosticsText?.includes('Subpack fixture -> high_resolution'), 'the merge report must record the subpack variant actually supplied by the caller');
+assert.ok(result.combinedExtras?.reportJson?.includes('Subpack fixture -> high_resolution'), 'the merge report must record the subpack variant actually supplied by the caller');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
 assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
