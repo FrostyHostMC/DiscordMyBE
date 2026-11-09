@@ -98,6 +98,25 @@ assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
 
+// Conflict-screen Keep A / Keep B must select the winning definition rather
+// than allowing the later generic merge to combine the discarded definition.
+const keepA = await makePack('Behavior Pack', 'Keep A', {
+  'entities/shared.json': JSON.stringify({ 'minecraft:entity': { description: { identifier: 'demo:shared' }, components: { 'minecraft:health': { value: 10, max: 10 } } } })
+});
+const keepB = await makePack('Behavior Pack', 'Keep B', {
+  'entities/shared.json': JSON.stringify({ 'minecraft:entity': { description: { identifier: 'demo:shared' }, components: { 'minecraft:health': { value: 20, max: 20 } } } })
+});
+const choices = await detectConflicts([keepA, keepB]);
+const definitionChoice = choices.find(conflict => conflict.identifier === 'demo:shared');
+assert.ok(definitionChoice, 'preflight must detect duplicate custom entity identifiers');
+definitionChoice!.resolution = 'keep_b';
+const chosenMerge = await executeMergePacks([keepA, keepB], { modpackName: 'Keep B Test', conflicts: choices });
+const chosenBehavior = await JSZip.loadAsync(chosenMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const chosenEntity = JSON.parse(await chosenBehavior.file('entities/shared.json')!.async('text'));
+assert.equal(chosenEntity['minecraft:entity'].components['minecraft:health'].max, 20);
+assert.ok(!chosenMerge.combinedExtras?.diagnosticsText?.includes('FEATURE_REGISTRY_RENAMED'), 'explicit Keep B must not be silently converted into prefix-and-keep-both');
+console.log('✓ explicit Keep B choice survives the complete behavior-pack merge');
+
 const beta = await makePack('Behavior Pack', 'Beta', { 'scripts/main.js': '// beta' }, '2.9.0-beta');
 const plan = buildMergePlan([bpA, beta]);
 assert.equal(plan.scriptGroups.length, 2);
