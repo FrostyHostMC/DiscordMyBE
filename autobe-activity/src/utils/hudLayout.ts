@@ -96,12 +96,19 @@ function inViewport(rect: Rect): boolean {
   return rect.left >= 0 && rect.top >= 0 && rect.right <= SCREEN.width && rect.bottom <= SCREEN.height;
 }
 
+function isFullScreenParent(value: any): boolean {
+  const size = value?.size;
+  if (!Array.isArray(size) || size.length < 2) return false;
+  const full = (part: any) => typeof part === 'string' && /^(?:100%|fill|100%sm|100%c)$/i.test(part.trim());
+  return full(size[0]) && full(size[1]);
+}
+
 function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
   const result: HudCandidate[] = [];
-  const visit = (value: any): void => {
+  const visit = (value: any, parentIsFullScreen = false): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      value.forEach(visit);
+      value.forEach(item => visit(item, parentIsFullScreen));
       return;
     }
     if (Array.isArray(value.modifications)) {
@@ -112,6 +119,10 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
           for (const [reference, rawInstance] of Object.entries(controlEntry)) {
             if (!reference.includes('@') || !rawInstance || typeof rawInstance !== 'object' || Array.isArray(rawInstance)) continue;
             const instance = rawInstance as Record<string, any>;
+            // Child offsets are relative to their parent. Only move controls
+            // inserted into a statically full-screen parent; nested panels need
+            // their own coordinate system and must not be guessed.
+            if (!parentIsFullScreen) continue;
             const target = reference.split('@').pop() || reference;
             const controlName = target.split('.').pop() || target;
             const definition = definitions.map(file => findDefinition(file, controlName)).find(Boolean) || {};
@@ -129,7 +140,8 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
         }
       }
     }
-    for (const child of Object.values(value)) visit(child);
+    const currentIsFullScreen = isFullScreenParent(value);
+    for (const child of Object.values(value)) visit(child, currentIsFullScreen);
   };
   visit(hud);
   return result;
