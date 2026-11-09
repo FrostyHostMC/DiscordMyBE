@@ -487,6 +487,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const iconBytes = await findFirstPackIcon(packs);
   const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const bundleParts: MergedOutput[] = [];
+  const blockingValidationErrors: string[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -533,6 +534,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await resolveHudLayoutInZip(rpZip, hudPlacement, mergeDiagnostics);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
     mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    blockingValidationErrors.push(...rpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[Resource Pack] ${issue.code}: ${issue.path} — ${issue.message}`));
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       plan.rp.map(p => p.minEngineVersion || ''),
@@ -833,6 +835,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   for (const b of builtBps) {
     const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
     mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    blockingValidationErrors.push(...bpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[${b.label}] ${issue.code}: ${issue.path} — ${issue.message}`));
+  }
+  if (blockingValidationErrors.length > 0) {
+    const details = blockingValidationErrors.slice(0, 20).map(issue => `• ${issue}`).join('\\n');
+    const remainder = blockingValidationErrors.length > 20 ? `\\n…and ${blockingValidationErrors.length - 20} more validation error(s).` : '';
+    throw new Error(`AutoBE stopped the build because the merged packs contain ${blockingValidationErrors.length} invalid JSON or other blocking validation error(s). These files cannot be loaded reliably by Minecraft:\\n${details}${remainder}`);
   }
   for (const b of builtBps) {
     const blobData = await b.zip.generateAsync({
