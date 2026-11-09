@@ -487,6 +487,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const iconBytes = await findFirstPackIcon(packs);
   const stablePackId = (role: string, members: AddonPack[]) => stableUUID([modpackName, role, ...members.map(pack => pack.uuid).sort()].join('|'));
   const bundleParts: MergedOutput[] = [];
+  const blockingValidationErrors: string[] = [];
   let rpHeaderUUID: string | null = null;
   const builtBps: Array<{
     zip: JSZip;
@@ -533,6 +534,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await resolveHudLayoutInZip(rpZip, hudPlacement, mergeDiagnostics);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
     mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    blockingValidationErrors.push(...rpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[Resource Pack] ${issue.code}: ${issue.path} — ${issue.message}`));
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       plan.rp.map(p => p.minEngineVersion || ''),
@@ -786,6 +788,44 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await buildBehaviorPack(g.packs, 'behavior_script', g.major, g.beta);
   }
 
+  // A merged modpack can contain multiple BP outputs because Script API
+  // versions cannot safely share one manifest. Make the highest stable/preview
+  // Script API output the activation root (falling back to another script BP,
+  // then the data-only BP) and have it depend on every other generated BP.
+  // Enabling this one pack then activates the complete behavior content set,
+  // rather than silently leaving data-only or lower-API definitions inactive.
+  if (builtBps.length > 0) {
+    const activationRoot = [...builtBps].reverse().find((output) => output.type === 'behavior_script' && (output.scriptMajor || 0) > 0)
+      || [...builtBps].reverse().find((output) => output.type === 'behavior_script')
+      || builtBps[builtBps.length - 1];
+    const dependencyManifests = await Promise.all(builtBps.map(async (output) => {
+      const manifestFile = output.zip.file('manifest.json');
+      if (!manifestFile) throw new Error(`Generated behavior output "${output.fileName}" has no manifest.`);
+      return { output, manifest: JSON.parse(await manifestFile.async('text')) };
+    }));
+    const rootEntry = dependencyManifests.find((entry) => entry.output === activationRoot)!;
+    const dependencies = Array.isArray(rootEntry.manifest.dependencies) ? rootEntry.manifest.dependencies : [];
+    const dependencyIds = new Set(dependencies.filter((dep: any) => typeof dep?.uuid === 'string').map((dep: any) => dep.uuid.toLowerCase()));
+    for (const entry of dependencyManifests) {
+      if (entry.output === activationRoot) continue;
+      const uuid = entry.manifest?.header?.uuid;
+      const version = entry.manifest?.header?.version;
+      if (typeof uuid !== 'string' || !Array.isArray(version)) {
+        throw new Error(`Generated behavior output "${entry.output.fileName}" has an invalid pack identity and cannot be linked.`);
+      }
+      if (!dependencyIds.has(uuid.toLowerCase())) {
+        dependencies.push({ uuid, version });
+        dependencyIds.add(uuid.toLowerCase());
+      }
+    }
+    rootEntry.manifest.dependencies = dependencies;
+    rootEntry.manifest.header.name = `${rootEntry.manifest.header.name} [Main - activate this pack]`;
+    rootEntry.manifest.header.description = `Activate this main behavior pack to load all ${builtBps.length} behavior packs in this AutoBE modpack.`;
+    activationRoot.zip.file('manifest.json', JSON.stringify(rootEntry.manifest, null, 2));
+    activationRoot.label = `${activationRoot.label} — Main (activate this one)`;
+    mergeDiagnostics.push(`INFO BEHAVIOR_ACTIVATION_ROOT: ${activationRoot.fileName} depends on all ${builtBps.length - 1} other generated behavior pack(s); activate the Main behavior pack to load the complete merged behavior set.`);
+  }
+
   // Check player conflicts across behavior outputs without copying definitions.
   if (builtBps.length > 1) {
     onProgress?.('Unifying cross-group content', 62);
@@ -795,6 +835,17 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   for (const b of builtBps) {
     const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
     mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    blockingValidationErrors.push(...bpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[${b.label}] ${issue.code}: ${issue.path} — ${issue.message}`));
+  }
+  if (blockingValidationErrors.length > 0) {
+    const newline = String.fromCharCode(10);
+    const details = blockingValidationErrors.slice(0, 20).map(issue => `• ${issue}`).join(newline);
+    const remainder = blockingValidationErrors.length > 20 ? newline + `…and ${blockingValidationErrors.length - 20} more validation error(s).` : '';
+    throw new Error([
+      `AutoBE stopped the build because the merged packs contain ${blockingValidationErrors.length} invalid JSON or other blocking validation error(s).`,
+      'These files cannot be loaded reliably by Minecraft:',
+      details + remainder
+    ].join(newline));
   }
   for (const b of builtBps) {
     const blobData = await b.zip.generateAsync({

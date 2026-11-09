@@ -68,7 +68,11 @@ const rpB = await makePack('Resource Pack', 'Second RP', {
   'textures/item_texture.json': '{"texture_data":{"second":{"textures":"textures/custom/gem"}}}'
 });
 const packs = [bpA, bpB, rpA, rpB];
-const result = await executeMergePacks(packs, { modpackName: 'Integration test', conflicts: await detectConflicts(packs) });
+const result = await executeMergePacks(packs, {
+  modpackName: 'Integration test',
+  conflicts: await detectConflicts(packs),
+  subpackSelections: [{ pack: 'Subpack fixture', variant: 'high_resolution' }]
+});
 const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'behavior_script')!.blob!);
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
@@ -90,6 +94,7 @@ assert.notEqual(atlas.texture_data.first.textures, atlas.texture_data.second.tex
 assert.ok(rp.file(`${atlas.texture_data.second.textures}.png`));
 const manifest = JSON.parse(await bp.file('manifest.json')!.async('text'));
 assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@minecraft/server').version, '2.10.0');
+assert.ok(result.combinedExtras?.reportJson?.includes('Subpack fixture -> high_resolution'), 'the merge report must record the subpack variant actually supplied by the caller');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
 assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
@@ -97,6 +102,30 @@ assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack',
 assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
+
+// Split Script API outputs must still behave as one installable modpack.
+// Activating the designated main BP should pull in the data-only BP as a
+// manifest dependency, so its blocks/items are not left inactive.
+const dataOnlyPack = await makePack('Behavior Pack', 'Data Definitions', {
+  'blocks/demo_block.json': JSON.stringify({
+    format_version: '1.21.0',
+    'minecraft:block': { description: { identifier: 'demo:from_data_pack' }, components: { 'minecraft:destructible_by_mining': { seconds_to_destroy: 1 } } }
+  })
+});
+const splitOutput = await executeMergePacks([dataOnlyPack, bpA], { modpackName: 'Split Output Activation' });
+const dataOutput = splitOutput.outputs!.find(output => output.type === 'behavior_data')!;
+const scriptOutput = splitOutput.outputs!.find(output => output.type === 'behavior_script')!;
+const dataOutputZip = await JSZip.loadAsync(dataOutput.blob!);
+const scriptOutputZip = await JSZip.loadAsync(scriptOutput.blob!);
+const dataManifest = JSON.parse(await dataOutputZip.file('manifest.json')!.async('text'));
+const scriptManifest = JSON.parse(await scriptOutputZip.file('manifest.json')!.async('text'));
+assert.ok(scriptManifest.dependencies.some((dependency: any) =>
+  dependency.uuid === dataManifest.header.uuid && JSON.stringify(dependency.version) === JSON.stringify(dataManifest.header.version)
+), 'the main behavior output must depend on every other generated behavior output');
+assert.match(scriptOutput.label, /Main \(activate this one\)/);
+assert.ok(dataOutputZip.file('blocks/demo_block.json'), 'data-only definitions must remain in the dependency pack');
+assert.ok(splitOutput.combinedExtras?.diagnosticsText?.includes('BEHAVIOR_ACTIVATION_ROOT'));
+console.log('✓ main behavior output activates all split behavior packs through manifest dependencies');
 
 // Real production-path regression: independent UI files and HUD patches from
 // separate packs must both survive the resource-pack merge.
@@ -187,6 +216,16 @@ const missing = await makePack('Behavior Pack', 'Missing entry', {}, '2.0.0');
 const missingResult = await executeMergePacks([missing], { modpackName: 'Missing' });
 assert.ok(missingResult.outputs?.some(output => output.type === 'behavior_data'), 'a stale script declaration without JavaScript must preserve data as a data-only pack');
 assert.ok(missingResult.combinedExtras?.diagnosticsText?.includes('SCRIPT_ENTRY_MISSING'), 'the missing entry must be reported clearly');
+const invalidJsonPack = await makePack('Behavior Pack', 'Broken JSON', {
+  'items/broken.json': '{"minecraft:item": '
+});
+await assert.rejects(
+  () => executeMergePacks([invalidJsonPack], { modpackName: 'Invalid JSON' }),
+  /INVALID_JSON.*broken\.json/,
+  'a merge must stop instead of shipping a pack with malformed item definitions'
+);
+console.log('✓ malformed merged JSON blocks output generation instead of shipping missing content');
+
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');

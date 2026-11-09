@@ -70,6 +70,7 @@ export const App: React.FC = () => {
     outputOptions?: Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>;
   } | null>(null);
   const scriptConflictsRef = useRef<Record<string, string[]>>({});
+  const appliedSubpackSelectionsRef = useRef<Array<{ pack: string; variant: string }>>([]);
   const pendingTargetEngineRef = useRef<string>('1.20.0');
   const pendingHudPlacementRef = useRef<NonNullable<MergeSessionConfig['hudPlacement']>>('auto');
   const pendingOutputOptionsRef = useRef<Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>>({ generateAddon: true, generateSeparatePacks: true });
@@ -270,6 +271,7 @@ export const App: React.FC = () => {
         autoPrefix: autoMerge,
         scriptConflicts: scriptConflictsRef.current,
         hudPlacement: pendingHudPlacementRef.current,
+        subpackSelections: appliedSubpackSelectionsRef.current,
         onProgress: (step, pct) => {
           setMergeStep(step);
           setMergeProgress(pct);
@@ -328,6 +330,7 @@ export const App: React.FC = () => {
       scriptConflictsRef.current = {};
     }
 
+    appliedSubpackSelectionsRef.current = [];
     // Port of AutoBE subpack flow: prompt for variants before merging
     const withSubpacks = packsToMerge.filter(
       (p) => p.subpacks && p.subpacks.length > 0 && p.fileBlob
@@ -361,6 +364,9 @@ export const App: React.FC = () => {
         const key = `${p.uuid}_${p.type}`;
         const variant = selections[key];
         console.log('[SubpackConfirm] Processing pack:', p.name, 'key:', key, 'variant:', variant, 'hasBlob:', !!p.fileBlob);
+        if (p.subpacks?.length && !variant) {
+          throw new Error(`No variant was selected for ${p.name}. Select a subpack variant before merging.`);
+        }
         if (variant && p.fileBlob) {
           // Never silently merge the unprocessed source if the selected UI/assets
           // variant failed to extract. That would recreate the missing-interface
@@ -370,6 +376,10 @@ export const App: React.FC = () => {
           processed.push(p);
         }
       }
+      appliedSubpackSelectionsRef.current = pending.packs
+        .filter((pack) => pack.subpacks?.length)
+        .map((pack) => ({ pack: pack.name, variant: selections[`${pack.uuid}_${pack.type}`] }))
+        .filter((selection): selection is { pack: string; variant: string } => !!selection.variant);
       await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine, pending.outputOptions);
     } catch (err) {
       console.error('[AutoBE] Selected subpack extraction failed; merge cancelled:', describeError(err));
