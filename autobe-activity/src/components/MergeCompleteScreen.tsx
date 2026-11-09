@@ -171,7 +171,14 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <div className="font-bold flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> {reviewFindings.length} conflict(s) need review</div>
           <p>Some add-on features may be missing or overridden until these conflicts are resolved.</p>
           {reviewFindings.some(finding => ['DEFINITION_CONFLICT', 'FILE_PATH_CONFLICT', 'SHARED_FILE_CONFLICT'].includes(finding.code)) && <p>Alternatives saved under <span className="font-mono">_autobe_conflicts/</span> are not active in Minecraft.</p>}
-          <ul className="list-disc pl-5 space-y-1">{reviewFindings.slice(0, 3).map((finding, index) => <li key={index}>{finding.path || finding.code}</li>)}</ul>
+          <ul className="space-y-2">
+            {reviewFindings.slice(0, 5).map((finding, index) => (
+              <li key={index} className="rounded-lg border border-amber-700/40 bg-black/20 p-2">
+                <div className="font-semibold text-amber-100 break-all">{finding.path || finding.code}</div>
+                {finding.message && <div className="mt-1 text-[11px] leading-relaxed text-amber-100/80">{finding.message}</div>}
+              </li>
+            ))}
+          </ul>
           <p>Open <span className="font-mono">_autobe_diagnostics.txt</span> in the combined bundle for details.</p>
         </div>
       )}
