@@ -57,14 +57,13 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
       if (!file.dir && /\.(?:js|mjs|ts)$/i.test(path)) scriptFiles.push({ path, file });
     });
     let usesDdui = false;
+    let usesPreviewDdui = false;
     for (const script of scriptFiles) {
       try {
         const source = await script.file.async('text');
         if (/\b(?:CustomForm|MessageBox|ObservableString|ObservableNumber|ObservableBoolean|ObservableUIRawMessage)\b/.test(source) &&
-            /@minecraft\/server-ui/.test(source)) {
-          usesDdui = true;
-          break;
-        }
+            /@minecraft\/server-ui/.test(source)) usesDdui = true;
+        if (/\.multiButtonRow\s*\(|\.button3WithOptions\s*\(/.test(source)) usesPreviewDdui = true;
       } catch { /* archive read failures are reported by other validation passes */ }
     }
     const versionAtLeast = (value: unknown, minimum: [number, number, number]) => {
@@ -91,6 +90,22 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         code: 'DDUI_SERVER_PEER_DEPENDENCY',
         path: manifestEntry?.path || 'manifest.json',
         message: '[' + label + '] DDUI requires the @minecraft/server 2.0.0 peer dependency. AutoBE will not silently upgrade this pack because API compatibility must match the selected Bedrock target.'
+      });
+    }
+    if (usesPreviewDdui && !versionAtLeast(uiDependency?.version, [2, 4, 0])) {
+      add({
+        severity: 'warning',
+        code: 'DDUI_PREVIEW_UI_VERSION',
+        path: manifestEntry?.path || 'manifest.json',
+        message: '[' + label + '] Scripts use preview DDUI methods such as multiButtonRow or button3WithOptions, but @minecraft/server-ui is older than 2.4.0-rc. These methods are preview-only in current documentation; AutoBE preserves the declared dependency instead of upgrading it.'
+      });
+    }
+    if (usesPreviewDdui && !versionAtLeast(serverDependency?.version, [2, 13, 0])) {
+      add({
+        severity: 'warning',
+        code: 'DDUI_PREVIEW_SERVER_PEER',
+        path: manifestEntry?.path || 'manifest.json',
+        message: '[' + label + '] Preview DDUI methods require the matching @minecraft/server 2.13.0-beta peer dependency in the documented 26.70 preview track. AutoBE will not silently move this add-on onto a preview API.'
       });
     }
   }
