@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
-import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
+import { mergeJsonForFile, isUiMergeStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -110,7 +110,6 @@ test('all UI JSON files preserve independent controls and bindings', () => {
 });
 
 test('subpack UI paths are routed through the UI-specific strategy', () => {
-  const { isUiMergeStrategyFile } = require('../src/utils/smartJsonMerge.ts');
   assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/hud_screen.json'), true);
   assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/common.json'), true);
 });
