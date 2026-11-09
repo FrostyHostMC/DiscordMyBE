@@ -233,7 +233,7 @@ function mergeHudModifications(...lists: any[][]): any[] {
 export function isUiMergeStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
-  return normalized.startsWith('ui/') && normalized.endsWith('.json');
+  return (normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json');
 }
 
 export function isPlayerAnimationStrategyFile(fileName: string): boolean {
@@ -256,12 +256,12 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
   const normalizedPath = fileName.replace(/\\/g, '/').toLowerCase();
   const base = fileName.substring(fileName.lastIndexOf('/') + 1);
 
-  if (normalizedPath.startsWith('ui/') && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
+  if ((normalizedPath.startsWith('ui/') || normalizedPath.includes('/ui/')) && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
     let mergedUi = structuredClone(list[0]);
     for (const overlay of list.slice(1)) mergedUi = mergeUiJson(mergedUi, overlay, '', fileName, uiConflicts);
     return mergedUi;
   }
-  if (normalizedPath === 'ui/_global_variables.json') {
+  if (normalizedPath.endsWith('/ui/_global_variables.json') || normalizedPath === 'ui/_global_variables.json') {
     let mergedVariables = structuredClone(list[0]);
     for (const overlay of list.slice(1)) mergedVariables = mergeUiJson(mergedVariables, overlay, '', fileName, uiConflicts);
     return mergedVariables;
