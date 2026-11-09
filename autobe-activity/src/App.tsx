@@ -18,13 +18,11 @@ import { executeMergePacks, buildMergePlan, MergePlan } from '@/utils/mergeEngin
 import { applySubpackToPack } from '@/utils/subpackProcessor';
 import { scanScriptRuntimeConflicts, conflictsToReport } from '@/utils/scriptConflictScan';
 import { describeError } from '@/utils/errorLog';
-import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
 
 
 import { MergeWorkspace } from '@/components/MergeWorkspace';
-import { AddPacksScreen } from '@/components/AddPacksScreen';
 import { ScriptCheckScreen } from '@/components/ScriptCheckScreen';
 import { ConflictScreen } from '@/components/ConflictScreen';
 import { MergingScreen } from '@/components/MergingScreen';
@@ -37,7 +35,6 @@ const tweaks = aippyTweaks(tweaksConfig);
 export const App: React.FC = () => {
   // Tweaks parameters at component top level
   const autoMergeTweak = tweaks.autoMergeConflicts.useState();
-  const keepOriginalsTweak = tweaks.keepOriginals.useState();
   const hapticTweak = tweaks.hapticEnabled.useState();
   const soundTweak = tweaks.soundEnabled.useState();
 
@@ -54,15 +51,6 @@ export const App: React.FC = () => {
 
   // Settings states
   const [autoMerge, setAutoMerge] = useState<boolean>(true);
-  const [keepOriginals, setKeepOriginals] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('autobe.keepOriginals');
-      return stored === null ? true : stored === 'true';
-    } catch {
-      return true;
-    }
-  });
-
   // Merging runtime states
   const [conflicts, setConflicts] = useState<ConflictItem[]>([]);
 
@@ -118,25 +106,11 @@ export const App: React.FC = () => {
     setScreen('main');
   };
 
-  const startCreate = () => navigateTab('workspace');
-
-  const openAbout = () => navigateTab('workspace');
-
   // Sync settings with tweaks
   useEffect(() => {
     const t = setTimeout(() => setAutoMerge(autoMergeTweak), 0);
     return () => clearTimeout(t);
   }, [autoMergeTweak]);
-
-  useEffect(() => {
-    try {
-      if (localStorage.getItem('autobe.keepOriginals') === null) {
-        setKeepOriginals(keepOriginalsTweak);
-      }
-    } catch {
-      // Keep the in-memory default when browser storage is unavailable.
-    }
-  }, [keepOriginalsTweak]);
 
   // AutoBE no longer keeps a personal workspace or project library.
   // Remove the legacy IndexedDB database once on startup so old saved private
@@ -189,34 +163,6 @@ export const App: React.FC = () => {
       showToast('Those add-ons are already in this merge session.');
     }
     return trulyNew.length;
-  };
-
-  const handleGlobalFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files ? Array.from(e.target.files) : [];
-    // Reset so picking the same file again (e.g. after deleting it) still fires onChange.
-    e.target.value = '';
-    if (files.length === 0) return;
-    showToast(`Parsing ${files.length} archive(s)...`);
-
-    const allParsed: AddonPack[] = [];
-    for (let i = 0; i < files.length; i++) {
-      try {
-        const res = await parseAddonArchive(files[i], files[i].name);
-        allParsed.push(...res.packs);
-      } catch (err) {
-        console.error('Import error:', err);
-      }
-    }
-
-    if (allParsed.length > 0) {
-      await handleImportPacks(allParsed);
-    } else {
-      showToast('No valid Minecraft Bedrock pack manifests found.');
-    }
-  };
-
-  const triggerGlobalImport = () => {
-    globalFileInputRef.current?.click();
   };
 
   // Every imported archive stays attached to its in-memory pack record.
@@ -761,16 +707,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative w-full h-[100dvh] min-h-[100svh] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
-      {/* Hidden Global File Input */}
-      <input
-        ref={globalFileInputRef}
-        type="file"
-        multiple
-        accept=".mcpack,.mcaddon,.zip"
-        onChange={handleGlobalFileChosen}
-        className="hidden"
-      />
-
       {/* Toast Notification Banner */}
       {toastMessage && (
         <div className="fixed top-[calc(env(safe-area-inset-top)+4.25rem)] left-3 right-3 sm:left-auto sm:right-4 z-[100] p-3 rounded-xl bg-[#15111F]/95 border border-[#762BFF]/60 text-xs font-semibold text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] flex items-center justify-between gap-3 max-w-md animate-in slide-in-from-top-2 duration-150">
