@@ -224,7 +224,7 @@ export async function resolveHudLayoutInZip(
     const hud = JSON.parse(await hudFile.async('text'));
     const definitions: any[] = [];
     const files = Object.entries(zip.files).filter(([path, file]) =>
-      !file.dir && /(?:^|\\/)ui\\/.+\\.json$/i.test(path) && path.toLowerCase() !== 'ui/hud_screen.json'
+      !file.dir && /(?:^|\/)ui\/.+\.json$/i.test(path.replace(/\\/g, '/')) && path.toLowerCase() !== 'ui/hud_screen.json'
     );
     for (const [, file] of files) {
       try { definitions.push(JSON.parse(await file.async('text'))); } catch { /* archive validator reports malformed UI JSON */ }
