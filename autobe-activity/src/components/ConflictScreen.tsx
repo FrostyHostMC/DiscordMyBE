@@ -65,9 +65,9 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 min-w-0 bg-[#08070D] text-white select-none overflow-hidden">
       {/* Top Header */}
-      <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-[#30263F]/70 bg-[#100D18]">
+      <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-[#30263F]/70 bg-[#100D18] shrink-0">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -105,7 +105,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-28 space-y-4 max-w-4xl mx-auto w-full">
+      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overscroll-y-contain p-4 sm:p-6 pb-8 space-y-4 max-w-4xl mx-auto w-full" style={{ WebkitOverflowScrolling: "touch", scrollbarGutter: "stable" }}>
         {/* Safe status if no conflicts */}
         {conflicts.length === 0 && !hasScriptVersionMismatch && (
           <div className="p-6 rounded-2xl bg-[#100D18] border border-emerald-500/30 text-center max-w-md mx-auto my-8">
@@ -261,7 +261,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
       </div>
 
       {/* Floating Bottom Bar: Confirm & Continue */}
-      <div className="fixed bottom-0 left-0 right-0 p-3 sm:p-4 bg-[#100D18]/95 backdrop-blur-md border-t border-[#30263F] z-20 flex justify-between items-center max-w-4xl mx-auto">
+      <div className="relative w-full max-w-4xl mx-auto shrink-0 p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] bg-[#100D18]/95 backdrop-blur-md border-t border-[#30263F] flex justify-between items-center">
         <span className="text-xs text-[#AAA3BB] font-mono">
           {conflicts.length} conflict{conflicts.length === 1 ? '' : 's'} managed
         </span>
