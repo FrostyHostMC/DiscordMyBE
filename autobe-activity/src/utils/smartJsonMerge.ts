@@ -295,7 +295,7 @@ export function isPlayerAnimationStrategyFile(fileName: string): boolean {
  * Merge a list of parsed JSON values for one output file using the legacy
  * per-file strategies. \`fileName\` is the lowercase zip path.
  */
-export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: string[] = []): any {
+export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: string[] = [], forceUiMerge = false): any {
   if (list.length === 0) return {};
   if (list.length === 1) return postProcessFile(fileName, structuredClone(list[0]));
   const normalizedPath = fileName.replace(/\\/g, '/').toLowerCase();
