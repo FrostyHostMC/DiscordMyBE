@@ -305,15 +305,34 @@ export async function parseAddonArchive(
         ? header.min_engine_version.join('.')
         : typeof header.min_engine_version === 'string' ? header.min_engine_version : undefined;
 
-      // Subpacks check
-      let subpacks: AddonPack['subpacks'] = undefined;
-      if (Array.isArray(manifest.subpacks) && manifest.subpacks.length > 0) {
-        subpacks = manifest.subpacks.map((s: any) => ({
-          folder: s.folder || '',
-          name: s.name || s.folder || 'Subpack',
-          memory_tier: s.memory_tier
-        }));
+      // Bedrock's manifest schema uses `folder_name` for subpack folders.
+      // Some community packs use the older/nonstandard `folder` spelling, so
+      // accept both. Also discover physical subpacks/ folders as a recovery
+      // path: otherwise a pack with omitted/malformed manifest metadata would
+      // silently lose every file under subpacks/ during accumulation.
+      const subpackByFolder = new Map<string, NonNullable<AddonPack['subpacks']>[number]>();
+      for (const subpack of Array.isArray(manifest.subpacks) ? manifest.subpacks : []) {
+        const folder = String(subpack?.folder_name || subpack?.folder || '').trim();
+        if (!folder) continue;
+        subpackByFolder.set(folder.toLowerCase(), {
+          folder,
+          name: String(subpack?.name || folder || 'Subpack'),
+          memory_tier: subpack?.memory_tier
+        });
       }
+      loaded.forEach((path) => {
+        const relativePath = rootFolder && path.startsWith(rootFolder) ? path.slice(rootFolder.length) : path;
+        const match = relativePath.match(/^subpacks\\/([^/]+)\\//i);
+        if (!match) return;
+        const folder = match[1];
+        const key = folder.toLowerCase();
+        if (!subpackByFolder.has(key)) {
+          subpackByFolder.set(key, { folder, name: folder, memory_tier: undefined });
+        }
+      });
+      const subpacks: AddonPack['subpacks'] = subpackByFolder.size > 0
+        ? [...subpackByFolder.values()]
+        : undefined;
 
       // Look for pack_icon.png
       let iconDataUrl: string | undefined = undefined;
