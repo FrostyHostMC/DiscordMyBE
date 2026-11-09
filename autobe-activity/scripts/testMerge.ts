@@ -24,6 +24,7 @@ function test(name: string, run: () => void) {
 test('HUD placement resolver relocates overlapping measurable controls to distinct safe anchors', () => {
   const hud = {
     root: {
+      size: ['100%', '100%'],
       modifications: [{
         array_name: 'controls',
         operation: 'insert_front',
@@ -58,7 +59,7 @@ test('HUD placement resolver leaves dynamic or unknown-size controls unchanged',
 });
 
 test('HUD placement preserve mode does not rewrite overlapping controls', () => {
-  const hud = { root: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+  const hud = { root: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
     { 'one@hud.one': {} }, { 'two@hud.two': {} },
   ] }] } };
   const definitions = [{ one: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' }, two: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' } }];
