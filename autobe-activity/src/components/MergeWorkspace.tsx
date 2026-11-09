@@ -46,6 +46,10 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   const [showConfig, setShowConfig] = useState(false);
   // Preserve import order for the current in-memory merge session only.
   const orderedPacks = installedPacks;
+  const behaviorPacks = orderedPacks.filter((pack) => pack.type === 'Behavior Pack');
+  const resourcePacks = orderedPacks.filter((pack) => pack.type === 'Resource Pack');
+  const selectedBP = behaviorPacks.filter((pack) => selectedPackIds.includes(pack.id));
+  const selectedRP = resourcePacks.filter((pack) => selectedPackIds.includes(pack.id));
 
   // Project configuration
   const [config, setConfig] = useState<MergeSessionConfig>({
@@ -526,7 +530,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       No behavior packs match your filter.
                     </div>
                   ) : (
-                    filteredBP.map((p, idx) => renderPackRow(p, idx, behaviorPacks))
+                    filteredBP.map((p) => renderPackRow(p))
                   )}
                 </div>
               </div>
@@ -553,7 +557,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       No resource packs match your filter.
                     </div>
                   ) : (
-                    filteredRP.map((p, idx) => renderPackRow(p, idx, resourcePacks))
+                    filteredRP.map((p) => renderPackRow(p))
                   )}
                 </div>
               </div>
