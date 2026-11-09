@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
-import { mergeJsonForFile, isUiMergeStrategyFile } from '../src/utils/smartJsonMerge.ts';
+import { mergeJsonForFile, mergeLanguageCodeLists, isUiMergeStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -20,6 +20,17 @@ function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('language registry lists merge additively across multiple add-ons without losing earlier languages', () => {
+  const first = ['en_US', 'de_DE'];
+  const second = ['fr_FR', 'en_us'];
+  const third = ['es_ES', 'fr_fr', 'ja_JP'];
+  const afterSecond = mergeLanguageCodeLists(first, second);
+  const afterThird = mergeLanguageCodeLists(afterSecond.values, third);
+  assert.deepEqual(afterThird.values, ['en_US', 'de_DE', 'fr_FR', 'es_ES', 'ja_JP']);
+  assert.deepEqual(afterThird.added, ['es_ES', 'ja_JP']);
+  assert.throws(() => mergeLanguageCodeLists(first, { language: 'fr_FR' }), /arrays of language codes/);
+});
 
 test('HUD placement resolver relocates overlapping measurable controls to distinct safe anchors', () => {
   const hud = {
