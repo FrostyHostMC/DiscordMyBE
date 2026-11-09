@@ -8,7 +8,6 @@ import {
   ChevronUp,
   ChevronDown,
   Info,
-  Trash2,
   SlidersHorizontal,
   Search,
   Sparkles,
@@ -29,10 +28,6 @@ interface MergeWorkspaceProps {
   onClearSelection: () => void;
   onStartMergeFlow: (config: MergeSessionConfig, orderedPackIds: string[]) => void;
   onImportPacks: (newPacks: AddonPack[]) => Promise<number> | void;
-  onDeletePack: (id: string) => void;
-  onDeleteSelectedPacks: (ids: string[]) => void;
-  onDeleteAllPacks: () => void;
-  onNavigateTab: (tab: any) => void;
 }
 
 export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
@@ -43,49 +38,18 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   onClearSelection,
   onStartMergeFlow,
   onImportPacks,
-  onDeletePack,
-  onDeleteSelectedPacks,
-  onDeleteAllPacks,
-  onNavigateTab
 }) => {
   // Tabs & Filters
   const [activeTab, setActiveTab] = useState<'both' | 'bp' | 'rp'>('both');
   const [searchQuery, setSearchQuery] = useState('');
   const [inspectingPack, setInspectingPack] = useState<AddonPack | null>(null);
   const [showConfig, setShowConfig] = useState(false);
-  // Ordered pack list for merge precedence
-  const [packOrder, setPackOrder] = useState<string[]>(() => {
-    const incoming = installedPacks.map((p) => p.id);
-    try {
-      const saved = JSON.parse(localStorage.getItem('autobe.packOrder') || '[]');
-      if (Array.isArray(saved)) {
-        const valid = saved.filter((id): id is string => typeof id === 'string' && incoming.includes(id));
-        return [...valid, ...incoming.filter(id => !valid.includes(id))];
-      }
-    } catch {
-      // Fall back to the current library order when saved priority is unavailable.
-    }
-    return incoming;
-  });
-
-  // Preserve the user's precedence across navigation and reloads while pruning
-  // deleted packs and appending newly imported packs in their arrival order.
-  React.useEffect(() => {
-    const incoming = installedPacks.map((p) => p.id);
-    setPackOrder(prev => {
-      const valid = prev.filter(id => incoming.includes(id));
-      const next = [...valid, ...incoming.filter(id => !valid.includes(id))];
-      return next.length === prev.length && next.every((id, index) => id === prev[index]) ? prev : next;
-    });
-  }, [installedPacks]);
-
-  React.useEffect(() => {
-    try {
-      localStorage.setItem('autobe.packOrder', JSON.stringify(packOrder));
-    } catch {
-      // Priority still applies for the current session if storage is unavailable.
-    }
-  }, [packOrder]);
+  // Preserve import order for the current in-memory merge session only.
+  const orderedPacks = installedPacks;
+  const behaviorPacks = orderedPacks.filter((pack) => pack.type === 'Behavior Pack');
+  const resourcePacks = orderedPacks.filter((pack) => pack.type === 'Resource Pack');
+  const selectedBP = behaviorPacks.filter((pack) => selectedPackIds.includes(pack.id));
+  const selectedRP = resourcePacks.filter((pack) => selectedPackIds.includes(pack.id));
 
   // Project configuration
   const [config, setConfig] = useState<MergeSessionConfig>({
@@ -104,45 +68,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
-
-  // Sort installedPacks by packOrder
-  const orderedPacks = React.useMemo(() => {
-    const map = new Map(installedPacks.map((p) => [p.id, p]));
-    const result: AddonPack[] = [];
-    for (const id of packOrder) {
-      const p = map.get(id);
-      if (p) result.push(p);
-    }
-    // Any remaining
-    for (const p of installedPacks) {
-      if (!packOrder.includes(p.id)) result.push(p);
-    }
-    return result;
-  }, [installedPacks, packOrder]);
-
-  const behaviorPacks = orderedPacks.filter((p) => p.type === 'Behavior Pack');
-  const resourcePacks = orderedPacks.filter((p) => p.type === 'Resource Pack');
-
-  const selectedBP = behaviorPacks.filter((p) => selectedPackIds.includes(p.id));
-  const selectedRP = resourcePacks.filter((p) => selectedPackIds.includes(p.id));
-
-  const handleMoveOrder = (index: number, direction: 'up' | 'down', list: AddonPack[]) => {
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= list.length) return;
-    const itemA = list[index].id;
-    const itemB = list[targetIdx].id;
-
-    setPackOrder((prev) => {
-      const next = [...prev];
-      const posA = next.indexOf(itemA);
-      const posB = next.indexOf(itemB);
-      if (posA !== -1 && posB !== -1) {
-        next[posA] = itemB;
-        next[posB] = itemA;
-      }
-      return next;
-    });
-  };
 
   const handleFilesChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
@@ -165,7 +90,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
     }
 
     if (allParsed.length > 0) {
-      setImportStatus(`Saving ${allParsed.length} pack(s)...`);
+      setImportStatus(`Adding ${allParsed.length} pack(s) to this session...`);
       let saved = allParsed.length;
       try {
         const result = await onImportPacks(allParsed);
@@ -177,7 +102,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
       if (saved > 0) {
         setImportStatus(`Imported ${saved} pack(s) successfully!`);
       } else {
-        setImportStatus('Nothing new was saved (duplicates, or a storage error — see the message above).');
+        setImportStatus('No new packs were added (all were duplicates).');
       }
     } else {
       setImportStatus('No valid Bedrock addon manifests found.');
@@ -193,7 +118,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   };
 
   // Render pack row
-  const renderPackRow = (pack: AddonPack, index: number, list: AddonPack[]) => {
+  const renderPackRow = (pack: AddonPack) => {
     const isSelected = selectedPackIds.includes(pack.id);
     const isBp = pack.type === 'Behavior Pack';
 
@@ -264,29 +189,8 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
           </div>
         </div>
 
-        {/* Right: Order controls + Inspect + Delete */}
+        {/* Right: Order controls + Inspect */}
         <div className="flex items-center gap-1 shrink-0">
-          <div className="flex flex-col">
-            <button
-              type="button"
-              disabled={index === 0}
-              onClick={() => handleMoveOrder(index, 'up', list)}
-              className="p-1 rounded text-[#AAA3BB] hover:text-white disabled:opacity-20 hover:bg-[#201A2E]"
-              title="Move up precedence"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={index === list.length - 1}
-              onClick={() => handleMoveOrder(index, 'down', list)}
-              className="p-1 rounded text-[#AAA3BB] hover:text-white disabled:opacity-20 hover:bg-[#201A2E]"
-              title="Move down precedence"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={() => setInspectingPack(pack)}
@@ -296,14 +200,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <Info className="w-4 h-4" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => onDeletePack(pack.id)}
-            className="p-1.5 rounded-lg text-[#AAA3BB] hover:text-red-400 hover:bg-[#201A2E] transition-colors"
-            title="Remove from library"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
+
         </div>
       </div>
     );
@@ -401,14 +298,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onNavigateTab('conflicts_tool')}
-              className="px-3 py-1.5 rounded-lg bg-[#15111F] hover:bg-[#201A2E] border border-[#30263F] text-xs font-semibold text-[#AAA3BB] hover:text-white active:scale-95 transition-all"
-            >
-              Analyze
-            </button>
-
             <button
               type="button"
               disabled={selectedPackIds.length === 0 || (!config.generateAddon && !config.generateSeparatePacks)}
@@ -551,16 +440,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               : 'Select All'}
           </button>
 
-          {installedPacks.length > 0 && (
-            <button
-              type="button"
-              onClick={onDeleteAllPacks}
-              className="text-xs font-semibold text-red-400 hover:text-red-300 px-2 py-1"
-            >
-              Delete All
-            </button>
-          )}
-
         </div>
 
         {/* Import actions get their own row on narrow screens so neither button is clipped. */}
@@ -570,7 +449,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             disabled={isImporting}
             onClick={() => fileInputRef.current?.click()}
             className="flex min-w-0 flex-1 sm:flex-none items-center justify-center gap-2 whitespace-nowrap px-3 py-2 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-60 disabled:cursor-wait border border-[#A855F7]/50 text-xs font-bold text-white shadow-[0_0_12px_rgba(118,43,255,0.25)] transition-all active:scale-95"
-            title="Select .mcpack, .mcaddon, or .zip files. Existing packs will stay in your workspace."
+            title="Select .mcpack, .mcaddon, or .zip files. Imported packs stay available until this session ends."
             aria-label="Add pack files"
           >
             <UploadCloud className="w-4 h-4 shrink-0" />
@@ -651,7 +530,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       No behavior packs match your filter.
                     </div>
                   ) : (
-                    filteredBP.map((p, idx) => renderPackRow(p, idx, behaviorPacks))
+                    filteredBP.map((p) => renderPackRow(p))
                   )}
                 </div>
               </div>
@@ -678,7 +557,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                       No resource packs match your filter.
                     </div>
                   ) : (
-                    filteredRP.map((p, idx) => renderPackRow(p, idx, resourcePacks))
+                    filteredRP.map((p) => renderPackRow(p))
                   )}
                 </div>
               </div>

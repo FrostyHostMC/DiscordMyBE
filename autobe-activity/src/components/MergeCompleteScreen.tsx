@@ -135,7 +135,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           className="flex items-center gap-1.5 text-xs text-[#AAA3BB] hover:text-white px-2 py-1 rounded-lg hover:bg-[#15111F] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
-          <span>Back to Projects</span>
+          <span>Back to Merge Workspace</span>
         </button>
         <span className="text-xs font-mono text-emerald-400 font-semibold flex items-center gap-1">
           <CheckCircle2 className="w-3.5 h-3.5" />
@@ -148,7 +148,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
           <NullProgress
             progress={transferProgress}
             status={transferStatus || (activeTransfer === 'publish' ? 'Publishing your modpack...' : activeTransfer === 'download' ? 'Saving your modpack...' : 'Installing your modpack...')}
-            description="Your modpack is saved in Projects. You can also save it directly to your device."
+            description="Your merged modpack is ready. Download it or publish it to the Community Modpacks section."
           />
         </div>
       )}
@@ -178,7 +178,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
 
       {/* Summary Card */}
       <div className="p-4 rounded-xl bg-[#100D18] border border-[#30263F] space-y-3 mb-4">
-        {/* Project Name row */}
+        {/* Modpack Name row */}
         <div className="flex items-center justify-between pb-2 border-b border-[#30263F]/50">
           <span className="text-xs text-[#AAA3BB]">Modpack Name</span>
           {isEditingName ? (
@@ -371,7 +371,7 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-bold text-white">Publish to Community</h3>
-                <p className="text-xs text-[#AAA3BB] mt-1">Add a cover image for the public listing. This does not change your saved project.</p>
+                <p className="text-xs text-[#AAA3BB] mt-1">Add a cover image for the public listing. This only changes the public community listing.</p>
               </div>
               <button type="button" disabled={isPublishing} onClick={() => setShowPublishOptions(false)} className="p-1.5 text-[#AAA3BB] hover:text-white disabled:opacity-40" aria-label="Close publish options"><X className="w-4 h-4" /></button>
             </div>
