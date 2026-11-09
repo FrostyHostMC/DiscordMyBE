@@ -14,7 +14,7 @@ import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
-import { mergeJsonForFile, isPlayerAnimationStrategyFile } from './smartJsonMerge';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
@@ -336,15 +336,14 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
-          } else if (group.kind === 'strategy' && isPlayerAnimationStrategyFile(path)) {
-            // Player registrations and named animation/controller definitions
-            // need the domain-aware merge strategy. Generic object merging can
-            // discard independent registrations and controller state maps.
-            const conservative = mergeAdditions(parsed, other);
+          } else if (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isUiMergeStrategyFile(path))) {
+            // Player registrations and Bedrock JSON-UI entry points have
+            // ordered/domain-specific semantics. In particular, HUD patches
+            // and ui_defs registrations must use their dedicated merger;
+            // generic object merging silently drops these additions.
             const specialized = mergeJsonForFile(path, [parsed, other]);
             changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
             parsed = specialized;
-            conflictDetails = conservative.conflicts;
           } else {
             const merged = mergeAdditions(parsed, other);
             parsed = merged.value;
