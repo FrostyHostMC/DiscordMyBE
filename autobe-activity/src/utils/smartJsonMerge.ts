@@ -332,7 +332,7 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
         } else if (Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = [...merged[key], ...value];
         } else if (merged[key] && value && typeof merged[key] === 'object' && typeof value === 'object' && !Array.isArray(merged[key]) && !Array.isArray(value)) {
-          merged[key] = mergeJsonForFile(base, [merged[key], value]);
+          merged[key] = mergeJsonForFile(base, [merged[key], value], uiConflicts);
         } else {
           // Preserve the first HUD value when two packs disagree on a scalar;
           // record the collision so the complete incoming source can be retained.
