@@ -728,6 +728,15 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               <p className="mt-1 text-xs leading-relaxed text-[#AAA3BB]">If compatible HUD add-ons compete for the same space, AutoBE can move measurable controls. Animated or unknown layouts stay untouched.</p>
             </div>
             <div className="p-4 sm:p-5 space-y-3">
+              <div className="rounded-lg border border-[#30263F] bg-[#15111F] p-3 space-y-1.5">
+                <div className="text-[10px] uppercase tracking-wider font-bold text-[#A855F7]">Resource packs being checked</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {installedPacks.filter(pack => pendingHudPackIds.includes(pack.id) && pack.type === 'Resource Pack').map(pack => (
+                    <span key={pack.id} className="rounded-md border border-[#49366A] bg-[#20152F] px-2 py-1 text-[10px] text-white">{pack.name}</span>
+                  ))}
+                </div>
+                <p className="text-[10px] leading-relaxed text-[#AAA3BB]">AutoBE scans these packs for HUD changes. This setting is a preferred placement for controls it can safely move; it does not move every element in every add-on.</p>
+              </div>
               <div className="grid grid-cols-3 gap-2">
                 {([
                   ['top_left', 'Top left'], ['top_middle', 'Top middle'], ['top_right', 'Top right'],
@@ -743,7 +752,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                 <button type="button" onClick={() => setHudPromptMode('auto')} className={`rounded-lg border px-3 py-2.5 text-xs font-bold ${hudPromptMode === 'auto' ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>Automatic placement</button>
                 <button type="button" onClick={() => setHudPromptMode('preserve')} className={`rounded-lg border px-3 py-2.5 text-xs font-bold ${hudPromptMode === 'preserve' ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>Keep original positions</button>
               </div>
-              <p className="text-[10px] leading-relaxed text-[#8F879F]">Placement is estimated at merge time. AutoBE only moves controls with static dimensions and a verified full-screen parent; it cannot guarantee every custom layout across all screen sizes.</p>
+              <p className="text-[10px] leading-relaxed text-[#8F879F]">The nine positions show where a safely movable control may be anchored. Automatic placement chooses a free position; a selected position is used as the preferred destination. AutoBE only moves controls with static dimensions and a verified full-screen parent. Conflicts that cannot be safely measured remain unchanged and are reported.</p>
               <p className="text-[10px] leading-relaxed text-[#8F879F]">Native Ore UI menus are game-owned and cannot accept resource-pack UI injections. AutoBE keeps legacy menu files and reports likely Ore UI limitations instead of deleting or pretending to convert them.</p>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-[#30263F]">
