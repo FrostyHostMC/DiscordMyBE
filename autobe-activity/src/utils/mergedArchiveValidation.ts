@@ -103,7 +103,9 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     'start_screen.json', 'pause_screen.json', 'settings_screen.json',
     'inventory_screen.json', 'crafting_screen.json', 'container_screen.json',
     'world_screen.json', 'create_world_screen.json', 'edit_world_screen.json',
-    'play_screen.json', 'marketplace_screen.json'
+    'play_screen.json', 'marketplace_screen.json', 'main_menu_screen.json',
+    'world_selection_screen.json', 'disconnected_screen.json', 'achievements_screen.json',
+    'sleep_screen.json', 'death_screen.json', 'permissions_screen.json'
   ]);
   if (isResourcePack) {
     for (const entry of jsonEntries) {
