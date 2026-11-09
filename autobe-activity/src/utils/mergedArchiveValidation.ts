@@ -46,6 +46,30 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
 
   const isResourcePack = /resource pack/i.test(label);
   const isBehaviorPack = /behavior/i.test(label);
+
+  // _ui_defs.json is the loader registry for custom JSON-UI screens/common
+  // files. A syntactically valid merge can still render nothing when one of
+  // these registered paths was overwritten, dropped, or never copied.
+  if (isResourcePack) {
+    for (const entry of jsonEntries) {
+      if (!entry.path.replace(/\\/g, '/').toLowerCase().endsWith('ui/_ui_defs.json')) continue;
+      const definitions = entry.data?.ui_defs;
+      if (!Array.isArray(definitions)) {
+        add({ severity: 'warning', code: 'INVALID_UI_DEFS', path: entry.path, message: '[' + label + '] ui/_ui_defs.json does not contain a ui_defs array; custom UI files may not be loaded.' });
+        continue;
+      }
+      for (const definition of definitions) {
+        if (typeof definition !== 'string' || !definition.trim()) {
+          add({ severity: 'warning', code: 'INVALID_UI_DEF_ENTRY', path: entry.path, message: '[' + label + '] ui_defs contains an empty or non-string UI file entry.' });
+          continue;
+        }
+        const normalized = definition.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+        if (!paths.has(normalized)) {
+          add({ severity: 'warning', code: 'MISSING_UI_DEFINITION_FILE', path: entry.path, message: '[' + label + '] UI file "' + definition + '" is registered in ui_defs but is missing from the merged resource pack.' });
+        }
+      }
+    }
+  }
   const identifiers = new Map<string, string[]>();
   const identifierRoots = ['minecraft:item', 'minecraft:entity', 'minecraft:block', 'minecraft:client_entity', 'minecraft:attachable'];
   for (const entry of jsonEntries) {
