@@ -35,16 +35,13 @@ const KEEP_FIRST_KEYS = new Set(['format_version', 'description', 'identifier',
  * nested definitions, but never silently replace an existing scalar setting.
  * Bedrock UI values often encode bindings, visibility and layout semantics;
  * guessing a winner can make an otherwise valid HUD disappear. */
-function mergeUiJson(base: any, overlay: any, key = ''): any {
+function mergeUiJson(base: any, overlay: any, key = '', path = '', conflicts: string[] = []): any {
   if (Array.isArray(base) && Array.isArray(overlay)) {
     const result = structuredClone(base);
     const fingerprints = new Set(result.map(item => JSON.stringify(item)));
     for (const item of overlay) {
       const fingerprint = JSON.stringify(item);
       if (fingerprints.has(fingerprint)) continue;
-      // A control array item is commonly a one-key object whose key is the
-      // registered control name. Merge same-name control definitions rather
-      // than emitting duplicate registrations.
       if (key === 'controls' && item && typeof item === 'object' && !Array.isArray(item)) {
         const incomingName = Object.keys(item)[0];
         const existingIndex = result.findIndex(existing =>
@@ -53,7 +50,7 @@ function mergeUiJson(base: any, overlay: any, key = ''): any {
         );
         if (existingIndex >= 0 && incomingName) {
           const existing = result[existingIndex];
-          result[existingIndex] = { [incomingName]: mergeUiJson(existing[incomingName], item[incomingName]) };
+          result[existingIndex] = { [incomingName]: mergeUiJson(existing[incomingName], item[incomingName], incomingName, path, conflicts) };
           continue;
         }
       }
@@ -67,16 +64,18 @@ function mergeUiJson(base: any, overlay: any, key = ''): any {
     const result = structuredClone(base);
     for (const [childKey, value] of Object.entries(overlay)) {
       if (!(childKey in result)) result[childKey] = structuredClone(value);
-      else result[childKey] = mergeUiJson(result[childKey], value, childKey);
+      else result[childKey] = mergeUiJson(result[childKey], value, childKey, path ? path + '.' + childKey : childKey, conflicts);
     }
     return result;
   }
-  // First definition wins on incompatible scalar/type collisions. The
-  // complete incoming pack remains available in source inputs for diagnosis;
-  // do not let a later UI addon silently disable an earlier one.
+  if (key === 'visible' && typeof base === 'string' && typeof overlay === 'string' && base !== overlay) {
+    return '(' + base + ') && (' + overlay + ')';
+  }
+  if (JSON.stringify(base) !== JSON.stringify(overlay)) {
+    conflicts.push((path || '<root>') + ' (' + typeof base + ' vs ' + typeof overlay + ')');
+  }
   return structuredClone(base);
 }
-
 /** Union-dedupe two lists preserving order (by JSON fingerprint). */
 export function unionMergeList(existing: any[], incoming: any[]): any[] {
   const seen = new Set(
@@ -251,7 +250,7 @@ export function isPlayerAnimationStrategyFile(fileName: string): boolean {
  * Merge a list of parsed JSON values for one output file using the legacy
  * per-file strategies. \`fileName\` is the lowercase zip path.
  */
-export function mergeJsonForFile(fileName: string, list: any[]): any {
+export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: string[] = []): any {
   if (list.length === 0) return {};
   if (list.length === 1) return postProcessFile(fileName, structuredClone(list[0]));
   const normalizedPath = fileName.replace(/\\/g, '/').toLowerCase();
@@ -259,8 +258,13 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
 
   if (normalizedPath.startsWith('ui/') && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
     let mergedUi = structuredClone(list[0]);
-    for (const overlay of list.slice(1)) mergedUi = mergeUiJson(mergedUi, overlay);
+    for (const overlay of list.slice(1)) mergedUi = mergeUiJson(mergedUi, overlay, '', fileName, uiConflicts);
     return mergedUi;
+  }
+  if (normalizedPath === 'ui/_global_variables.json') {
+    let mergedVariables = structuredClone(list[0]);
+    for (const overlay of list.slice(1)) mergedVariables = mergeUiJson(mergedVariables, overlay, '', fileName, uiConflicts);
+    return mergedVariables;
   }
 
   if (base.endsWith('.entity.json') || base === 'player.entity.json') {
