@@ -100,6 +100,14 @@ test('all UI JSON files preserve independent controls and bindings', () => {
   ], uiConflicts);
   assert.equal(conflicted.panel.texture, 'textures/ui/first');
   assert.ok(uiConflicts.some(path => path.includes('texture')));
+  const bindingConflicts: string[] = [];
+  const bindingMerge = mergeJsonForFile('ui/common.json', [
+    { panel: { bindings: [{ binding_name: '#health', binding_name_override: '#value', source_property_name: 'health' }] } },
+    { panel: { bindings: [{ binding_name: '#health', binding_name_override: '#value', source_property_name: 'armor' }] } },
+  ], bindingConflicts);
+  assert.equal(bindingMerge.panel.bindings.length, 1, 'conflicting binding identity must not be duplicated');
+  assert.ok(bindingConflicts.some(path => path.includes('bindings')));
+
   const hudConflicts: string[] = [];
   mergeJsonForFile('ui/hud_screen.json', [
     { screen: { scale: 1, modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'a' }] } },
