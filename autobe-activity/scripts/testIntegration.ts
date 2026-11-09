@@ -98,6 +98,30 @@ assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
 
+// Split Script API outputs must still behave as one installable modpack.
+// Activating the designated main BP should pull in the data-only BP as a
+// manifest dependency, so its blocks/items are not left inactive.
+const dataOnlyPack = await makePack('Behavior Pack', 'Data Definitions', {
+  'blocks/demo_block.json': JSON.stringify({
+    format_version: '1.21.0',
+    'minecraft:block': { description: { identifier: 'demo:from_data_pack' }, components: { 'minecraft:destructible_by_mining': { seconds_to_destroy: 1 } } }
+  })
+});
+const splitOutput = await executeMergePacks([dataOnlyPack, bpA], { modpackName: 'Split Output Activation' });
+const dataOutput = splitOutput.outputs!.find(output => output.type === 'behavior_data')!;
+const scriptOutput = splitOutput.outputs!.find(output => output.type === 'behavior_script')!;
+const dataOutputZip = await JSZip.loadAsync(dataOutput.blob!);
+const scriptOutputZip = await JSZip.loadAsync(scriptOutput.blob!);
+const dataManifest = JSON.parse(await dataOutputZip.file('manifest.json')!.async('text'));
+const scriptManifest = JSON.parse(await scriptOutputZip.file('manifest.json')!.async('text'));
+assert.ok(scriptManifest.dependencies.some((dependency: any) =>
+  dependency.uuid === dataManifest.header.uuid && JSON.stringify(dependency.version) === JSON.stringify(dataManifest.header.version)
+), 'the main behavior output must depend on every other generated behavior output');
+assert.match(scriptOutput.label, /Main \(activate this one\)/);
+assert.ok(dataOutputZip.file('blocks/demo_block.json'), 'data-only definitions must remain in the dependency pack');
+assert.ok(splitOutput.combinedExtras?.diagnosticsText?.includes('BEHAVIOR_ACTIVATION_ROOT'));
+console.log('✓ main behavior output activates all split behavior packs through manifest dependencies');
+
 // Real production-path regression: independent UI files and HUD patches from
 // separate packs must both survive the resource-pack merge.
 const uiPackA = await makePack('Resource Pack', 'HUD Coordinates', {
