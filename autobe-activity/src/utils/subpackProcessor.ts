@@ -34,12 +34,9 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
     if (fuzzy) {
       resolved = fuzzy;
     } else if (subpackDirs.size > 0) {
-      console.warn(
-        `[Aippy] Subpack "${folderName}" not found in archive; available: ${[...subpackDirs].join(', ')} — using the first available variant.`
-      );
-      resolved = [...subpackDirs][0];
+      throw new Error(`Selected subpack "${folderName}" was not found. Available variants: ${[...subpackDirs].join(', ')}.`);
     } else {
-      console.warn('[Aippy] No subpacks/ folders found in archive; skipping variant extraction.');
+      throw new Error(`The pack declares subpack "${folderName}", but no subpacks/ folder exists in its archive.`);
     }
   }
 
