@@ -71,28 +71,6 @@ export const App: React.FC = () => {
   const [mergeProgress, setMergeProgress] = useState<number>(0);
   const [justCompletedModpack, setJustCompletedModpack] = useState<MergedModpack | null>(null);
 
-  // Discord user state for community modpacks and personalized greetings.
-  const [discordUser, setDiscordUser] = useState<{ id: string; username?: string; global_name?: string } | null>(null);
-  const [isReturningUser, setIsReturningUser] = useState(false);
-
-  // Automatically greet first-time and returning Discord users separately on this device.
-  // Each Discord account has its own key, so shared devices don't mix up greetings.
-  useEffect(() => {
-    const user = getDiscordUser();
-    if (!user) return;
-
-    setDiscordUser(user);
-    try {
-      const seenKey = `autobe_seen_discord_user_${user.id}`;
-      const hasVisited = window.localStorage.getItem(seenKey) === '1';
-      setIsReturningUser(hasVisited);
-      window.localStorage.setItem(seenKey, '1');
-    } catch {
-      // Embedded browsers may block local storage; default to a first-visit greeting.
-      setIsReturningUser(false);
-    }
-  }, []);
-
   // Subpack selection flow (port of AutoBE._show_subpack_selection)
   const [subpackPromptPacks, setSubpackPromptPacks] = useState<AddonPack[] | null>(null);
   const pendingMergeRef = useRef<{
@@ -821,31 +799,6 @@ export const App: React.FC = () => {
       )}
 
       {/* Screen Router */}
-      {screen === 'splash' && (
-        <SplashScreen
-          onFinished={() => setScreen('main')}
-          onCreateNew={startCreate}
-          onBrowseTemplates={() => {
-            navigateTab('library');
-          }}
-          onViewDocumentation={openAbout}
-        />
-      )}
-
-      {screen === 'add_packs' && (
-        <AddPacksScreen
-          installedPacks={installedPacks}
-          selectedPackIds={selectedPackIds}
-          onTogglePack={handleTogglePack}
-          onSelectAll={handleSelectAll}
-          onClearSelection={handleClearSelection}
-          onDeleteAll={handleDeleteAllPacks}
-          onContinue={handleStartMergeFlow}
-          onImportPacks={handleImportPacks}
-          onBack={() => setScreen('main')}
-        />
-      )}
-
       {screen === 'script_check' && mergePlan && (
         <ScriptCheckScreen
           plan={mergePlan}
