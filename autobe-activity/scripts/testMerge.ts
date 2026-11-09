@@ -51,6 +51,11 @@ await (async () => {
   assert.equal(selectedZip.file('subpacks/normal/textures/ui/frame.png'), null, 'unselected variant must not leak into output');
   const manifest = JSON.parse(await selectedZip.file('manifest.json')!.async('text'));
   assert.equal(manifest.subpacks, undefined, 'selected output must not prompt again');
+  await assert.rejects(
+    () => applySubpackSelection(parsed.packs[0].fileBlob!, 'missing_variant'),
+    /Selected subpack "missing_variant" was not found/,
+    'a missing requested variant must fail instead of silently substituting a different UI pack'
+  );
   console.log('✓ standard Bedrock folder_name subpacks are detected and selected UI assets are retained');
 })();
 
