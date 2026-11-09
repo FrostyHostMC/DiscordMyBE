@@ -63,9 +63,7 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
         delete manifest.subpacks;
         out.file(path, JSON.stringify(manifest, null, 2));
       } catch {
-        // Do not let a root/base entry replace the selected variant's file.
-    if (selectedVariantPaths.has(lower)) continue;
-    out.file(path, await f.async('uint8array'));
+        out.file(path, await f.async('uint8array'));
       }
       continue;
     }
@@ -81,6 +79,9 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
       }
       continue;
     }
+    // A selected variant has priority over root/base files even when the
+    // base entry appears later in the ZIP central directory.
+    if (selectedVariantPaths.has(lower)) continue;
     out.file(path, await f.async('uint8array'));
   }
   const data = await out.generateAsync({ type: 'uint8array' });
