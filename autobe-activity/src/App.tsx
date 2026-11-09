@@ -74,7 +74,6 @@ export const App: React.FC = () => {
   const pendingOutputOptionsRef = useRef<Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>>({ generateAddon: true, generateSeparatePacks: true });
 
   // File import ref
-  const globalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Notification Toast state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
