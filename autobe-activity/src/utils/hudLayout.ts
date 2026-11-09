@@ -17,6 +17,7 @@ type HudCandidate = {
   anchorTo: HudPosition;
   offset: [number, number];
   definition: Record<string, any>;
+  movable: boolean;
 };
 
 const SCREEN_PROFILES = [
@@ -121,10 +122,8 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
       value.forEach(item => visit(item));
       return;
     }
-    if (Array.isArray(value.modifications)) {
-      for (const patch of value.modifications) {
-        if (!patch || patch.array_name !== 'controls' || !Array.isArray(patch.value)) continue;
-        for (const controlEntry of patch.value) {
+    const collectControlEntries = (entries: any[], movable: boolean): void => {
+      for (const controlEntry of entries) {
           if (!controlEntry || typeof controlEntry !== 'object' || Array.isArray(controlEntry)) continue;
           for (const [reference, rawInstance] of Object.entries(controlEntry)) {
             if (!reference.includes('@') || !rawInstance || typeof rawInstance !== 'object' || Array.isArray(rawInstance)) continue;
@@ -152,9 +151,24 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             // coordinate origin because a wrong assumption can move a valid HUD
             // element off-screen or into another add-on's controls.
             if (!anchorFrom || !anchorTo || !offset) continue;
-            result.push({ instance, id: reference, size, anchorFrom, anchorTo, offset, definition });
+            result.push({ instance, id: reference, size, anchorFrom, anchorTo, offset, definition, movable });
           }
         }
+      }
+    };
+    // Existing controls already present in the root HUD are fixed obstacles:
+    // the resolver must not move a new add-on control into their occupied area.
+    if (key === 'root_panel' && Array.isArray(value.controls)) {
+      collectControlEntries(value.controls, false);
+    }
+    if (Array.isArray(value.modifications)) {
+      for (const patch of value.modifications) {
+        // Only insertion operations add visible controls. A remove/replace
+        // patch must never be interpreted as a new HUD element.
+        if (!patch || patch.array_name !== 'controls' ||
+            !/^insert_(?:front|back)$/i.test(String(patch.operation || '')) ||
+            !Array.isArray(patch.value)) continue;
+        collectControlEntries(patch.value, true);
       }
     }
     for (const [childKey, child] of Object.entries(value)) visit(child, childKey);
@@ -191,10 +205,17 @@ export function resolveHudPlacements(
   for (const candidate of candidates) {
     const currentRects = SCREEN_PROFILES.map(screen => rectFor(candidate.anchorFrom, candidate.anchorTo, candidate.offset, candidate.size, screen));
     if (currentRects.some((rect, index) => !inViewport(rect, SCREEN_PROFILES[index]))) {
-      unresolved.push(candidate.id + ' (original bounds extend outside at least one supported screen profile)');
+      if (candidate.movable) unresolved.push(candidate.id + ' (original bounds extend outside at least one supported screen profile)');
+      // Keep even out-of-bounds fixed controls out of the placement candidates;
+      // a bad source layout must not cause AutoBE to move unrelated controls.
       continue;
     }
-    if (!occupied.some(existing => existing.some((rect, index) => intersects(rect, currentRects[index])))) {
+    const collides = occupied.some(existing => existing.some((rect, index) => intersects(rect, currentRects[index])));
+    if (!collides) {
+      occupied.push(currentRects);
+      continue;
+    }
+    if (!candidate.movable) {
       occupied.push(currentRects);
       continue;
     }
