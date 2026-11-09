@@ -1,3 +1,5 @@
+import { deepMergeUi } from './subpackHudMerge';
+
 /**
  * Port of AutoBE Part 18 _merge_json / _merge_entity_json_simple /
  * _deep_merge_union (file-specific branches) plus the blocks.json and
@@ -188,7 +190,7 @@ function mergeHudModifications(...lists: any[][]): any[] {
 export function isUiMergeStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
-  return normalized.startsWith('ui/') && (base === 'hud_screen.json' || base === '_ui_defs.json');
+  return normalized.startsWith('ui/') && normalized.endsWith('.json');
 }
 
 export function isPlayerAnimationStrategyFile(fileName: string): boolean {
@@ -208,7 +210,14 @@ export function isPlayerAnimationStrategyFile(fileName: string): boolean {
 export function mergeJsonForFile(fileName: string, list: any[]): any {
   if (list.length === 0) return {};
   if (list.length === 1) return postProcessFile(fileName, structuredClone(list[0]));
+  const normalizedPath = fileName.replace(/\\/g, '/').toLowerCase();
   const base = fileName.substring(fileName.lastIndexOf('/') + 1);
+
+  if (normalizedPath.startsWith('ui/') && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
+    const mergedUi = structuredClone(list[0]);
+    for (const overlay of list.slice(1)) deepMergeUi(mergedUi, overlay);
+    return mergedUi;
+  }
 
   if (base.endsWith('.entity.json') || base === 'player.entity.json') {
     return postProcessFile(fileName, mergeEntityJsonSimple(list));
