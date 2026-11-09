@@ -46,6 +46,111 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
 
   const isResourcePack = /resource pack/i.test(label);
   const isBehaviorPack = /behavior/i.test(label);
+
+  if (isBehaviorPack) {
+    const manifestEntry = jsonEntries.find(entry => entry.path.replace(/\\/g, '/').toLowerCase().endsWith('manifest.json'));
+    const dependencies = Array.isArray(manifestEntry?.data?.dependencies) ? manifestEntry.data.dependencies : [];
+    const uiDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server-ui');
+    const serverDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server');
+    const scriptFiles: Array<{ path: string; file: JSZip.JSZipObject }> = [];
+    zip.forEach((path, file) => {
+      if (!file.dir && /\.(?:js|mjs|ts)$/i.test(path)) scriptFiles.push({ path, file });
+    });
+    let usesDdui = false;
+    let usesPreviewDdui = false;
+    for (const script of scriptFiles) {
+      try {
+        const source = await script.file.async('text');
+        if (/\b(?:CustomForm|MessageBox|ObservableString|ObservableNumber|ObservableBoolean|ObservableUIRawMessage)\b/.test(source) &&
+            /@minecraft\/server-ui/.test(source)) usesDdui = true;
+        if (/@minecraft\/server-ui/.test(source) && /\.multiButtonRow\s*\(|\.button3WithOptions\s*\(/.test(source)) usesPreviewDdui = true;
+      } catch { /* archive read failures are reported by other validation passes */ }
+    }
+    const versionAtLeast = (value: unknown, minimum: [number, number, number]) => {
+      if (typeof value !== 'string') return false;
+      const parsed = value.split('.').slice(0, 3).map(part => Number.parseInt(part, 10));
+      if (parsed.length !== 3 || parsed.some(part => !Number.isFinite(part))) return false;
+      for (let i = 0; i < 3; i++) {
+        if (parsed[i] > minimum[i]) return true;
+        if (parsed[i] < minimum[i]) return false;
+      }
+      return true;
+    };
+    if (usesDdui && !versionAtLeast(uiDependency?.version, [2, 1, 0])) {
+      add({
+        severity: 'warning',
+        code: 'DDUI_API_DEPENDENCY_MISSING',
+        path: manifestEntry?.path || 'manifest.json',
+        message: '[' + label + '] Scripts reference DDUI classes, but @minecraft/server-ui is missing or older than 2.1.0. DDUI became stable in @minecraft/server-ui 2.1.0; preserve the source dependency or update it only when the selected Minecraft target supports it.'
+      });
+    }
+    if (usesDdui && !versionAtLeast(serverDependency?.version, [2, 0, 0])) {
+      add({
+        severity: 'warning',
+        code: 'DDUI_SERVER_PEER_DEPENDENCY',
+        path: manifestEntry?.path || 'manifest.json',
+        message: '[' + label + '] DDUI requires the @minecraft/server 2.0.0 peer dependency. AutoBE will not silently upgrade this pack because API compatibility must match the selected Bedrock target.'
+      });
+    }
+    if (usesPreviewDdui && !versionAtLeast(uiDependency?.version, [2, 4, 0])) {
+      add({
+        severity: 'warning',
+        code: 'DDUI_PREVIEW_UI_VERSION',
+        path: manifestEntry?.path || 'manifest.json',
+        message: '[' + label + '] Scripts use preview DDUI methods such as multiButtonRow or button3WithOptions, but @minecraft/server-ui is older than 2.4.0-rc. These methods are preview-only in current documentation; AutoBE preserves the declared dependency instead of upgrading it.'
+      });
+    }
+  }
+
+  // These legacy screen files can affect older JSON-UI menu implementations,
+  // but they are not a supported injection surface for native Ore UI screens.
+  // Keep the files; emit an informational warning so users do not mistake a
+  // successful JSON merge for native Ore UI compatibility.
+  const legacyMenuFiles = new Set([
+    'start_screen.json', 'pause_screen.json', 'settings_screen.json',
+    'inventory_screen.json', 'crafting_screen.json', 'container_screen.json',
+    'world_screen.json', 'create_world_screen.json', 'edit_world_screen.json',
+    'play_screen.json', 'marketplace_screen.json', 'main_menu_screen.json',
+    'world_selection_screen.json', 'disconnected_screen.json', 'achievements_screen.json',
+    'sleep_screen.json', 'death_screen.json', 'permissions_screen.json'
+  ]);
+  if (isResourcePack) {
+    for (const entry of jsonEntries) {
+      const normalized = entry.path.replace(/\\\\/g, '/').toLowerCase();
+      const fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+      if (!(normalized.startsWith('ui/') || normalized.includes('/ui/')) || !legacyMenuFiles.has(fileName)) continue;
+      add({
+        severity: 'warning',
+        code: 'LEGACY_UI_ORE_UI_LIMIT',
+        path: entry.path,
+        message: '[' + label + '] This add-on customizes a legacy JSON UI menu file. If the corresponding native screen uses Ore UI in the installed Minecraft version, resource packs cannot inject into or replace that screen. The file is preserved for game versions that still load the legacy screen.'
+      });
+    }
+  }
+
+  // _ui_defs.json is the loader registry for custom JSON-UI screens/common
+  // files. A syntactically valid merge can still render nothing when one of
+  // these registered paths was overwritten, dropped, or never copied.
+  if (isResourcePack) {
+    for (const entry of jsonEntries) {
+      if (!entry.path.replace(/\\/g, '/').toLowerCase().endsWith('ui/_ui_defs.json')) continue;
+      const definitions = entry.data?.ui_defs;
+      if (!Array.isArray(definitions)) {
+        add({ severity: 'warning', code: 'INVALID_UI_DEFS', path: entry.path, message: '[' + label + '] ui/_ui_defs.json does not contain a ui_defs array; custom UI files may not be loaded.' });
+        continue;
+      }
+      for (const definition of definitions) {
+        if (typeof definition !== 'string' || !definition.trim()) {
+          add({ severity: 'warning', code: 'INVALID_UI_DEF_ENTRY', path: entry.path, message: '[' + label + '] ui_defs contains an empty or non-string UI file entry.' });
+          continue;
+        }
+        const normalized = definition.replace(/\\/g, '/').replace(/^\.\//, '').toLowerCase();
+        if (!paths.has(normalized)) {
+          add({ severity: 'warning', code: 'MISSING_UI_DEFINITION_FILE', path: entry.path, message: '[' + label + '] UI file "' + definition + '" is registered in ui_defs but is missing from the merged resource pack.' });
+        }
+      }
+    }
+  }
   const identifiers = new Map<string, string[]>();
   const identifierRoots = ['minecraft:item', 'minecraft:entity', 'minecraft:block', 'minecraft:client_entity', 'minecraft:attachable'];
   for (const entry of jsonEntries) {

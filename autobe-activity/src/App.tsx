@@ -139,6 +139,7 @@ export const App: React.FC = () => {
   } | null>(null);
   const scriptConflictsRef = useRef<Record<string, string[]>>({});
   const pendingTargetEngineRef = useRef<string>('1.20.0');
+  const pendingHudPlacementRef = useRef<NonNullable<MergeSessionConfig['hudPlacement']>>('auto');
   const pendingOutputOptionsRef = useRef<Pick<MergeSessionConfig, 'generateAddon' | 'generateSeparatePacks'>>({ generateAddon: true, generateSeparatePacks: true });
 
   // File import ref
@@ -416,6 +417,7 @@ export const App: React.FC = () => {
 
   const handleStartMergeFlowInner = async (customConfig?: MergeSessionConfig, orderedPackIds?: string[]) => {
     pendingTargetEngineRef.current = customConfig?.targetEngine || '1.20.0';
+    pendingHudPlacementRef.current = customConfig?.hudPlacement || 'auto';
     pendingOutputOptionsRef.current = { generateAddon: customConfig?.generateAddon ?? true, generateSeparatePacks: customConfig?.generateSeparatePacks ?? true };
     triggerHaptic(50);
     handleSoundTap();
@@ -482,6 +484,7 @@ export const App: React.FC = () => {
         conflicts: confList,
         autoPrefix: autoMerge,
         scriptConflicts: scriptConflictsRef.current,
+        hudPlacement: pendingHudPlacementRef.current,
         onProgress: (step, pct) => {
           setMergeStep(step);
           setMergeProgress(pct);

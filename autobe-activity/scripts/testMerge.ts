@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
-import { mergeJsonForFile } from '../src/utils/smartJsonMerge.ts';
+import { mergeJsonForFile, isUiMergeStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -13,12 +13,121 @@ import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
 import { selectMergeOutputs } from '../src/utils/outputOptions.ts';
 import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from '../src/utils/identifierReferences.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
+import { resolveHudPlacements, HUD_POSITIONS } from '../src/utils/hudLayout.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('HUD placement resolver relocates overlapping measurable controls to distinct safe anchors', () => {
+  const hud = {
+    root: {
+      size: ['100%', '100%'],
+      modifications: [{
+        array_name: 'controls',
+        operation: 'insert_front',
+        value: [
+          { 'coords@hud.coords': {} },
+          { 'ammo@hud.ammo': {} },
+          { 'boss@hud.boss': {} },
+        ],
+      }],
+    },
+  };
+  const definitions = [{
+    coords: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+    ammo: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+    boss: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 2);
+  assert.equal(result.unresolved.length, 0);
+  assert.equal(new Set(result.moved.map(item => item.to)).size, 2);
+  assert.deepEqual(HUD_POSITIONS.length, 9);
+  assert.equal(hud.root.modifications[0].value[1]['ammo@hud.ammo'].anchor_from, undefined, 'source input must not be mutated');
+});
+
+test('HUD placement treats existing root controls as fixed occupied space', () => {
+  const hud = { root_panel: {
+    controls: [{ 'vanilla@hud.vanilla': {} }],
+    modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'addon@hud.addon': {} }] }],
+  } };
+  const definitions = [{
+    vanilla: { size: [220, 64], anchor_from: 'top_left', anchor_to: 'top_left', offset: [12, 12] },
+    addon: { size: [220, 64], anchor_from: 'top_left', anchor_to: 'top_left', offset: [12, 12] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 1);
+  assert.notEqual(result.moved[0].to, 'top_left', 'new add-on HUD must move away from an existing root control');
+  assert.equal(result.hud.root_panel.controls[0]['vanilla@hud.vanilla'].anchor_from, undefined, 'existing HUD control must not be mutated');
+});
+
+test('HUD placement ignores removal and replacement patches', () => {
+  const hud = { root: { size: ['100%', '100%'], modifications: [
+    { array_name: 'controls', operation: 'remove', value: [{ 'remove@hud.remove': {} }] },
+    { array_name: 'controls', operation: 'replace', value: [{ 'replace@hud.replace': {} }] },
+    { array_name: 'controls', operation: 'insert_back', value: [{ 'insert@hud.insert': {} }] },
+  ] } };
+  const definitions = [{
+    remove: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    replace: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    insert: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 0);
+  assert.deepEqual(result.hud, hud);
+});
+
+test('HUD placement resolver recognizes the canonical inherited root_panel coordinate space', () => {
+  const hud = { root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'first@hud.first': {} }, { 'second@hud.second': {} },
+  ] }] } };
+  const definitions = [{
+    first: { size: [180, 48], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    second: { size: [180, 48], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 1, 'root_panel inherits the full-screen HUD coordinate space');
+  assert.equal(result.unresolved.length, 0);
+});
+
+test('HUD placement resolver uses all nine positions and leaves excess collisions intact', () => {
+  const controls: any[] = [];
+  const definitions: any = {};
+  for (let index = 0; index < 10; index++) {
+    const name = 'panel_' + index;
+    controls.push({ [name + '@hud.' + name]: {} });
+    definitions[name] = { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] };
+  }
+  const hud = { root: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: controls }] } };
+  const result = resolveHudPlacements(hud, [definitions], 'auto');
+  assert.equal(result.moved.length, 8);
+  assert.equal(result.unresolved.length, 1, 'the tenth overlapping panel must not be forced into an occupied position');
+  assert.equal(new Set(result.moved.map(item => item.to)).size, 8);
+  assert.ok(HUD_POSITIONS.every(position => position === 'top_left' || result.moved.some(item => item.to === position)));
+});
+
+test('HUD placement resolver leaves dynamic or unknown-size controls unchanged', () => {
+  const hud = { root: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'dynamic@hud.dynamic': { anims: ['@hud.move'], offset: ['$dynamic_x', 0] } },
+  ] }] } };
+  const result = resolveHudPlacements(hud, [{ dynamic: { type: 'panel', size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left' } }], 'auto');
+  assert.equal(result.moved.length, 0);
+  assert.deepEqual(result.hud, hud);
+});
+
+test('HUD placement preserve mode does not rewrite overlapping controls', () => {
+  const hud = { root: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'one@hud.one': {} }, { 'two@hud.two': {} },
+  ] }] } };
+  const definitions = [{ one: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' }, two: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' } }];
+  const result = resolveHudPlacements(hud, definitions, 'preserve');
+  assert.equal(result.moved.length, 0);
+  assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.hud, hud);
+});
 
 test('selected Bedrock target is written as the minimum when source packs support it', () => {
   const diagnostics: string[] = [];
@@ -79,13 +188,83 @@ test('HUD merge preserves ordered patches and removes only exact duplicates', ()
   JSON.parse(JSON.stringify(merged));
 });
 
-test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
+test('all UI JSON files preserve independent controls and bindings', () => {
+  const merged = mergeJsonForFile('ui/common.json', [
+    { panel: { controls: [{ 'left@hud.left': {} }], bindings: [{ binding_name: '#left' }] } },
+    { panel: { controls: [{ 'right@hud.right': {} }], bindings: [{ binding_name: '#right' }] } },
+  ]);
+  assert.deepEqual(merged.panel.controls, [{ 'left@hud.left': {} }, { 'right@hud.right': {} }]);
+  assert.deepEqual(merged.panel.bindings, [{ binding_name: '#left' }, { binding_name: '#right' }]);
+  const collision = mergeJsonForFile('ui/common.json', [
+    { panel: { type: 'panel', texture: 'textures/ui/first', controls: [{ 'same@hud.control': { offset: [0, 0] } }] } },
+    { panel: { type: 'image', texture: 'textures/ui/second', controls: [{ 'same@hud.control': { size: [20, 20] } }] } },
+  ]);
+  assert.equal(collision.panel.type, 'panel', 'later conflicting UI scalar must not replace the active definition');
+  assert.equal(collision.panel.texture, 'textures/ui/first');
+  assert.deepEqual(collision.panel.controls[0]['same@hud.control'], { offset: [0, 0], size: [20, 20] });
+
+  const structuralConflicts: string[] = [];
+  const structural = mergeJsonForFile('ui/common.json', [
+    { panel: { controls: [{ 'shared@hud.control': { type: 'panel', controls: [{ 'first@hud.first': {} }] } }] } },
+    { panel: { controls: [{ 'shared@hud.control': { type: 'image', texture: 'textures/ui/second' } }] } },
+  ], structuralConflicts);
+  assert.deepEqual(
+    structural.panel.controls[0]['shared@hud.control'],
+    { type: 'panel', controls: [{ 'first@hud.first': {} }] },
+    'different control types must not be blended into a hybrid definition'
+  );
+  assert.ok(structuralConflicts.some(path => path.includes('structural collision')));
+  const uiConflicts: string[] = [];
+  const conflicted = mergeJsonForFile('ui/common.json', [
+    { panel: { texture: 'textures/ui/first' } },
+    { panel: { texture: 'textures/ui/second' } },
+  ], uiConflicts);
+  assert.equal(conflicted.panel.texture, 'textures/ui/first');
+  assert.ok(uiConflicts.some(path => path.includes('texture')));
+  const bindingConflicts: string[] = [];
+  const bindingMerge = mergeJsonForFile('ui/common.json', [
+    { panel: { bindings: [{ binding_name: '#health', binding_name_override: '#value', source_property_name: 'health' }] } },
+    { panel: { bindings: [{ binding_name: '#health', binding_name_override: '#value', source_property_name: 'armor' }] } },
+  ], bindingConflicts);
+  assert.equal(bindingMerge.panel.bindings.length, 1, 'conflicting binding identity must not be duplicated');
+  assert.ok(bindingConflicts.some(path => path.includes('bindings')));
+
+  const hudConflicts: string[] = [];
+  mergeJsonForFile('ui/hud_screen.json', [
+    { screen: { scale: 1, modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'a' }] } },
+    { screen: { scale: 2, modifications: [{ array_name: 'controls', operation: 'insert_front', value: 'b' }] } },
+  ], hudConflicts);
+  assert.ok(hudConflicts.some(path => path.includes('scale')), 'HUD scalar collisions must be reported');
+
+});
+
+test('subpack UI paths are routed through the UI-specific strategy', () => {
+  assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/hud_screen.json'), true);
+  assert.equal(isUiMergeStrategyFile('subpacks/compact/ui/common.json'), true);
+});
+
+test('HUD and UI definition strategy merge preserves independent registrations', () => {
+  const hud = mergeJsonForFile('ui/hud_screen.json', [
+    { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'first@hud.first': {} }] }] } },
+    { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'second@hud.second': {} }] }] } },
+  ]);
+  assert.equal(hud.screen.modifications.length, 2);
+  const defs = mergeJsonForFile('ui/_ui_defs.json', [
+    { ui_defs: ['ui/first.json'] },
+    { ui_defs: ['ui/second.json', 'ui/first.json'] },
+  ]);
+  assert.deepEqual(defs.ui_defs, ['ui/first.json', 'ui/second.json']);
+});
+
+test('conflicting HUD visibility predicates are preserved and reported, not ANDed into invisible HUDs', () => {
+  const conflicts: string[] = [];
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { panel: { visible: 'query.is_first_person', text: 'base label' } } },
     { screen: { panel: { visible: 'query.is_alive', text: 'overlay label' } } },
-  ]);
-  assert.equal(merged.screen.panel.visible, '(query.is_first_person) && (query.is_alive)');
+  ], conflicts);
+  assert.equal(merged.screen.panel.visible, 'query.is_first_person');
   assert.equal(merged.screen.panel.text, 'base label');
+  assert.ok(conflicts.some(path => path.endsWith('.visible')));
 });
 
 test('subpack HUD merge preserves controls and bindings from both packs', () => {
@@ -93,7 +272,7 @@ test('subpack HUD merge preserves controls and bindings from both packs', () => 
     { panel: { visible: 'query.is_first_person', controls: [{ base: {} }], bindings: [{ binding_name: '#base' }] } },
     { panel: { visible: 'query.is_alive', controls: [{ overlay: {} }], bindings: [{ binding_name: '#overlay' }] } },
   );
-  assert.equal(result.panel.visible, '(query.is_first_person) && (query.is_alive)');
+  assert.equal(result.panel.visible, 'query.is_first_person', 'conflicting subpack visibility must not hide the root HUD');
   assert.deepEqual(result.panel.controls, [{ base: {} }, { overlay: {} }]);
   assert.deepEqual(result.panel.bindings, [{ binding_name: '#base' }, { binding_name: '#overlay' }]);
 });
@@ -468,7 +647,40 @@ await (async () => {
   assert.ok(issues.some(issue => issue.code === 'MISSING_ANIMATION_REFERENCE' && issue.message.includes('animation.missing')));
   assert.ok(issues.some(issue => issue.code === 'MISSING_RENDER_CONTROLLER_REFERENCE' && issue.message.includes('controller.render.missing')));
   assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
-  console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
+  zip.file('ui/_ui_defs.json', JSON.stringify({ ui_defs: ['ui/working.json', 'ui/missing.json'] }));
+  zip.file('ui/working.json', JSON.stringify({}));
+  zip.file('ui/settings_screen.json', JSON.stringify({ legacy_menu: {} }));
+  const uiIssues = await validateMergedArchive(zip, 'Test Resource Pack');
+  assert.ok(uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/missing.json')));
+  assert.ok(!uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/working.json')));
+  assert.ok(uiIssues.some(issue => issue.code === 'LEGACY_UI_ORE_UI_LIMIT' && issue.path === 'ui/settings_screen.json'));
+  console.log('✓ merged archive validation reports malformed JSON, unresolved assets, missing UI registrations and Ore UI legacy-menu limits');
+})();
+
+await (async () => {
+  const zip = new JSZip();
+  zip.file('manifest.json', JSON.stringify({ dependencies: [{ module_name: '@minecraft/server', version: '1.21.0' }] }));
+  zip.file('scripts/menu.js', 'import { CustomForm, ObservableString } from "@minecraft/server-ui";');
+  const issues = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(issues.some(issue => issue.code === 'DDUI_API_DEPENDENCY_MISSING'));
+  assert.ok(issues.some(issue => issue.code === 'DDUI_SERVER_PEER_DEPENDENCY'));
+  zip.file('manifest.json', JSON.stringify({ dependencies: [
+    { module_name: '@minecraft/server', version: '2.0.0' },
+    { module_name: '@minecraft/server-ui', version: '2.1.0' },
+  ] }));
+  const supported = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(!supported.some(issue => issue.code === 'DDUI_API_DEPENDENCY_MISSING'));
+  assert.ok(!supported.some(issue => issue.code === 'DDUI_SERVER_PEER_DEPENDENCY'));
+  zip.file('scripts/menu.js', 'import { CustomForm } from "@minecraft/server-ui"; form.multiButtonRow();');
+  const previewMissing = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(previewMissing.some(issue => issue.code === 'DDUI_PREVIEW_UI_VERSION'));
+  zip.file('manifest.json', JSON.stringify({ dependencies: [
+    { module_name: '@minecraft/server', version: '2.13.0-beta.1.26.70-preview.21' },
+    { module_name: '@minecraft/server-ui', version: '2.4.0-rc.1.26.70-preview.21' },
+  ] }));
+  const previewSupported = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(!previewSupported.some(issue => issue.code === 'DDUI_PREVIEW_UI_VERSION'));
+  console.log('✓ DDUI stable and preview-only method usage is checked against matching server-ui/server versions');
 })();
 
 

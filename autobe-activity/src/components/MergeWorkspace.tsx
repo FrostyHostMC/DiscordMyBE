@@ -53,6 +53,9 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [inspectingPack, setInspectingPack] = useState<AddonPack | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [showHudPlacementPrompt, setShowHudPlacementPrompt] = useState(false);
+  const [pendingHudPackIds, setPendingHudPackIds] = useState<string[]>([]);
+  const [hudPromptMode, setHudPromptMode] = useState<NonNullable<MergeSessionConfig['hudPlacement']>>('auto');
 
   // Ordered pack list for merge precedence
   const [packOrder, setPackOrder] = useState<string[]>(() => {
@@ -96,7 +99,8 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
     targetEngine: '1.20.0',
     autoPrefix: true,
     generateAddon: true,
-    generateSeparatePacks: true
+    generateSeparatePacks: true,
+    hudPlacement: 'auto'
   });
 
   // Import state
@@ -316,6 +320,25 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const requestMerge = () => {
+    const ids = orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id);
+    if (selectedRP.length > 0) {
+      setPendingHudPackIds(ids);
+      setHudPromptMode(config.hudPlacement || 'auto');
+      setShowHudPlacementPrompt(true);
+    } else {
+      onStartMergeFlow(config, ids);
+    }
+  };
+
+  const confirmHudPlacement = () => {
+    const nextConfig = { ...config, hudPlacement: hudPromptMode };
+    setConfig(nextConfig);
+    setShowHudPlacementPrompt(false);
+    onStartMergeFlow(nextConfig, pendingHudPackIds);
+    setPendingHudPackIds([]);
+  };
+
   return (
     <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-hidden">
       {/* Hidden File Inputs */}
@@ -404,7 +427,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             <button
               type="button"
               disabled={selectedPackIds.length === 0 || (!config.generateAddon && !config.generateSeparatePacks)}
-              onClick={() => onStartMergeFlow(config, orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id))}
+              onClick={requestMerge}
               className="px-4 py-1.5 rounded-lg bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-40 text-xs font-bold text-white transition-all shadow-[0_0_15px_rgba(118,43,255,0.4)] active:scale-95 flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -456,7 +479,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               </p>
             </div>
 
-            <div className="sm:col-span-2 rounded-lg border border-[#30263F] bg-[#100D18] p-3 space-y-3">
+                        <div className="sm:col-span-2 rounded-lg border border-[#30263F] bg-[#100D18] p-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0"><div className="text-[11px] font-semibold text-white">Combined Addon (.mcaddon)</div><p className="text-[10px] text-[#8F879F]">One installable bundle containing the generated packs.</p></div>
                 <input type="checkbox" checked={config.generateAddon} onChange={(e) => setConfig({ ...config, generateAddon: e.target.checked })} className="rounded accent-[#762BFF] shrink-0" />
@@ -688,13 +711,48 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
         <button
           type="button"
           disabled={selectedPackIds.length === 0}
-          onClick={() => onStartMergeFlow(config, orderedPacks.filter(pack => selectedPackIds.includes(pack.id)).map(pack => pack.id))}
+          onClick={requestMerge}
           className="flex-1 max-w-[200px] py-2.5 rounded-xl bg-[#762BFF] hover:bg-[#853CFF] disabled:opacity-40 text-xs font-bold text-white transition-all shadow-[0_0_15px_rgba(118,43,255,0.4)] active:scale-95 flex items-center justify-center gap-1.5"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>Start Merge</span>
         </button>
       </div>
+
+      {showHudPlacementPrompt && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="hud-placement-title">
+          <div className="w-full max-w-lg rounded-2xl border border-[#49366A] bg-[#100D18] shadow-2xl overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-[#30263F]">
+              <div className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#A855F7]">Before merging</div>
+              <h2 id="hud-placement-title" className="mt-1 text-lg font-bold text-white">Choose HUD placement</h2>
+              <p className="mt-1 text-xs leading-relaxed text-[#AAA3BB]">If compatible HUD add-ons compete for the same space, AutoBE can move measurable controls. Animated or unknown layouts stay untouched.</p>
+            </div>
+            <div className="p-4 sm:p-5 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                {([
+                  ['top_left', 'Top left'], ['top_middle', 'Top middle'], ['top_right', 'Top right'],
+                  ['left_middle', 'Middle left'], ['center', 'Center'], ['right_middle', 'Middle right'],
+                  ['bottom_left', 'Bottom left'], ['bottom_middle', 'Bottom middle'], ['bottom_right', 'Bottom right'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} type="button" onClick={() => setHudPromptMode(value)} className={`min-h-12 rounded-lg border px-2 py-2 text-[11px] font-semibold transition-colors ${hudPromptMode === value ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB] hover:text-white'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setHudPromptMode('auto')} className={`rounded-lg border px-3 py-2.5 text-xs font-bold ${hudPromptMode === 'auto' ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>Automatic placement</button>
+                <button type="button" onClick={() => setHudPromptMode('preserve')} className={`rounded-lg border px-3 py-2.5 text-xs font-bold ${hudPromptMode === 'preserve' ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>Keep original positions</button>
+              </div>
+              <p className="text-[10px] leading-relaxed text-[#8F879F]">Placement is estimated at merge time. AutoBE only moves controls with static dimensions and a verified full-screen parent; it cannot guarantee every custom layout across all screen sizes.</p>
+              <p className="text-[10px] leading-relaxed text-[#8F879F]">Native Ore UI menus are game-owned and cannot accept resource-pack UI injections. AutoBE keeps legacy menu files and reports likely Ore UI limitations instead of deleting or pretending to convert them.</p>
+            </div>
+            <div className="flex justify-end gap-2 p-4 border-t border-[#30263F]">
+              <button type="button" onClick={() => { setShowHudPlacementPrompt(false); setPendingHudPackIds([]); }} className="rounded-lg border border-[#30263F] px-4 py-2 text-xs font-semibold text-[#AAA3BB] hover:text-white">Cancel</button>
+              <button type="button" onClick={confirmHudPlacement} className="rounded-lg bg-[#762BFF] px-4 py-2 text-xs font-bold text-white hover:bg-[#853CFF]">Continue to merge</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Inspector Modal */}
       {inspectingPack && (

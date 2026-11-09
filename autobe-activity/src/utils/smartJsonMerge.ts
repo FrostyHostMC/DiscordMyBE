@@ -31,6 +31,81 @@ const MERGE_MAX_KEYS = new Set([
 const KEEP_FIRST_KEYS = new Set(['format_version', 'description', 'identifier',
   'minecraft:collision_box', 'minecraft:movement']);
 
+/** Structural properties define what a UI control actually is. If two
+ * packs reuse the same control key but disagree on one of these, combining
+ * their remaining properties creates a hybrid control that belonged to
+ * neither source pack. Keep the first definition intact and preserve the
+ * incoming file as a conflict backup instead. */
+const UI_STRUCTURAL_KEYS = ['type', 'renderer', 'template'];
+
+function hasUiStructuralCollision(base: any, overlay: any): string[] {
+  if (!base || !overlay || typeof base !== 'object' || typeof overlay !== 'object' ||
+      Array.isArray(base) || Array.isArray(overlay)) return [];
+  return UI_STRUCTURAL_KEYS.filter(key =>
+    key in base && key in overlay && JSON.stringify(base[key]) !== JSON.stringify(overlay[key])
+  );
+}
+
+/** Merge UI JSON conservatively: retain independent controls/bindings and
+ * nested definitions, but never silently replace an existing scalar setting.
+ * Bedrock UI values often encode bindings, visibility and layout semantics;
+ * guessing a winner can make an otherwise valid HUD disappear. */
+function mergeUiJson(base: any, overlay: any, key = '', path = '', conflicts: string[] = []): any {
+  if (Array.isArray(base) && Array.isArray(overlay)) {
+    const result = structuredClone(base);
+    const fingerprints = new Set(result.map(item => JSON.stringify(item)));
+    for (const item of overlay) {
+      const fingerprint = JSON.stringify(item);
+      if (fingerprints.has(fingerprint)) continue;
+      if (key === 'bindings' && item && typeof item === 'object' && !Array.isArray(item)) {
+        const identity = item.binding_name_override || item.target_property_name || item.binding_name;
+        const existing = identity && result.find(candidate =>
+          candidate && typeof candidate === 'object' && !Array.isArray(candidate) &&
+          (candidate.binding_name_override || candidate.target_property_name || candidate.binding_name) === identity
+        );
+        if (existing) {
+          if (JSON.stringify(existing) !== fingerprint) conflicts.push((path || '<root>') + '.bindings[' + identity + ']');
+          continue;
+        }
+      }
+      if (key === 'controls' && item && typeof item === 'object' && !Array.isArray(item)) {
+        const incomingName = Object.keys(item)[0];
+        const existingIndex = result.findIndex(existing =>
+          existing && typeof existing === 'object' && !Array.isArray(existing) &&
+          Object.keys(existing).length === 1 && Object.keys(existing)[0] === incomingName
+        );
+        if (existingIndex >= 0 && incomingName) {
+          const existing = result[existingIndex];
+          const structuralConflicts = hasUiStructuralCollision(existing[incomingName], item[incomingName]);
+          if (structuralConflicts.length) {
+            conflicts.push((path || '<root>') + '.controls[' + incomingName + '] structural collision: ' + structuralConflicts.join(', '));
+            // Do not construct a hybrid of two different control types,
+            // renderers or templates. The caller retains the whole source file.
+            continue;
+          }
+          result[existingIndex] = { [incomingName]: mergeUiJson(existing[incomingName], item[incomingName], incomingName, path, conflicts) };
+          continue;
+        }
+      }
+      result.push(structuredClone(item));
+      fingerprints.add(fingerprint);
+    }
+    return result;
+  }
+  if (base && overlay && typeof base === 'object' && typeof overlay === 'object' &&
+      !Array.isArray(base) && !Array.isArray(overlay)) {
+    const result = structuredClone(base);
+    for (const [childKey, value] of Object.entries(overlay)) {
+      if (!(childKey in result)) result[childKey] = structuredClone(value);
+      else result[childKey] = mergeUiJson(result[childKey], value, childKey, path ? path + '.' + childKey : childKey, conflicts);
+    }
+    return result;
+  }
+  if (JSON.stringify(base) !== JSON.stringify(overlay)) {
+    conflicts.push((path || '<root>') + ' (' + typeof base + ' vs ' + typeof overlay + ')');
+  }
+  return structuredClone(base);
+}
 /** Union-dedupe two lists preserving order (by JSON fingerprint). */
 export function unionMergeList(existing: any[], incoming: any[]): any[] {
   const seen = new Set(
@@ -184,6 +259,13 @@ function mergeHudModifications(...lists: any[][]): any[] {
  * animation/controller registries. Collect these before ZIP writes so a later
  * pack cannot silently replace an earlier registration file.
  */
+/** Files whose semantics require the dedicated Bedrock JSON-UI merger. */
+export function isUiMergeStrategyFile(fileName: string): boolean {
+  const normalized = fileName.replace(/\\/g, '/').toLowerCase();
+  const base = normalized.substring(normalized.lastIndexOf('/') + 1);
+  return (normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json');
+}
+
 export function isPlayerAnimationStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
@@ -198,10 +280,22 @@ export function isPlayerAnimationStrategyFile(fileName: string): boolean {
  * Merge a list of parsed JSON values for one output file using the legacy
  * per-file strategies. \`fileName\` is the lowercase zip path.
  */
-export function mergeJsonForFile(fileName: string, list: any[]): any {
+export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: string[] = []): any {
   if (list.length === 0) return {};
   if (list.length === 1) return postProcessFile(fileName, structuredClone(list[0]));
+  const normalizedPath = fileName.replace(/\\/g, '/').toLowerCase();
   const base = fileName.substring(fileName.lastIndexOf('/') + 1);
+
+  if ((normalizedPath.startsWith('ui/') || normalizedPath.includes('/ui/')) && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
+    let mergedUi = structuredClone(list[0]);
+    for (const overlay of list.slice(1)) mergedUi = mergeUiJson(mergedUi, overlay, '', fileName, uiConflicts);
+    return mergedUi;
+  }
+  if (normalizedPath.endsWith('/ui/_global_variables.json') || normalizedPath === 'ui/_global_variables.json') {
+    let mergedVariables = structuredClone(list[0]);
+    for (const overlay of list.slice(1)) mergedVariables = mergeUiJson(mergedVariables, overlay, '', fileName, uiConflicts);
+    return mergedVariables;
+  }
 
   if (base.endsWith('.entity.json') || base === 'player.entity.json') {
     return postProcessFile(fileName, mergeEntityJsonSimple(list));
@@ -261,17 +355,21 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
         } else if (key === 'modifications' && Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = mergeHudModifications(merged[key], value);
         } else if (key === 'visible' && typeof merged[key] === 'string' && typeof value === 'string' && merged[key] !== value) {
-          // `visible` is a Molang condition, not a nested JSON object. Keep
-          // both packs' visibility requirements instead of recursively treating
-          // the strings as HUD objects (which would replace them with `{}`).
-          merged[key] = `(${merged[key]}) && (${value})`;
+          // Visibility predicates are not safely composable across unrelated
+          // addons. AND can make an otherwise visible HUD disappear whenever
+          // the two predicates are mutually exclusive. Preserve the active
+          // predicate and surface a collision instead of guessing.
+          uiConflicts.push(fileName + '.visible');
         } else if (Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = [...merged[key], ...value];
         } else if (merged[key] && value && typeof merged[key] === 'object' && typeof value === 'object' && !Array.isArray(merged[key]) && !Array.isArray(value)) {
-          merged[key] = mergeJsonForFile(base, [merged[key], value]);
+          merged[key] = mergeJsonForFile(base, [merged[key], value], uiConflicts);
         } else {
           // Preserve the first HUD value when two packs disagree on a scalar;
-          // overwriting it can silently break the first pack's UI definition.
+          // record the collision so the complete incoming source can be retained.
+          if (JSON.stringify(merged[key]) !== JSON.stringify(value)) {
+            uiConflicts.push(fileName + '.' + key);
+          }
         }
         continue;
       }

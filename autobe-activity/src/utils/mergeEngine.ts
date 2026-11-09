@@ -14,11 +14,12 @@ import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
-import { mergeJsonForFile, isPlayerAnimationStrategyFile } from './smartJsonMerge';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
+import { resolveHudLayoutInZip, type HudPlacementMode } from './hudLayout';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -51,7 +52,7 @@ function isStrategyMergeFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
   return STRATEGY_MERGE_FILES.has(normalized) ||
-    (normalized.startsWith('ui/') && normalized.endsWith('.json')) ||
+    ((normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json')) ||
     isPlayerAnimationStrategyFile(normalized);
 }
 
@@ -299,6 +300,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
       if (sameBytes(first.data, entry.data)) continue;
       try {
         let conflictDetails: string[] = [];
+        const uiConflictDetails: string[] = [];
         if (group.kind === 'lang') {
           const values = new Map<string, string>();
           const lines = (text: string) => text.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#') && line.includes('='));
@@ -336,15 +338,14 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
-          } else if (group.kind === 'strategy' && isPlayerAnimationStrategyFile(path)) {
-            // Player registrations and named animation/controller definitions
-            // need the domain-aware merge strategy. Generic object merging can
-            // discard independent registrations and controller state maps.
-            const conservative = mergeAdditions(parsed, other);
-            const specialized = mergeJsonForFile(path, [parsed, other]);
+          } else if (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isUiMergeStrategyFile(path))) {
+            // Player registrations and Bedrock JSON-UI entry points have
+            // ordered/domain-specific semantics. In particular, HUD patches
+            // and ui_defs registrations must use their dedicated merger;
+            // generic object merging silently drops these additions.
+            const specialized = mergeJsonForFile(path, [parsed, other], uiConflictDetails);
             changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
             parsed = specialized;
-            conflictDetails = conservative.conflicts;
           } else {
             const merged = mergeAdditions(parsed, other);
             parsed = merged.value;
@@ -355,6 +356,10 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
         if (conflictDetails.length) {
           const backup = preserveConflict(zip, path, entry.original, entry.source);
           diagnostics.push(`WARNING SHARED_FILE_PARTIAL_CONFLICT [${path}]: Kept compatible additions from ${entry.source}; retained the first values at ${conflictDetails.slice(0, 5).join(', ')} and saved the complete incoming file as ${backup} for review.`);
+        }
+        if (uiConflictDetails.length) {
+          const backup = preserveConflict(zip, path, entry.original, entry.source);
+          diagnostics.push(`WARNING UI_DEFINITION_COLLISION [${path}]: ${entry.source} has incompatible JSON-UI values at ${uiConflictDetails.slice(0, 8).join(', ')}. AutoBE preserved the active definition, retained the incoming file as ${backup}, and did not silently overwrite either source.`);
         }
       } catch (error) {
         const backup = preserveConflict(zip, path, entry.original, entry.source);
@@ -433,6 +438,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     pack: string;
     variant: string;
   }>;
+  /** Conservative post-merge layout handling for statically measurable HUD controls. */
+  hudPlacement?: HudPlacementMode;
 }): Promise<MergedModpack> {
   const {
     modpackName,
@@ -445,7 +452,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     autoPrefix = true,
     onProgress,
     scriptConflicts,
-    subpackSelections
+    subpackSelections,
+    hudPlacement = 'auto'
   } = options;
   onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
@@ -503,6 +511,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // Merge only compatible duplicate definitions; preserve a lone player as-is.
     await mergeDefinitionsByIdentifier(rpZip, mergeDiagnostics, 'resource');
     await mergeSubpackHudFiles(rpZip);
+    await resolveHudLayoutInZip(rpZip, hudPlacement, mergeDiagnostics);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
     mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
     const minEngine = resolveTargetEngineVersion(
