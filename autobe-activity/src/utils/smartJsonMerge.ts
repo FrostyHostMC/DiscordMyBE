@@ -42,6 +42,17 @@ function mergeUiJson(base: any, overlay: any, key = '', path = '', conflicts: st
     for (const item of overlay) {
       const fingerprint = JSON.stringify(item);
       if (fingerprints.has(fingerprint)) continue;
+      if (key === 'bindings' && item && typeof item === 'object' && !Array.isArray(item)) {
+        const identity = item.binding_name_override || item.target_property_name || item.binding_name;
+        const existing = identity && result.find(candidate =>
+          candidate && typeof candidate === 'object' && !Array.isArray(candidate) &&
+          (candidate.binding_name_override || candidate.target_property_name || candidate.binding_name) === identity
+        );
+        if (existing) {
+          if (JSON.stringify(existing) !== fingerprint) conflicts.push((path || '<root>') + '.bindings[' + identity + ']');
+          continue;
+        }
+      }
       if (key === 'controls' && item && typeof item === 'object' && !Array.isArray(item)) {
         const incomingName = Object.keys(item)[0];
         const existingIndex = result.findIndex(existing =>
