@@ -47,6 +47,30 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
   const isResourcePack = /resource pack/i.test(label);
   const isBehaviorPack = /behavior/i.test(label);
 
+  // These legacy screen files can affect older JSON-UI menu implementations,
+  // but they are not a supported injection surface for native Ore UI screens.
+  // Keep the files; emit an informational warning so users do not mistake a
+  // successful JSON merge for native Ore UI compatibility.
+  const legacyMenuFiles = new Set([
+    'start_screen.json', 'pause_screen.json', 'settings_screen.json',
+    'inventory_screen.json', 'crafting_screen.json', 'container_screen.json',
+    'world_screen.json', 'create_world_screen.json', 'edit_world_screen.json',
+    'play_screen.json', 'marketplace_screen.json'
+  ]);
+  if (isResourcePack) {
+    for (const entry of jsonEntries) {
+      const normalized = entry.path.replace(/\\\\/g, '/').toLowerCase();
+      const fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
+      if (!normalized.includes('/ui/') || !legacyMenuFiles.has(fileName)) continue;
+      add({
+        severity: 'warning',
+        code: 'LEGACY_UI_ORE_UI_LIMIT',
+        path: entry.path,
+        message: '[' + label + '] This add-on customizes a legacy JSON UI menu file. If the corresponding native screen uses Ore UI in the installed Minecraft version, resource packs cannot inject into or replace that screen. The file is preserved for game versions that still load the legacy screen.'
+      });
+    }
+  }
+
   // _ui_defs.json is the loader registry for custom JSON-UI screens/common
   // files. A syntactically valid merge can still render nothing when one of
   // these registered paths was overwritten, dropped, or never copied.
