@@ -58,3 +58,13 @@ The nine positions are not a guarantee that all controls fit on every aspect rat
 - Keep source-baseline findings separate from merge-introduced findings.
 
 Passing archive tests does not prove Minecraft's runtime rendering behavior. Native Ore UI compatibility cannot be certified by resource-pack tests because the native screen is not a supported extension surface.
+
+
+## Reference material
+
+- [Mojang Ore UI repository](https://github.com/Mojang/ore-ui) — describes Ore UI as shared web-technology UI building blocks (React/TypeScript and React Facet), not a Bedrock add-on screen-registration API.
+- [Microsoft `@minecraft/server-ui` module](https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-ui/minecraft-server-ui?view=minecraft-bedrock-stable) — documents the form-based script UI surface.
+- [Microsoft `@minecraft/server-ui` changelog](https://learn.microsoft.com/en-us/minecraft/creator/scriptapi/minecraft/server-ui/changelog?view=minecraft-bedrock-stable) — records stable DDUI additions and preview-only version changes.
+- [Bedrock Wiki: Adding HUD elements](https://wiki.bedrock.dev/json-ui/add-hud-elements) — documents inserting custom controls through the `root_panel` modifications and how its child controls inherit the HUD screen coordinate space.
+- [Bedrock Wiki: JSON UI reference](https://wiki.bedrock.dev/json-ui/json-ui-documentation) — documents the nine anchor values and offset behavior.
+- [Minecraft Wiki: Ore UI rollout](https://minecraft.wiki/w/Ore_UI) — tracks the game-version migration of individual native screens. This is community-maintained and should be treated as a version-tracking aid, not an API contract.
