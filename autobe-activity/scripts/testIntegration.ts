@@ -102,13 +102,13 @@ console.log('✓ real merge preserves scripts, player view, camera paths, materi
 // separate packs must both survive the resource-pack merge.
 const uiPackA = await makePack('Resource Pack', 'HUD Coordinates', {
   'ui/_ui_defs.json': JSON.stringify({ ui_defs: ['ui/coordinates.json'] }),
-  'ui/coordinates.json': JSON.stringify({ coordinates_panel: { type: 'panel', controls: [{ 'coords@hud.coords': {} }], bindings: [{ binding_name: '#position' }] } }),
-  'ui/hud_screen.json': JSON.stringify({ root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'coordinates@hud.coordinates_panel': {} }] }] } })
+  'ui/coordinates.json': JSON.stringify({ coordinates_panel: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14], controls: [{ 'coords@hud.coords': {} }], bindings: [{ binding_name: '#position' }] } }),
+  'ui/hud_screen.json': JSON.stringify({ root_panel: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'coordinates@hud.coordinates_panel': {} }] }] } })
 });
 const uiPackB = await makePack('Resource Pack', 'HUD Weapon', {
   'ui/_ui_defs.json': JSON.stringify({ ui_defs: ['ui/weapon.json'] }),
-  'ui/weapon.json': JSON.stringify({ weapon_panel: { type: 'panel', controls: [{ 'ammo@hud.ammo': {} }], bindings: [{ binding_name: '#ammo' }] } }),
-  'ui/hud_screen.json': JSON.stringify({ root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'weapon@hud.weapon_panel': {} }] }] } })
+  'ui/weapon.json': JSON.stringify({ weapon_panel: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14], controls: [{ 'ammo@hud.ammo': {} }], bindings: [{ binding_name: '#ammo' }] } }),
+  'ui/hud_screen.json': JSON.stringify({ root_panel: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'weapon@hud.weapon_panel': {} }] }] } })
 });
 const uiMerged = await executeMergePacks([uiPackA, uiPackB], { modpackName: 'UI Compatibility' });
 const uiRp = await JSZip.loadAsync(uiMerged.outputs!.find(output => output.type === 'resource')!.blob!);
@@ -116,6 +116,10 @@ const uiDefs = JSON.parse(await uiRp.file('ui/_ui_defs.json')!.async('text'));
 assert.deepEqual(uiDefs.ui_defs.sort(), ['ui/coordinates.json', 'ui/weapon.json']);
 const hud = JSON.parse(await uiRp.file('ui/hud_screen.json')!.async('text'));
 assert.equal(hud.root_panel.modifications.length, 2);
+const relocated = hud.root_panel.modifications.flatMap((patch: any) => patch.value || []).find((entry: any) => entry['weapon@hud.weapon_panel']);
+assert.ok(relocated, 'weapon HUD control should remain registered');
+assert.ok(relocated['weapon@hud.weapon_panel'].anchor_from, 'overlapping measurable HUD control should receive a new anchor');
+assert.ok(uiMerged.combinedExtras?.diagnosticsText?.includes('HUD_AUTO_PLACEMENT'), 'merge report should record the automatic HUD placement');
 const coordsUi = JSON.parse(await uiRp.file('ui/coordinates.json')!.async('text'));
 const weaponUi = JSON.parse(await uiRp.file('ui/weapon.json')!.async('text'));
 assert.equal(coordsUi.coordinates_panel.controls.length, 1);
