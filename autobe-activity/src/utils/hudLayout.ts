@@ -105,10 +105,10 @@ function isFullScreenParent(value: any): boolean {
 
 function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
   const result: HudCandidate[] = [];
-  const visit = (value: any, parentIsFullScreen = false): void => {
+  const visit = (value: any): void => {
     if (!value || typeof value !== 'object') return;
     if (Array.isArray(value)) {
-      value.forEach(item => visit(item, parentIsFullScreen));
+      value.forEach(visit);
       return;
     }
     if (Array.isArray(value.modifications)) {
@@ -122,7 +122,7 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             // Child offsets are relative to their parent. Only move controls
             // inserted into a statically full-screen parent; nested panels need
             // their own coordinate system and must not be guessed.
-            if (!parentIsFullScreen) continue;
+            if (!isFullScreenParent(value)) continue;
             const target = reference.split('@').pop() || reference;
             const controlName = target.split('.').pop() || target;
             const definition = definitions.map(file => findDefinition(file, controlName)).find(Boolean) || {};
@@ -140,8 +140,7 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
         }
       }
     }
-    const currentIsFullScreen = isFullScreenParent(value);
-    for (const child of Object.values(value)) visit(child, currentIsFullScreen);
+    for (const child of Object.values(value)) visit(child);
   };
   visit(hud);
   return result;
