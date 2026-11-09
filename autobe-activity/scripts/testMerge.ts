@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import { sanitizeJsonString, detectConflicts, parseAddonArchive } from '../src/utils/addonParser.ts';
+import { sanitizeJsonString, detectConflicts, parseAddonArchive, collectRegisteredUiPathsFromZip } from '../src/utils/addonParser.ts';
 import { applySubpackSelection } from '../src/utils/subpackProcessor.ts';
 import { mergeJsonForFile, isUiMergeStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile } from '../src/utils/smartJsonMerge.ts';
-import { collectRegisteredUiPathsFromZip } from '../src/utils/mergeEngine.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
