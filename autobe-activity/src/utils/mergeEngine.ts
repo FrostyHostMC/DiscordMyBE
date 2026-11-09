@@ -147,7 +147,7 @@ export function formatPlanSummary(plan: MergePlan): string {
 
 // --- Zip merge helpers -------------------------------------------------
 
-type SharedKind = 'array' | 'strategy' | 'deep' | 'lang';
+type SharedKind = 'array' | 'strategy' | 'deep' | 'lang' | 'langlist';
 interface SharedEntry { data: Uint8Array; original: Uint8Array; source: string; }
 interface MergeAccum {
   shared: Map<string, { kind: SharedKind; entries: SharedEntry[] }>;
@@ -256,7 +256,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     }
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
       : isStrategyMergeFile(lower) ? 'strategy' : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
-      : lower.endsWith('.lang') ? 'lang' : undefined;
+      : lower === 'texts/languages.json' ? 'langlist' : lower.endsWith('.lang') ? 'lang' : undefined;
     if (sharedKind) {
       const group = accum.shared.get(outPath) || { kind: sharedKind, entries: [] };
       group.entries.push({ data: bytes, original, source: sourceLabel });
@@ -301,7 +301,20 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
       try {
         let conflictDetails: string[] = [];
         const uiConflictDetails: string[] = [];
-        if (group.kind === 'lang') {
+        if (group.kind === 'langlist') {
+          const baseValues = Array.isArray(JSON.parse(decoder.decode(first.data))) ? JSON.parse(decoder.decode(first.data)) : [];
+          const incomingValues = JSON.parse(decoder.decode(entry.data));
+          if (!Array.isArray(incomingValues)) throw new Error('languages.json must contain an array of language codes');
+          const mergedValues = [...baseValues];
+          const known = new Set(baseValues.map((value: unknown) => String(value).toLowerCase()));
+          for (const value of incomingValues) {
+            if (typeof value !== 'string' || !value.trim()) continue;
+            const key = value.trim().toLowerCase();
+            if (!known.has(key)) { mergedValues.push(value); known.add(key); changed = true; }
+          }
+          parsed = mergedValues;
+          parsedReady = true;
+        } else if (group.kind === 'lang') {
           const values = new Map<string, string>();
           const lines = (text: string) => text.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#') && line.includes('='));
           for (const line of lines(lang)) {
