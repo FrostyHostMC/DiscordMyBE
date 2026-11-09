@@ -51,7 +51,7 @@ function isStrategyMergeFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
   return STRATEGY_MERGE_FILES.has(normalized) ||
-    (normalized.startsWith('ui/') && normalized.endsWith('.json')) ||
+    ((normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json')) ||
     isPlayerAnimationStrategyFile(normalized);
 }
 
