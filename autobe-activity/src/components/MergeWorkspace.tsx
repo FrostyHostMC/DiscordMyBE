@@ -744,6 +744,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
                 <button type="button" onClick={() => setHudPromptMode('preserve')} className={`rounded-lg border px-3 py-2.5 text-xs font-bold ${hudPromptMode === 'preserve' ? 'border-[#A855F7] bg-[#762BFF]/25 text-white' : 'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>Keep original positions</button>
               </div>
               <p className="text-[10px] leading-relaxed text-[#8F879F]">Placement is estimated at merge time. AutoBE only moves controls with static dimensions and a verified full-screen parent; it cannot guarantee every custom layout across all screen sizes.</p>
+              <p className="text-[10px] leading-relaxed text-[#8F879F]">Native Ore UI menus are game-owned and cannot accept resource-pack UI injections. AutoBE keeps legacy menu files and reports likely Ore UI limitations instead of deleting or pretending to convert them.</p>
             </div>
             <div className="flex justify-end gap-2 p-4 border-t border-[#30263F]">
               <button type="button" onClick={() => { setShowHudPlacementPrompt(false); setPendingHudPackIds([]); }} className="rounded-lg border border-[#30263F] px-4 py-2 text-xs font-semibold text-[#AAA3BB] hover:text-white">Cancel</button>
