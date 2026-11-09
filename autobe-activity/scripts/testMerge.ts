@@ -640,7 +640,18 @@ await (async () => {
   const supported = await validateMergedArchive(zip, 'Test Behavior Pack');
   assert.ok(!supported.some(issue => issue.code === 'DDUI_API_DEPENDENCY_MISSING'));
   assert.ok(!supported.some(issue => issue.code === 'DDUI_SERVER_PEER_DEPENDENCY'));
-  console.log('✓ DDUI script usage is checked against server-ui 2.1.0 and its server 2.0.0 peer dependency');
+  zip.file('scripts/menu.js', 'import { CustomForm } from "@minecraft/server-ui"; form.multiButtonRow();');
+  const previewMissing = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(previewMissing.some(issue => issue.code === 'DDUI_PREVIEW_UI_VERSION'));
+  assert.ok(previewMissing.some(issue => issue.code === 'DDUI_PREVIEW_SERVER_PEER'));
+  zip.file('manifest.json', JSON.stringify({ dependencies: [
+    { module_name: '@minecraft/server', version: '2.13.0-beta.1.26.70-preview.21' },
+    { module_name: '@minecraft/server-ui', version: '2.4.0-rc.1.26.70-preview.21' },
+  ] }));
+  const previewSupported = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(!previewSupported.some(issue => issue.code === 'DDUI_PREVIEW_UI_VERSION'));
+  assert.ok(!previewSupported.some(issue => issue.code === 'DDUI_PREVIEW_SERVER_PEER'));
+  console.log('✓ DDUI stable and preview-only method usage is checked against matching server-ui/server versions');
 })();
 
 
