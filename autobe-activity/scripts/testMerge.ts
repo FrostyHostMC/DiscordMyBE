@@ -490,7 +490,12 @@ await (async () => {
   assert.ok(issues.some(issue => issue.code === 'MISSING_ANIMATION_REFERENCE' && issue.message.includes('animation.missing')));
   assert.ok(issues.some(issue => issue.code === 'MISSING_RENDER_CONTROLLER_REFERENCE' && issue.message.includes('controller.render.missing')));
   assert.ok(!issues.some(issue => issue.code === 'MISSING_TEXTURE_FILE' && issue.message.includes('textures/entity/present')));
-  console.log('✓ merged archive validation reports malformed JSON and unresolved explicit texture paths');
+  zip.file('ui/_ui_defs.json', JSON.stringify({ ui_defs: ['ui/working.json', 'ui/missing.json'] }));
+  zip.file('ui/working.json', JSON.stringify({}));
+  const uiIssues = await validateMergedArchive(zip, 'Test Resource Pack');
+  assert.ok(uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/missing.json')));
+  assert.ok(!uiIssues.some(issue => issue.code === 'MISSING_UI_DEFINITION_FILE' && issue.message.includes('ui/working.json')));
+  console.log('✓ merged archive validation reports malformed JSON, unresolved assets and missing registered UI files');
 })();
 
 
