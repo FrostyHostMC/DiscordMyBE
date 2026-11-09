@@ -787,12 +787,15 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   }
 
   // A merged modpack can contain multiple BP outputs because Script API
-  // versions cannot safely share one manifest. Make the final/highest API
-  // output the activation root and have it depend on every other generated BP.
+  // versions cannot safely share one manifest. Make the highest stable/preview
+  // Script API output the activation root (falling back to another script BP,
+  // then the data-only BP) and have it depend on every other generated BP.
   // Enabling this one pack then activates the complete behavior content set,
   // rather than silently leaving data-only or lower-API definitions inactive.
   if (builtBps.length > 0) {
-    const activationRoot = builtBps[builtBps.length - 1];
+    const activationRoot = [...builtBps].reverse().find((output) => output.type === 'behavior_script' && (output.scriptMajor || 0) > 0)
+      || [...builtBps].reverse().find((output) => output.type === 'behavior_script')
+      || builtBps[builtBps.length - 1];
     const dependencyManifests = await Promise.all(builtBps.map(async (output) => {
       const manifestFile = output.zip.file('manifest.json');
       if (!manifestFile) throw new Error(`Generated behavior output "${output.fileName}" has no manifest.`);
