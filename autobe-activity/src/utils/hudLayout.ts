@@ -19,7 +19,13 @@ type HudCandidate = {
   definition: Record<string, any>;
 };
 
-const SCREEN = { width: 1920, height: 1080 };
+const SCREEN_PROFILES = [
+  { width: 1024, height: 768 },   // compact 4:3
+  { width: 1280, height: 720 },   // compact 16:9
+  { width: 1600, height: 900 },   // standard 16:9
+  { width: 1920, height: 1200 },  // 16:10
+  { width: 2560, height: 1080 },  // ultrawide 21:9
+];
 const MARGIN = 14;
 const POSITION_OFFSETS: Record<HudPosition, [number, number]> = {
   top_left: [MARGIN, MARGIN],
@@ -68,9 +74,9 @@ function numericPair(value: any): [number, number] | undefined {
   return [value[0], value[1]];
 }
 
-function anchorPoint(anchor: HudPosition): [number, number] {
-  const x = anchor.includes('left') ? 0 : anchor.includes('right') ? SCREEN.width : SCREEN.width / 2;
-  const y = anchor.startsWith('top') ? 0 : anchor.startsWith('bottom') ? SCREEN.height : SCREEN.height / 2;
+function anchorPoint(anchor: HudPosition, screen: { width: number; height: number }): [number, number] {
+  const x = anchor.includes('left') ? 0 : anchor.includes('right') ? screen.width : screen.width / 2;
+  const y = anchor.startsWith('top') ? 0 : anchor.startsWith('bottom') ? screen.height : screen.height / 2;
   return [x, y];
 }
 
@@ -80,8 +86,8 @@ function anchorWithinElement(anchor: HudPosition, width: number, height: number)
   return [x, y];
 }
 
-function rectFor(anchorFrom: HudPosition, anchorTo: HudPosition, offset: [number, number], size: [number, number]): Rect {
-  const [px, py] = anchorPoint(anchorFrom);
+function rectFor(anchorFrom: HudPosition, anchorTo: HudPosition, offset: [number, number], size: [number, number], screen: { width: number; height: number }): Rect {
+  const [px, py] = anchorPoint(anchorFrom, screen);
   const [ax, ay] = anchorWithinElement(anchorTo, size[0], size[1]);
   const left = px + offset[0] - ax;
   const top = py + offset[1] - ay;
@@ -93,8 +99,8 @@ function intersects(a: Rect, b: Rect): boolean {
   return a.left < b.right - pad && a.right > b.left + pad && a.top < b.bottom - pad && a.bottom > b.top + pad;
 }
 
-function inViewport(rect: Rect): boolean {
-  return rect.left >= 0 && rect.top >= 0 && rect.right <= SCREEN.width && rect.bottom <= SCREEN.height;
+function inViewport(rect: Rect, screen: { width: number; height: number }): boolean {
+  return rect.left >= 0 && rect.top >= 0 && rect.right <= screen.width && rect.bottom <= screen.height;
 }
 
 function isFullScreenParent(value: any): boolean {
@@ -129,7 +135,7 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             const definition = definitions.map(file => findDefinition(file, controlName)).find(Boolean) || {};
             const effective = { ...definition, ...instance };
             const size = numericPair(effective.size);
-            if (!size || size[0] <= 0 || size[1] <= 0 || size[0] > SCREEN.width * 0.85 || size[1] > SCREEN.height * 0.85) continue;
+            if (!size || size[0] <= 0 || size[1] <= 0 || size[0] > Math.min(...SCREEN_PROFILES.map(screen => screen.width)) * 0.85 || size[1] > Math.min(...SCREEN_PROFILES.map(screen => screen.height)) * 0.85) continue;
             // Animated/dynamic layout values cannot be safely relocated by changing
             // the instance anchor: an animation or expression may overwrite it.
             if (effective.anims || effective.use_anchored_offset || effective.factory || effective.collection_name) continue;
@@ -163,7 +169,7 @@ export function resolveHudPlacements(
 ): HudPlacementResult {
   const output = structuredClone(hud);
   const candidates = collectCandidates(output, definitions);
-  const occupied: Rect[] = [];
+  const occupied: Rect[][] = [];
   const moved: HudPlacementResult['moved'] = [];
   const unresolved: string[] = [];
   if (candidates.length === 0) {
@@ -177,17 +183,17 @@ export function resolveHudPlacements(
   }
 
   for (const candidate of candidates) {
-    const current = rectFor(candidate.anchorFrom, candidate.anchorTo, candidate.offset, candidate.size);
-    if (!inViewport(current)) {
-      unresolved.push(candidate.id + ' (original bounds extend outside the screen)');
+    const currentRects = SCREEN_PROFILES.map(screen => rectFor(candidate.anchorFrom, candidate.anchorTo, candidate.offset, candidate.size, screen));
+    if (currentRects.some((rect, index) => !inViewport(rect, SCREEN_PROFILES[index]))) {
+      unresolved.push(candidate.id + ' (original bounds extend outside at least one supported screen profile)');
       continue;
     }
-    if (!occupied.some(rect => intersects(rect, current))) {
-      occupied.push(current);
+    if (!occupied.some(existing => existing.some((rect, index) => intersects(rect, currentRects[index])))) {
+      occupied.push(currentRects);
       continue;
     }
     if (mode === 'preserve') {
-      occupied.push(current);
+      occupied.push(currentRects);
       unresolved.push(candidate.id + ' (overlap preserved by user choice)');
       continue;
     }
@@ -197,20 +203,21 @@ export function resolveHudPlacements(
     let placed: { position: HudPosition; rect: Rect } | undefined;
     for (const position of choices) {
       const offset = POSITION_OFFSETS[position];
-      const rect = rectFor(position, position, offset, candidate.size);
-      if (!inViewport(rect) || occupied.some(existing => intersects(existing, rect))) continue;
-      placed = { position, rect };
+      const rects = SCREEN_PROFILES.map(screen => rectFor(position, position, offset, candidate.size, screen));
+      if (rects.some((rect, index) => !inViewport(rect, SCREEN_PROFILES[index])) ||
+          occupied.some(existing => existing.some((rect, index) => intersects(rect, rects[index])))) continue;
+      placed = { position, rects };
       break;
     }
     if (!placed) {
-      occupied.push(current);
-      unresolved.push(candidate.id + ' (no safe free position; original layout retained)');
+      occupied.push(currentRects);
+      unresolved.push(candidate.id + ' (no safe free position across supported screen profiles; original layout retained)');
       continue;
     }
     candidate.instance.anchor_from = placed.position;
     candidate.instance.anchor_to = placed.position;
     candidate.instance.offset = POSITION_OFFSETS[placed.position];
-    occupied.push(placed.rect);
+    occupied.push(placed.rects);
     moved.push({ control: candidate.id, from: candidate.anchorFrom, to: placed.position });
   }
   return { hud: output, moved, unresolved };
