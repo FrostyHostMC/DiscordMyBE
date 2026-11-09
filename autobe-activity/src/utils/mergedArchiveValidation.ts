@@ -82,7 +82,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         severity: 'warning',
         code: 'DDUI_API_DEPENDENCY_MISSING',
         path: manifestEntry?.path || 'manifest.json',
-            /@minecraft\/server-ui/.test(source)) {
+        message: '[' + label + '] Scripts reference DDUI classes, but @minecraft/server-ui is missing or older than 2.1.0. DDUI became stable in @minecraft/server-ui 2.1.0; preserve the source dependency or update it only when the selected Minecraft target supports it.'
       });
     }
     if (usesDdui && !versionAtLeast(serverDependency?.version, [2, 0, 0])) {
