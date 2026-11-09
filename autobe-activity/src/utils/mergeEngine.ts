@@ -14,7 +14,7 @@ import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
-import { mergeJsonForFile, isPlayerAnimationStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
+import { mergeJsonForFile, mergeLanguageCodeLists, isPlayerAnimationStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
@@ -305,16 +305,12 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
           if (!languageCodes) {
             const baseValues = JSON.parse(decoder.decode(first.data));
             if (!Array.isArray(baseValues)) throw new Error('base languages.json must contain an array of language codes');
-            languageCodes = baseValues.filter((value: unknown) => typeof value === 'string');
+            languageCodes = baseValues.filter((value: unknown): value is string => typeof value === 'string');
           }
           const incomingValues = JSON.parse(decoder.decode(entry.data));
-          if (!Array.isArray(incomingValues)) throw new Error('languages.json must contain an array of language codes');
-          const known = new Set(languageCodes.map(value => value.trim().toLowerCase()));
-          for (const value of incomingValues) {
-            if (typeof value !== 'string' || !value.trim()) continue;
-            const key = value.trim().toLowerCase();
-            if (!known.has(key)) { languageCodes.push(value); known.add(key); changed = true; }
-          }
+          const mergedLanguages = mergeLanguageCodeLists(languageCodes, incomingValues);
+          languageCodes = mergedLanguages.values;
+          changed ||= mergedLanguages.added.length > 0;
           parsed = languageCodes;
           parsedReady = true;
         } else if (group.kind === 'lang') {
