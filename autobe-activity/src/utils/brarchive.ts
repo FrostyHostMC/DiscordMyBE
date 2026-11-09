@@ -4,7 +4,8 @@ import type JSZip from 'jszip';
  * Expand Bedrock .brarchive containers used by some packaged addons.
  * Format: 16-byte header, followed by count 256-byte records. Each record
  * stores a length-prefixed UTF-8 filename, payload offset at +248, and size
- * at +252. Unknown formats are left untouched so diagnostics can report them.
+ * at +252. Unknown or malformed formats are rejected so the merge cannot
+ * silently omit packed definitions from conflict detection or output.
  */
 export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): Promise<number> {
   const report = (message: string) => {
