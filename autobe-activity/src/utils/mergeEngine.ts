@@ -24,6 +24,7 @@ export interface MergeProgressCallback {
 }
 export interface MergePlanScriptGroup {
   major: number;
+  beta: boolean;
   packs: AddonPack[];
 }
 export interface MergePlan {
@@ -101,28 +102,30 @@ export function buildMergePlan(packs: AddonPack[]): MergePlan {
   const rp = packs.filter(p => p.type === 'Resource Pack');
   const bps = packs.filter(p => p.type === 'Behavior Pack');
   const dataBp: AddonPack[] = [];
-  const groupMap = new Map<number, AddonPack[]>();
+  // Stable and preview/beta Script API tracks are not interchangeable merely
+  // because they share a major version. Keep them in separate output packs.
+  const groupMap = new Map<string, { major: number; beta: boolean; packs: AddonPack[] }>();
   const unassigned: AddonPack[] = [];
   for (const p of bps) {
     const major = getScriptMajor(p);
     if (major === null) {
       if (p.hasScripts) unassigned.push(p);else dataBp.push(p);
     } else {
-      const arr = groupMap.get(major) || [];
-      arr.push(p);
-      groupMap.set(major, arr);
+      const beta = /-(?:beta|preview|alpha|rc)(?:[.-]|$)/i.test(p.scriptVersion || '');
+      const key = `${major}:${beta ? 'preview' : 'stable'}`;
+      const group = groupMap.get(key) || { major, beta, packs: [] };
+      group.packs.push(p);
+      groupMap.set(key, group);
     }
   }
-  const scriptGroups = [...groupMap.entries()].sort((a, b) => a[0] - b[0]).map(([major, gPacks]) => ({
-    major,
-    packs: gPacks
-  }));
+  const scriptGroups = [...groupMap.values()].sort((a, b) => a.major - b.major || Number(a.beta) - Number(b.beta));
 
   // Scripted packs without a recognizable API version MUST still be merged —
   // group them together (major 0) instead of silently dropping them.
   if (unassigned.length > 0) {
     scriptGroups.push({
       major: 0,
+      beta: false,
       packs: unassigned
     });
   }
@@ -137,7 +140,7 @@ export function formatPlanSummary(plan: MergePlan): string {
   const parts: string[] = [];
   if (plan.rp.length > 0) parts.push(`Resource pack: ${plan.rp.length} packs`);
   if (plan.dataBp.length > 0) parts.push(`BP data-only: ${plan.dataBp.length} packs`);
-  for (const g of plan.scriptGroups) parts.push(g.major > 0 ? `BP v${g.major}: ${g.packs.length} packs` : `BP scripts: ${g.packs.length} packs`);
+  for (const g of plan.scriptGroups) parts.push(g.major > 0 ? `BP ${g.beta ? 'preview' : 'stable'} Script API v${g.major}: ${g.packs.length} packs` : `BP scripts: ${g.packs.length} packs`);
   return parts.join(' · ') || 'No packs selected';
 }
 
@@ -515,7 +518,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   }
 
   // --- Behavior Pack (Data-only) ---
-  const buildBehaviorPack = async (groupPacks: AddonPack[], type: 'behavior_data' | 'behavior_script', major: number | undefined): Promise<void> => {
+  const buildBehaviorPack = async (groupPacks: AddonPack[], type: 'behavior_data' | 'behavior_script', major: number | undefined, beta = false): Promise<void> => {
     onProgress?.(type === 'behavior_data' ? 'Processing behavior packs' : `Splitting by script API version (v${major})`, type === 'behavior_data' ? 45 : 55);
     const bpZip = new JSZip();
     const headerUUID = stablePackId(`${type}-${major ?? 'data'}-header`, groupPacks);
@@ -641,14 +644,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       bpZip.file(scriptEntry, `// AutoBE combined script entry\n${imports}\n`);
       mergeDiagnostics.push('INFO SCRIPT_PATHS_RELOCATED: Multiple script packs share an output; their script folders were separated while script contents were preserved. Review script references to resources outside those folders.');
     }
-    const label = outputType === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
+    const label = outputType === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major}${beta ? ' Preview' : ''})` : 'Behavior (Scripts)';
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       groupPacks.map(p => p.minEngineVersion || ''),
       mergeDiagnostics,
       label
     );
-    const fileName = outputType === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
+    const fileName = outputType === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}${beta ? '_preview' : ''}.mcpack` : 'behavior_pack_scripts.mcpack';
 
     // Dependencies: every BP depends on the shared RP
     const dependencies: any[] = [];
@@ -705,7 +708,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await buildBehaviorPack(plan.dataBp, 'behavior_data', undefined);
   }
   for (const g of plan.scriptGroups) {
-    await buildBehaviorPack(g.packs, 'behavior_script', g.major);
+    await buildBehaviorPack(g.packs, 'behavior_script', g.major, g.beta);
   }
 
   // Check player conflicts across behavior outputs without copying definitions.
