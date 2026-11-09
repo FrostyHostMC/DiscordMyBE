@@ -223,7 +223,7 @@ export async function resolveHudLayoutInZip(
   try {
     const hud = JSON.parse(await hudFile.async('text'));
     const definitions: any[] = [];
-    const files = Object.entries(zip.files as Record<string, JSZip.JSZipObject>).filter(([path, file]) =>
+    const files = Object.entries(zip.files as Record<string, { dir: boolean; async: (type: 'text') => Promise<string> }>).filter(([path, file]) =>
       !file.dir && /(?:^|\/)ui\/.+\.json$/i.test(path.replace(/\\/g, '/')) && path.toLowerCase() !== 'ui/hud_screen.json'
     );
     for (const [, file] of files) {
