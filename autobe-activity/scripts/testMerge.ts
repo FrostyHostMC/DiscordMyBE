@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts } from '../src/utils/addonParser.ts';
-import { mergeJsonForFile, isUiMergeStrategyFile } from '../src/utils/smartJsonMerge.ts';
+import { mergeJsonForFile, isUiMergeStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile } from '../src/utils/smartJsonMerge.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -20,6 +20,41 @@ function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('shared animation registries and item catalogs are recognized for strategy merging', () => {
+  assert.equal(isAnimationRegistryStrategyFile('render_controllers/translucence.json'), true);
+  assert.equal(isAnimationRegistryStrategyFile('animations/mobs/dragon.animation.json'), true);
+  assert.equal(isAnimationRegistryStrategyFile('animation_controllers/mobs/dragon.controller.json'), true);
+  assert.equal(isAnimationRegistryStrategyFile('entities/dragon.json'), false);
+  assert.equal(isCraftingItemCatalogStrategyFile('item_catalog/crafting_item_catalog.json'), true);
+  assert.equal(isCraftingItemCatalogStrategyFile('crafting_item_catalog.json'), true);
+  assert.equal(isCraftingItemCatalogStrategyFile('items/crafting_item_catalog.json'), false);
+});
+
+test('crafting item catalog merges categories and unique creative groups from every pack', () => {
+  const merged = mergeJsonForFile('item_catalog/crafting_item_catalog.json', [
+    { 'minecraft:crafting_items_catalog': { categories: [
+      { category_name: 'equipment', groups: [{ group_identifier: { icon: 'demo:first' }, items: ['demo:first'] }] }
+    ] } },
+    { 'minecraft:crafting_items_catalog': { categories: [
+      { category_name: 'equipment', groups: [{ group_identifier: { icon: 'demo:second' }, items: ['demo:second'] }] },
+      { category_name: 'building', groups: [{ group_identifier: { icon: 'demo:block' }, items: ['demo:block'] }] }
+    ] } }
+  ]);
+  const categories = merged['minecraft:crafting_items_catalog'].categories;
+  assert.equal(categories.length, 2);
+  assert.deepEqual(categories[0].groups.map((group: any) => group.group_identifier.icon), ['demo:first', 'demo:second']);
+  assert.deepEqual(categories[1].groups.map((group: any) => group.group_identifier.icon), ['demo:block']);
+});
+
+test('shared render-controller registry retains distinct controllers from colliding files', () => {
+  const merged = mergeJsonForFile('render_controllers/translucence.json', [
+    { format_version: '1.8.0', 'controller.render.first_addon': { geometry: 'Geometry.default', materials: [{ '*': 'Material.default' }], textures: ['Texture.default'] } },
+    { format_version: '1.8.0', 'controller.render.second_addon': { geometry: 'Geometry.default', materials: [{ '*': 'Material.default' }], textures: ['Texture.default'] } }
+  ]);
+  assert.ok(merged['controller.render.first_addon']);
+  assert.ok(merged['controller.render.second_addon']);
+});
 
 test('HUD placement resolver relocates overlapping measurable controls to distinct safe anchors', () => {
   const hud = {

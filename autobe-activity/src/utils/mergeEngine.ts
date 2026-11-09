@@ -14,7 +14,7 @@ import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
-import { mergeJsonForFile, isPlayerAnimationStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
@@ -41,7 +41,7 @@ const ARRAY_MERGE_FILES = new Set(['textures/flipbook_textures.json', 'textures/
 
 // Per-file strategy merge files (Part 18 _merge_json special branches):
 // collected as lists and merged with mergeJsonForFile at write time.
-const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'crafting_item_catalog.json']);
+const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 'ui/_global_variables.json', 'item_catalog/crafting_item_catalog.json', 'crafting_item_catalog.json']);
 
 /** Every UI JSON file and the shared player animation/controller JSON files
  * participate in the strategy merge. Without collecting these files first,
@@ -53,7 +53,7 @@ function isStrategyMergeFile(path: string): boolean {
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
   return STRATEGY_MERGE_FILES.has(normalized) ||
     ((normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json')) ||
-    isPlayerAnimationStrategyFile(normalized);
+    isPlayerAnimationStrategyFile(normalized) || isAnimationRegistryStrategyFile(normalized) || isCraftingItemCatalogStrategyFile(normalized);
 }
 
 // --- Version utilities -------------------------------------------------
@@ -338,7 +338,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
-          } else if (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isUiMergeStrategyFile(path))) {
+          } else if (group.kind === 'strategy' && (isPlayerAnimationStrategyFile(path) || isAnimationRegistryStrategyFile(path) || isCraftingItemCatalogStrategyFile(path) || isUiMergeStrategyFile(path))) {
             // Player registrations and Bedrock JSON-UI entry points have
             // ordered/domain-specific semantics. In particular, HUD patches
             // and ui_defs registrations must use their dedicated merger;
