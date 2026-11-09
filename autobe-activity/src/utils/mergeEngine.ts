@@ -299,6 +299,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
       if (sameBytes(first.data, entry.data)) continue;
       try {
         let conflictDetails: string[] = [];
+        const uiConflictDetails: string[] = [];
         if (group.kind === 'lang') {
           const values = new Map<string, string>();
           const lines = (text: string) => text.split(/\r?\n/).filter(line => line.trim() && !line.trim().startsWith('#') && line.includes('='));
@@ -341,7 +342,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
             // ordered/domain-specific semantics. In particular, HUD patches
             // and ui_defs registrations must use their dedicated merger;
             // generic object merging silently drops these additions.
-            const specialized = mergeJsonForFile(path, [parsed, other]);
+            const specialized = mergeJsonForFile(path, [parsed, other], uiConflictDetails);
             changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
             parsed = specialized;
           } else {
@@ -354,6 +355,10 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
         if (conflictDetails.length) {
           const backup = preserveConflict(zip, path, entry.original, entry.source);
           diagnostics.push(`WARNING SHARED_FILE_PARTIAL_CONFLICT [${path}]: Kept compatible additions from ${entry.source}; retained the first values at ${conflictDetails.slice(0, 5).join(', ')} and saved the complete incoming file as ${backup} for review.`);
+        }
+        if (uiConflictDetails.length) {
+          const backup = preserveConflict(zip, path, entry.original, entry.source);
+          diagnostics.push(`WARNING UI_DEFINITION_COLLISION [${path}]: ${entry.source} has incompatible JSON-UI values at ${uiConflictDetails.slice(0, 8).join(', ')}. AutoBE preserved the active definition, retained the incoming file as ${backup}, and did not silently overwrite either source.`);
         }
       } catch (error) {
         const backup = preserveConflict(zip, path, entry.original, entry.source);
