@@ -296,6 +296,7 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
     let parsedReady = false;
     let changed = false;
     let lang = decoder.decode(first.data);
+    let languageCodes: string[] | undefined;
     for (const entry of group.entries.slice(1)) {
       if (sameBytes(first.data, entry.data)) continue;
       try {
