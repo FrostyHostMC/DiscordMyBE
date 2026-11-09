@@ -1,3 +1,4 @@
+import JSZip from 'jszip';
 export const HUD_POSITIONS = [
   'top_left', 'top_middle', 'top_right',
   'left_middle', 'center', 'right_middle',
@@ -213,7 +214,7 @@ export function resolveHudPlacements(
 
 /** Apply the resolver to the final merged resource-pack archive. */
 export async function resolveHudLayoutInZip(
-  zip: import('jszip').default,
+  zip: JSZip,
   mode: HudPlacementMode,
   diagnostics: string[]
 ): Promise<void> {
@@ -222,7 +223,7 @@ export async function resolveHudLayoutInZip(
   try {
     const hud = JSON.parse(await hudFile.async('text'));
     const definitions: any[] = [];
-    const files = Object.entries(zip.files).filter(([path, file]) =>
+    const files = Object.entries(zip.files as Record<string, JSZip.JSZipObject>).filter(([path, file]) =>
       !file.dir && /(?:^|\/)ui\/.+\.json$/i.test(path.replace(/\\/g, '/')) && path.toLowerCase() !== 'ui/hud_screen.json'
     );
     for (const [, file] of files) {
