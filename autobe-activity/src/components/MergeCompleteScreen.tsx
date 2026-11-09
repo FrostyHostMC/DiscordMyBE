@@ -112,6 +112,12 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
     reviewFindings = (report.findings || []).filter((finding: any) => reviewCodes.has(finding.code));
   } catch { /* Older saved projects may not include a report. */ }
 
+  // A combined .mcaddon can contain multiple behavior packs when source packs
+  // require different Script API tracks. Minecraft imports them all, but the
+  // player must activate every behavior pack in the world settings.
+  const allGeneratedOutputs = modpack.bundleParts ?? modpack.outputs ?? [];
+  const behaviorOutputs = allGeneratedOutputs.filter(output => output.type !== 'resource');
+
   const formatSize = (bytes: number) => {
     if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
     if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
@@ -234,9 +240,30 @@ export const MergeCompleteScreen: React.FC<MergeCompleteScreenProps> = ({
             Generated Outputs
           </span>
           <span className="text-[#AAA3BB] text-[10px]">
-            {modpack.generateSeparatePacks === false ? 'Individual .mcpack downloads are disabled for this project.' : 'Tap any output to download individual .mcpack'}
+            {modpack.generateSeparatePacks === false ? 'Separate .mcpack downloads are disabled; the combined .mcaddon still includes all generated packs.' : 'Tap any output to download individual .mcpack'}
           </span>
         </div>
+
+        {behaviorOutputs.length > 1 && (
+          <div role="alert" className="rounded-xl border border-amber-600/60 bg-amber-950/25 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-amber-200 text-xs font-bold">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              Activate every Behavior Pack in your world
+            </div>
+            <p className="text-[11px] leading-relaxed text-amber-100/90">
+              This merge contains {behaviorOutputs.length} separate Behavior Packs because the source add-ons use different Script API versions. Importing the .mcaddon installs them, but does not activate them all in an existing world. Open the world's Behavior Packs settings and activate every pack listed below. If one is missing or inactive, its items, blocks, entities, and scripts will not load.
+            </p>
+            <ul className="list-disc pl-5 space-y-1 text-[11px] text-amber-100/90">
+              {behaviorOutputs.map(output => (
+                <li key={output.id}>
+                  <span className="font-semibold">{output.label}</span>
+                  <span className="font-mono opacity-80"> — {output.fileName}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-[10px] text-amber-200/80">Also activate the matching Resource Pack under the world's Resource Packs settings.</p>
+          </div>
+        )}
 
         {/* Combined .mcaddon Main Card */}
         {modpack.generateAddon !== false && <div className="p-3.5 rounded-xl bg-[#15111F] border border-[#762BFF]/60 flex items-center justify-between gap-3 shadow-[0_0_15px_rgba(118,43,255,0.15)]">
