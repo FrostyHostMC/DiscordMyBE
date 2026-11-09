@@ -158,7 +158,7 @@ function newAccum(): MergeAccum {
 }
 
 function normalizeRegisteredUiPath(value: string): string {
-  return value.replace(/\\\\/g, '/').replace(/^\\.\\//, '').replace(/^\\/+/, '').toLowerCase();
+  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').toLowerCase();
 }
 
 /** Read every custom UI file registered by this resource pack's _ui_defs.json. */
