@@ -65,45 +65,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
-  // Sort installedPacks by packOrder
-  const orderedPacks = React.useMemo(() => {
-    const map = new Map(installedPacks.map((p) => [p.id, p]));
-    const result: AddonPack[] = [];
-    for (const id of packOrder) {
-      const p = map.get(id);
-      if (p) result.push(p);
-    }
-    // Any remaining
-    for (const p of installedPacks) {
-      if (!packOrder.includes(p.id)) result.push(p);
-    }
-    return result;
-  }, [installedPacks, packOrder]);
-
-  const behaviorPacks = orderedPacks.filter((p) => p.type === 'Behavior Pack');
-  const resourcePacks = orderedPacks.filter((p) => p.type === 'Resource Pack');
-
-  const selectedBP = behaviorPacks.filter((p) => selectedPackIds.includes(p.id));
-  const selectedRP = resourcePacks.filter((p) => selectedPackIds.includes(p.id));
-
-  const handleMoveOrder = (index: number, direction: 'up' | 'down', list: AddonPack[]) => {
-    const targetIdx = direction === 'up' ? index - 1 : index + 1;
-    if (targetIdx < 0 || targetIdx >= list.length) return;
-    const itemA = list[index].id;
-    const itemB = list[targetIdx].id;
-
-    setPackOrder((prev) => {
-      const next = [...prev];
-      const posA = next.indexOf(itemA);
-      const posB = next.indexOf(itemB);
-      if (posA !== -1 && posB !== -1) {
-        next[posA] = itemB;
-        next[posB] = itemA;
-      }
-      return next;
-    });
-  };
-
   const handleFilesChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files ? Array.from(e.target.files) : [];
     // Reset so choosing the same file again (e.g. after deleting it) still triggers onChange.
@@ -153,7 +114,7 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
   };
 
   // Render pack row
-  const renderPackRow = (pack: AddonPack, index: number, list: AddonPack[]) => {
+  const renderPackRow = (pack: AddonPack) => {
     const isSelected = selectedPackIds.includes(pack.id);
     const isBp = pack.type === 'Behavior Pack';
 
@@ -226,27 +187,6 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
 
         {/* Right: Order controls + Inspect */}
         <div className="flex items-center gap-1 shrink-0">
-          <div className="flex flex-col">
-            <button
-              type="button"
-              disabled={index === 0}
-              onClick={() => handleMoveOrder(index, 'up', list)}
-              className="p-1 rounded text-[#AAA3BB] hover:text-white disabled:opacity-20 hover:bg-[#201A2E]"
-              title="Move up precedence"
-            >
-              <ChevronUp className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={index === list.length - 1}
-              onClick={() => handleMoveOrder(index, 'down', list)}
-              className="p-1 rounded text-[#AAA3BB] hover:text-white disabled:opacity-20 hover:bg-[#201A2E]"
-              title="Move down precedence"
-            >
-              <ChevronDown className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
           <button
             type="button"
             onClick={() => setInspectingPack(pack)}
