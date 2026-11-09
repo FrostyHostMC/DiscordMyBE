@@ -2,7 +2,7 @@ import assetsData from '../config/assets';
 import JSZip from 'jszip';
 import { buildStoreZip, type StoreZipEntry } from './storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
-import { generateUUID, sanitizeJsonString } from './addonParser';
+import { generateUUID, sanitizeJsonString, collectRegisteredUiPathsFromZip, normalizeRegisteredUiPath } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
 import { resolveTargetEngineVersion } from './targetEngine';
 import { selectMergeOutputs } from './outputOptions';
@@ -155,42 +155,6 @@ interface MergeAccum {
 }
 function newAccum(): MergeAccum {
   return { shared: new Map(), writtenBinaryPaths: new Set() };
-}
-
-function normalizeRegisteredUiPath(value: string): string {
-  return value.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').toLowerCase();
-}
-
-/** Read every custom UI file registered by this resource pack's _ui_defs.json. */
-export async function collectRegisteredUiPathsFromZip(zip: JSZip): Promise<Set<string>> {
-  const paths = new Set<string>();
-  for (const [path, file] of Object.entries(zip.files)) {
-    if (file.dir || path.split('/').pop()?.toLowerCase() !== '_ui_defs.json') continue;
-    try {
-      const data = JSON.parse(sanitizeJsonString(await file.async('text')));
-      for (const entry of Array.isArray(data?.ui_defs) ? data.ui_defs : []) {
-        if (typeof entry === 'string' && entry.trim()) paths.add(normalizeRegisteredUiPath(entry.trim()));
-      }
-    } catch {
-      // Invalid registrations are reported by archive validation; do not guess paths.
-    }
-  }
-  return paths;
-}
-
-/** Build one union before merging so a custom UI file is strategy-merged even
- * when its first provider does not register it but a later pack does. */
-async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>> {
-  const paths = new Set<string>();
-  for (const pack of packs) {
-    if (!pack.fileBlob) continue;
-    const zip = await JSZip.loadAsync(pack.fileBlob);
-    await expandBrarchiveFiles(zip);
-    const packPaths = await collectRegisteredUiPathsFromZip(zip);
-    for (const path of packPaths) paths.add(path);
-    zip.files = {} as typeof zip.files;
-  }
-  return paths;
 }
 
 /** Alternative paths are only safe for definitions which Bedrock loads by ID. */
