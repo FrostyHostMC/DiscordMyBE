@@ -178,7 +178,47 @@ function rewriteIdentifierReferences(text: string, renameMap?: Map<string, strin
   return rewriteIdentifierTokens(text, renameMap);
 }
 
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>): Promise<void> {
+function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ type: ConflictItem['type']; identifier: string }> {
+  const lower = path.toLowerCase().replace(/\\/g, '/');
+  try {
+    const data = JSON.parse(sanitizeJsonString(new TextDecoder().decode(bytes)));
+    const results: Array<{ type: ConflictItem['type']; identifier: string }> = [];
+    const folder = lower.split('/').filter(Boolean).slice(-2, -1)[0] || '';
+    const roots: Array<[string, ConflictItem['type']]> = [
+      ['minecraft:entity', 'entity'], ['minecraft:client_entity', 'entity'],
+      ['minecraft:item', 'item'], ['minecraft:block', 'block'],
+      ['minecraft:recipe_shaped', 'recipe'], ['minecraft:recipe_shapeless', 'recipe'],
+      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe', 'recipe']
+    ];
+    for (const [root, type] of roots) {
+      const identifier = data?.[root]?.description?.identifier;
+      if (typeof identifier === 'string') results.push({ type, identifier });
+    }
+    if (folder === 'animation_controllers') {
+      for (const identifier of Object.keys(data?.animation_controllers || {})) results.push({ type: 'animation_controller', identifier });
+    }
+    if (folder === 'render_controllers') {
+      for (const identifier of Object.keys(data?.render_controllers || {})) results.push({ type: 'render_controller', identifier });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePackId: string | undefined, conflicts: ConflictItem[]): boolean {
+  if (!sourcePackId || !conflicts.length) return false;
+  const definitions = conflictDefinitionsInFile(path, bytes);
+  for (const conflict of conflicts) {
+    if (conflict.type === 'vanilla_asset' || conflict.resolution === 'prefix_all') continue;
+    const losingPackId = conflict.resolution === 'keep_a' ? conflict.packB.id : conflict.packA.id;
+    if (sourcePackId !== losingPackId) continue;
+    if (definitions.some(definition => definition.type === conflict.type && definition.identifier === conflict.identifier)) return true;
+  }
+  return false;
+}
+
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = []): Promise<void> {
   const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
@@ -190,6 +230,10 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const transformedPath = pathTransform ? pathTransform(path) : path;
     const outPath = assetPathMap.get(path) || assetPathMap.get(transformedPath) || transformedPath;
     const original = await fileObj.async('uint8array');
+    // Explicit Keep A / Keep B choices apply to definitions before they enter
+    // shared-file accumulation; otherwise a later generic merge could combine
+    // or reactivate the definition the user explicitly excluded.
+    if (shouldSkipConflictDefinition(path, original, sourcePackId, conflicts)) continue;
     let bytes = original;
     const isStructuredText = /\.(json|mcfunction|molang|material)$/i.test(lower);
     const isScriptText = /\.(js|mjs|cjs|ts)$/i.test(lower);
@@ -447,7 +491,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
@@ -613,7 +657,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
         ? (p: string) => /^(?:scripts\/)/i.test(p) || /\.(?:[cm]?js)$/i.test(p) ? scriptModuleOutputPath(slug, p) : p
         : undefined;
       await applyFeatureRegistry(zip, bpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), transform, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), transform, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts);
       zip.files = {} as typeof zip.files;
       if (isScriptGroup && entry) scriptEntries.push(relocateScripts ? scriptModuleOutputPath(slug, entry) : entry);
     }
