@@ -99,7 +99,7 @@ function inViewport(rect: Rect): boolean {
 function isFullScreenParent(value: any): boolean {
   const size = value?.size;
   if (!Array.isArray(size) || size.length < 2) return false;
-  const full = (part: any) => typeof part === 'string' && /^(?:100%|fill|100%sm|100%c)$/i.test(part.trim());
+  const full = (part: any) => typeof part === 'string' && /^(?:100%|100%sm)$/i.test(part.trim());
   return full(size[0]) && full(size[1]);
 }
 
