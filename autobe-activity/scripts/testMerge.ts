@@ -13,12 +13,60 @@ import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
 import { selectMergeOutputs } from '../src/utils/outputOptions.ts';
 import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from '../src/utils/identifierReferences.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
+import { resolveHudPlacements, HUD_POSITIONS } from '../src/utils/hudLayout.ts';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from '../src/utils/assetCollision.ts';
 
 function test(name: string, run: () => void) {
   run();
   console.log(`✓ ${name}`);
 }
+
+test('HUD placement resolver relocates overlapping measurable controls to distinct safe anchors', () => {
+  const hud = {
+    root: {
+      modifications: [{
+        array_name: 'controls',
+        operation: 'insert_front',
+        value: [
+          { 'coords@hud.coords': {} },
+          { 'ammo@hud.ammo': {} },
+          { 'boss@hud.boss': {} },
+        ],
+      }],
+    },
+  };
+  const definitions = [{
+    coords: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+    ammo: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+    boss: { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 2);
+  assert.equal(result.unresolved.length, 0);
+  assert.equal(new Set(result.moved.map(item => item.to)).size, 2);
+  assert.deepEqual(HUD_POSITIONS.length, 9);
+  assert.equal(hud.root.modifications[0].value[1]['ammo@hud.ammo'].anchor_from, undefined, 'source input must not be mutated');
+});
+
+test('HUD placement resolver leaves dynamic or unknown-size controls unchanged', () => {
+  const hud = { root: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'dynamic@hud.dynamic': { anims: ['@hud.move'], offset: ['$dynamic_x', 0] } },
+  ] }] } };
+  const result = resolveHudPlacements(hud, [{ dynamic: { type: 'panel', size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left' } }], 'auto');
+  assert.equal(result.moved.length, 0);
+  assert.deepEqual(result.hud, hud);
+});
+
+test('HUD placement preserve mode does not rewrite overlapping controls', () => {
+  const hud = { root: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'one@hud.one': {} }, { 'two@hud.two': {} },
+  ] }] } };
+  const definitions = [{ one: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' }, two: { size: [100, 50], anchor_from: 'center', anchor_to: 'center' } }];
+  const result = resolveHudPlacements(hud, definitions, 'preserve');
+  assert.equal(result.moved.length, 0);
+  assert.equal(result.unresolved.length, 1);
+  assert.deepEqual(result.hud, hud);
+});
 
 test('selected Bedrock target is written as the minimum when source packs support it', () => {
   const diagnostics: string[] = [];
