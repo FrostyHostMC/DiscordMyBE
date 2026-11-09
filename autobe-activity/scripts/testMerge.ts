@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { sanitizeJsonString, detectConflicts, parseAddonArchive } from '../src/utils/addonParser.ts';
 import { applySubpackSelection } from '../src/utils/subpackProcessor.ts';
 import { mergeJsonForFile, isUiMergeStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile } from '../src/utils/smartJsonMerge.ts';
+import { collectRegisteredUiPathsFromZip } from '../src/utils/mergeEngine.ts';
 import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
@@ -52,6 +53,27 @@ await (async () => {
   const manifest = JSON.parse(await selectedZip.file('manifest.json')!.async('text'));
   assert.equal(manifest.subpacks, undefined, 'selected output must not prompt again');
   console.log('✓ standard Bedrock folder_name subpacks are detected and selected UI assets are retained');
+})();
+
+await (async () => {
+  const registryZip = new JSZip();
+  registryZip.file('ui/_ui_defs.json', JSON.stringify({
+    ui_defs: ['custom_screens/menu.json', 'ui/common_controls.json', './ui/relative_screen.json']
+  }));
+  const registered = await collectRegisteredUiPathsFromZip(registryZip);
+  assert.ok(registered.has('custom_screens/menu.json'),
+    'custom UI definitions outside the ui/ folder must be discovered');
+  assert.ok(registered.has('ui/common_controls.json'));
+  assert.ok(registered.has('ui/relative_screen.json'));
+
+  const merged = mergeJsonForFile('custom_screens/menu.json', [
+    { namespace: 'fixture', first_panel: { type: 'panel', controls: [{ first_button: { type: 'button' } }] } },
+    { namespace: 'fixture', second_panel: { type: 'panel', controls: [{ second_button: { type: 'button' } }] } }
+  ], [], true);
+  assert.ok(merged.first_panel);
+  assert.ok(merged.second_panel,
+    'registered custom UI files must use the UI merger even when they live outside ui/');
+  console.log('✓ registered UI files outside ui/ are discovered and merged with UI-aware semantics');
 })();
 
 test('shared animation registries and item catalogs are recognized for strategy merging', () => {
