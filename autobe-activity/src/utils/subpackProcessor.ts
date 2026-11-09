@@ -50,6 +50,10 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
 
   let extractedCount = 0;
   let skippedCount = 0;
+  const selectedVariantPaths = new Set<string>();
+  // A selected variant has higher priority than root/base files, regardless
+  // of ZIP entry order. Track its output paths so a later base entry cannot
+  // overwrite the selected content.
   for (const [path, f] of Object.entries(zip.files)) {
     if (f.dir) continue;
     const lower = path.toLowerCase();
@@ -67,20 +71,17 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
       // Only the chosen variant is kept; everything else under subpacks/ is dropped.
       if (prefixLower && lower.startsWith(prefixLower)) {
         const outPath = path.slice(prefix.length);
-        // JSZip will overwrite if file exists, which matches AutoBE's behavior
-        if (!out.file(outPath)) {
-          out.file(outPath, await f.async('uint8array'));
-          extractedCount++;
-        } else {
-          // File already exists at root - AutoBE would overwrite, so we do too
-          out.file(outPath, await f.async('uint8array'));
-          extractedCount++;
-        }
+        selectedVariantPaths.add(outPath.toLowerCase());
+        out.file(outPath, await f.async('uint8array'));
+        extractedCount++;
       } else {
         skippedCount++;
       }
       continue;
     }
+    // A selected variant has priority over root/base files even when the
+    // base entry appears later in the ZIP central directory.
+    if (selectedVariantPaths.has(lower)) continue;
     out.file(path, await f.async('uint8array'));
   }
   const data = await out.generateAsync({ type: 'uint8array' });

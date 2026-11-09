@@ -180,8 +180,23 @@ function mergeHudModifications(...lists: any[][]): any[] {
 }
 
 /**
+ * Identify files that register the vanilla player or define shared player
+ * animation/controller registries. Collect these before ZIP writes so a later
+ * pack cannot silently replace an earlier registration file.
+ */
+export function isPlayerAnimationStrategyFile(fileName: string): boolean {
+  const normalized = fileName.replace(/\\/g, '/').toLowerCase();
+  const base = normalized.substring(normalized.lastIndexOf('/') + 1);
+  return normalized === 'entity/player.entity.json' ||
+    normalized === 'entity/player.json' ||
+    base === 'player.animation.json' ||
+    base === 'player.animation_controllers.json' ||
+    base === 'player.render_controllers.json';
+}
+
+/**
  * Merge a list of parsed JSON values for one output file using the legacy
- * per-file strategies. `fileName` is the lowercase zip path.
+ * per-file strategies. \`fileName\` is the lowercase zip path.
  */
 export function mergeJsonForFile(fileName: string, list: any[]): any {
   if (list.length === 0) return {};

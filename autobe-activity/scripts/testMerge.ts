@@ -5,6 +5,7 @@ import { deepMergeUi } from '../src/utils/subpackHudMerge.ts';
 import { mergeJsonData } from '../src/utils/behaviorEntityMerge.ts';
 import JSZip from 'jszip';
 import { mergeDefinitionsByIdentifier } from '../src/utils/definitionMerger.ts';
+import { applyFeatureRegistry } from '../src/utils/featureRegistry.ts';
 import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
@@ -518,6 +519,27 @@ await (async () => {
   assert.equal(loot.pools[0].entries[0].name, newId, 'loot-table item references should be repaired');
   assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_RENAMED')));
   console.log('✓ feature registry renames colliding custom identifiers and repairs source-owned recipe references');
+})();
+
+await (async () => {
+  const first = new JSZip();
+  first.file('items/shared.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'demo:shared' }, components: {} } }));
+  const second = new JSZip();
+  second.file('items/shared.json', JSON.stringify({ 'minecraft:item': { description: { identifier: 'demo:shared' }, components: {} } }));
+  const diagnostics: string[] = [];
+  const changed = await applyFeatureRegistry(second, first, 'Second Pack', diagnostics, undefined, false);
+  assert.equal(changed, 0, 'production registry fallback must not invent a rename when the conflict UI supplied none');
+  const unchanged = JSON.parse(await second.file('items/shared.json')!.async('text'));
+  assert.equal(unchanged['minecraft:item'].description.identifier, 'demo:shared');
+  assert.ok(diagnostics.some(message => message.includes('FEATURE_REGISTRY_CHOICE_REQUIRED')));
+
+  const explicit = new Map([['demo:shared', 'demo_second:shared']]);
+  const explicitDiagnostics: string[] = [];
+  const explicitChanged = await applyFeatureRegistry(second, first, 'Second Pack', explicitDiagnostics, explicit, false);
+  assert.equal(explicitChanged, 1);
+  const renamed = JSON.parse(await second.file('items/shared.json')!.async('text'));
+  assert.equal(renamed['minecraft:item'].description.identifier, 'demo_second:shared');
+  console.log('✓ feature registry respects explicit rename choices and never silently overrides Keep A / Keep B');
 })();
 
 await (async () => {

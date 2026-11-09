@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { expandBrarchiveFiles } from './brarchive';
 import { AddonPack, ConflictItem } from '@/types/modpack';
 import { mergeAdditions } from './conservativeMerge';
 
@@ -189,14 +190,17 @@ export async function parseAddonArchive(
   const packs: AddonPack[] = [];
   const errors: string[] = [];
 
-  // Look for all manifest.json files (ignore nested manifests in subfolders)
+  // Only a file whose basename is exactly "manifest.json" is a pack
+  // manifest. Combined .mcaddon files also contain AutoBE's
+  // "_autobe_merge_manifest.json" report; treating that report as a pack
+  // manifest prevents discovery of the actual nested .mcpack files below.
   const manifestPaths: string[] = [];
   loaded.forEach((relativePath) => {
-    const lower = relativePath.toLowerCase();
-    // Only consider manifests at the root or one level deep
-    // Ignore manifests in subfolders like "unused-assets/manifest.json"
+    const basename = relativePath.split('/').pop()?.toLowerCase();
+    // Only consider pack manifests at the root or one level deep.
+    // Ignore report files and unrelated nested manifests in asset folders.
     const pathParts = relativePath.split('/');
-    if (lower.endsWith('manifest.json') && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
+    if (basename === 'manifest.json' && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
       manifestPaths.push(relativePath);
     }
   });
@@ -378,6 +382,10 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
     if (!pack.fileBlob) continue;
     try {
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      // Preflight must inspect the same expanded file inventory that the merge
+      // pipeline will actually process. Otherwise definitions stored inside
+      // optimized .brarchive containers evade conflict detection.
+      await expandBrarchiveFiles(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
@@ -477,8 +485,14 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           // ignore individual json parse errors
         }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      // A malformed optimized archive can hide definitions from conflict
+      // preflight. Do not silently continue with an incomplete inventory.
+      if (error instanceof Error && /\\.brarchive|brarchive/i.test(error.message)) {
+        throw error;
+      }
+      // Ignore unreadable non-archive packs here; their parse diagnostics are
+      // surfaced by the normal import/validation path.
     }
   }
 

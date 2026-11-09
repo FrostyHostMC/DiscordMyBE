@@ -49,7 +49,8 @@ function archive(name: string, content: string): Uint8Array {
   return result;
 }
 
-const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","scripts":{"initialize":["variable.is_first_person = query.is_first_person;"]}}}}';
+const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
+const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
 const scriptB = 'world.afterEvents.playerSpawn.subscribe(event => console.log("handbook"));';
 const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', '__brarchive/cameras/presets.brarchive': archive('test.json', '{"preset":true}') }, '2.7.0');
@@ -61,6 +62,7 @@ const rpA = await makePack('Resource Pack', 'First RP', {
   'textures/item_texture.json': '{"texture_data":{"first":{"textures":"textures/custom/gem"}}}'
 });
 const rpB = await makePack('Resource Pack', 'Second RP', {
+  'entity/player.entity.json': playerOverlay,
   'materials/entity.material': '{"materials":{"second":{}}}',
   'textures/custom/gem.png': new Uint8Array([2]),
   'textures/item_texture.json': '{"texture_data":{"second":{"textures":"textures/custom/gem"}}}'
@@ -71,11 +73,16 @@ const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
-assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, scriptB].sort());
+assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, 'world?.afterEvents?.playerSpawn?.subscribe?.(event => console.log("handbook"));'].sort());
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
-assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import\(/);
-assert.ok(bp.file('cameras/presets/test.json'));
-assert.equal(await rp.file('entity/player.entity.json')!.async('text'), player);
+assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
+assert.ok(bp.file('cameras/test.json'), 'packed camera presets should expand beside the archive container folder');
+const mergedPlayer = JSON.parse(await rp.file('entity/player.entity.json')!.async('text'));
+const playerDescription = mergedPlayer['minecraft:client_entity'].description;
+assert.equal(playerDescription.animations.base_walk, 'animation.base.walk');
+assert.equal(playerDescription.animations.addon_emote, 'animation.addon.emote');
+assert.ok(playerDescription.scripts.animate.includes('base_walk'));
+assert.ok(playerDescription.scripts.animate.includes('addon_emote'));
 const materials = JSON.parse(sanitizeJsonString(await rp.file('materials/entity.material')!.async('text')));
 assert.deepEqual(Object.keys(materials.materials).sort(), ['first', 'second']);
 const atlas = JSON.parse(await rp.file('textures/item_texture.json')!.async('text'));
@@ -85,13 +92,39 @@ const manifest = JSON.parse(await bp.file('manifest.json')!.async('text'));
 assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@minecraft/server').version, '2.10.0');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
-assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP');
+assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
+assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Resource Pack']);
+assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
+assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
+
+// Conflict-screen Keep A / Keep B must select the winning definition rather
+// than allowing the later generic merge to combine the discarded definition.
+const keepA = await makePack('Behavior Pack', 'Keep A', {
+  'entities/shared.json': JSON.stringify({ 'minecraft:entity': { description: { identifier: 'demo:shared' }, components: { 'minecraft:health': { value: 10, max: 10 } } } })
+});
+const keepB = await makePack('Behavior Pack', 'Keep B', {
+  'entities/shared.json': JSON.stringify({ 'minecraft:entity': { description: { identifier: 'demo:shared' }, components: { 'minecraft:health': { value: 20, max: 20 } } } })
+});
+const choices = await detectConflicts([keepA, keepB]);
+const definitionChoice = choices.find(conflict => conflict.identifier === 'demo:shared');
+assert.ok(definitionChoice, 'preflight must detect duplicate custom entity identifiers');
+definitionChoice!.resolution = 'keep_b';
+const chosenMerge = await executeMergePacks([keepA, keepB], { modpackName: 'Keep B Test', conflicts: choices });
+const chosenBehavior = await JSZip.loadAsync(chosenMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const chosenEntity = JSON.parse(await chosenBehavior.file('entities/shared.json')!.async('text'));
+assert.equal(chosenEntity['minecraft:entity'].components['minecraft:health'].max, 20);
+assert.ok(!chosenMerge.combinedExtras?.diagnosticsText?.includes('FEATURE_REGISTRY_RENAMED'), 'explicit Keep B must not be silently converted into prefix-and-keep-both');
+console.log('✓ explicit Keep B choice survives the complete behavior-pack merge');
 
 const beta = await makePack('Behavior Pack', 'Beta', { 'scripts/main.js': '// beta' }, '2.9.0-beta');
 const plan = buildMergePlan([bpA, beta]);
 assert.equal(plan.scriptGroups.length, 2);
-assert.notEqual(plan.scriptGroups[0].fileName, plan.scriptGroups[1].fileName);
+assert.notEqual(plan.scriptGroups[0].beta, plan.scriptGroups[1].beta);
+assert.notEqual(
+  `behavior_pack_v${plan.scriptGroups[0].major}${plan.scriptGroups[0].beta ? '_preview' : ''}.mcpack`,
+  `behavior_pack_v${plan.scriptGroups[1].major}${plan.scriptGroups[1].beta ? '_preview' : ''}.mcpack`
+);
 console.log('✓ stable and beta Script API tracks stay in separate outputs');
 
 const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"a":{}}}}';
@@ -116,7 +149,9 @@ assert.equal(await (await JSZip.loadAsync(overlay)).file('ui/sample.json')!.asyn
 console.log('✓ selected subpack overrides the base regardless of archive order');
 
 const missing = await makePack('Behavior Pack', 'Missing entry', {}, '2.0.0');
-await assert.rejects(executeMergePacks([missing], { modpackName: 'Missing' }), /Missing script entry/);
+const missingResult = await executeMergePacks([missing], { modpackName: 'Missing' });
+assert.ok(missingResult.outputs?.some(output => output.type === 'behavior_data'), 'a stale script declaration without JavaScript must preserve data as a data-only pack');
+assert.ok(missingResult.combinedExtras?.diagnosticsText?.includes('SCRIPT_ENTRY_MISSING'), 'the missing entry must be reported clearly');
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');

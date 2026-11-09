@@ -1,6 +1,6 @@
-import assetsData from "@/config/assets";
+import assetsData from '../config/assets';
 import JSZip from 'jszip';
-import { buildStoreZip, type StoreZipEntry } from '@/utils/storeZip';
+import { buildStoreZip, type StoreZipEntry } from './storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
 import { generateUUID, sanitizeJsonString } from './addonParser';
 import { highestFullScriptVersion } from './scriptApiVersion';
@@ -10,10 +10,11 @@ import { unifyCrossGroupBps } from './crossGroupUnify';
 import { mergeDefinitionsByIdentifier } from './definitionMerger';
 import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { scriptModuleOutputPath } from './scriptNamespacing';
-import { stableUUID } from '@/utils/stableUuid';
+import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
+import { mergeJsonForFile, isPlayerAnimationStrategyFile } from './smartJsonMerge';
 import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
@@ -23,6 +24,7 @@ export interface MergeProgressCallback {
 }
 export interface MergePlanScriptGroup {
   major: number;
+  beta: boolean;
   packs: AddonPack[];
 }
 export interface MergePlan {
@@ -48,14 +50,9 @@ const STRATEGY_MERGE_FILES = new Set(['ui/hud_screen.json', 'ui/_ui_defs.json', 
 function isStrategyMergeFile(path: string): boolean {
   const normalized = path.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
-  const isPlayerAnimationFile = new Set([
-    'player.animation.json',
-    'player.animation_controllers.json',
-    'player.render_controllers.json'
-  ]).has(base);
   return STRATEGY_MERGE_FILES.has(normalized) ||
     (normalized.startsWith('ui/') && normalized.endsWith('.json')) ||
-    isPlayerAnimationFile;
+    isPlayerAnimationStrategyFile(normalized);
 }
 
 // --- Version utilities -------------------------------------------------
@@ -105,28 +102,30 @@ export function buildMergePlan(packs: AddonPack[]): MergePlan {
   const rp = packs.filter(p => p.type === 'Resource Pack');
   const bps = packs.filter(p => p.type === 'Behavior Pack');
   const dataBp: AddonPack[] = [];
-  const groupMap = new Map<number, AddonPack[]>();
+  // Stable and preview/beta Script API tracks are not interchangeable merely
+  // because they share a major version. Keep them in separate output packs.
+  const groupMap = new Map<string, { major: number; beta: boolean; packs: AddonPack[] }>();
   const unassigned: AddonPack[] = [];
   for (const p of bps) {
     const major = getScriptMajor(p);
     if (major === null) {
       if (p.hasScripts) unassigned.push(p);else dataBp.push(p);
     } else {
-      const arr = groupMap.get(major) || [];
-      arr.push(p);
-      groupMap.set(major, arr);
+      const beta = /-(?:beta|preview|alpha|rc)(?:[.-]|$)/i.test(p.scriptVersion || '');
+      const key = `${major}:${beta ? 'preview' : 'stable'}`;
+      const group = groupMap.get(key) || { major, beta, packs: [] };
+      group.packs.push(p);
+      groupMap.set(key, group);
     }
   }
-  const scriptGroups = [...groupMap.entries()].sort((a, b) => a[0] - b[0]).map(([major, gPacks]) => ({
-    major,
-    packs: gPacks
-  }));
+  const scriptGroups = [...groupMap.values()].sort((a, b) => a.major - b.major || Number(a.beta) - Number(b.beta));
 
   // Scripted packs without a recognizable API version MUST still be merged —
   // group them together (major 0) instead of silently dropping them.
   if (unassigned.length > 0) {
     scriptGroups.push({
       major: 0,
+      beta: false,
       packs: unassigned
     });
   }
@@ -141,7 +140,7 @@ export function formatPlanSummary(plan: MergePlan): string {
   const parts: string[] = [];
   if (plan.rp.length > 0) parts.push(`Resource pack: ${plan.rp.length} packs`);
   if (plan.dataBp.length > 0) parts.push(`BP data-only: ${plan.dataBp.length} packs`);
-  for (const g of plan.scriptGroups) parts.push(g.major > 0 ? `BP v${g.major}: ${g.packs.length} packs` : `BP scripts: ${g.packs.length} packs`);
+  for (const g of plan.scriptGroups) parts.push(g.major > 0 ? `BP ${g.beta ? 'preview' : 'stable'} Script API v${g.major}: ${g.packs.length} packs` : `BP scripts: ${g.packs.length} packs`);
   return parts.join(' · ') || 'No packs selected';
 }
 
@@ -179,7 +178,50 @@ function rewriteIdentifierReferences(text: string, renameMap?: Map<string, strin
   return rewriteIdentifierTokens(text, renameMap);
 }
 
-async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>): Promise<void> {
+function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ type: ConflictItem['type']; identifier: string }> {
+  const lower = path.toLowerCase().replace(/\\/g, '/');
+  try {
+    const data = JSON.parse(sanitizeJsonString(new TextDecoder().decode(bytes)));
+    const results: Array<{ type: ConflictItem['type']; identifier: string }> = [];
+    const folder = lower.split('/').filter(Boolean).slice(-2, -1)[0] || '';
+    const roots: Array<[string, ConflictItem['type']]> = [
+      ['minecraft:entity', 'entity'], ['minecraft:client_entity', 'entity'],
+      ['minecraft:item', 'item'], ['minecraft:block', 'block'],
+      ['minecraft:recipe_shaped', 'recipe'], ['minecraft:recipe_shapeless', 'recipe'],
+      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe', 'recipe']
+    ];
+    for (const [root, type] of roots) {
+      const identifier = data?.[root]?.description?.identifier;
+      if (typeof identifier === 'string') results.push({ type, identifier });
+    }
+    if (folder === 'animation_controllers') {
+      for (const identifier of Object.keys(data?.animation_controllers || {})) results.push({ type: 'animation_controller', identifier });
+    }
+    if (folder === 'render_controllers') {
+      for (const identifier of Object.keys(data?.render_controllers || {})) results.push({ type: 'render_controller', identifier });
+    }
+    return results;
+  } catch {
+    return [];
+  }
+}
+
+function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePackId: string | undefined, conflicts: ConflictItem[]): boolean {
+  if (!sourcePackId || !conflicts.length) return false;
+  const definitions = conflictDefinitionsInFile(path, bytes);
+  for (const conflict of conflicts) {
+    // minecraft:player is a shared vanilla registration that AutoBE merges
+    // additively; treating it as an ordinary Keep A / Keep B definition would
+    // discard player overlays and undo the dedicated player merge strategy.
+    if (conflict.type === 'vanilla_asset' || conflict.identifier === 'minecraft:player' || conflict.resolution === 'prefix_all') continue;
+    const losingPackId = conflict.resolution === 'keep_a' ? conflict.packB.id : conflict.packA.id;
+    if (sourcePackId !== losingPackId) continue;
+    if (definitions.some(definition => definition.type === conflict.type && definition.identifier === conflict.identifier)) return true;
+  }
+  return false;
+}
+
+async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = []): Promise<void> {
   const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
@@ -191,6 +233,10 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
     const transformedPath = pathTransform ? pathTransform(path) : path;
     const outPath = assetPathMap.get(path) || assetPathMap.get(transformedPath) || transformedPath;
     const original = await fileObj.async('uint8array');
+    // Explicit Keep A / Keep B choices apply to definitions before they enter
+    // shared-file accumulation; otherwise a later generic merge could combine
+    // or reactivate the definition the user explicitly excluded.
+    if (shouldSkipConflictDefinition(path, original, sourcePackId, conflicts)) continue;
     let bytes = original;
     const isStructuredText = /\.(json|mcfunction|molang|material)$/i.test(lower);
     const isScriptText = /\.(js|mjs|cjs|ts)$/i.test(lower);
@@ -208,7 +254,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
-      : isStrategyMergeFile(lower) ? 'strategy' : DEEP_MERGE_FILES.has(lower) ? 'deep'
+      : isStrategyMergeFile(lower) ? 'strategy' : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
       : lower.endsWith('.lang') ? 'lang' : undefined;
     if (sharedKind) {
       const group = accum.shared.get(outPath) || { kind: sharedKind, entries: [] };
@@ -290,6 +336,15 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
                 changed = true;
               }
             }
+          } else if (group.kind === 'strategy' && isPlayerAnimationStrategyFile(path)) {
+            // Player registrations and named animation/controller definitions
+            // need the domain-aware merge strategy. Generic object merging can
+            // discard independent registrations and controller state maps.
+            const conservative = mergeAdditions(parsed, other);
+            const specialized = mergeJsonForFile(path, [parsed, other]);
+            changed ||= JSON.stringify(specialized) !== JSON.stringify(parsed);
+            parsed = specialized;
+            conflictDetails = conservative.conflicts;
           } else {
             const merged = mergeAdditions(parsed, other);
             parsed = merged.value;
@@ -438,8 +493,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
-      await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics);
-      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
+      await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts);
       // Release the loaded archive so its memory can be reclaimed now.
       zip.files = {} as typeof zip.files;
     }
@@ -510,7 +565,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   }
 
   // --- Behavior Pack (Data-only) ---
-  const buildBehaviorPack = async (groupPacks: AddonPack[], type: 'behavior_data' | 'behavior_script', major: number | undefined): Promise<void> => {
+  const buildBehaviorPack = async (groupPacks: AddonPack[], type: 'behavior_data' | 'behavior_script', major: number | undefined, beta = false): Promise<void> => {
     onProgress?.(type === 'behavior_data' ? 'Processing behavior packs' : `Splitting by script API version (v${major})`, type === 'behavior_data' ? 45 : 55);
     const bpZip = new JSZip();
     const headerUUID = stablePackId(`${type}-${major ?? 'data'}-header`, groupPacks);
@@ -604,8 +659,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const transform = relocateScripts
         ? (p: string) => /^(?:scripts\/)/i.test(p) || /\.(?:[cm]?js)$/i.test(p) ? scriptModuleOutputPath(slug, p) : p
         : undefined;
-      await applyFeatureRegistry(zip, bpZip, pack.name, mergeDiagnostics);
-      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), transform, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners);
+      await applyFeatureRegistry(zip, bpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
+      await accumulatePack(zip, bpZip, accum, renameMaps.get(pack.id), transform, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts);
       zip.files = {} as typeof zip.files;
       if (isScriptGroup && entry) scriptEntries.push(relocateScripts ? scriptModuleOutputPath(slug, entry) : entry);
     }
@@ -636,14 +691,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       bpZip.file(scriptEntry, `// AutoBE combined script entry\n${imports}\n`);
       mergeDiagnostics.push('INFO SCRIPT_PATHS_RELOCATED: Multiple script packs share an output; their script folders were separated while script contents were preserved. Review script references to resources outside those folders.');
     }
-    const label = outputType === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major})` : 'Behavior (Scripts)';
+    const label = outputType === 'behavior_data' ? 'Behavior (Data)' : major && major > 0 ? `Behavior (Script API v${major}${beta ? ' Preview' : ''})` : 'Behavior (Scripts)';
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
       groupPacks.map(p => p.minEngineVersion || ''),
       mergeDiagnostics,
       label
     );
-    const fileName = outputType === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}.mcpack` : 'behavior_pack_scripts.mcpack';
+    const fileName = outputType === 'behavior_data' ? 'behavior_pack_data.mcpack' : major && major > 0 ? `behavior_pack_v${major}${beta ? '_preview' : ''}.mcpack` : 'behavior_pack_scripts.mcpack';
 
     // Dependencies: every BP depends on the shared RP
     const dependencies: any[] = [];
@@ -700,7 +755,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await buildBehaviorPack(plan.dataBp, 'behavior_data', undefined);
   }
   for (const g of plan.scriptGroups) {
-    await buildBehaviorPack(g.packs, 'behavior_script', g.major);
+    await buildBehaviorPack(g.packs, 'behavior_script', g.major, g.beta);
   }
 
   // Check player conflicts across behavior outputs without copying definitions.
