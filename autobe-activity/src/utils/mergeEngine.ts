@@ -157,6 +157,21 @@ function newAccum(): MergeAccum {
   return { shared: new Map(), writtenBinaryPaths: new Set() };
 }
 
+/** Build one union before merging so a custom UI file is strategy-merged even
+ * when its first provider does not register it but a later pack does. */
+async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const pack of packs) {
+    if (!pack.fileBlob) continue;
+    const zip = await JSZip.loadAsync(pack.fileBlob);
+    await expandBrarchiveFiles(zip);
+    const packPaths = await collectRegisteredUiPathsFromZip(zip);
+    for (const path of packPaths) paths.add(path);
+    zip.files = {} as typeof zip.files;
+  }
+  return paths;
+}
+
 /** Alternative paths are only safe for definitions which Bedrock loads by ID. */
 function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
   const slash = path.lastIndexOf('/');
