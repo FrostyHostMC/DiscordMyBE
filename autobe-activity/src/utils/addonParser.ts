@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { expandBrarchiveFiles } from './brarchive';
 import { AddonPack, ConflictItem } from '@/types/modpack';
 import { mergeAdditions } from './conservativeMerge';
 
@@ -381,6 +382,10 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
     if (!pack.fileBlob) continue;
     try {
       const zip = await JSZip.loadAsync(pack.fileBlob);
+      // Preflight must inspect the same expanded file inventory that the merge
+      // pipeline will actually process. Otherwise definitions stored inside
+      // optimized .brarchive containers evade conflict detection.
+      await expandBrarchiveFiles(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
