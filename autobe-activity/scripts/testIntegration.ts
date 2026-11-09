@@ -216,6 +216,16 @@ const missing = await makePack('Behavior Pack', 'Missing entry', {}, '2.0.0');
 const missingResult = await executeMergePacks([missing], { modpackName: 'Missing' });
 assert.ok(missingResult.outputs?.some(output => output.type === 'behavior_data'), 'a stale script declaration without JavaScript must preserve data as a data-only pack');
 assert.ok(missingResult.combinedExtras?.diagnosticsText?.includes('SCRIPT_ENTRY_MISSING'), 'the missing entry must be reported clearly');
+const invalidJsonPack = await makePack('Behavior Pack', 'Broken JSON', {
+  'items/broken.json': '{"minecraft:item": '
+});
+await assert.rejects(
+  () => executeMergePacks([invalidJsonPack], { modpackName: 'Invalid JSON' }),
+  /INVALID_JSON.*items\\/broken\\.json/,
+  'a merge must stop instead of shipping a pack with malformed item definitions'
+);
+console.log('✓ malformed merged JSON blocks output generation instead of shipping missing content');
+
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');
