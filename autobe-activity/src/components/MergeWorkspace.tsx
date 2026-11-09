@@ -96,7 +96,8 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
     targetEngine: '1.20.0',
     autoPrefix: true,
     generateAddon: true,
-    generateSeparatePacks: true
+    generateSeparatePacks: true,
+    hudPlacement: 'auto'
   });
 
   // Import state
@@ -454,6 +455,28 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
               <p className="mt-1 text-[10px] leading-relaxed text-[#8F879F]">
                 This sets the minimum game version in the generated packs. If an add-on requires a newer version, AutoBE keeps that requirement and explains why in the merge report.
               </p>
+            </div>
+
+            <div className="sm:col-span-2 rounded-lg border border-[#30263F] bg-[#100D18] p-3">
+              <label className="text-[11px] font-semibold text-white block mb-1">HUD Interface Placement</label>
+              <select
+                value={config.hudPlacement || 'auto'}
+                onChange={(e) => setConfig({ ...config, hudPlacement: e.target.value as NonNullable<MergeSessionConfig['hudPlacement']> })}
+                className="w-full bg-[#100D18] border border-[#30263F] rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-[#762BFF]"
+              >
+                <option value="auto">Automatic — move measurable overlapping HUD elements</option>
+                <option value="preserve">Keep original positions</option>
+                <option value="top_left">Prefer top left</option>
+                <option value="top_middle">Prefer top middle</option>
+                <option value="top_right">Prefer top right</option>
+                <option value="left_middle">Prefer middle left</option>
+                <option value="center">Prefer center</option>
+                <option value="right_middle">Prefer middle right</option>
+                <option value="bottom_left">Prefer bottom left</option>
+                <option value="bottom_middle">Prefer bottom middle</option>
+                <option value="bottom_right">Prefer bottom right</option>
+              </select>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-[#8F879F]">AutoBE only relocates controls with measurable static bounds. Animated or dynamic layouts stay in their original position and are reported for review.</p>
             </div>
 
             <div className="sm:col-span-2 rounded-lg border border-[#30263F] bg-[#100D18] p-3 space-y-3">
