@@ -838,9 +838,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     blockingValidationErrors.push(...bpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[${b.label}] ${issue.code}: ${issue.path} — ${issue.message}`));
   }
   if (blockingValidationErrors.length > 0) {
-    const details = blockingValidationErrors.slice(0, 20).map(issue => `• ${issue}`).join('\\n');
-    const remainder = blockingValidationErrors.length > 20 ? `\\n…and ${blockingValidationErrors.length - 20} more validation error(s).` : '';
-    throw new Error(`AutoBE stopped the build because the merged packs contain ${blockingValidationErrors.length} invalid JSON or other blocking validation error(s). These files cannot be loaded reliably by Minecraft:\\n${details}${remainder}`);
+    const newline = String.fromCharCode(10);
+    const details = blockingValidationErrors.slice(0, 20).map(issue => `• ${issue}`).join(newline);
+    const remainder = blockingValidationErrors.length > 20 ? newline + `…and ${blockingValidationErrors.length - 20} more validation error(s).` : '';
+    throw new Error([
+      `AutoBE stopped the build because the merged packs contain ${blockingValidationErrors.length} invalid JSON or other blocking validation error(s).`,
+      'These files cannot be loaded reliably by Minecraft:',
+      details + remainder
+    ].join(newline));
   }
   for (const b of builtBps) {
     const blobData = await b.zip.generateAsync({
