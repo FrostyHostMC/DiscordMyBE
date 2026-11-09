@@ -86,6 +86,13 @@ test('all UI JSON files preserve independent controls and bindings', () => {
   ]);
   assert.deepEqual(merged.panel.controls, [{ 'left@hud.left': {} }, { 'right@hud.right': {} }]);
   assert.deepEqual(merged.panel.bindings, [{ binding_name: '#left' }, { binding_name: '#right' }]);
+  const collision = mergeJsonForFile('ui/common.json', [
+    { panel: { type: 'panel', texture: 'textures/ui/first', controls: [{ 'same@hud.control': { offset: [0, 0] } }] } },
+    { panel: { type: 'image', texture: 'textures/ui/second', controls: [{ 'same@hud.control': { size: [20, 20] } }] } },
+  ]);
+  assert.equal(collision.panel.type, 'panel', 'later conflicting UI scalar must not replace the active definition');
+  assert.equal(collision.panel.texture, 'textures/ui/first');
+  assert.deepEqual(collision.panel.controls[0]['same@hud.control'], { offset: [0, 0], size: [20, 20] });
 });
 
 test('HUD and UI definition strategy merge preserves independent registrations', () => {
