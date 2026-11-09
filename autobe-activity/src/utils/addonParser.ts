@@ -189,14 +189,17 @@ export async function parseAddonArchive(
   const packs: AddonPack[] = [];
   const errors: string[] = [];
 
-  // Look for all manifest.json files (ignore nested manifests in subfolders)
+  // Only a file whose basename is exactly "manifest.json" is a pack
+  // manifest. Combined .mcaddon files also contain AutoBE's
+  // "_autobe_merge_manifest.json" report; treating that report as a pack
+  // manifest prevents discovery of the actual nested .mcpack files below.
   const manifestPaths: string[] = [];
   loaded.forEach((relativePath) => {
-    const lower = relativePath.toLowerCase();
-    // Only consider manifests at the root or one level deep
-    // Ignore manifests in subfolders like "unused-assets/manifest.json"
+    const basename = relativePath.split('/').pop()?.toLowerCase();
+    // Only consider pack manifests at the root or one level deep.
+    // Ignore report files and unrelated nested manifests in asset folders.
     const pathParts = relativePath.split('/');
-    if (lower.endsWith('manifest.json') && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
+    if (basename === 'manifest.json' && !relativePath.includes('__MACOSX') && pathParts.length <= 2) {
       manifestPaths.push(relativePath);
     }
   });
