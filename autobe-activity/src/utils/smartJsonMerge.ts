@@ -1,5 +1,3 @@
-import { deepMergeUi } from './subpackHudMerge';
-
 /**
  * Port of AutoBE Part 18 _merge_json / _merge_entity_json_simple /
  * _deep_merge_union (file-specific branches) plus the blocks.json and
@@ -32,6 +30,52 @@ const MERGE_MAX_KEYS = new Set([
 
 const KEEP_FIRST_KEYS = new Set(['format_version', 'description', 'identifier',
   'minecraft:collision_box', 'minecraft:movement']);
+
+/** Merge UI JSON conservatively: retain independent controls/bindings and
+ * nested definitions, but never silently replace an existing scalar setting.
+ * Bedrock UI values often encode bindings, visibility and layout semantics;
+ * guessing a winner can make an otherwise valid HUD disappear. */
+function mergeUiJson(base: any, overlay: any, key = ''): any {
+  if (Array.isArray(base) && Array.isArray(overlay)) {
+    const result = structuredClone(base);
+    const fingerprints = new Set(result.map(item => JSON.stringify(item)));
+    for (const item of overlay) {
+      const fingerprint = JSON.stringify(item);
+      if (fingerprints.has(fingerprint)) continue;
+      // A control array item is commonly a one-key object whose key is the
+      // registered control name. Merge same-name control definitions rather
+      // than emitting duplicate registrations.
+      if (key === 'controls' && item && typeof item === 'object' && !Array.isArray(item)) {
+        const incomingName = Object.keys(item)[0];
+        const existingIndex = result.findIndex(existing =>
+          existing && typeof existing === 'object' && !Array.isArray(existing) &&
+          Object.keys(existing).length === 1 && Object.keys(existing)[0] === incomingName
+        );
+        if (existingIndex >= 0 && incomingName) {
+          const existing = result[existingIndex];
+          result[existingIndex] = { [incomingName]: mergeUiJson(existing[incomingName], item[incomingName]) };
+          continue;
+        }
+      }
+      result.push(structuredClone(item));
+      fingerprints.add(fingerprint);
+    }
+    return result;
+  }
+  if (base && overlay && typeof base === 'object' && typeof overlay === 'object' &&
+      !Array.isArray(base) && !Array.isArray(overlay)) {
+    const result = structuredClone(base);
+    for (const [childKey, value] of Object.entries(overlay)) {
+      if (!(childKey in result)) result[childKey] = structuredClone(value);
+      else result[childKey] = mergeUiJson(result[childKey], value, childKey);
+    }
+    return result;
+  }
+  // First definition wins on incompatible scalar/type collisions. The
+  // complete incoming pack remains available in source inputs for diagnosis;
+  // do not let a later UI addon silently disable an earlier one.
+  return structuredClone(base);
+}
 
 /** Union-dedupe two lists preserving order (by JSON fingerprint). */
 export function unionMergeList(existing: any[], incoming: any[]): any[] {
@@ -214,8 +258,8 @@ export function mergeJsonForFile(fileName: string, list: any[]): any {
   const base = fileName.substring(fileName.lastIndexOf('/') + 1);
 
   if (normalizedPath.startsWith('ui/') && base !== 'hud_screen.json' && base !== '_ui_defs.json') {
-    const mergedUi = structuredClone(list[0]);
-    for (const overlay of list.slice(1)) deepMergeUi(mergedUi, overlay);
+    let mergedUi = structuredClone(list[0]);
+    for (const overlay of list.slice(1)) mergedUi = mergeUiJson(mergedUi, overlay);
     return mergedUi;
   }
 
