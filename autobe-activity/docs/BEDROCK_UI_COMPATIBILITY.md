@@ -29,6 +29,10 @@ DDUI's `CustomForm`, `MessageBox`, and Observable classes were released as stabl
 
 DDUI is a supported way for add-on authors to build their own interactive modal experiences. It is not a pixel-positioned HUD overlay and does not grant access to native Ore UI screens. AutoBE cannot safely convert an arbitrary legacy JSON UI panel into a DDUI form: the original may rely on game-provided bindings, Molang, factories, animations, input mappings, or client-only state that scripts cannot reproduce.
 
+The latest preview documentation (26.70 preview) still describes DDUI as a modal/form surface and notes that richer layout files are planned rather than exposed as a general custom-screen extension today. It also documents limitations such as unsupported glyph rendering. AutoBE therefore treats DDUI as an add-on-authored form fallback, not as a replacement renderer for arbitrary legacy HUDs or native Ore UI screens.
+
+Community frameworks such as MinUI can compile custom persistent screens to legacy JSON UI, but their own project documentation describes an early, single-consumer state and confirms they do not bypass Bedrock's native dialog/interaction limitations. AutoBE should not depend on an experimental third-party framework to promise universal Ore UI support.
+
 AutoBE should preserve and merge the script modules and their declared `@minecraft/server-ui` dependencies. It must not silently inject a new UI script into unrelated behavior packs or upgrade API dependencies beyond the selected Bedrock target.
 
 ## Nine-position HUD placement
