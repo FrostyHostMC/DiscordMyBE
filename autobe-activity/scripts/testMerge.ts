@@ -79,6 +79,15 @@ test('HUD merge preserves ordered patches and removes only exact duplicates', ()
   JSON.parse(JSON.stringify(merged));
 });
 
+test('all UI JSON files preserve independent controls and bindings', () => {
+  const merged = mergeJsonForFile('ui/common.json', [
+    { panel: { controls: [{ 'left@hud.left': {} }], bindings: [{ binding_name: '#left' }] } },
+    { panel: { controls: [{ 'right@hud.right': {} }], bindings: [{ binding_name: '#right' }] } },
+  ]);
+  assert.deepEqual(merged.panel.controls, [{ 'left@hud.left': {} }, { 'right@hud.right': {} }]);
+  assert.deepEqual(merged.panel.bindings, [{ binding_name: '#left' }, { binding_name: '#right' }]);
+});
+
 test('HUD and UI definition strategy merge preserves independent registrations', () => {
   const hud = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'first@hud.first': {} }] }] } },
