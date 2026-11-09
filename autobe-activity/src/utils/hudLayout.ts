@@ -69,13 +69,13 @@ function numericPair(value: any): [number, number] | undefined {
 }
 
 function anchorPoint(anchor: HudPosition): [number, number] {
-  const x = anchor.endsWith('left') ? 0 : anchor.endsWith('right') ? SCREEN.width : SCREEN.width / 2;
+  const x = anchor.includes('left') ? 0 : anchor.includes('right') ? SCREEN.width : SCREEN.width / 2;
   const y = anchor.startsWith('top') ? 0 : anchor.startsWith('bottom') ? SCREEN.height : SCREEN.height / 2;
   return [x, y];
 }
 
 function anchorWithinElement(anchor: HudPosition, width: number, height: number): [number, number] {
-  const x = anchor.endsWith('left') ? 0 : anchor.endsWith('right') ? width : width / 2;
+  const x = anchor.includes('left') ? 0 : anchor.includes('right') ? width : width / 2;
   const y = anchor.startsWith('top') ? 0 : anchor.startsWith('bottom') ? height : height / 2;
   return [x, y];
 }
