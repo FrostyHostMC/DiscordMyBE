@@ -18,19 +18,7 @@ import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
 import { ensureCombinedBlob } from '@/utils/mergeEngine';
 import { uploadToCloud } from '@/utils/cloudUpload';
 import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
-import {
-  getAllPacksFromDB,
-  savePackToDB,
-  loadPackFile,
-  getLastStorageError,
-  deletePackFromDB,
-  getAllModpacksFromDB,
-  loadModpackFiles,
-  cleanupExpiredLocalWorkspace,
-  saveModpackToDB,
-  deleteModpackFromDB,
-  clearAllDB
-} from '@/utils/storage';
+import { deleteLegacyWorkspaceDatabase } from '@/utils/legacyWorkspaceCleanup';
 import { detectConflicts, parseAddonArchive } from '@/utils/addonParser';
 import { executeMergePacks, buildMergePlan, MergePlan } from '@/utils/mergeEngine';
 import { applySubpackToPack } from '@/utils/subpackProcessor';
@@ -39,7 +27,7 @@ import { describeError } from '@/utils/errorLog';
 import { downloadBlob } from '@/utils/download';
 import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
-import { syncWorkspaceOnStartup, syncPackToCloud, syncProjectToCloud, deleteWorkspaceItemFromCloud, deleteWorkspaceItemsFromCloud } from '@/utils/workspaceSync';
+
 
 import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
 import { BottomNav } from '@/components/BottomNav';
@@ -205,41 +193,14 @@ export const App: React.FC = () => {
     }
   }, [keepOriginalsTweak]);
 
-  // Load device data immediately, then reconcile with the authenticated Discord account.
-  // If cloud sync fails, local work remains available and is never cleared.
+  // AutoBE no longer keeps a personal workspace or project library.
+  // Remove the legacy IndexedDB database once on startup so old saved private
+  // packs/projects do not linger on users' devices. Community data is server-side
+  // in separate D1/R2 namespaces and is never touched here.
   useEffect(() => {
-    let cancelled = false;
-    const loadData = async () => {
-      try {
-        const expired = await cleanupExpiredLocalWorkspace();
-        if (expired.packs || expired.projects) showToast(`Removed ${expired.packs} inactive pack(s) and ${expired.projects} inactive project(s) older than 7 days.`, 6500);
-        const [storedPacks, storedModpackRows] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
-        const storedModpacks = await Promise.all(storedModpackRows.map(loadModpackFiles));
-        if (cancelled) return;
-        setInstalledPacks(storedPacks);
-        setMyModpacks(storedModpacks);
-
-        if (getDiscordAuth()?.token) {
-          try {
-            const synced = await syncWorkspaceOnStartup();
-            if (cancelled) return;
-            setInstalledPacks(synced.packs);
-            setMyModpacks(synced.projects);
-            if (synced.imported > 0 || synced.uploaded > 0) {
-              showToast(`Cloud sync complete: restored ${synced.imported}, backed up ${synced.uploaded} workspace item(s).`, 6500);
-            }
-          } catch (syncErr) {
-            console.error('[WorkspaceSync] Cloud sync failed; keeping local data:', describeError(syncErr));
-            if (!cancelled) showToast(`Cloud backup not complete: ${describeError(syncErr)}. Your device data was kept.`, 9000);
-          }
-        }
-      } catch (err) {
-        console.error('[Aippy] Initialization error:', describeError(err));
-        if (!cancelled) showToast(`Could not load your saved packs: ${describeError(err)}`);
-      }
-    };
-    void loadData();
-    return () => { cancelled = true; };
+    void deleteLegacyWorkspaceDatabase().catch((err) => {
+      console.warn('[LegacyWorkspace] Could not clear old local workspace database:', describeError(err));
+    });
   }, []);
 
   // Toggle selection for pack merge
@@ -263,84 +224,26 @@ export const App: React.FC = () => {
     setSelectedPackIds([]);
   };
 
-  // Import packs
+  // Imports exist only in memory for the current merge session. Nothing is
+  // written to IndexedDB or uploaded to a private per-user cloud workspace.
   const handleImportPacks = async (newPacks: AddonPack[]): Promise<number> => {
     triggerHaptic(80);
-
-    // Compare against what is REALLY stored (not a possibly-stale React state)
-    // so deleting then re-importing the same addon always works.
-    let existingPacks: AddonPack[];
-    try {
-      existingPacks = await getAllPacksFromDB();
-    } catch (err) {
-      console.error('[Import] Could not read storage:', describeError(err));
-      showToast(`Import failed: storage unavailable (${describeError(err)})`);
-      if (soundTweak) playError().catch(() => {});
-      return 0;
-    }
-
-    // Dedupe by UUID + type (BP/RP halves can share a UUID), including
-    // duplicates inside this same batch.
-    const seen = new Set(existingPacks.map((p) => `${p.uuid}_${p.type}`));
+    const seen = new Set(installedPacks.map((p) => `${p.uuid}_${p.type}`));
     const trulyNew: AddonPack[] = [];
-    for (const p of newPacks) {
-      const key = `${p.uuid}_${p.type}`;
+    for (const pack of newPacks) {
+      const key = `${pack.uuid}_${pack.type}`;
       if (seen.has(key)) continue;
       seen.add(key);
-      trulyNew.push(p);
+      trulyNew.push(pack);
     }
-
-    // Save one at a time and COUNT what actually succeeded.
-    let persisted = 0;
-    let memoryOnly = 0;
-    let firstError: string | null = null;
-    const successfullySaved: AddonPack[] = [];
-    for (const p of trulyNew) {
-      try {
-        const where = await savePackToDB(p);
-        successfullySaved.push(p);
-        if (where === 'saved') persisted++;
-        else memoryOnly++;
-      } catch (err) {
-        console.error('[Import] Failed to save pack:', p.name, describeError(err));
-        if (!firstError) firstError = describeError(err);
-      }
-    }
-    const saved = persisted + memoryOnly;
-
-    // Always refresh the list from storage, even after a partial failure.
-    try {
-      setInstalledPacks(await getAllPacksFromDB());
-    } catch (err) {
-      console.error('[Import] Could not refresh list:', describeError(err));
-    }
-
-    // Back up successful imports. A cloud error must not undo or hide the local save.
-    if (successfullySaved.length > 0 && getDiscordAuth()?.token) {
-      void Promise.all(successfullySaved.map(pack => syncPackToCloud(pack))).catch(err => {
-        console.error('[WorkspaceSync] Pack backup failed:', describeError(err));
-        showToast(`Pack(s) saved on this device, but cloud backup failed: ${describeError(err)}`, 9000);
-      });
-    }
-
-    const skipped = newPacks.length - trulyNew.length;
-    const failed = trulyNew.length - saved;
-    if (failed > 0) {
-      showToast(`Saved ${saved} of ${trulyNew.length} pack(s). Error: ${firstError}`, 12000);
-      if (soundTweak) playError().catch(() => {});
-    } else if (memoryOnly > 0) {
-      showToast(
-        `Added ${saved} pack(s). ${memoryOnly} couldn't be saved on this device, so they only last until you close the app — merge them now. (${getLastStorageError()})`,
-        14000
-      );
-    } else if (skipped > 0) {
-      showToast(`Added ${saved} pack(s), skipped ${skipped} duplicate(s).`);
-      if (soundTweak && saved > 0) playSuccess().catch(() => {});
-    } else {
-      showToast(`Successfully added ${saved} pack(s) to workspace!`);
+    if (trulyNew.length) {
+      setInstalledPacks((previous) => [...previous, ...trulyNew]);
+      showToast(`Imported ${trulyNew.length} add-on pack(s) into this merge session.`);
       if (soundTweak) playSuccess().catch(() => {});
+    } else {
+      showToast('Those add-ons are already in this merge session.');
     }
-    return saved;
+    return trulyNew.length;
   };
 
   const handleGlobalFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -371,24 +274,15 @@ export const App: React.FC = () => {
     globalFileInputRef.current?.click();
   };
 
-  // Packs in the library list carry metadata only (no file bytes). Load only the
-  // exact selected IDs from the current local library; never reuse a prior merge's
-  // pack list or a stale hydration cache.
+  // Every imported archive stays attached to its in-memory pack record.
+  // If it is missing, ask for a fresh import instead of consulting personal storage.
   const hydratePacks = async (packs: AddonPack[]): Promise<AddonPack[]> => {
-    const out: AddonPack[] = [];
-    const seen = new Set<string>();
-    for (let i = 0; i < packs.length; i++) {
-      const pack = packs[i];
-      if (seen.has(pack.id)) continue;
-      seen.add(pack.id);
-      if (!pack.fileBlob) showToast(`Loading ${pack.name} (${i + 1}/${packs.length})…`, 20000);
-      const hydrated = await loadPackFile({ ...pack, fileBlob: undefined });
-      if (!hydrated.fileBlob) {
-        throw new Error(`The selected pack "${pack.name}" has no stored file. Remove it and import the original .mcpack/.mcaddon again.`);
-      }
-      out.push(hydrated);
+    const unique = new Map<string, AddonPack>();
+    for (const pack of packs) {
+      if (!unique.has(pack.id)) unique.set(pack.id, pack);
+      if (!pack.fileBlob) throw new Error(`The selected pack "${pack.name}" is no longer in this session. Import it again before merging.`);
     }
-    return out;
+    return [...unique.values()];
   };
   const mergeStartingRef = useRef(false);
 
@@ -498,53 +392,8 @@ export const App: React.FC = () => {
 
       mergeLogger.success('Merge completed successfully', result.outputFileName, packsToMerge.length, packsToMerge.map(p => p.name));
 
-      // Persist the finished project before optionally removing its source packs.
-      // If project persistence fails, never remove the only reusable source copies.
-      let projectSaved = false;
-      try {
-        await saveModpackToDB(result);
-        projectSaved = true;
-        const updatedModpacks = await getAllModpacksFromDB();
-        setMyModpacks(updatedModpacks);
-        if (getDiscordAuth()?.token) {
-          void syncProjectToCloud(result).catch(err => {
-            console.error('[WorkspaceSync] Project backup failed:', describeError(err));
-            showToast(`Project saved locally, but cloud backup failed: ${describeError(err)}`, 9000);
-          });
-        }
-      } catch (saveErr) {
-        console.error('[Aippy] Could not save merge to history:', describeError(saveErr));
-        showToast('Merged OK, but could not save it to your Projects list.');
-      }
-
-      if (!keepOriginals) {
-        if (!projectSaved) {
-          showToast('Original add-ons were kept because the merged project could not be saved.');
-        } else {
-          const sourceIds = [...new Set(packsToMerge.map(pack => pack.id))];
-          try {
-            // Remove cloud copies first so a later workspace sync cannot restore
-            // originals that the user explicitly chose not to retain.
-            if (getDiscordAuth()?.token) {
-              await deleteWorkspaceItemsFromCloud(sourceIds.map(id => ({ type: 'pack' as const, id })));
-            }
-            const removals = await Promise.allSettled(sourceIds.map(id => deletePackFromDB(id)));
-            const failed = removals.filter(item => item.status === 'rejected').length;
-            const remaining = await getAllPacksFromDB();
-            setInstalledPacks(remaining);
-            const remainingIds = new Set(remaining.map(pack => pack.id));
-            setSelectedPackIds(previous => previous.filter(id => remainingIds.has(id)));
-            if (failed > 0) {
-              showToast(`Merged successfully, but ${failed} original add-on(s) could not be removed from this device.`, 9000);
-            } else {
-              showToast(`Merged successfully. Removed ${sourceIds.length} original add-on(s) from your library.`, 6500);
-            }
-          } catch (cleanupError) {
-            console.error('[Merge] Could not remove original source packs:', describeError(cleanupError));
-            showToast(`Merged successfully, but original add-ons were kept because cleanup failed: ${describeError(cleanupError)}`, 9000);
-          }
-        }
-      }
+      // Keep generated output only in memory until the user downloads it or
+      // explicitly publishes it to the public Community Modpacks section.
 
       setJustCompletedModpack(result);
       setScreen('merge_complete');
@@ -1228,7 +1077,8 @@ export const App: React.FC = () => {
           onShare={handleShareModpack}
           onDownloadOutput={handleDownloadOutput}
           onDone={() => {
-            navigateTab('mypacks');
+            setJustCompletedModpack(null);
+            navigateTab('workspace');
           }}
           onRename={(newName) => {
             setJustCompletedModpack({
