@@ -5,14 +5,8 @@ import { Info, X } from 'lucide-react';
 import tweaksConfig from '@/config/tweaksConfig.json';
 
 import {
-  AddonPack,
-  MergedModpack,
-  MergedOutput,
-  ConflictItem,
-  TabType,
-  ScreenType,
-  MergeSessionConfig,
-  CommunityModpack
+  AddonPack, MergedModpack, MergedOutput, ConflictItem, TabType, ScreenType,
+  MergeSessionConfig, CommunityModpack
 } from '@/types/modpack';
 import { deliverFile, openExternalUrl } from '@/utils/deliverFile';
 import { ensureCombinedBlob } from '@/utils/mergeEngine';
@@ -29,26 +23,12 @@ import { useModpackAudio } from '@/hooks/useModpackAudio';
 import { mergeLogger } from '@/utils/mergeLogger';
 
 
-import { AppSidebar, TopBar, UtilityPanel } from '@/components/DashboardShell';
-import { BottomNav } from '@/components/BottomNav';
-import { HomeScreen } from '@/components/HomeScreen';
 import { MergeWorkspace } from '@/components/MergeWorkspace';
-import { DependenciesScreen } from '@/components/DependenciesScreen';
-import { LogsScreen } from '@/components/LogsScreen';
 import { AddPacksScreen } from '@/components/AddPacksScreen';
 import { ScriptCheckScreen } from '@/components/ScriptCheckScreen';
 import { ConflictScreen } from '@/components/ConflictScreen';
 import { MergingScreen } from '@/components/MergingScreen';
 import { MergeCompleteScreen } from '@/components/MergeCompleteScreen';
-import { ModpackDetailsScreen } from '@/components/ModpackDetailsScreen';
-import { SettingsScreen } from '@/components/SettingsScreen';
-import { HelpCenterScreen } from '@/components/HelpCenterScreen';
-import { LibraryScreen } from '@/components/LibraryScreen';
-import { MyPacksScreen } from '@/components/MyPacksScreen';
-import { PackExtractTool } from '@/components/PackExtractTool';
-import { ListMaker } from '@/components/ListMaker';
-import { LegalScreen } from '@/components/LegalScreen';
-import { SplashScreen } from '@/components/SplashScreen';
 import { SubpackSelectModal } from '@/components/SubpackSelectModal';
 import { CommunityModpacksScreen } from '@/components/CommunityModpacksScreen';
 
@@ -66,14 +46,11 @@ export const App: React.FC = () => {
 
   // Navigation states - starts directly in main studio workspace
   const [screen, setScreen] = useState<ScreenType>('main');
-  const [currentTab, setCurrentTab] = useState<TabType>('overview');
-  const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [currentTab, setCurrentTab] = useState<TabType>('workspace');
 
   // Data states
   const [installedPacks, setInstalledPacks] = useState<AddonPack[]>([]);
-  const [myModpacks, setMyModpacks] = useState<MergedModpack[]>([]);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
-  const [activeModpack, setActiveModpack] = useState<MergedModpack | null>(null);
 
   // Settings states
   const [autoMerge, setAutoMerge] = useState<boolean>(true);
@@ -159,23 +136,13 @@ export const App: React.FC = () => {
   const navigateTab = (tab: TabType) => {
     triggerHaptic(30);
     handleSoundTap();
-    setCurrentTab(tab);
+    setCurrentTab(tab === 'community' ? 'community' : 'workspace');
     setScreen('main');
   };
 
-  const startCreate = () => {
-    triggerHaptic(50);
-    handleSoundTap();
-    setCurrentTab('workspace');
-    setScreen('main');
-  };
+  const startCreate = () => navigateTab('workspace');
 
-  const openAbout = () => {
-    triggerHaptic(40);
-    handleSoundTap();
-    setCurrentTab('about');
-    setScreen('main');
-  };
+  const openAbout = () => navigateTab('workspace');
 
   // Sync settings with tweaks
   useEffect(() => {
@@ -629,87 +596,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Delete pack from library
-  const handleDeletePack = async (id: string) => {
-    triggerHaptic(50);
-    console.log('[Delete Pack] Deleting pack:', id);
-    try {
-      // Confirm cloud deletion before removing the only local copy. Fire-and-forget
-      // deletes race app closure and allow startup sync to resurrect the item.
-      if (getDiscordAuth()?.token) await deleteWorkspaceItemFromCloud('pack', id);
-      await deletePackFromDB(id);
-      const updated = await getAllPacksFromDB();
-      setInstalledPacks(updated);
-      setSelectedPackIds((prev) => prev.filter((x) => x !== id));
-      showToast('Pack removed from workspace');
-    } catch (err) {
-      console.error('[Delete Pack] Error:', err);
-      showToast(`Failed to delete pack: ${describeError(err)}`);
-    }
-  };
-
-  // Remove selected source packs locally first. Cloud cleanup is best-effort:
-  // a transient network failure must never block deleting the device copies.
-  const handleDeleteSelectedPacks = async (ids: string[]) => {
-    triggerHaptic(50);
-    const uniqueIds = [...new Set(ids)];
-    if (uniqueIds.length === 0) return;
-    console.log('[Delete Selected] Deleting packs:', uniqueIds);
-    const localResults = await Promise.allSettled(uniqueIds.map((id) => deletePackFromDB(id)));
-    const failedLocal = localResults.filter((result) => result.status === 'rejected').length;
-
-    try {
-      const updated = await getAllPacksFromDB();
-      setInstalledPacks(updated);
-      const remainingIds = new Set(updated.map((pack) => pack.id));
-      setSelectedPackIds((previous) => previous.filter((id) => remainingIds.has(id)));
-    } catch (err) {
-      console.error('[Delete Selected] Could not refresh workspace:', describeError(err));
-    }
-
-    const auth = getDiscordAuth();
-    let cloudError: string | null = null;
-    if (auth?.token) {
-      try {
-        await deleteWorkspaceItemsFromCloud(uniqueIds.map((id) => ({ type: 'pack' as const, id })));
-      } catch (err) {
-        cloudError = describeError(err);
-        console.error('[Delete Selected] Cloud cleanup failed:', cloudError);
-      }
-    }
-    if (failedLocal > 0 || cloudError) {
-      const localMessage = failedLocal > 0 ? `${failedLocal} local deletion(s) failed` : 'All local copies deleted';
-      const cloudMessage = cloudError ? `Cloud cleanup failed: ${cloudError}` : 'Cloud copies deleted';
-      showToast(`${localMessage}. ${cloudMessage}. Retry cloud cleanup if needed.`, 12000);
-      return;
-    }
-    showToast(`${uniqueIds.length} selected pack(s) removed from workspace`);
-  };
-
-  // Delete every source pack, regardless of the current selection. Saved projects
-  // are intentionally kept; cloud failures cannot interrupt local workspace cleanup.
-  const handleDeleteAllPacks = async () => {
-    triggerHaptic(50);
-    try {
-      const packs = await getAllPacksFromDB();
-      if (packs.length === 0) {
-        setInstalledPacks([]);
-        setSelectedPackIds([]);
-        showToast('Workspace is already empty');
-        return;
-      }
-      await handleDeleteSelectedPacks(packs.map((pack) => pack.id));
-      const remaining = await getAllPacksFromDB();
-      if (remaining.length === 0) {
-        setInstalledPacks([]);
-        setSelectedPackIds([]);
-      }
-    } catch (err) {
-      console.error('[Delete All] Error:', err);
-      showToast(`Could not delete all packs: ${describeError(err)}`, 9000);
-    }
-  };
-
   // Download community modpack
   const handleDownloadCommunityModpack = async (modpack: CommunityModpack) => {
     triggerHaptic(50);
@@ -894,68 +780,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Delete merged modpack
-  const handleDeleteModpack = async (id: string) => {
-    triggerHaptic(50);
-    try {
-      // Wait for private cloud deletion before removing the local project.
-      if (getDiscordAuth()?.token) await deleteWorkspaceItemFromCloud('project', id);
-      await deleteModpackFromDB(id);
-      const updated = await getAllModpacksFromDB();
-      setMyModpacks(updated);
-      if (activeModpack?.id === id) {
-        setActiveModpack(null);
-        setScreen('main');
-      }
-      showToast('Modpack deleted from storage');
-    } catch (err) {
-      console.error('[Delete Modpack] Error:', err);
-      showToast(`Failed to delete modpack: ${describeError(err)}`);
-    }
-  };
-
-  // Update an existing modpack in storage and UI state (e.g. after customization)
-  const handleUpdateModpack = async (updated: MergedModpack) => {
-    await saveModpackToDB(updated);
-    if (getDiscordAuth()?.token) {
-      void syncProjectToCloud(updated).catch(err => {
-        console.error('[WorkspaceSync] Project update backup failed:', describeError(err));
-        showToast(`Project updated locally, but cloud backup failed: ${describeError(err)}`, 9000);
-      });
-    }
-    setMyModpacks((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    if (activeModpack?.id === updated.id) {
-      setActiveModpack(updated);
-    }
-    if (justCompletedModpack?.id === updated.id) {
-      setJustCompletedModpack(updated);
-    }
-    triggerHaptic(80);
-    showToast('Pack name, description, author, and icon updated.');
-  };
-
-  // Clear demo data
-  const handleClearDemoData = async () => {
-    triggerHaptic(90);
-    try {
-      // Remove cloud copies first so the next startup cannot resurrect explicitly cleared data.
-      if (getDiscordAuth()?.token) {
-        const [packs, projects] = await Promise.all([getAllPacksFromDB(), getAllModpacksFromDB()]);
-        for (const pack of packs) await deleteWorkspaceItemFromCloud('pack', pack.id);
-        for (const project of projects) await deleteWorkspaceItemFromCloud('project', project.id);
-      }
-      await clearAllDB();
-      setInstalledPacks([]);
-      setMyModpacks([]);
-      setSelectedPackIds([]);
-      showToast('Cleared all addons and modpacks data.');
-    } catch (err) {
-      showToast(`Could not fully clear workspace data: ${describeError(err)}`, 9000);
-    }
-  };
-
-  const behaviorCount = installedPacks.filter((p) => p.type === 'Behavior Pack').length;
-  const resourceCount = installedPacks.filter((p) => p.type === 'Resource Pack').length;
 
   return (
     <div className="relative w-full h-[100dvh] min-h-[100svh] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
@@ -1095,36 +919,6 @@ export const App: React.FC = () => {
         />
       )}
 
-      {screen === 'modpack_details' && activeModpack && (
-        <ModpackDetailsScreen
-          modpack={activeModpack}
-          onBack={() => setScreen('main')}
-          onDelete={handleDeleteModpack}
-          onDownloadOutput={handleDownloadOutput}
-          onReinstall={() => {
-            setJustCompletedModpack(activeModpack);
-            setScreen('merge_complete');
-          }}
-          onUpdateModpack={handleUpdateModpack}
-        />
-      )}
-
-      {screen === 'pack_extract' && (
-        <PackExtractTool onBack={() => setScreen('main')} />
-      )}
-
-      {screen === 'list_maker' && (
-        <ListMaker packs={installedPacks} onBack={() => setScreen('main')} />
-      )}
-
-      {screen === 'tos' && (
-        <LegalScreen type="tos" onBack={() => setScreen('main')} />
-      )}
-
-      {screen === 'privacy' && (
-        <LegalScreen type="privacy" onBack={() => setScreen('main')} />
-      )}
-
       {screen === 'community' && (
         <CommunityModpacksScreen
           onBack={() => setScreen('main')}
@@ -1133,262 +927,45 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Main Studio Viewport */}
+      {/* Main studio: only the in-memory merge session and public community remain. */}
       {screen === 'main' && (
-        <div className="flex w-full flex-1 min-h-0 min-w-0 overflow-hidden">
-          {/* Permanent Desktop Left Sidebar */}
-          <div className="hidden md:flex shrink-0 h-full">
-            <AppSidebar
-              currentTab={currentTab}
-              onChangeTab={navigateTab}
-              onStartCreate={startCreate}
-              onImportClick={triggerGlobalImport}
-              bpCount={behaviorCount}
-              rpCount={resourceCount}
-              projectCount={myModpacks.length}
-            />
-          </div>
-
-          {/* Slide-out Mobile Drawer */}
-          {isMobileDrawerOpen && (
-            <div className="fixed left-0 right-0 top-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] bottom-[env(safe-area-inset-bottom,0px)] z-50 md:hidden flex min-h-0">
-              <div
-                className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-                onClick={() => setIsMobileDrawerOpen(false)}
-              />
-              <div className="relative z-10 w-72 h-full bg-[#100D18] shadow-2xl animate-in slide-in-from-left duration-200">
-                <AppSidebar
-                  currentTab={currentTab}
-                  onChangeTab={navigateTab}
-                  onStartCreate={startCreate}
-                  onImportClick={triggerGlobalImport}
-                  bpCount={behaviorCount}
-                  rpCount={resourceCount}
-                  projectCount={myModpacks.length}
-                  onCloseMobileDrawer={() => setIsMobileDrawerOpen(false)}
-                />
-              </div>
+        <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[#30263F]/70 bg-[#100D18] px-4 py-3">
+            <div>
+              <div className="text-sm font-black tracking-tight text-white">Auto<span className="text-[#A855F7]">BE</span></div>
+              <div className="text-[10px] text-[#AAA3BB]">Bedrock Add-on Merger</div>
             </div>
-          )}
-
-          {/* Center Content Workspace */}
-          <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-            {/* Top Bar with Breadcrumbs & Quick Actions */}
-            <TopBar
-              currentTab={currentTab}
-              onOpenMobileNav={() => setIsMobileDrawerOpen(true)}
-              onStartCreate={startCreate}
-              onImportClick={triggerGlobalImport}
-              installedCount={installedPacks.length}
-              modpackCount={myModpacks.length}
-            />
-
-            {/* Central Work Viewport */}
-            <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-              <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: "touch" }}>
-                {/* 1. Overview */}
-                {(currentTab === 'overview' || currentTab === 'home') && (
-                  <HomeScreen
-                    onStartCreate={startCreate}
-                    onNavigateTab={navigateTab}
-                    onOpenAbout={openAbout}
-                    onOpenModpack={(mp) => {
-                      triggerHaptic(40);
-                      handleSoundTap();
-                      setActiveModpack(mp);
-                      setScreen('modpack_details');
-                    }}
-                    onExportModpack={(mp) => handleInstallToMinecraft(mp)}
-                    onImportClick={triggerGlobalImport}
-                    modpackCount={myModpacks.length}
-                    libraryCount={installedPacks.length}
-                    modpacks={myModpacks}
-                    installedPacks={installedPacks}
-                    welcomeName={discordUser?.username || discordUser?.global_name || undefined}
-                    isReturningUser={isReturningUser}
-                  />
-                )}
-
-                {/* 2. Merge Workspace - The Core Studio */}
-                {currentTab === 'workspace' && (
-                  <MergeWorkspace
-                    installedPacks={installedPacks}
-                    selectedPackIds={selectedPackIds}
-                    onTogglePack={handleTogglePack}
-                    onSelectAll={handleSelectAll}
-                    onClearSelection={handleClearSelection}
-                    onStartMergeFlow={handleStartMergeFlow}
-                    onImportPacks={handleImportPacks}
-                    onDeletePack={handleDeletePack}
-                    onDeleteSelectedPacks={handleDeleteSelectedPacks}
-                    onDeleteAllPacks={handleDeleteAllPacks}
-                    onNavigateTab={navigateTab}
-                  />
-                )}
-
-                {/* 3. My Projects */}
-                {currentTab === 'mypacks' && (
-                  <MyPacksScreen
-                    modpacks={myModpacks}
-                    onSelectModpack={(mp) => {
-                      triggerHaptic(40);
-                      handleSoundTap();
-                      setActiveModpack(mp);
-                      setScreen('modpack_details');
-                    }}
-                    onDeleteModpack={handleDeleteModpack}
-                    onStartCreate={startCreate}
-                  />
-                )}
-
-                {/* 4. Library (All, Behavior, or Resource) */}
-                {currentTab === 'library' && (
-                  <LibraryScreen
-                    packs={installedPacks}
-                    filterType="all"
-                    onSelectPackForMerge={(pid) => {
-                      setSelectedPackIds([pid]);
-                      navigateTab('workspace');
-                    }}
-                    onDeletePack={handleDeletePack}
-                    onStartCreate={startCreate}
-                  />
-                )}
-
-                {currentTab === 'bp_library' && (
-                  <LibraryScreen
-                    packs={installedPacks}
-                    filterType="bp"
-                    onSelectPackForMerge={(pid) => {
-                      setSelectedPackIds([pid]);
-                      navigateTab('workspace');
-                    }}
-                    onDeletePack={handleDeletePack}
-                    onStartCreate={startCreate}
-                  />
-                )}
-
-                {currentTab === 'rp_library' && (
-                  <LibraryScreen
-                    packs={installedPacks}
-                    filterType="rp"
-                    onSelectPackForMerge={(pid) => {
-                      setSelectedPackIds([pid]);
-                      navigateTab('workspace');
-                    }}
-                    onDeletePack={handleDeletePack}
-                    onStartCreate={startCreate}
-                  />
-                )}
-
-                {/* 5. Community Modpacks */}
-                {currentTab === 'community' && (
-                  <CommunityModpacksScreen
-                    onBack={() => navigateTab('overview')}
-                    onDownload={handleDownloadCommunityModpack}
-                    currentUserId={discordUser?.id}
-                  />
-                )}
-
-                {/* 5. Conflict Analyzer Tool */}
-                {currentTab === 'conflicts_tool' && (
-                  <ConflictScreen
-                    conflicts={conflicts}
-                    autoMerge={autoMerge}
-                    packs={installedPacks}
-                    onUpdateResolution={(cid, res) => {
-                      setConflicts((prev) =>
-                        prev.map((c) => (c.id === cid ? { ...c, resolution: res } : c))
-                      );
-                    }}
-                    onAutoPrefixAll={() => {
-                      setConflicts((prev) =>
-                        prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all' }))
-                      );
-                      showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
-                    }}
-                    onProceedMerge={() => {
-                      navigateTab('workspace');
-                    }}
-                    onBack={() => navigateTab('workspace')}
-                  />
-                )}
-
-                {/* 6. Dependencies Tool */}
-                {currentTab === 'dependencies_tool' && (
-                  <DependenciesScreen
-                    packs={installedPacks}
-                    onSelectPack={(pack) => {
-                      setSelectedPackIds([pack.id]);
-                      navigateTab('workspace');
-                    }}
-                  />
-                )}
-
-                {/* 7. History & Logs Tool */}
-                {(currentTab === 'history_tool' || currentTab === 'logs_tool') && (
-                  <LogsScreen
-                    modpacks={myModpacks}
-                    onSelectModpack={(mp) => {
-                      setActiveModpack(mp);
-                      setScreen('modpack_details');
-                    }}
-                  />
-                )}
-
-                {/* 8. Settings */}
-                {currentTab === 'settings' && (
-                  <SettingsScreen
-                    autoMerge={autoMerge}
-                    onToggleAutoMerge={() => {
-                      triggerHaptic(40);
-                      handleSoundTap();
-                      setAutoMerge(!autoMerge);
-                    }}
-                    keepOriginals={keepOriginals}
-                    onToggleKeepOriginals={() => {
-                      triggerHaptic(40);
-                      handleSoundTap();
-                      setKeepOriginals(previous => {
-                        const next = !previous;
-                        try {
-                          localStorage.setItem('autobe.keepOriginals', String(next));
-                        } catch {
-                          showToast('Could not save this preference on this device.', 6000);
-                        }
-                        return next;
-                      });
-                    }}
-                    onOpenAbout={openAbout}
-                    onOpenToS={() => setScreen('tos')}
-                    onOpenPrivacy={() => setScreen('privacy')}
-                    onOpenPackExtract={() => setScreen('pack_extract')}
-                    onOpenListMaker={() => setScreen('list_maker')}
-                    onClearDemoData={handleClearDemoData}
-                  />
-                )}
-
-                {/* 9. Help / About */}
-                {currentTab === 'about' && (
-                  <HelpCenterScreen onBack={() => navigateTab('overview')} />
-                )}
-              </main>
-
-              {/* Right Utility Panel (on wide desktop displays) */}
-              <UtilityPanel
-                modpackCount={myModpacks.length}
-                libraryCount={installedPacks.length}
-                onStartCreate={startCreate}
-                onChangeTab={navigateTab}
-                onOpenAbout={openAbout}
+            <nav className="flex items-center gap-2">
+              <button type="button" onClick={() => navigateTab('workspace')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'workspace' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Merge Workspace</button>
+              <button type="button" onClick={() => navigateTab('community')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'community' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Modpack Community</button>
+            </nav>
+          </header>
+          <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+            {currentTab === 'workspace' ? (
+              <MergeWorkspace
+                installedPacks={installedPacks}
+                selectedPackIds={selectedPackIds}
+                onTogglePack={handleTogglePack}
+                onSelectAll={handleSelectAll}
+                onClearSelection={handleClearSelection}
+                onStartMergeFlow={handleStartMergeFlow}
+                onImportPacks={handleImportPacks}
+                onDeletePack={() => {}}
+                onDeleteSelectedPacks={() => {}}
+                onDeleteAllPacks={() => { setInstalledPacks([]); setSelectedPackIds([]); }}
+                onNavigateTab={navigateTab}
               />
-            </div>
-
-            {/* Mobile Bottom Navigation Bar */}
-            <BottomNav currentTab={currentTab} onChangeTab={navigateTab} />
-          </div>
+            ) : (
+              <CommunityModpacksScreen
+                onBack={() => navigateTab('workspace')}
+                onDownload={handleDownloadCommunityModpack}
+                currentUserId={discordUser?.id}
+              />
+            )}
+          </main>
         </div>
       )}
+
     </div>
   );
 };
