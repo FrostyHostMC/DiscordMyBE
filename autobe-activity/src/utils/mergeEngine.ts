@@ -19,6 +19,7 @@ import { expandBrarchiveFiles } from './brarchive';
 import { applyFeatureRegistry } from './featureRegistry';
 import { hasDynamicTemplateIdentifierReference, rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from './identifierReferences';
 import { guardUnavailableEventSubscriptions } from './scriptCompatibility';
+import { resolveHudLayoutInZip, type HudPlacementMode } from './hudLayout';
 export interface MergeProgressCallback {
   (step: string, percent: number): void;
 }
@@ -437,6 +438,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     pack: string;
     variant: string;
   }>;
+  /** Conservative post-merge layout handling for statically measurable HUD controls. */
+  hudPlacement?: HudPlacementMode;
 }): Promise<MergedModpack> {
   const {
     modpackName,
@@ -449,7 +452,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     autoPrefix = true,
     onProgress,
     scriptConflicts,
-    subpackSelections
+    subpackSelections,
+    hudPlacement = 'auto'
   } = options;
   onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
@@ -507,6 +511,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     // Merge only compatible duplicate definitions; preserve a lone player as-is.
     await mergeDefinitionsByIdentifier(rpZip, mergeDiagnostics, 'resource');
     await mergeSubpackHudFiles(rpZip);
+    await resolveHudLayoutInZip(rpZip, hudPlacement, mergeDiagnostics);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
     mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
     const minEngine = resolveTargetEngineVersion(
