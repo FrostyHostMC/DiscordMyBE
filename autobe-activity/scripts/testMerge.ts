@@ -49,6 +49,22 @@ test('HUD placement resolver relocates overlapping measurable controls to distin
   assert.equal(hud.root.modifications[0].value[1]['ammo@hud.ammo'].anchor_from, undefined, 'source input must not be mutated');
 });
 
+test('HUD placement resolver uses all nine positions and leaves excess collisions intact', () => {
+  const controls: any[] = [];
+  const definitions: any = {};
+  for (let index = 0; index < 10; index++) {
+    const name = 'panel_' + index;
+    controls.push({ [name + '@hud.' + name]: {} });
+    definitions[name] = { type: 'panel', size: [240, 60], anchor_from: 'top_left', anchor_to: 'top_left', offset: [14, 14] };
+  }
+  const hud = { root: { size: ['100%', '100%'], modifications: [{ array_name: 'controls', operation: 'insert_front', value: controls }] } };
+  const result = resolveHudPlacements(hud, [definitions], 'auto');
+  assert.equal(result.moved.length, 8);
+  assert.equal(result.unresolved.length, 1, 'the tenth overlapping panel must not be forced into an occupied position');
+  assert.equal(new Set(result.moved.map(item => item.to)).size, 8);
+  assert.ok(HUD_POSITIONS.every(position => position === 'top_left' || result.moved.some(item => item.to === position)));
+});
+
 test('HUD placement resolver leaves dynamic or unknown-size controls unchanged', () => {
   const hud = { root: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
     { 'dynamic@hud.dynamic': { anims: ['@hud.move'], offset: ['$dynamic_x', 0] } },
