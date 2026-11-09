@@ -49,6 +49,37 @@ test('HUD placement resolver relocates overlapping measurable controls to distin
   assert.equal(hud.root.modifications[0].value[1]['ammo@hud.ammo'].anchor_from, undefined, 'source input must not be mutated');
 });
 
+test('HUD placement treats existing root controls as fixed occupied space', () => {
+  const hud = { root_panel: {
+    controls: [{ 'vanilla@hud.vanilla': {} }],
+    modifications: [{ array_name: 'controls', operation: 'insert_front', value: [{ 'addon@hud.addon': {} }] }],
+  } };
+  const definitions = [{
+    vanilla: { size: [220, 64], anchor_from: 'top_left', anchor_to: 'top_left', offset: [12, 12] },
+    addon: { size: [220, 64], anchor_from: 'top_left', anchor_to: 'top_left', offset: [12, 12] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 1);
+  assert.notEqual(result.moved[0].to, 'top_left', 'new add-on HUD must move away from an existing root control');
+  assert.equal(result.hud.root_panel.controls[0]['vanilla@hud.vanilla'].anchor_from, undefined, 'existing HUD control must not be mutated');
+});
+
+test('HUD placement ignores removal and replacement patches', () => {
+  const hud = { root: { size: ['100%', '100%'], modifications: [
+    { array_name: 'controls', operation: 'remove', value: [{ 'remove@hud.remove': {} }] },
+    { array_name: 'controls', operation: 'replace', value: [{ 'replace@hud.replace': {} }] },
+    { array_name: 'controls', operation: 'insert_back', value: [{ 'insert@hud.insert': {} }] },
+  ] } };
+  const definitions = [{
+    remove: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    replace: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    insert: { size: [100, 40], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 0);
+  assert.deepEqual(result.hud, hud);
+});
+
 test('HUD placement resolver recognizes the canonical inherited root_panel coordinate space', () => {
   const hud = { root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
     { 'first@hud.first': {} }, { 'second@hud.second': {} },
