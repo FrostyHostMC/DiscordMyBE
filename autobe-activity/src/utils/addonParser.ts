@@ -322,7 +322,7 @@ export async function parseAddonArchive(
       }
       loaded.forEach((path) => {
         const relativePath = rootFolder && path.startsWith(rootFolder) ? path.slice(rootFolder.length) : path;
-        const match = relativePath.match(/^subpacks\\/([^/]+)\\//i);
+        const match = relativePath.match(/^subpacks\/([^/]+)\//i);
         if (!match) return;
         const folder = match[1];
         const key = folder.toLowerCase();
