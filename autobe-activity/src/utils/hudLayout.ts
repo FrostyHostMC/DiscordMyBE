@@ -154,7 +154,6 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             result.push({ instance, id: reference, size, anchorFrom, anchorTo, offset, definition, movable });
           }
         }
-      }
     };
     // Existing controls already present in the root HUD are fixed obstacles:
     // the resolver must not move a new add-on control into their occupied area.
