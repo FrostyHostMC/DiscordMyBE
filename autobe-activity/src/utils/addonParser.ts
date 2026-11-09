@@ -485,8 +485,14 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           // ignore individual json parse errors
         }
       }
-    } catch {
-      // ignore
+    } catch (error) {
+      // A malformed optimized archive can hide definitions from conflict
+      // preflight. Do not silently continue with an incomplete inventory.
+      if (error instanceof Error && /\\.brarchive|brarchive/i.test(error.message)) {
+        throw error;
+      }
+      // Ignore unreadable non-archive packs here; their parse diagnostics are
+      // surfaced by the normal import/validation path.
     }
   }
 
