@@ -93,6 +93,18 @@ test('all UI JSON files preserve independent controls and bindings', () => {
   assert.equal(collision.panel.type, 'panel', 'later conflicting UI scalar must not replace the active definition');
   assert.equal(collision.panel.texture, 'textures/ui/first');
   assert.deepEqual(collision.panel.controls[0]['same@hud.control'], { offset: [0, 0], size: [20, 20] });
+
+  const structuralConflicts: string[] = [];
+  const structural = mergeJsonForFile('ui/common.json', [
+    { panel: { controls: [{ 'shared@hud.control': { type: 'panel', controls: [{ 'first@hud.first': {} }] } }] } },
+    { panel: { controls: [{ 'shared@hud.control': { type: 'image', texture: 'textures/ui/second' } }] } },
+  ], structuralConflicts);
+  assert.deepEqual(
+    structural.panel.controls[0]['shared@hud.control'],
+    { type: 'panel', controls: [{ 'first@hud.first': {} }] },
+    'different control types must not be blended into a hybrid definition'
+  );
+  assert.ok(structuralConflicts.some(path => path.includes('structural collision')));
   const uiConflicts: string[] = [];
   const conflicted = mergeJsonForFile('ui/common.json', [
     { panel: { texture: 'textures/ui/first' } },
