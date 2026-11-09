@@ -597,6 +597,23 @@ await (async () => {
   console.log('✓ merged archive validation reports malformed JSON, unresolved assets, missing UI registrations and Ore UI legacy-menu limits');
 })();
 
+await (async () => {
+  const zip = new JSZip();
+  zip.file('manifest.json', JSON.stringify({ dependencies: [{ module_name: '@minecraft/server', version: '1.21.0' }] }));
+  zip.file('scripts/menu.js', 'import { CustomForm, ObservableString } from "@minecraft/server-ui";');
+  const issues = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(issues.some(issue => issue.code === 'DDUI_API_DEPENDENCY_MISSING'));
+  assert.ok(issues.some(issue => issue.code === 'DDUI_SERVER_PEER_DEPENDENCY'));
+  zip.file('manifest.json', JSON.stringify({ dependencies: [
+    { module_name: '@minecraft/server', version: '2.0.0' },
+    { module_name: '@minecraft/server-ui', version: '2.1.0' },
+  ] }));
+  const supported = await validateMergedArchive(zip, 'Test Behavior Pack');
+  assert.ok(!supported.some(issue => issue.code === 'DDUI_API_DEPENDENCY_MISSING'));
+  assert.ok(!supported.some(issue => issue.code === 'DDUI_SERVER_PEER_DEPENDENCY'));
+  console.log('✓ DDUI script usage is checked against server-ui 2.1.0 and its server 2.0.0 peer dependency');
+})();
+
 
 
 await (async () => {
