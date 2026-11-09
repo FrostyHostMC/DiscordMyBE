@@ -13,7 +13,9 @@ export function deepMergeUi(base: any, overlay: any): any {
     if (k in base && typeof base[k] === 'object' && base[k] !== null && typeof v === 'object' && v !== null && !Array.isArray(base[k]) && !Array.isArray(v)) {
       deepMergeUi(base[k], v);
     } else if (k === 'visible' && typeof base[k] === 'string' && typeof v === 'string' && base[k] !== v) {
-      base[k] = `(${base[k]}) && (${v})`;
+      // Different addons' Molang visibility predicates are not guaranteed to
+      // be compatible. Keep the root predicate rather than ANDing conditions
+      // that can make the entire HUD disappear.
     } else if (k === 'modifications' && Array.isArray(base[k]) && Array.isArray(v)) {
       // JSON-UI patches are ordered operations: keep both lists in pack order,
       // removing only byte-for-byte duplicate patch objects.
