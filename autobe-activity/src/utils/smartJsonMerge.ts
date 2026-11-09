@@ -31,6 +31,21 @@ const MERGE_MAX_KEYS = new Set([
 const KEEP_FIRST_KEYS = new Set(['format_version', 'description', 'identifier',
   'minecraft:collision_box', 'minecraft:movement']);
 
+/** Structural properties define what a UI control actually is. If two
+ * packs reuse the same control key but disagree on one of these, combining
+ * their remaining properties creates a hybrid control that belonged to
+ * neither source pack. Keep the first definition intact and preserve the
+ * incoming file as a conflict backup instead. */
+const UI_STRUCTURAL_KEYS = ['type', 'renderer', 'template'];
+
+function hasUiStructuralCollision(base: any, overlay: any): string[] {
+  if (!base || !overlay || typeof base !== 'object' || typeof overlay !== 'object' ||
+      Array.isArray(base) || Array.isArray(overlay)) return [];
+  return UI_STRUCTURAL_KEYS.filter(key =>
+    key in base && key in overlay && JSON.stringify(base[key]) !== JSON.stringify(overlay[key])
+  );
+}
+
 /** Merge UI JSON conservatively: retain independent controls/bindings and
  * nested definitions, but never silently replace an existing scalar setting.
  * Bedrock UI values often encode bindings, visibility and layout semantics;
@@ -61,6 +76,13 @@ function mergeUiJson(base: any, overlay: any, key = '', path = '', conflicts: st
         );
         if (existingIndex >= 0 && incomingName) {
           const existing = result[existingIndex];
+          const structuralConflicts = hasUiStructuralCollision(existing[incomingName], item[incomingName]);
+          if (structuralConflicts.length) {
+            conflicts.push((path || '<root>') + '.controls[' + incomingName + '] structural collision: ' + structuralConflicts.join(', '));
+            // Do not construct a hybrid of two different control types,
+            // renderers or templates. The caller retains the whole source file.
+            continue;
+          }
           result[existingIndex] = { [incomingName]: mergeUiJson(existing[incomingName], item[incomingName], incomingName, path, conflicts) };
           continue;
         }
