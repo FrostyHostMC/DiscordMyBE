@@ -25,6 +25,8 @@ The safe compatibility behavior is:
 
 The supported script UI surface is `@minecraft/server-ui`. Traditional `ActionFormData`, `MessageFormData`, and `ModalFormData` remain form-based APIs. Data-Driven UI (DDUI) adds `CustomForm`, `MessageBox`, and Observable values for reactive forms. Microsoft documents DDUI in the stable Script API documentation; `@minecraft/server-ui` 2.1.0 introduced the DDUI classes as stable APIs, with later versions adding capabilities.
 
+DDUI's `CustomForm`, `MessageBox`, and Observable classes were released as stable in `@minecraft/server-ui` 2.1.0 (Bedrock 26.30). Newer game releases continue to add DDUI controls; for example, later 26.x changelogs add multi-button-row capabilities. AutoBE validates the declared `@minecraft/server-ui` and `@minecraft/server` peer versions when it detects DDUI class usage, but does not silently upgrade either dependency.
+
 DDUI is a supported way for add-on authors to build their own interactive modal experiences. It is not a pixel-positioned HUD overlay and does not grant access to native Ore UI screens. AutoBE cannot safely convert an arbitrary legacy JSON UI panel into a DDUI form: the original may rely on game-provided bindings, Molang, factories, animations, input mappings, or client-only state that scripts cannot reproduce.
 
 AutoBE should preserve and merge the script modules and their declared `@minecraft/server-ui` dependencies. It must not silently inject a new UI script into unrelated behavior packs or upgrade API dependencies beyond the selected Bedrock target.
