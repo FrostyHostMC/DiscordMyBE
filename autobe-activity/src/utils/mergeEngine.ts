@@ -210,7 +210,10 @@ function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePac
   if (!sourcePackId || !conflicts.length) return false;
   const definitions = conflictDefinitionsInFile(path, bytes);
   for (const conflict of conflicts) {
-    if (conflict.type === 'vanilla_asset' || conflict.resolution === 'prefix_all') continue;
+    // minecraft:player is a shared vanilla registration that AutoBE merges
+    // additively; treating it as an ordinary Keep A / Keep B definition would
+    // discard player overlays and undo the dedicated player merge strategy.
+    if (conflict.type === 'vanilla_asset' || conflict.identifier === 'minecraft:player' || conflict.resolution === 'prefix_all') continue;
     const losingPackId = conflict.resolution === 'keep_a' ? conflict.packB.id : conflict.packA.id;
     if (sourcePackId !== losingPackId) continue;
     if (definitions.some(definition => definition.type === conflict.type && definition.identifier === conflict.identifier)) return true;
