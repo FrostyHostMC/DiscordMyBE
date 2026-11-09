@@ -100,14 +100,6 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         message: '[' + label + '] Scripts use preview DDUI methods such as multiButtonRow or button3WithOptions, but @minecraft/server-ui is older than 2.4.0-rc. These methods are preview-only in current documentation; AutoBE preserves the declared dependency instead of upgrading it.'
       });
     }
-    if (usesPreviewDdui && !versionAtLeast(serverDependency?.version, [2, 13, 0])) {
-      add({
-        severity: 'warning',
-        code: 'DDUI_PREVIEW_SERVER_PEER',
-        path: manifestEntry?.path || 'manifest.json',
-        message: '[' + label + '] Preview DDUI methods require the matching @minecraft/server 2.13.0-beta peer dependency in the documented 26.70 preview track. AutoBE will not silently move this add-on onto a preview API.'
-      });
-    }
   }
 
   // These legacy screen files can affect older JSON-UI menu implementations,
