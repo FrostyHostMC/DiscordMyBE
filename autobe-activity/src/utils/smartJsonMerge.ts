@@ -266,6 +266,20 @@ export function isUiMergeStrategyFile(fileName: string): boolean {
   return (normalized.startsWith('ui/') || normalized.includes('/ui/')) && normalized.endsWith('.json');
 }
 
+export function isAnimationRegistryStrategyFile(fileName: string): boolean {
+  const normalized = fileName.replace(/\\/g, '/').toLowerCase();
+  const segments = normalized.split('/');
+  return segments.includes('animations') ||
+    segments.includes('animation_controllers') ||
+    segments.includes('render_controllers');
+}
+
+export function isCraftingItemCatalogStrategyFile(fileName: string): boolean {
+  const normalized = fileName.replace(/\\/g, '/').toLowerCase();
+  return normalized === 'crafting_item_catalog.json' ||
+    normalized.endsWith('/item_catalog/crafting_item_catalog.json');
+}
+
 export function isPlayerAnimationStrategyFile(fileName: string): boolean {
   const normalized = fileName.replace(/\\/g, '/').toLowerCase();
   const base = normalized.substring(normalized.lastIndexOf('/') + 1);
@@ -309,7 +323,7 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
         if (!('format_version' in merged)) merged.format_version = value;
         continue;
       }
-      if (base === 'player.animation_controllers.json' || base === 'player.render_controllers.json' || base === 'player.animation.json') {
+      if (isAnimationRegistryStrategyFile(normalizedPath) || isPlayerAnimationStrategyFile(normalizedPath)) {
         // Keep independent named definitions and non-conflicting object keys.
         // Render-controller arrays are semantic choices (textures/geometry/materials),
         // not additive lists: unioning them can render two incompatible rigs at once.
@@ -404,7 +418,7 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
         }
         continue;
       }
-      if (base === 'crafting_item_catalog.json' && key === 'minecraft:crafting_items_catalog') {
+      if (isCraftingItemCatalogStrategyFile(normalizedPath) && key === 'minecraft:crafting_items_catalog') {
         if (!(key in merged)) {
           merged[key] = structuredClone(value);
         } else if (merged[key] && typeof merged[key] === 'object' && value && typeof value === 'object') {
