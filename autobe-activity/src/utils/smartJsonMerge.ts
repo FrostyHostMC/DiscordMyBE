@@ -101,9 +101,6 @@ function mergeUiJson(base: any, overlay: any, key = '', path = '', conflicts: st
     }
     return result;
   }
-  if (key === 'visible' && typeof base === 'string' && typeof overlay === 'string' && base !== overlay) {
-    return '(' + base + ') && (' + overlay + ')';
-  }
   if (JSON.stringify(base) !== JSON.stringify(overlay)) {
     conflicts.push((path || '<root>') + ' (' + typeof base + ' vs ' + typeof overlay + ')');
   }
@@ -358,10 +355,11 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
         } else if (key === 'modifications' && Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = mergeHudModifications(merged[key], value);
         } else if (key === 'visible' && typeof merged[key] === 'string' && typeof value === 'string' && merged[key] !== value) {
-          // `visible` is a Molang condition, not a nested JSON object. Keep
-          // both packs' visibility requirements instead of recursively treating
-          // the strings as HUD objects (which would replace them with `{}`).
-          merged[key] = `(${merged[key]}) && (${value})`;
+          // Visibility predicates are not safely composable across unrelated
+          // addons. AND can make an otherwise visible HUD disappear whenever
+          // the two predicates are mutually exclusive. Preserve the active
+          // predicate and surface a collision instead of guessing.
+          uiConflicts.push(fileName + '.visible');
         } else if (Array.isArray(merged[key]) && Array.isArray(value)) {
           merged[key] = [...merged[key], ...value];
         } else if (merged[key] && value && typeof merged[key] === 'object' && typeof value === 'object' && !Array.isArray(merged[key]) && !Array.isArray(value)) {
