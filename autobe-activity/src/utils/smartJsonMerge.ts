@@ -335,7 +335,10 @@ export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: str
           merged[key] = mergeJsonForFile(base, [merged[key], value]);
         } else {
           // Preserve the first HUD value when two packs disagree on a scalar;
-          // overwriting it can silently break the first pack's UI definition.
+          // record the collision so the complete incoming source can be retained.
+          if (JSON.stringify(merged[key]) !== JSON.stringify(value)) {
+            uiConflicts.push(fileName + '.' + key);
+          }
         }
         continue;
       }
