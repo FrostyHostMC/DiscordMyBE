@@ -92,7 +92,10 @@ const manifest = JSON.parse(await bp.file('manifest.json')!.async('text'));
 assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@minecraft/server').version, '2.10.0');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
-assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP');
+assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
+assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Resource Pack']);
+assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
+assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
 
 const beta = await makePack('Behavior Pack', 'Beta', { 'scripts/main.js': '// beta' }, '2.9.0-beta');
