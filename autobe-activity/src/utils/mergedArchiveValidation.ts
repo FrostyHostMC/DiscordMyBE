@@ -61,7 +61,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     for (const entry of jsonEntries) {
       const normalized = entry.path.replace(/\\\\/g, '/').toLowerCase();
       const fileName = normalized.substring(normalized.lastIndexOf('/') + 1);
-      if (!normalized.includes('/ui/') || !legacyMenuFiles.has(fileName)) continue;
+      if (!(normalized.startsWith('ui/') || normalized.includes('/ui/')) || !legacyMenuFiles.has(fileName)) continue;
       add({
         severity: 'warning',
         code: 'LEGACY_UI_ORE_UI_LIMIT',
