@@ -48,6 +48,7 @@ export const App: React.FC = () => {
   // Data states
   const [installedPacks, setInstalledPacks] = useState<AddonPack[]>([]);
   const [selectedPackIds, setSelectedPackIds] = useState<string[]>([]);
+  const discordUser = getDiscordUser();
 
   // Settings states
   const [autoMerge, setAutoMerge] = useState<boolean>(true);
