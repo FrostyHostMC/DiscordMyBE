@@ -903,10 +903,6 @@ export const App: React.FC = () => {
                 onClearSelection={handleClearSelection}
                 onStartMergeFlow={handleStartMergeFlow}
                 onImportPacks={handleImportPacks}
-                onDeletePack={() => {}}
-                onDeleteSelectedPacks={() => {}}
-                onDeleteAllPacks={() => { setInstalledPacks([]); setSelectedPackIds([]); }}
-                onNavigateTab={navigateTab}
               />
             ) : (
               <CommunityModpacksScreen
