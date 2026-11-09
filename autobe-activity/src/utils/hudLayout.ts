@@ -133,9 +133,13 @@ function collectCandidates(hud: any, definitions: any[]): HudCandidate[] {
             // Animated/dynamic layout values cannot be safely relocated by changing
             // the instance anchor: an animation or expression may overwrite it.
             if (effective.anims || effective.use_anchored_offset || effective.factory || effective.collection_name) continue;
-            const anchorFrom = isPosition(effective.anchor_from) ? effective.anchor_from : 'center';
-            const anchorTo = isPosition(effective.anchor_to) ? effective.anchor_to : 'center';
-            const offset = numericPair(effective.offset) || [0, 0];
+            const anchorFrom = isPosition(effective.anchor_from) ? effective.anchor_from : undefined;
+            const anchorTo = isPosition(effective.anchor_to) ? effective.anchor_to : undefined;
+            const offset = numericPair(effective.offset);
+            // Missing anchors/offsets rely on engine defaults; never guess their
+            // coordinate origin because a wrong assumption can move a valid HUD
+            // element off-screen or into another add-on's controls.
+            if (!anchorFrom || !anchorTo || !offset) continue;
             result.push({ instance, id: reference, size, anchorFrom, anchorTo, offset, definition });
           }
         }
