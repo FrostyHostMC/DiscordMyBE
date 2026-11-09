@@ -190,3 +190,33 @@ export function resolveHudPlacements(
   }
   return { hud: output, moved, unresolved };
 }
+
+/** Apply the resolver to the final merged resource-pack archive. */
+export async function resolveHudLayoutInZip(
+  zip: import('jszip').default,
+  mode: HudPlacementMode,
+  diagnostics: string[]
+): Promise<void> {
+  const hudFile = zip.file('ui/hud_screen.json');
+  if (!hudFile) return;
+  try {
+    const hud = JSON.parse(await hudFile.async('text'));
+    const definitions: any[] = [];
+    const files = Object.entries(zip.files).filter(([path, file]) =>
+      !file.dir && /(?:^|\\/)ui\\/.+\\.json$/i.test(path) && path.toLowerCase() !== 'ui/hud_screen.json'
+    );
+    for (const [, file] of files) {
+      try { definitions.push(JSON.parse(await file.async('text'))); } catch { /* archive validator reports malformed UI JSON */ }
+    }
+    const result = resolveHudPlacements(hud, definitions, mode);
+    if (result.moved.length) {
+      zip.file('ui/hud_screen.json', JSON.stringify(result.hud, null, 2));
+      diagnostics.push(`INFO HUD_AUTO_PLACEMENT [ui/hud_screen.json]: Relocated ${result.moved.length} overlapping HUD control(s): ${result.moved.map(item => `${item.control} ${item.from} → ${item.to}`).join('; ')}.`);
+    }
+    if (result.unresolved.length) {
+      diagnostics.push(`WARNING HUD_PLACEMENT_REVIEW [ui/hud_screen.json]: AutoBE left ${result.unresolved.length} control(s) unchanged because their layout could not be moved safely: ${result.unresolved.slice(0, 12).join('; ')}.`);
+    }
+  } catch (error) {
+    diagnostics.push(`WARNING HUD_LAYOUT_SCAN_FAILED [ui/hud_screen.json]: Could not analyze HUD layout; original merged HUD was retained (${error instanceof Error ? error.message : String(error)}).`);
+  }
+}
