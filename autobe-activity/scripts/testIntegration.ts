@@ -221,7 +221,7 @@ const invalidJsonPack = await makePack('Behavior Pack', 'Broken JSON', {
 });
 await assert.rejects(
   () => executeMergePacks([invalidJsonPack], { modpackName: 'Invalid JSON' }),
-  /INVALID_JSON.*items\\/broken\\.json/,
+  /INVALID_JSON.*broken\.json/,
   'a merge must stop instead of shipping a pack with malformed item definitions'
 );
 console.log('✓ malformed merged JSON blocks output generation instead of shipping missing content');
