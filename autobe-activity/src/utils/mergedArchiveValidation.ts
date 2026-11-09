@@ -48,20 +48,20 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
   const isBehaviorPack = /behavior/i.test(label);
 
   if (isBehaviorPack) {
-    const manifestEntry = jsonEntries.find(entry => entry.path.replace(/\\\\/g, '/').toLowerCase().endsWith('manifest.json'));
+    const manifestEntry = jsonEntries.find(entry => entry.path.replace(/\\/g, '/').toLowerCase().endsWith('manifest.json'));
     const dependencies = Array.isArray(manifestEntry?.data?.dependencies) ? manifestEntry.data.dependencies : [];
-    const uiDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server-ui');
+            /@minecraft\/server-ui/.test(source)) {
     const serverDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server');
     const scriptFiles: Array<{ path: string; file: JSZip.JSZipObject }> = [];
     zip.forEach((path, file) => {
-      if (!file.dir && /\\.(?:js|mjs|ts)$/i.test(path)) scriptFiles.push({ path, file });
+      if (!file.dir && /\.(?:js|mjs|ts)$/i.test(path)) scriptFiles.push({ path, file });
     });
     let usesDdui = false;
     for (const script of scriptFiles) {
       try {
         const source = await script.file.async('text');
-        if (/\\b(?:CustomForm|MessageBox|ObservableString|ObservableNumber|ObservableBoolean|ObservableUIRawMessage)\\b/.test(source) &&
-            /@minecraft\\/server-ui/.test(source)) {
+        if (/\b(?:CustomForm|MessageBox|ObservableString|ObservableNumber|ObservableBoolean|ObservableUIRawMessage)\b/.test(source) &&
+            /@minecraft\/server-ui/.test(source)) {
           usesDdui = true;
           break;
         }
@@ -82,7 +82,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
         severity: 'warning',
         code: 'DDUI_API_DEPENDENCY_MISSING',
         path: manifestEntry?.path || 'manifest.json',
-        message: '[' + label + '] Scripts reference DDUI classes, but @minecraft/server-ui is missing or older than 2.1.0. DDUI became stable in @minecraft/server-ui 2.1.0; preserve the source dependency or update it only when the selected Minecraft target supports it.'
+            /@minecraft\/server-ui/.test(source)) {
       });
     }
     if (usesDdui && !versionAtLeast(serverDependency?.version, [2, 0, 0])) {
