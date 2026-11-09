@@ -147,13 +147,15 @@ test('HUD and UI definition strategy merge preserves independent registrations',
   assert.deepEqual(defs.ui_defs, ['ui/first.json', 'ui/second.json']);
 });
 
-test('HUD visibility strings merge as conditions instead of being treated as objects', () => {
+test('conflicting HUD visibility predicates are preserved and reported, not ANDed into invisible HUDs', () => {
+  const conflicts: string[] = [];
   const merged = mergeJsonForFile('ui/hud_screen.json', [
     { screen: { panel: { visible: 'query.is_first_person', text: 'base label' } } },
     { screen: { panel: { visible: 'query.is_alive', text: 'overlay label' } } },
-  ]);
-  assert.equal(merged.screen.panel.visible, '(query.is_first_person) && (query.is_alive)');
+  ], conflicts);
+  assert.equal(merged.screen.panel.visible, 'query.is_first_person');
   assert.equal(merged.screen.panel.text, 'base label');
+  assert.ok(conflicts.some(path => path.endsWith('.visible')));
 });
 
 test('subpack HUD merge preserves controls and bindings from both packs', () => {
