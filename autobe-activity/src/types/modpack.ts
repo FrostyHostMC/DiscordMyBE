@@ -120,6 +120,8 @@ export interface MergeSessionConfig {
   autoPrefix: boolean;
   generateAddon: boolean;
   generateSeparatePacks: boolean;
+  /** HUD layout policy: auto-resolve safe collisions, preserve source layout, or prefer a screen position. */
+  hudPlacement?: 'auto' | 'preserve' | 'top_left' | 'top_middle' | 'top_right' | 'left_middle' | 'center' | 'right_middle' | 'bottom_left' | 'bottom_middle' | 'bottom_right';
 }
 
 export interface ActivityLogEntry {
