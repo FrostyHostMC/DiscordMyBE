@@ -200,7 +200,7 @@ export function resolveHudPlacements(
 
     const preferred = mode !== 'auto' ? [mode] : [];
     const choices = [...preferred, ...HUD_POSITIONS.filter(position => position !== candidate.anchorFrom && !preferred.includes(position))];
-    let placed: { position: HudPosition; rect: Rect } | undefined;
+    let placed: { position: HudPosition; rects: Rect[] } | undefined;
     for (const position of choices) {
       const offset = POSITION_OFFSETS[position];
       const rects = SCREEN_PROFILES.map(screen => rectFor(position, position, offset, candidate.size, screen));
