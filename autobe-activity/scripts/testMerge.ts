@@ -49,6 +49,19 @@ test('HUD placement resolver relocates overlapping measurable controls to distin
   assert.equal(hud.root.modifications[0].value[1]['ammo@hud.ammo'].anchor_from, undefined, 'source input must not be mutated');
 });
 
+test('HUD placement resolver recognizes the canonical inherited root_panel coordinate space', () => {
+  const hud = { root_panel: { modifications: [{ array_name: 'controls', operation: 'insert_front', value: [
+    { 'first@hud.first': {} }, { 'second@hud.second': {} },
+  ] }] } };
+  const definitions = [{
+    first: { size: [180, 48], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+    second: { size: [180, 48], anchor_from: 'top_left', anchor_to: 'top_left', offset: [8, 8] },
+  }];
+  const result = resolveHudPlacements(hud, definitions, 'auto');
+  assert.equal(result.moved.length, 1, 'root_panel inherits the full-screen HUD coordinate space');
+  assert.equal(result.unresolved.length, 0);
+});
+
 test('HUD placement resolver uses all nine positions and leaves excess collisions intact', () => {
   const controls: any[] = [];
   const definitions: any = {};
