@@ -786,6 +786,41 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await buildBehaviorPack(g.packs, 'behavior_script', g.major, g.beta);
   }
 
+  // A merged modpack can contain multiple BP outputs because Script API
+  // versions cannot safely share one manifest. Make the final/highest API
+  // output the activation root and have it depend on every other generated BP.
+  // Enabling this one pack then activates the complete behavior content set,
+  // rather than silently leaving data-only or lower-API definitions inactive.
+  if (builtBps.length > 0) {
+    const activationRoot = builtBps[builtBps.length - 1];
+    const dependencyManifests = await Promise.all(builtBps.map(async (output) => {
+      const manifestFile = output.zip.file('manifest.json');
+      if (!manifestFile) throw new Error(`Generated behavior output "${output.fileName}" has no manifest.`);
+      return { output, manifest: JSON.parse(await manifestFile.async('text')) };
+    }));
+    const rootEntry = dependencyManifests.find((entry) => entry.output === activationRoot)!;
+    const dependencies = Array.isArray(rootEntry.manifest.dependencies) ? rootEntry.manifest.dependencies : [];
+    const dependencyIds = new Set(dependencies.filter((dep: any) => typeof dep?.uuid === 'string').map((dep: any) => dep.uuid.toLowerCase()));
+    for (const entry of dependencyManifests) {
+      if (entry.output === activationRoot) continue;
+      const uuid = entry.manifest?.header?.uuid;
+      const version = entry.manifest?.header?.version;
+      if (typeof uuid !== 'string' || !Array.isArray(version)) {
+        throw new Error(`Generated behavior output "${entry.output.fileName}" has an invalid pack identity and cannot be linked.`);
+      }
+      if (!dependencyIds.has(uuid.toLowerCase())) {
+        dependencies.push({ uuid, version });
+        dependencyIds.add(uuid.toLowerCase());
+      }
+    }
+    rootEntry.manifest.dependencies = dependencies;
+    rootEntry.manifest.header.name = `${rootEntry.manifest.header.name} [Main - activate this pack]`;
+    rootEntry.manifest.header.description = `Activate this main behavior pack to load all ${builtBps.length} behavior packs in this AutoBE modpack.`;
+    activationRoot.zip.file('manifest.json', JSON.stringify(rootEntry.manifest, null, 2));
+    activationRoot.label = `${activationRoot.label} — Main (activate this one)`;
+    mergeDiagnostics.push(`INFO BEHAVIOR_ACTIVATION_ROOT: ${activationRoot.fileName} depends on all ${builtBps.length - 1} other generated behavior pack(s); activate the Main behavior pack to load the complete merged behavior set.`);
+  }
+
   // Check player conflicts across behavior outputs without copying definitions.
   if (builtBps.length > 1) {
     onProgress?.('Unifying cross-group content', 62);
