@@ -280,6 +280,25 @@ export function isPlayerAnimationStrategyFile(fileName: string): boolean {
  * Merge a list of parsed JSON values for one output file using the legacy
  * per-file strategies. \`fileName\` is the lowercase zip path.
  */
+export function mergeLanguageCodeLists(base: unknown, incoming: unknown): { values: string[]; added: string[] } {
+  if (!Array.isArray(base) || !Array.isArray(incoming)) {
+    throw new Error('texts/languages.json must contain arrays of language codes');
+  }
+  const values = base.filter((value): value is string => typeof value === 'string');
+  const known = new Set(values.map(value => value.trim().toLowerCase()));
+  const added: string[] = [];
+  for (const value of incoming) {
+    if (typeof value !== 'string' || !value.trim()) continue;
+    const key = value.trim().toLowerCase();
+    if (!known.has(key)) {
+      values.push(value);
+      added.push(value);
+      known.add(key);
+    }
+  }
+  return { values, added };
+}
+
 export function mergeJsonForFile(fileName: string, list: any[], uiConflicts: string[] = []): any {
   if (list.length === 0) return {};
   if (list.length === 1) return postProcessFile(fileName, structuredClone(list[0]));
