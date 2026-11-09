@@ -92,7 +92,14 @@ function uniqueIdentifier(original: string, occupied: Set<string>): string {
  * with an earlier pack, then repairs schema-recognized references in that source.
  * Vanilla minecraft:* identifiers are deliberately never renamed.
  */
-export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, sourceLabel: string, diagnostics: string[] = []): Promise<number> {
+export async function applyFeatureRegistry(
+  sourceZip: JSZip,
+  targetZip: JSZip,
+  sourceLabel: string,
+  diagnostics: string[] = [],
+  requestedRenames?: Map<string, string>,
+  autoRenameUnplannedCollisions = true
+): Promise<number> {
   const [incoming, existing] = await Promise.all([collectDefinitions(sourceZip), collectDefinitions(targetZip)]);
   const occupied = new Set<string>([...existing, ...incoming].map(item => item.identifier));
   const existingById = new Map<string, Definition[]>();
@@ -102,7 +109,11 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
     existingById.set(def.identifier, list);
   }
 
-  const idMap = new Map<string, string>();
+  // Explicit conflict-screen choices take precedence over registry fallback.
+  // The production merge path supplies its per-pack rename map and disables
+  // autonomous renaming so Keep A / Keep B are never silently converted into
+  // "keep both" by this secondary pass.
+  const idMap = new Map<string, string>(requestedRenames || []);
   for (const def of incoming) {
     if (!existingById.has(def.identifier)) continue;
     if (def.identifier.startsWith('minecraft:')) {
@@ -110,6 +121,10 @@ export async function applyFeatureRegistry(sourceZip: JSZip, targetZip: JSZip, s
       continue;
     }
     if (idMap.has(def.identifier)) continue;
+    if (!autoRenameUnplannedCollisions) {
+      diagnostics.push(`WARNING FEATURE_REGISTRY_CHOICE_REQUIRED [${sourceLabel}:${def.path}]: Duplicate identifier "${def.identifier}" was not automatically renamed because the merge conflict screen did not provide a rename choice. The normal definition merge will retain/report the collision.`);
+      continue;
+    }
     const replacement = uniqueIdentifier(def.identifier, occupied);
     occupied.add(replacement);
     idMap.set(def.identifier, replacement);
