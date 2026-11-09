@@ -50,7 +50,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
   if (isBehaviorPack) {
     const manifestEntry = jsonEntries.find(entry => entry.path.replace(/\\/g, '/').toLowerCase().endsWith('manifest.json'));
     const dependencies = Array.isArray(manifestEntry?.data?.dependencies) ? manifestEntry.data.dependencies : [];
-            /@minecraft\/server-ui/.test(source)) {
+    const uiDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server-ui');
     const serverDependency = dependencies.find((dependency: any) => dependency?.module_name === '@minecraft/server');
     const scriptFiles: Array<{ path: string; file: JSZip.JSZipObject }> = [];
     zip.forEach((path, file) => {
