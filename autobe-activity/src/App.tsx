@@ -615,24 +615,27 @@ export const App: React.FC = () => {
 
     console.log('[SubpackConfirm] Selections:', selections);
     const processed: AddonPack[] = [];
-    for (const p of pending.packs) {
-      // Look up selection by UUID+type (same key used for deduplication)
-      const key = `${p.uuid}_${p.type}`;
-      const variant = selections[key];
-      console.log('[SubpackConfirm] Processing pack:', p.name, 'key:', key, 'variant:', variant, 'hasBlob:', !!p.fileBlob);
-      if (variant && p.fileBlob) {
-        try {
+    try {
+      for (const p of pending.packs) {
+        // Look up selection by UUID+type (same key used for deduplication)
+        const key = `${p.uuid}_${p.type}`;
+        const variant = selections[key];
+        console.log('[SubpackConfirm] Processing pack:', p.name, 'key:', key, 'variant:', variant, 'hasBlob:', !!p.fileBlob);
+        if (variant && p.fileBlob) {
+          // Never silently merge the unprocessed source if the selected UI/assets
+          // variant failed to extract. That would recreate the missing-interface
+          // bug while falsely reporting a successful merge.
           processed.push(await applySubpackToPack(p, variant));
-        } catch (err) {
-          console.error('[Aippy] Subpack processing failed:', describeError(err));
+        } else {
           processed.push(p);
         }
-      } else {
-        processed.push(p);
       }
+      await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine, pending.outputOptions);
+    } catch (err) {
+      console.error('[AutoBE] Selected subpack extraction failed; merge cancelled:', describeError(err));
+      showToast(`Could not apply the selected variant. Merge cancelled to prevent missing UI/assets: ${describeError(err)}`, 10000);
+      setScreen('main');
     }
-
-    await doRunMergeProcess(processed, pending.confList, pending.nameOverride, pending.targetEngine, pending.outputOptions);
   };
 
   const handleSubpackCancel = () => {
