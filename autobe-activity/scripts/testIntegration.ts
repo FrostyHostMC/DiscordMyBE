@@ -167,8 +167,8 @@ assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@mi
 assert.ok(result.combinedExtras?.reportJson?.includes('Subpack fixture -> high_resolution'), 'the merge report must record the subpack variant actually supplied by the caller');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
-assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
-assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Resource Pack']);
+assert.equal(reparsed.packs.length, 3, 'a combined output with two Script API groups must reimport as both BPs and the RP, not mistake AutoBE report JSON for a pack manifest');
+assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Behavior Pack', 'Resource Pack']);
 assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');
