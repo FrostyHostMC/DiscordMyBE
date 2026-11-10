@@ -50,6 +50,29 @@ function archive(name: string, content: string): Uint8Array {
   return result;
 }
 
+// Regression: language registries and translation keys must survive shared BP merging.
+const languagePackA = await makePack('Behavior Pack', 'Language A', {
+  'texts/languages.json': JSON.stringify(['en_US']),
+  'texts/en_US.lang': 'pack.name=Pack A\\npack.description=Description A\\ndemo:item.a=Alpha\\n'
+});
+const languagePackB = await makePack('Behavior Pack', 'Language B', {
+  'texts/languages.json': JSON.stringify(['en_US', 'zh_CN', 'es_ES']),
+  'texts/en_US.lang': 'pack.name=Pack B\\npack.description=Description B\\ndemo:item.b=Bravo\\n'
+});
+const languageMerge = await executeMergePacks([languagePackA, languagePackB], {
+  modpackName: 'Language merge regression',
+  conflicts: await detectConflicts([languagePackA, languagePackB])
+});
+const languageOutput = await JSZip.loadAsync(languageMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const mergedLanguages = JSON.parse(await languageOutput.file('texts/languages.json')!.async('text'));
+assert.deepEqual(mergedLanguages, ['en_US', 'zh_CN', 'es_ES'], 'all supported language codes must be unioned');
+const mergedTranslations = await languageOutput.file('texts/en_US.lang')!.async('text');
+assert.ok(mergedTranslations.includes('demo:item.a=Alpha'));
+assert.ok(mergedTranslations.includes('demo:item.b=Bravo'));
+assert.ok(mergedTranslations.includes('pack.name=Pack A'), 'priority winner pack metadata must remain stable');
+assert.ok(!mergedTranslations.includes('pack.name=Pack B'), 'conflicting pack metadata must not overwrite priority winner');
+console.log('✓ language codes and unique translation keys survive BP merge while pack metadata priority remains stable');
+
 const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
 const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
