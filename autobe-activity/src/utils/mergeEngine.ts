@@ -842,12 +842,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
       if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
-      const aliasMaps = await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
-      await applyResourceTerrainAliasMap(zip, aliasMaps.terrain);
-      resourceAliasMaps.set(pack.uuid.toLowerCase(), aliasMaps);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       sourceIssues.forEach(issue => sourceBaseline.add(validationIssueKey(issue)));
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
+      const aliasMaps = await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
+      await applyResourceTerrainAliasMap(zip, aliasMaps.terrain);
+      resourceAliasMaps.set(pack.uuid.toLowerCase(), aliasMaps);
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts, registeredUiPaths);
       // Release the loaded archive so its memory can be reclaimed now.
@@ -980,10 +980,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       } catch {
         mergeDiagnostics.push(`WARNING SOURCE_MANIFEST [${pack.name}]: Could not read the original manifest; review output dependencies.`);
       }
-      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       sourceIssues.forEach(issue => sourceBaseline.add(validationIssueKey(issue)));
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
+      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       if (isScriptGroup) {
         const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
         const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\.(?:[cm]?js)$/i.test(path));
