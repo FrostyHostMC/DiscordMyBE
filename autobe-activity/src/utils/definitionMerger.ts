@@ -33,7 +33,8 @@ function mergeSpawnRuleAdditions(base: any, incoming: any): { value: any; change
   }
   if (baseCopy?.[root]) baseCopy[root].conditions = combined;
   if (incomingCopy?.[root]) incomingCopy[root].conditions = combined;
-  return mergeAdditions(baseCopy, incomingCopy);
+  const result = mergeAdditions(baseCopy, incomingCopy);
+  return { ...result, changed: result.changed || combined.length > baseConditions.length };
 }
 
 export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: string[] = [], packType?: 'resource' | 'behavior'): Promise<void> {
