@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 import { buildStoreZip, type StoreZipEntry } from './storeZip';
 import { AddonPack, ConflictItem, MergedModpack, MergedOutput } from '@/types/modpack';
 import { generateUUID, sanitizeJsonString, collectRegisteredUiPathsFromZip, normalizeRegisteredUiPath } from './addonParser';
-import { highestFullScriptVersion } from './scriptApiVersion';
+import { highestFullScriptVersion, normalizeScriptApiVersion } from './scriptApiVersion';
 import { resolveTargetEngineVersion } from './targetEngine';
 import { selectMergeOutputs } from './outputOptions';
 import { unifyCrossGroupBps } from './crossGroupUnify';
@@ -937,6 +937,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     const scriptEntries: string[] = [];
     const sourceCapabilities = new Set<string>();
     const sourceModuleDeps = new Map<string, any>();
+    const sourceModuleRequests = new Map<string, Array<{ pack: string; version: string }>>();
     const externalUuidDeps = new Map<string, any>();
     const selectedUuids = new Set(packs.map(p => p.uuid));
     const relocateScripts = type === 'behavior_script' && groupPacks.length > 1;
@@ -962,13 +963,18 @@ export async function executeMergePacks(packs: AddonPack[], options: {
           for (const capability of Array.isArray(manifest.capabilities) ? manifest.capabilities : []) if (typeof capability === 'string') sourceCapabilities.add(capability);
           for (const dep of Array.isArray(manifest.dependencies) ? manifest.dependencies : []) {
             if (typeof dep?.module_name === 'string') {
-              const old = sourceModuleDeps.get(dep.module_name);
-              if (!old) sourceModuleDeps.set(dep.module_name, dep);
+              const moduleName = dep.module_name;
+              const requests = sourceModuleRequests.get(moduleName) || [];
+              if (dep.version !== undefined) {
+                const normalizedVersion = normalizeScriptApiVersion(dep.version);
+                if (normalizedVersion) requests.push({ pack: pack.name, version: normalizedVersion });
+              }
+              sourceModuleRequests.set(moduleName, requests);
+              const old = sourceModuleDeps.get(moduleName);
+              if (!old) sourceModuleDeps.set(moduleName, dep);
               else if (JSON.stringify(old.version) !== JSON.stringify(dep.version)) {
-                const selectedVersion = typeof old.version === 'string' && typeof dep.version === 'string'
-                  ? highestFullScriptVersion([old.version, dep.version]) : undefined;
-                if (selectedVersion) sourceModuleDeps.set(dep.module_name, { ...old, version: selectedVersion });
-                mergeDiagnostics.push(`WARNING SCRIPT_DEPENDENCY_CONFLICT [${dep.module_name}]: Source packs requested different versions; review the generated manifest.`);
+                const selectedVersion = highestFullScriptVersion([old.version, dep.version]);
+                if (selectedVersion) sourceModuleDeps.set(moduleName, { ...old, version: selectedVersion });
               }
             } else if (typeof dep?.uuid === 'string' && !selectedUuids.has(dep.uuid)) {
               externalUuidDeps.set(dep.uuid, dep);
@@ -1082,6 +1088,14 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       dependencies
     };
     if (outputType === 'behavior_script') {
+      for (const [moduleName, requests] of sourceModuleRequests) {
+        const versions = [...new Set(requests.map(request => request.version))];
+        if (versions.length > 1) {
+          const selected = normalizeScriptApiVersion(sourceModuleDeps.get(moduleName)?.version) || '(unresolved)';
+          const details = requests.map(request => `${request.pack} requested ${request.version}`).join('; ');
+          mergeDiagnostics.push(`WARNING SCRIPT_DEPENDENCY_CONFLICT [${moduleName}]: ${details}. AutoBE selected ${selected} for this generated behavior pack. This is a manifest choice, not proof that the selected API exists in the installed Minecraft version; check the target game version and the pack's runtime logs.`);
+        }
+      }
       modules.push({
         type: 'script',
         language: 'javascript',

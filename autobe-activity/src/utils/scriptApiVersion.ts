@@ -13,19 +13,30 @@ import { AddonPack } from '@/types/modpack';
 type ManifestLike = Record<string, any> | null | undefined;
 
 /** Convert '1.19.0-beta' -> (1,19,0,0) for numeric comparison. Handles literal 'beta' and [1,4,7] arrays. */
+export function normalizeScriptApiVersion(value: unknown): string | null {
+  if (Array.isArray(value) && value.length >= 2 && value.every(part => Number.isInteger(part) && part >= 0)) {
+    return value.map(part => String(part)).join('.');
+  }
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'beta') return '2.7.0-beta';
+  if (/^\[\s*\d+(?:\s*,\s*\d+){1,3}\s*\]$/.test(normalized)) {
+    return normalized.slice(1, -1).split(',').map(part => part.trim()).join('.');
+  }
+  return normalized;
+}
+
+/** Parse string or array-form manifest versions without losing numeric components. */
 export function scriptApiVerTuple(v: unknown): [number, number, number, number] {
   try {
-    let vStr = String(v ?? '').trim().toLowerCase();
-    if (vStr === 'beta') vStr = '2.7.0-beta';
-    if (vStr.startsWith('[') && vStr.endsWith(']')) {
-      vStr = vStr.slice(1, -1).replace(/,\s*/g, '.');
-    }
-    const clean = vStr.replace('-beta', '.1').replace(/-/g, '.');
+    const normalized = normalizeScriptApiVersion(v) || '';
+    const clean = normalized.replace(/-(?:beta|rc|preview|alpha)(?:\.|$)/, '.-1.');
     const parts = clean.split('.');
     const out: [number, number, number, number] = [0, 0, 0, 0];
     for (let i = 0; i < 4; i++) {
       const p = parts[i];
-      out[i] = p && /^\d+$/.test(p) ? parseInt(p, 10) : 0;
+      out[i] = p && /^-?\d+$/.test(p) ? parseInt(p, 10) : 0;
     }
     return out;
   } catch {
@@ -299,13 +310,15 @@ export function validatePacks(
 }
 
 /** Highest script version among packs, preserving '-beta' suffixes (used for merged manifest dependency). */
-export function highestFullScriptVersion(versions: string[]): string | null {
+export function highestFullScriptVersion(versions: unknown[]): string | null {
   let best: string | null = null;
   let bestTup: [number, number, number, number] = [0, 0, 0, 0];
-  for (const v of versions) {
-    const tup = scriptApiVerTuple(v);
+  for (const value of versions) {
+    const version = normalizeScriptApiVersion(value);
+    if (!version) continue;
+    const tup = scriptApiVerTuple(version);
     if (best === null || compareVersionTuples(tup, bestTup) > 0) {
-      best = v;
+      best = version;
       bestTup = tup;
     }
   }
