@@ -254,15 +254,19 @@ async function applyResourceTerrainAliasMap(resourceZip: JSZip, terrainAliases: 
     let changed = false;
     for (const [blockId, definition] of Object.entries(data)) {
       if (!definition || typeof definition !== 'object') continue;
-      const rewrite = (value: any): any => {
-        if (typeof value === 'string' && terrainAliases.has(value)) {
-          changed = true;
-          return terrainAliases.get(value);
+      const rewrite = (value: any, key = '', parentKey = ''): any => {
+        if (typeof value === 'string') {
+          const isTextureValue = key.toLowerCase() === 'textures' || key.toLowerCase() === 'texture' || parentKey.toLowerCase() === 'textures';
+          if (isTextureValue && terrainAliases.has(value)) {
+            changed = true;
+            return terrainAliases.get(value);
+          }
+          return value;
         }
-        if (Array.isArray(value)) return value.map(rewrite);
+        if (Array.isArray(value)) return value.map(item => rewrite(item, key, parentKey));
         if (!value || typeof value !== 'object') return value;
         const output: Record<string, any> = {};
-        for (const [key, child] of Object.entries(value)) output[key] = rewrite(child);
+        for (const [childKey, child] of Object.entries(value)) output[childKey] = rewrite(child, childKey, key);
         return output;
       };
       (data as any)[blockId] = rewrite(definition);
