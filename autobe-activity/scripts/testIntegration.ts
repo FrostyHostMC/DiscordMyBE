@@ -14,6 +14,7 @@ JSZip.prototype.loadAsync = (async function (this: JSZip, input: any, ...args: a
 const { parseAddonArchive, detectConflicts, sanitizeJsonString } = await import('../src/utils/addonParser.ts');
 const { executeMergePacks, ensureCombinedBlob, buildMergePlan } = await import('../src/utils/mergeEngine.ts');
 const { applySubpackSelection } = await import('../src/utils/subpackProcessor.ts');
+const { guardUnavailableEventSubscriptions } = await import('../src/utils/scriptCompatibility.ts');
 
 let nextId = 0;
 async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, files: Record<string, string | Uint8Array>, scriptVersion?: string) {
@@ -335,6 +336,29 @@ const legacyBlocks = JSON.parse(await atlasRp.file('blocks.json')!.async('text')
 assert.equal(legacyBlocks['demo:atlas_block'].textures, renamedTerrainAlias,
   'the resource pack legacy blocks.json mapping must follow the renamed terrain alias');
 console.log('✓ colliding item/terrain atlas aliases survive and paired BP/RP references are repaired');
+
+const scriptRepairFixture = new JSZip();
+const originalScript = [
+  '// world?.beforeEvents?.entityHurt?.subscribe(event => {',
+  '  try {',
+  '    const value = event.damage;',
+  '  } catch (error) {}',
+  '}, { entityFilter: { type: "demo:mob" } });',
+  'world.beforeEvents.entityHurt.subscribe(event => {',
+  '  event.cancel = false;',
+  '});'
+].join('\\n');
+scriptRepairFixture.file('scripts/libs/boss_attack_utils.js', originalScript);
+const scriptRepairDiagnostics: string[] = [];
+const changedScriptCount = await guardUnavailableEventSubscriptions(scriptRepairFixture, scriptRepairDiagnostics);
+assert.equal(changedScriptCount, 0, 'untrusted third-party JavaScript must not be regex-rewritten');
+assert.equal(await scriptRepairFixture.file('scripts/libs/boss_attack_utils.js')!.async('text'), originalScript,
+  'comments and callback bodies must remain byte-for-byte unchanged');
+assert.ok(scriptRepairDiagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')),
+  'the report must disclose that automatic script rewriting was skipped');
+console.log('✓ arbitrary add-on JavaScript and event-like comments are preserved without regex rewriting');
+
+
 
 const brokenReferences = await makePack('Behavior Pack', 'Broken references', {
   'items/missing_spawn_egg.json': JSON.stringify({
