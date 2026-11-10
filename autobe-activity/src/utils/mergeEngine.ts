@@ -177,7 +177,7 @@ function collectAtlasTexturePaths(value: any): string[] {
   const paths: string[] = [];
   const visit = (node: any, key = '') => {
     if (typeof node === 'string') {
-      if ((key === 'textures' || key === 'texture') && node.includes('/')) paths.push(node.replace(/^\\.\\//, ''));
+      if ((key === 'textures' || key === 'texture') && node.includes('/')) paths.push(node.replace(/^\.\//, ''));
       return;
     }
     if (Array.isArray(node)) { node.forEach(child => visit(child, key)); return; }
@@ -198,8 +198,8 @@ function fingerprintTextureBytes(bytes: Uint8Array): string {
 async function atlasAliasFingerprint(value: any, sourceZip: JSZip | null, accum: MergeAccum | null): Promise<string> {
   const fingerprints: string[] = [];
   for (const rawPath of collectAtlasTexturePaths(value).sort()) {
-    const normalized = rawPath.replace(/\\\\/g, '/').replace(/^\\.\\//, '');
-    const candidates = /\\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+    const normalized = rawPath.replace(/\\/g, '/').replace(/^\.\//, '');
+    const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
       ? [normalized]
       : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
     let resolved = false;
