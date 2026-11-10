@@ -141,7 +141,7 @@ const scriptOutputs = result.outputs!.filter(output => output.type === 'behavior
 assert.equal(scriptOutputs.length, 2, 'Script API v1 and v2 must remain separate generated behavior outputs');
 const bp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 2)!.blob!);
 const legacyBp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 1)!.blob!);
-assert.ok(Object.keys(legacyBp.files).some(path => path.endsWith('/scripts/main.js')), 'the Script API v1 source must remain in its own output');
+assert.ok(legacyBp.file('scripts/main.js'), 'the Script API v1 source must remain in its own output');
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
