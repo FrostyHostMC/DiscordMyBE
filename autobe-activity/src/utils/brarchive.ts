@@ -103,25 +103,53 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
       expandedCount++;
     }
 
-    // Rewrite explicit path references in companion structured files from the
-    // same .brarchive. Scope is deliberately archive-local: rewriting every
-    // occurrence in the whole pack would be ambiguous when two independent
-    // providers intentionally reference the original winning path.
+    // Rewrite only exact path-valued strings in companion files from this
+    // archive. This avoids broad regex edits to scripts, comments, or unrelated
+    // providers that may legitimately reference the original winning path.
     if (archivePathMap.size) {
       const replacements = [...archivePathMap.entries()].sort((a, b) => b[0].length - a[0].length);
       for (const entry of decoded) {
-        if (!/\.(?:json|material|molang|mcfunction)$/i.test(entry.name)) continue;
+        if (!/\\.(?:json|material)$/i.test(entry.name)) continue;
         const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
-        // A duplicate definition itself was written under its renamed path;
-        // it still needs its own internal references repaired.
         const destination = archivePathMap.get(joined) || archivePathMap.get(entry.name) || joined;
         const existing = zip.file(destination);
         if (!existing) continue;
-        let source = await existing.async('text');
-        const before = source;
-        for (const [oldPath, newPath] of replacements) {
-          const escaped = oldPath.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\      zip.file(outputPath, entry.data);
-      expandedCount++;
+        const raw = await existing.async('text');
+        let rewritten = raw;
+        try {
+          const parsed = JSON.parse(raw);
+          const visit = (value: any): any => {
+            if (typeof value === 'string') {
+              let result = value;
+              for (const [oldPath, newPath] of replacements) {
+                if (result === oldPath) result = newPath;
+                const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+                const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+                if (oldWithoutExtension !== oldPath && result === oldWithoutExtension) result = newWithoutExtension;
+              }
+              return result;
+            }
+            if (Array.isArray(value)) return value.map(visit);
+            if (value && typeof value === 'object') {
+              for (const key of Object.keys(value)) value[key] = visit(value[key]);
+            }
+            return value;
+          };
+          rewritten = JSON.stringify(visit(parsed), null, 2);
+        } catch {
+          // JSONC or other text: replace only quoted exact path tokens.
+          for (const [oldPath, newPath] of replacements) {
+            rewritten = rewritten.split(JSON.stringify(oldPath)).join(JSON.stringify(newPath));
+            const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+            const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+            if (oldWithoutExtension !== oldPath) {
+              rewritten = rewritten.split(JSON.stringify(oldWithoutExtension)).join(JSON.stringify(newWithoutExtension));
+            }
+          }
+        }
+        if (rewritten !== raw) zip.file(destination, rewritten);
+      }
+      report('Applied archive-local exact path reference repair for ' + archivePathMap.size / 2 + ' duplicate mapping(s) in ' + archivePath + '.');
     }
     zip.remove(archivePath);');
           const expression = new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}(?![A-Za-z0-9_./-])`, 'g');
