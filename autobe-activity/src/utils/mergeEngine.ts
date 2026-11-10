@@ -590,35 +590,64 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
     zip.file(path, resultBytes);
   }
 }
-function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<string, Map<string, string>> {
+function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean, packs: AddonPack[]): Map<string, Map<string, string>> {
   const renameMaps = new Map<string, Map<string, string>>();
   const occupied = new Set(conflicts.map(conflict => conflict.identifier));
+  const packById = new Map(packs.map(pack => [pack.id, pack]));
+  const normalizeName = (value: string) => value.toLowerCase()
+    .replace(/\\[(?:bp|rp|behavior pack|resource pack)\\]/g, '')
+    .replace(/\\b(?:behavior|resource)\\s*pack\\b/g, '')
+    .replace(/\\b(?:bp|rp)\\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const normalizeSource = (value: string) => value.toLowerCase()
+    .replace(/\\.(?:mcaddon|mcpack|zip)$/i, '')
+    .replace(/(?:[_\\s.-])(?:behavior|resource)(?:[_\\s.-]?pack)?$/i, '')
+    .replace(/(?:[_\\s.-])(?:bp|rp)$/i, '')
+    .replace(/[^a-z0-9]/g, '');
+  const pairIdentity = (pack: AddonPack) => {
+    const name = normalizeName(pack.name);
+    const source = pack.sourceFileName ? normalizeSource(pack.sourceFileName) : '';
+    return name && source ? `${name}|${source}` : name || source || pack.id;
+  };
+  const mapsByPair = new Map<string, Map<string, string>>();
+
   for (const conflict of conflicts) {
     if (conflict.type === 'vanilla_asset' || conflict.type === 'loot_table' || conflict.type === 'spawn_rule' || conflict.identifier === 'minecraft:player') continue;
     if (conflict.resolution !== 'prefix_all' && (!autoPrefix || conflict.resolution === 'keep_a' || conflict.resolution === 'keep_b')) continue;
 
-    let map = renameMaps.get(conflict.packB.id);
-    if (!map) {
-      map = new Map();
-      renameMaps.set(conflict.packB.id, map);
+    const sourcePack = packById.get(conflict.packB.id);
+    const pairKey = sourcePack ? pairIdentity(sourcePack) : conflict.packB.id;
+    let pairMap = mapsByPair.get(pairKey);
+    if (!pairMap) { pairMap = new Map(); mapsByPair.set(pairKey, pairMap); }
+    let candidate = pairMap.get(conflict.identifier);
+    if (!candidate) {
+      const prefixName = (sourcePack ? normalizeName(sourcePack.name) : normalizeName(conflict.packB.name)).slice(0, 8) || 'addon';
+      const packToken = pairKey.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6) || 'pack';
+      const colon = conflict.identifier.indexOf(':');
+      const namespace = colon >= 0 ? conflict.identifier.slice(0, colon) : 'custom';
+      const path = colon >= 0 ? conflict.identifier.slice(colon + 1) : conflict.identifier;
+      const baseNamespace = `${namespace}_${prefixName}_${packToken}`;
+      candidate = `${baseNamespace}:${path}`;
+      let suffix = 2;
+      while (occupied.has(candidate)) candidate = `${baseNamespace}_${suffix++}:${path}`;
+      occupied.add(candidate);
+      pairMap.set(conflict.identifier, candidate);
     }
-    if (map.has(conflict.identifier)) continue;
 
-    const prefixName = conflict.packB.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 8) || 'addon';
-    const packToken = conflict.packB.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6) || 'pack';
-    const colon = conflict.identifier.indexOf(':');
-    const namespace = colon >= 0 ? conflict.identifier.slice(0, colon) : 'custom';
-    const path = colon >= 0 ? conflict.identifier.slice(colon + 1) : conflict.identifier;
-    const baseNamespace = `${namespace}_${prefixName}_${packToken}`;
-    let candidate = `${baseNamespace}:${path}`;
-    let suffix = 2;
-    while (occupied.has(candidate)) candidate = `${baseNamespace}_${suffix++}:${path}`;
-    occupied.add(candidate);
-    map.set(conflict.identifier, candidate);
+    // Apply the exact same identifier mapping to the paired BP and RP. Their
+    // entity/client_entity identifiers (and block/item visual references)
+    // must stay synchronized even though the packs have different internal IDs.
+    const pairedPacks = sourcePack
+      ? packs.filter(pack => pairIdentity(pack) === pairKey)
+      : [sourcePack].filter(Boolean) as AddonPack[];
+    for (const pack of pairedPacks) {
+      let map = renameMaps.get(pack.id);
+      if (!map) { map = new Map(); renameMaps.set(pack.id, map); }
+      map.set(conflict.identifier, candidate);
+    }
   }
   return renameMaps;
 }
-
 function slugify(name: string, id: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
   return base || id.replace(/-/g, '').slice(0, 8);
@@ -678,7 +707,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
   const mergeDiagnostics: string[] = [];
-  const renameMaps = buildRenameMaps(conflicts, autoPrefix);
+  const renameMaps = buildRenameMaps(conflicts, autoPrefix, packs);
   const vanillaAssetWinners = new Map<string, string>();
   for (const conflict of conflicts) {
     if (conflict.type !== 'vanilla_asset') continue;
