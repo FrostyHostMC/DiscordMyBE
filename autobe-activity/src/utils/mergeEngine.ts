@@ -595,14 +595,14 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean, packs: 
   const occupied = new Set(conflicts.map(conflict => conflict.identifier));
   const packById = new Map(packs.map(pack => [pack.id, pack]));
   const normalizeName = (value: string) => value.toLowerCase()
-    .replace(/\\[(?:bp|rp|behavior pack|resource pack)\\]/g, '')
-    .replace(/\\b(?:behavior|resource)\\s*pack\\b/g, '')
-    .replace(/\\b(?:bp|rp)\\b/g, '')
+    .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
+    .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:bp|rp)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
   const normalizeSource = (value: string) => value.toLowerCase()
-    .replace(/\\.(?:mcaddon|mcpack|zip)$/i, '')
-    .replace(/(?:[_\\s.-])(?:behavior|resource)(?:[_\\s.-]?pack)?$/i, '')
-    .replace(/(?:[_\\s.-])(?:bp|rp)$/i, '')
+    .replace(/\.(?:mcaddon|mcpack|zip)$/i, '')
+    .replace(/(?:[_\s.-])(?:behavior|resource)(?:[_\s.-]?pack)?$/i, '')
+    .replace(/(?:[_\s.-])(?:bp|rp)$/i, '')
     .replace(/[^a-z0-9]/g, '');
   const pairIdentity = (pack: AddonPack) => {
     const name = normalizeName(pack.name);
