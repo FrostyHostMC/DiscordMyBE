@@ -557,13 +557,13 @@ await (async () => {
   zip.file('spawn_rules/mob_surface.json', JSON.stringify({
     'minecraft:spawn_rules': {
       description: { identifier: 'demo:mob' },
-      conditions: [{ minecraft:spawns_on_surface: {}, minecraft:weight: { default: 5 } }]
+      conditions: [{ 'minecraft:spawns_on_surface': {}, 'minecraft:weight': { default: 5 } }]
     }
   }));
   zip.file('spawn_rules/mob_cave.json', JSON.stringify({
     'minecraft:spawn_rules': {
       description: { identifier: 'demo:mob' },
-      conditions: [{ minecraft:spawns_on_block_filter: { blocks: ['minecraft:stone'] }, minecraft:weight: { default: 2 } }]
+      conditions: [{ 'minecraft:spawns_on_block_filter': { blocks: ['minecraft:stone'] }, 'minecraft:weight': { default: 2 } }]
     }
   }));
   await mergeDefinitionsByIdentifier(zip, diagnostics, 'behavior');
