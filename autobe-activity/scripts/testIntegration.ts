@@ -297,6 +297,10 @@ const renamedItemAlias = Object.keys(itemAtlas.texture_data).find(key => key.sta
 const renamedTerrainAlias = Object.keys(terrainAtlas.texture_data).find(key => key.startsWith('shared_terrain__second_atlas'));
 assert.ok(renamedItemAlias, 'a colliding item texture alias must be preserved under a unique name');
 assert.ok(renamedTerrainAlias, 'a colliding terrain texture alias must be preserved under a unique name');
+assert.equal(Object.keys(atlasRp.files).filter(path => path.startsWith('textures/items/') && path.endsWith('.png')).length, 2,
+  'both different binary images using the same original path must survive under distinct output paths');
+assert.equal(Object.keys(atlasRp.files).filter(path => path.startsWith('textures/blocks/') && path.endsWith('.png')).length, 2,
+  'both different block textures using the same original path must survive under distinct output paths');
 const atlasItem = JSON.parse(await atlasBp.file('items/atlas_item.json')!.async('text'));
 assert.equal(atlasItem['minecraft:item'].components['minecraft:icon'].texture, renamedItemAlias,
   'the paired behavior-pack item icon must be rewritten to the renamed resource alias');
