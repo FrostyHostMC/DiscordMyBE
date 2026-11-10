@@ -265,9 +265,9 @@ const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
   'textures/blocks/shared_block.png': new Uint8Array([2])
 });
 const atlasSecond = await makePack('Resource Pack', 'Second Atlas', {
-  'textures/item_texture.json': JSON.stringify({ texture_data: { demo:shared_icon: { textures: 'textures/items/demo:shared_icon' } } }),
-  'textures/terrain_texture.json': JSON.stringify({ texture_data: { demo:shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
-  'textures/items/demo:shared_icon.png': new Uint8Array([3]),
+  'textures/item_texture.json': JSON.stringify({ texture_data: { 'demo:shared_icon': { textures: 'textures/items/shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { 'demo:shared_terrain': { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/shared_icon.png': new Uint8Array([3]),
   'textures/blocks/shared_block.png': new Uint8Array([4]),
   'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'demo:shared_terrain' } })
 });
