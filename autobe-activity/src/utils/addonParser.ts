@@ -473,7 +473,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
                 conflicts.push({
                   id: generateUUID(), type: 'entity', identifier: 'minecraft:player',
                   packA: { id: first.packId, name: first.packName, path: first.path },
-                  packB: { id: pack.id, name: pack.name, path }, resolution: cat === 'spawn_rule' || cat === 'loot_table' || ident === 'minecraft:player' ? 'keep_a' : 'prefix_all'
+                  packB: { id: pack.id, name: pack.name, path }, resolution: 'keep_a'
                 });
               }
               previous.push({ packId: pack.id, packName: pack.name, path, data: playerData });
