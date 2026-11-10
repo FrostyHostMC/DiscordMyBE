@@ -18,7 +18,7 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
   // entries, so discovering variants only from physical files incorrectly
   // rejects valid choices such as Refine Sounds' "only_sounds".
   const declaredSubpacks: Array<{ folder: string; name: string }> = [];
-  const manifestFile = zip.file(/^manifest\\.json$/i)[0];
+  const manifestFile = Object.entries(zip.files).find(([path, file]) => path.toLowerCase() === 'manifest.json' && !file.dir)?.[1];
   if (manifestFile) {
     try {
       const manifest = JSON.parse(sanitizeJsonString(await manifestFile.async('text')));
@@ -35,8 +35,8 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
 
   const physicalSubpacks = new Set<string>();
   for (const path of Object.keys(zip.files)) {
-    const m = path.match(/^subpacks\\/([^/]+)\\//i);
-    if (m) physicalSubpacks.add(m[1]);
+    const segments = path.split('/');
+    if (segments.length >= 2 && segments[0].toLowerCase() === 'subpacks' && segments[1]) physicalSubpacks.add(segments[1]);
   }
   const availableFolders = [
     ...declaredSubpacks.map((entry) => entry.folder),
