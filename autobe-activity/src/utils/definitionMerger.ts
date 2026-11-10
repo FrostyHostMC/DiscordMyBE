@@ -19,6 +19,30 @@ function classify(path: string): { kind: Kind; client: boolean } | null {
   return null;
 }
 
+function compareFormatVersions(a: unknown, b: unknown): number {
+  const parts = (value: unknown) => String(value ?? '0.0.0').split('.').map(part => Number.parseInt(part, 10) || 0);
+  const left = parts(a), right = parts(b);
+  for (let i = 0; i < Math.max(left.length, right.length); i++) {
+    const difference = (left[i] || 0) - (right[i] || 0);
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+function highestFormatVersion(a: any, b: any): unknown {
+  return compareFormatVersions(a?.format_version, b?.format_version) >= 0
+    ? a?.format_version : b?.format_version;
+}
+
+const BLOCK_STRUCTURAL_CONFLICTS = [
+  'minecraft:block.description.states',
+  'minecraft:block.permutations',
+  'minecraft:block.components.minecraft:collision_box',
+  'minecraft:block.components.minecraft:selection_box',
+  'minecraft:block.components.minecraft:geometry',
+  'minecraft:block.components.minecraft:custom_components'
+];
+
 function mergeSpawnRuleAdditions(base: any, incoming: any): { value: any; changed: boolean; conflicts: string[] } {
   const root = 'minecraft:spawn_rules';
   const baseCopy = structuredClone(base);
@@ -65,9 +89,18 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
     let merged = first.data;
     let changed = false;
     for (const entry of entries.slice(1)) {
+      // format_version describes the schema version, not a competing gameplay
+      // value. Keep the newest declaration while comparing the actual content.
+      const incoming = structuredClone(entry.data);
+      const selectedFormatVersion = highestFormatVersion(merged, incoming);
+      if (selectedFormatVersion !== undefined) {
+        merged = structuredClone(merged);
+        merged.format_version = selectedFormatVersion;
+        incoming.format_version = selectedFormatVersion;
+      }
       const result = entry.kind === 'spawn_rule'
-        ? mergeSpawnRuleAdditions(merged, entry.data)
-        : mergeAdditions(merged, entry.data);
+        ? mergeSpawnRuleAdditions(merged, incoming)
+        : mergeAdditions(merged, incoming);
       // Different attachable rigs must never be combined just because their
       // individual fields happen to be disjoint.
       // Attachable definitions describe one complete visual rig. Combining
@@ -84,6 +117,10 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
         if (result.conflicts.length > 0) {
           const backup = preserveConflict(zip, entry.path, entry.bytes, 'definitions');
           diagnostics.push(`WARNING DEFINITION_PARTIAL_CONFLICT [${entry.identifier}]: Kept compatible additions from ${entry.path} in ${first.path}; retained the first value at ${result.conflicts.slice(0, 5).join(', ')} and saved the complete incoming definition as ${backup} for review.`);
+          if (entry.kind === 'block') {
+            const structural = result.conflicts.filter(path => BLOCK_STRUCTURAL_CONFLICTS.some(key => path === key || path.startsWith(key + '.')));
+            if (structural.length) diagnostics.push(`WARNING DEFINITION_STRUCTURAL_CONFLICT [${entry.identifier}]: Conflicting block state, permutation, geometry, selection-box, collision-box or custom-component data was not combined. The higher-priority definition in ${first.path} remains active; the complete alternative is preserved at ${backup}. Review this block before release.`);
+          }
         } else if (result.changed) {
           diagnostics.push(`INFO DEFINITION_MERGED [${entry.identifier}]: Added non-conflicting fields from ${entry.path} to ${first.path}.`);
         }
