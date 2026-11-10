@@ -473,7 +473,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
                 conflicts.push({
                   id: generateUUID(), type: 'entity', identifier: 'minecraft:player',
                   packA: { id: first.packId, name: first.packName, path: first.path },
-                  packB: { id: pack.id, name: pack.name, path }, resolution: 'keep_a'
+                  packB: { id: pack.id, name: pack.name, path }, resolution: cat === 'spawn_rule' || cat === 'loot_table' || ident === 'minecraft:player' ? 'keep_a' : 'prefix_all'
                 });
               }
               previous.push({ packId: pack.id, packName: pack.name, path, data: playerData });
@@ -516,8 +516,25 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             const identifierKey = `${pack.type}:${cat}:${ident}`;
             if (identifierMap.has(identifierKey)) {
               const existing = identifierMap.get(identifierKey)!;
-              const comparison = mergeAdditions(existing.data, json);
-              const requiresWholeDefinitionChoice = ['recipe', 'spawn_rule', 'attachable', 'loot_table'].includes(cat);
+              let comparisonBase = existing.data;
+              let comparisonIncoming = json;
+              if (cat === 'spawn_rule') {
+                const root = 'minecraft:spawn_rules';
+                const baseConditions = Array.isArray(existing.data?.[root]?.conditions) ? existing.data[root].conditions : [];
+                const incomingConditions = Array.isArray(json?.[root]?.conditions) ? json[root].conditions : [];
+                const combinedConditions = [...baseConditions];
+                const fingerprints = new Set(combinedConditions.map((condition: any) => JSON.stringify(condition)));
+                for (const condition of incomingConditions) {
+                  const fingerprint = JSON.stringify(condition);
+                  if (!fingerprints.has(fingerprint)) { combinedConditions.push(condition); fingerprints.add(fingerprint); }
+                }
+                comparisonBase = structuredClone(existing.data);
+                comparisonIncoming = structuredClone(json);
+                comparisonBase[root].conditions = combinedConditions;
+                comparisonIncoming[root].conditions = combinedConditions;
+              }
+              const comparison = mergeAdditions(comparisonBase, comparisonIncoming);
+              const requiresWholeDefinitionChoice = ['recipe', 'attachable', 'loot_table'].includes(cat);
               if (existing.packId !== pack.id && (comparison.conflicts.length > 0 || (requiresWholeDefinitionChoice && comparison.changed))) {
                 conflicts.push({
                   id: generateUUID(),
