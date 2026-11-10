@@ -484,15 +484,16 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         }
         const normalizedSegments = lower.split('/').filter(Boolean);
         let cat: ConflictItem['type'] | null = null;
-        if (normalizedSegments.includes('entities') || normalizedSegments.includes('entity')) cat = 'entity';
-        else if (normalizedSegments.includes('items')) cat = 'item';
-        else if (normalizedSegments.includes('blocks')) cat = 'block';
-        else if (normalizedSegments.includes('recipes')) cat = 'recipe';
-        else if (normalizedSegments.includes('attachables')) cat = 'attachable';
-        else if (normalizedSegments.includes('spawn_rules')) cat = 'spawn_rule';
-        else if (normalizedSegments.includes('loot_tables')) cat = 'loot_table';
-        else if (normalizedSegments.includes('animation_controllers')) cat = 'animation_controller';
-        else if (normalizedSegments.includes('render_controllers')) cat = 'render_controller';
+        const rootFolder = normalizedSegments[0] || '';
+        if (rootFolder === 'entities' || rootFolder === 'entity') cat = 'entity';
+        else if (rootFolder === 'items') cat = 'item';
+        else if (rootFolder === 'blocks') cat = 'block';
+        else if (rootFolder === 'recipes') cat = 'recipe';
+        else if (rootFolder === 'attachables') cat = 'attachable';
+        else if (rootFolder === 'spawn_rules') cat = 'spawn_rule';
+        else if (rootFolder === 'loot_tables') cat = 'loot_table';
+        else if (rootFolder === 'animation_controllers') cat = 'animation_controller';
+        else if (rootFolder === 'render_controllers') cat = 'render_controller';
 
         if (!cat) continue;
 
