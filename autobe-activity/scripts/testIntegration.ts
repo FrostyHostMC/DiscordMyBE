@@ -191,8 +191,8 @@ assert.notEqual(
 );
 console.log('✓ stable and beta Script API tracks stay in separate outputs');
 
-const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"a":{}}}}';
-const itemB = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"b":{}}}}';
+const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"minecraft:max_stack_size":16}}}';
+const itemB = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"minecraft:max_stack_size":64}}}';
 const conflictA = await makePack('Behavior Pack', 'A', { '__brarchive/items/weapons.brarchive': archive('item.json', itemA) });
 const conflictB = await makePack('Behavior Pack', 'B', { 'items/other.json': itemB });
 const conflicts = await detectConflicts([conflictA, conflictB]);
