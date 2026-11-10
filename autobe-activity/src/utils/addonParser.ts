@@ -482,13 +482,18 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             }
           } catch { /* Invalid JSON is reported by archive validation. */ }
         }
+        const normalizedSegments = lower.split('/').filter(Boolean);
+        const folder = normalizedSegments.length > 1 ? normalizedSegments[normalizedSegments.length - 2] : '';
         let cat: ConflictItem['type'] | null = null;
-        if (lower.includes('entities/')) cat = 'entity';
-        else if (lower.includes('items/')) cat = 'item';
-        else if (lower.includes('blocks/')) cat = 'block';
-        else if (lower.includes('recipes/')) cat = 'recipe';
-        else if (lower.includes('animation_controllers/')) cat = 'animation_controller';
-        else if (lower.includes('render_controllers/')) cat = 'render_controller';
+        if (folder === 'entities' || folder === 'entity') cat = 'entity';
+        else if (folder === 'items') cat = 'item';
+        else if (folder === 'blocks') cat = 'block';
+        else if (folder === 'recipes') cat = 'recipe';
+        else if (folder === 'attachables') cat = 'attachable';
+        else if (folder === 'spawn_rules') cat = 'spawn_rule';
+        else if (folder === 'loot_tables') cat = 'loot_table';
+        else if (folder === 'animation_controllers') cat = 'animation_controller';
+        else if (folder === 'render_controllers') cat = 'render_controller';
 
         if (!cat) continue;
 
@@ -496,10 +501,15 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           const txt = await fileObj.async('text');
           const json = JSON.parse(sanitizeJsonString(txt));
           let ident = '';
-          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;
+          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier || json['minecraft:client_entity']?.description?.identifier;
           else if (cat === 'item') ident = json['minecraft:item']?.description?.identifier;
           else if (cat === 'block') ident = json['minecraft:block']?.description?.identifier;
-          else if (cat === 'recipe') ident = json['minecraft:recipe_shaped']?.description?.identifier || json['minecraft:recipe_shapeless']?.description?.identifier;
+          else if (cat === 'attachable') ident = json['minecraft:attachable']?.description?.identifier;
+          else if (cat === 'spawn_rule') ident = json['minecraft:spawn_rules']?.description?.identifier;
+          else if (cat === 'recipe') {
+            const recipeRoots = ['minecraft:recipe_shaped', 'minecraft:recipe_shapeless', 'minecraft:recipe_furnace', 'minecraft:recipe_brewing_mix', 'minecraft:recipe_brewing_container', 'minecraft:recipe_smithing_transform', 'minecraft:recipe_smithing_trim', 'minecraft:recipe'];
+            ident = recipeRoots.map(root => json[root]?.description?.identifier).find(value => typeof value === 'string') || '';
+          } else if (cat === 'loot_table') ident = path.replace(/^.*?loot_tables\\//i, '').replace(/\\.json$/i, '');
           else if (cat === 'animation_controller') ident = Object.keys(json.animation_controllers || {})[0];
           else if (cat === 'render_controller') ident = Object.keys(json.render_controllers || {})[0];
 
@@ -514,7 +524,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
                   type: cat,
                   identifier: ident,
                   packA: { id: existing.packId, name: existing.packName },
-                  packB: { id: pack.id, name: pack.name },
+                  packB: { id: pack.id, name: pack.name, path },
                   resolution: 'keep_a'
                 });
               }
@@ -523,7 +533,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             }
           }
         } catch {
-          // ignore individual json parse errors
+          // Invalid JSON is surfaced by the source archive validation pass.
         }
       }
     } catch (error) {
