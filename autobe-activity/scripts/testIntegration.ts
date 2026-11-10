@@ -53,11 +53,11 @@ function archive(name: string, content: string): Uint8Array {
 // Regression: language registries and translation keys must survive shared BP merging.
 const languagePackA = await makePack('Behavior Pack', 'Language A', {
   'texts/languages.json': JSON.stringify(['en_US']),
-  'texts/en_US.lang': 'pack.name=Pack A\\npack.description=Description A\\ndemo:item.a=Alpha\\n'
+  'texts/en_US.lang': 'pack.name=Pack A\npack.description=Description A\ndemo:item.a=Alpha\n'
 });
 const languagePackB = await makePack('Behavior Pack', 'Language B', {
   'texts/languages.json': JSON.stringify(['en_US', 'zh_CN', 'es_ES']),
-  'texts/en_US.lang': 'pack.name=Pack B\\npack.description=Description B\\ndemo:item.b=Bravo\\n'
+  'texts/en_US.lang': 'pack.name=Pack B\npack.description=Description B\ndemo:item.b=Bravo\n'
 });
 const languageMerge = await executeMergePacks([languagePackA, languagePackB], {
   modpackName: 'Language merge regression',
