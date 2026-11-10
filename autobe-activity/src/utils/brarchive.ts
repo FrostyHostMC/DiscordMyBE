@@ -59,6 +59,7 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
       decoded.push({ name, data: bytes.slice(start, end) });
     }
 
+    const archivePathMap = new Map<string, string>();
     for (const entry of decoded) {
       const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
       const segments = joined.split('/').filter(Boolean);
@@ -89,15 +90,56 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
         do {
           outputPath = stem + '.autobe-' + suffix++ + extension;
         } while (zip.file(outputPath));
+        archivePathMap.set(joined, outputPath);
+        archivePathMap.set(entry.name, outputPath);
         report(
           'Conflicting archive path preserved as ' + outputPath +
           '; original path was ' + joined + ' from ' + archivePath +
-          '. References to this duplicate were not automatically rewritten.'
+          '. References inside this archive were rewritten when they used an explicit matching path; references elsewhere in the pack remain subject to dependency validation.'
         );
       }
 
       zip.file(outputPath, entry.data);
       expandedCount++;
+    }
+
+    // Rewrite explicit path references in companion structured files from the
+    // same .brarchive. Scope is deliberately archive-local: rewriting every
+    // occurrence in the whole pack would be ambiguous when two independent
+    // providers intentionally reference the original winning path.
+    if (archivePathMap.size) {
+      const replacements = [...archivePathMap.entries()].sort((a, b) => b[0].length - a[0].length);
+      for (const entry of decoded) {
+        if (!/\.(?:json|material|molang|mcfunction)$/i.test(entry.name)) continue;
+        const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
+        // A duplicate definition itself was written under its renamed path;
+        // it still needs its own internal references repaired.
+        const destination = archivePathMap.get(joined) || archivePathMap.get(entry.name) || joined;
+        const existing = zip.file(destination);
+        if (!existing) continue;
+        let source = await existing.async('text');
+        const before = source;
+        for (const [oldPath, newPath] of replacements) {
+          const escaped = oldPath.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\      zip.file(outputPath, entry.data);
+      expandedCount++;
+    }
+    zip.remove(archivePath);');
+          const expression = new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}(?![A-Za-z0-9_./-])`, 'g');
+          source = source.replace(expression, (_match, prefix) => prefix + newPath);
+          const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+          const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
+          if (oldWithoutExtension !== oldPath) {
+            const extensionless = oldWithoutExtension.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\      zip.file(outputPath, entry.data);
+      expandedCount++;
+    }
+    zip.remove(archivePath);');
+            const extensionlessExpression = new RegExp(`(^|[^A-Za-z0-9_./-])${extensionless}(?![A-Za-z0-9_./-])`, 'g');
+            source = source.replace(extensionlessExpression, (_match, prefix) => prefix + newWithoutExtension);
+          }
+        }
+        if (source !== before) zip.file(destination, source);
+      }
+      report('Rewrote ' + archivePathMap.size / 2 + ' explicit duplicate path reference mapping(s) inside ' + archivePath + '.');
     }
     zip.remove(archivePath);
   }
