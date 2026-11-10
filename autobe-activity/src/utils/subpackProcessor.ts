@@ -12,38 +12,66 @@ export async function applySubpackSelection(blob: Blob, folderName: string): Pro
   const zip = await JSZip.loadAsync(blob);
   const out = new JSZip();
 
-  // Discover the subpack folders that physically exist in the archive so we can
-  // resolve the manifest-declared folder name even when its casing / spacing
-  // does not exactly match the zip paths (a very common addon quirk).
-  const subpackDirs = new Set<string>();
-  for (const path of Object.keys(zip.files)) {
-    const m = path.toLowerCase().match(/^subpacks\/([^/]+)\//);
-    if (m) subpackDirs.add(m[1]);
-  }
-
-  console.log('[SubpackSelection] Requested variant:', folderName);
-  console.log('[SubpackSelection] Available subpack folders:', [...subpackDirs]);
-
-  let resolved = folderName.trim();
-  const wantedLower = resolved.toLowerCase();
-  if (!subpackDirs.has(wantedLower)) {
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-    const fuzzy =
-      [...subpackDirs].find((d) => norm(d) === norm(folderName)) ||
-      [...subpackDirs].find((d) => norm(d).startsWith(norm(folderName)));
-    if (fuzzy) {
-      resolved = fuzzy;
-    } else if (subpackDirs.size > 0) {
-      throw new Error(`Selected subpack "${folderName}" was not found. Available variants: ${[...subpackDirs].join(', ')}.`);
-    } else {
-      throw new Error(`The pack declares subpack "${folderName}", but no subpacks/ folder exists in its archive.`);
+  // The manifest is the source of truth: Bedrock permits a declared
+  // subpack to be an empty overlay (all of its content comes from the base
+  // pack). JSZip/browser ZIP readers may omit explicit empty-directory
+  // entries, so discovering variants only from physical files incorrectly
+  // rejects valid choices such as Refine Sounds' "only_sounds".
+  const declaredSubpacks: Array<{ folder: string; name: string }> = [];
+  const manifestFile = zip.file(/^manifest\\.json$/i)[0];
+  if (manifestFile) {
+    try {
+      const manifest = JSON.parse(sanitizeJsonString(await manifestFile.async('text')));
+      for (const subpack of Array.isArray(manifest.subpacks) ? manifest.subpacks : []) {
+        const folder = String(subpack?.folder_name || subpack?.folder || '').trim();
+        if (folder && !declaredSubpacks.some((entry) => entry.folder.toLowerCase() === folder.toLowerCase())) {
+          declaredSubpacks.push({ folder, name: String(subpack?.name || folder) });
+        }
+      }
+    } catch {
+      // Keep physical-folder recovery below for malformed third-party manifests.
     }
   }
 
-  const prefix = `subpacks/${resolved}/`;
+  const physicalSubpacks = new Set<string>();
+  for (const path of Object.keys(zip.files)) {
+    const m = path.match(/^subpacks\\/([^/]+)\\//i);
+    if (m) physicalSubpacks.add(m[1]);
+  }
+  const availableFolders = [
+    ...declaredSubpacks.map((entry) => entry.folder),
+    ...[...physicalSubpacks].filter((folder) =>
+      !declaredSubpacks.some((entry) => entry.folder.toLowerCase() === folder.toLowerCase())
+    )
+  ];
+
+  console.log('[SubpackSelection] Requested variant:', folderName);
+  console.log('[SubpackSelection] Manifest-declared variants:', declaredSubpacks);
+  console.log('[SubpackSelection] Physical subpack folders:', [...physicalSubpacks]);
+
+  const norm = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const requested = folderName.trim();
+  const resolvedDeclared = declaredSubpacks.find((entry) => entry.folder.toLowerCase() === requested.toLowerCase());
+  const resolvedPhysical = [...physicalSubpacks].find((folder) => folder.toLowerCase() === requested.toLowerCase());
+  const resolved = resolvedDeclared?.folder || resolvedPhysical || availableFolders.find((folder) => norm(folder) === norm(requested)) ||
+    availableFolders.find((folder) => norm(folder).startsWith(norm(requested)));
+
+  if (!resolved) {
+    if (availableFolders.length > 0) {
+      throw new Error(`Selected subpack "${folderName}" was not found. Available variants: ${availableFolders.join(', ')}.`);
+    }
+    throw new Error(`The pack declares subpack "${folderName}", but no valid subpack metadata or folders were found in its archive.`);
+  }
+
+  // Prefer the actual archive folder spelling when present. A manifest-only
+  // variant is valid too; it simply contributes no overlay files.
+  const physicalFolder = [...physicalSubpacks].find((folder) => folder.toLowerCase() === resolved.toLowerCase());
+  const selectedFolder = physicalFolder || resolved;
+
+  const prefix = `subpacks/${selectedFolder}/`;
   const prefixLower = prefix.toLowerCase();
 
-  console.log('[SubpackSelection] Using prefix:', prefix, 'resolved:', resolved);
+  console.log('[SubpackSelection] Using prefix:', prefix, 'resolved:', resolved, 'manifest-declared:', !!resolvedDeclared);
 
   let extractedCount = 0;
   let skippedCount = 0;
