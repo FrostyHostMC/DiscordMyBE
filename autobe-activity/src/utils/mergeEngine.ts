@@ -409,7 +409,7 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
       if (typeof identifier === 'string') results.push({ type, identifier });
     }
     if (hasFolder('loot_tables')) {
-      const identifier = lower.replace(/^.*?loot_tables\\//, '').replace(/\\.json$/, '');
+      const identifier = lower.replace(/^.*?loot_tables\//, '').replace(/\.json$/, '');
       if (identifier) results.push({ type: 'loot_table', identifier });
     }
     if (hasFolder('animation_controllers')) {
