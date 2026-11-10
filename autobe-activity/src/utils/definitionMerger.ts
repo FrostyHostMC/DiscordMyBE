@@ -92,10 +92,14 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
       // format_version describes the schema version, not a competing gameplay
       // value. Keep the newest declaration while comparing the actual content.
       const incoming = structuredClone(entry.data);
+      const currentFormatVersion = merged?.format_version;
       const selectedFormatVersion = highestFormatVersion(merged, incoming);
       if (selectedFormatVersion !== undefined) {
-        merged = structuredClone(merged);
-        merged.format_version = selectedFormatVersion;
+        if (selectedFormatVersion !== currentFormatVersion) {
+          merged = structuredClone(merged);
+          merged.format_version = selectedFormatVersion;
+          changed = true;
+        }
         incoming.format_version = selectedFormatVersion;
       }
       const result = entry.kind === 'spawn_rule'
