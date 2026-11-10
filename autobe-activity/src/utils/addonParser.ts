@@ -508,7 +508,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           else if (cat === 'recipe') {
             const recipeRoots = ['minecraft:recipe_shaped', 'minecraft:recipe_shapeless', 'minecraft:recipe_furnace', 'minecraft:recipe_brewing_mix', 'minecraft:recipe_brewing_container', 'minecraft:recipe_smithing_transform', 'minecraft:recipe_smithing_trim', 'minecraft:recipe'];
             ident = recipeRoots.map(root => json[root]?.description?.identifier).find(value => typeof value === 'string') || '';
-          } else if (cat === 'loot_table') ident = path.replace(/^.*?loot_tables\\//i, '').replace(/\\.json$/i, '');
+          } else if (cat === 'loot_table') ident = path.replace(/^.*?loot_tables\//i, '').replace(/\.json$/i, '');
           else if (cat === 'animation_controller') ident = Object.keys(json.animation_controllers || {})[0];
           else if (cat === 'render_controller') ident = Object.keys(json.render_controllers || {})[0];
 
