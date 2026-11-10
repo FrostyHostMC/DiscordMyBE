@@ -705,7 +705,7 @@ await (async () => {
   assert.deepEqual(Array.from(await zip.file('items/kept.json')!.async('uint8array')), Array.from(same));
   assert.deepEqual(Array.from(await zip.file('items/kept.autobe-2.json')!.async('uint8array')), Array.from(different));
   assert.ok(diagnostics.some(message => message.includes('Duplicate identical archive entry skipped')));
-  assert.ok(diagnostics.some(message => message.includes('References to this duplicate were not automatically rewritten')));
+  assert.ok(diagnostics.some(message => message.includes('Conflicting archive path preserved as items/kept.autobe-2.json')));
   console.log('✓ .brarchive expansion preserves conflicts, skips identical payloads, and emits diagnostics');
 })();
 

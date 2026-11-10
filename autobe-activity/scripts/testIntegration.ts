@@ -35,20 +35,39 @@ async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, f
   return parsed.packs[0];
 }
 
-function archive(name: string, content: string): Uint8Array {
-  const bytes = new TextEncoder().encode(content);
-  const result = new Uint8Array(16 + 256 + bytes.length);
+function archiveEntries(entries: Array<{ name: string; content: string }>): Uint8Array {
+  const encoded = entries.map(entry => ({ name: new TextEncoder().encode(entry.name), data: new TextEncoder().encode(entry.content) }));
+  const payloadBase = 16 + encoded.length * 256;
+  const payloadSize = encoded.reduce((total, entry) => total + entry.data.length, 0);
+  const result = new Uint8Array(payloadBase + payloadSize);
   result.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26]);
   const view = new DataView(result.buffer);
-  view.setUint32(8, 1, true);
+  view.setUint32(8, encoded.length, true);
   view.setUint32(12, 1, true);
-  const encodedName = new TextEncoder().encode(name);
-  result[16] = encodedName.length;
-  result.set(encodedName, 17);
-  view.setUint32(16 + 252, bytes.length, true);
-  result.set(bytes, 16 + 256);
+  let payloadOffset = 0;
+  encoded.forEach((entry, index) => {
+    if (entry.name.length < 1 || entry.name.length > 247) throw new Error('Invalid fixture archive name');
+    const recordOffset = 16 + index * 256;
+    result[recordOffset] = entry.name.length;
+    result.set(entry.name, recordOffset + 1);
+    view.setUint32(recordOffset + 248, payloadOffset, true);
+    view.setUint32(recordOffset + 252, entry.data.length, true);
+    result.set(entry.data, payloadBase + payloadOffset);
+    payloadOffset += entry.data.length;
+  });
   return result;
 }
+
+function archive(name: string, content: string): Uint8Array {
+  return archiveEntries([{ name, content }]);
+}
+
+// Manifest names that are localization keys should display their translated pack name.
+const localizedPack = await makePack('Resource Pack', 'pack.name', {
+  'texts/languages.json': JSON.stringify(['en_US']),
+  'texts/en_US.lang': 'pack.name=Localized Furniture\npack.description=Furniture description\n'
+});
+assert.equal(localizedPack.name, 'Localized Furniture', 'pack.name should resolve from the source pack language file');
 
 // Regression: language registries and translation keys must survive shared BP merging.
 const languagePackA = await makePack('Behavior Pack', 'Language A', {
@@ -73,12 +92,33 @@ assert.ok(mergedTranslations.includes('pack.name=Pack A'), 'priority winner pack
 assert.ok(!mergedTranslations.includes('pack.name=Pack B'), 'conflicting pack metadata must not overwrite priority winner');
 console.log('✓ language codes and unique translation keys survive BP merge while pack metadata priority remains stable');
 
+const localeJsonA = await makePack('Behavior Pack', 'Locale JSON A', {
+  'texts/en_US.json': JSON.stringify({ menu: { title: 'First', shared: 'Priority value' } })
+});
+const localeJsonB = await makePack('Behavior Pack', 'Locale JSON B', {
+  'texts/en_US.json': JSON.stringify({ menu: { subtitle: 'Second add-on', shared: 'Conflicting value' } })
+});
+const localeJsonMerge = await executeMergePacks([localeJsonA, localeJsonB], {
+  modpackName: 'Locale JSON conflict regression',
+  conflicts: await detectConflicts([localeJsonA, localeJsonB])
+});
+const localeJsonOutput = await JSZip.loadAsync(localeJsonMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const localeJsonActive = JSON.parse(await localeJsonOutput.file('texts/en_US.json')!.async('text'));
+assert.equal(localeJsonActive.menu.title, 'First');
+assert.equal(localeJsonActive.menu.subtitle, 'Second add-on', 'non-conflicting locale JSON keys should be merged');
+assert.equal(localeJsonActive.menu.shared, 'Priority value', 'conflicting locale JSON values should retain the active priority');
+assert.ok(Object.keys(localeJsonOutput.files).some(path => path.startsWith('_autobe_conflicts/') && path.endsWith('/texts/en_US.json.backup')),
+  'the complete conflicting locale JSON should be recoverable from the conflict backup');
+console.log('✓ locale JSON merges unique keys and preserves conflicting values in a recoverable backup');
+
+
 const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
 const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
 const scriptB = 'world.afterEvents.playerSpawn.subscribe(event => console.log("handbook"));';
-const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', '__brarchive/cameras/presets.brarchive': archive('test.json', '{"preset":true}') }, '2.7.0');
+const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', 'cameras/test.json': '{"original":true}', '__brarchive/cameras/presets.brarchive': archiveEntries([{ name: 'test.json', content: '{"packed":true}' }, { name: 'index.json', content: '{"asset":"cameras/test.json"}' }]) }, '2.7.0');
 const bpB = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptB }, '2.10.0');
+const bpLegacy = await makePack('Behavior Pack', 'Legacy API Pack', { 'scripts/main.js': 'world.afterEvents.playerSpawn.subscribe(() => {});' }, '1.19.0');
 const rpA = await makePack('Resource Pack', 'First RP', {
   'entity/player.entity.json': player,
   'materials/entity.material': '{"materials":{"first":{}}}',
@@ -91,13 +131,17 @@ const rpB = await makePack('Resource Pack', 'Second RP', {
   'textures/custom/gem.png': new Uint8Array([2]),
   'textures/item_texture.json': '{"texture_data":{"second":{"textures":"textures/custom/gem"}}}'
 });
-const packs = [bpA, bpB, rpA, rpB];
+const packs = [bpA, bpB, bpLegacy, rpA, rpB];
 const result = await executeMergePacks(packs, {
   modpackName: 'Integration test',
   conflicts: await detectConflicts(packs),
   subpackSelections: [{ pack: 'Subpack fixture', variant: 'high_resolution' }]
 });
-const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'behavior_script')!.blob!);
+const scriptOutputs = result.outputs!.filter(output => output.type === 'behavior_script');
+assert.equal(scriptOutputs.length, 2, 'Script API v1 and v2 must remain separate generated behavior outputs');
+const bp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 2)!.blob!);
+const legacyBp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 1)!.blob!);
+assert.ok(legacyBp.file('scripts/main.js'), 'the Script API v1 source must remain in its own output');
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
@@ -105,6 +149,8 @@ assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('te
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
 assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/test.json'), 'packed camera presets should expand beside the archive container folder');
+assert.ok(bp.file('cameras/test.autobe-2.json'), 'a conflicting packed entry must be retained under a unique path');
+assert.equal(JSON.parse(await bp.file('cameras/index.json')!.async('text')).asset, 'cameras/test.autobe-2.json', 'archive-local references must follow the renamed duplicate');
 const mergedPlayer = JSON.parse(await rp.file('entity/player.entity.json')!.async('text'));
 const playerDescription = mergedPlayer['minecraft:client_entity'].description;
 assert.equal(playerDescription.animations.base_walk, 'animation.base.walk');
@@ -121,8 +167,8 @@ assert.equal(manifest.dependencies.find((item: any) => item.module_name === '@mi
 assert.ok(result.combinedExtras?.reportJson?.includes('Subpack fixture -> high_resolution'), 'the merge report must record the subpack variant actually supplied by the caller');
 const reparsed = await parseAddonArchive(await ensureCombinedBlob(result), 'merged.mcaddon');
 assert.deepEqual(reparsed.errors, []);
-assert.equal(reparsed.packs.length, 2, 'a combined output must reimport as its BP and RP, not mistake AutoBE report JSON for a pack manifest');
-assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Resource Pack']);
+assert.equal(reparsed.packs.length, 3, 'a combined output with two Script API groups must reimport as both BPs and the RP, not mistake AutoBE report JSON for a pack manifest');
+assert.deepEqual(reparsed.packs.map(pack => pack.type).sort(), ['Behavior Pack', 'Behavior Pack', 'Resource Pack']);
 assert.ok(reparsed.packs.some(pack => pack.name.includes('[RP]')));
 assert.ok(reparsed.packs.some(pack => pack.name.includes('Behavior')));
 console.log('✓ real merge preserves scripts, player view, camera paths, material entries, atlas references and reimport');

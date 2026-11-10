@@ -33,6 +33,37 @@ export async function validateModpackContent(
     Promise.all(behaviorZips.map(readJson))
   ]);
   const behaviorEntries = behaviorGroups.flat();
+
+  // Verify static relative module imports after script-pack namespacing. Each
+  // script output is an isolated runtime pack, so imports must resolve inside
+  // that exact archive rather than merely somewhere in the combined modpack.
+  for (let groupIndex = 0; groupIndex < behaviorZips.length; groupIndex++) {
+    const zip = behaviorZips[groupIndex];
+    const files = new Set(Object.entries(zip.files)
+      .filter(([path, file]) => !file.dir && /\.(?:[cm]?js)$/i.test(path))
+      .map(([path]) => path.replace(/\\/g, '/').toLowerCase()));
+    for (const [path, file] of Object.entries(zip.files)) {
+      if (file.dir || !/\.(?:[cm]?js)$/i.test(path)) continue;
+      const source = await file.async('text');
+      const imports = source.matchAll(/(?:\bimport\s+(?:[^'";]*?\s+from\s+)?|\bexport\s+[^'";]*?\s+from\s+|\bimport\s*\()\s*['"](\.{1,2}\/[^'"]+)['"]/g);
+      for (const match of imports) {
+        const specifier = match[1].replace(/\\/g, '/');
+        const base = path.replace(/\\/g, '/').split('/');
+        base.pop();
+        for (const segment of specifier.split('/')) {
+          if (!segment || segment === '.') continue;
+          if (segment === '..') base.pop();
+          else base.push(segment);
+        }
+        const resolved = base.join('/').toLowerCase();
+        const candidates = [resolved, resolved + '.js', resolved + '.mjs', resolved + '.cjs', resolved + '.ts', resolved + '/index.js', resolved + '/index.mjs'];
+        if (!candidates.some(candidate => files.has(candidate))) {
+          add('MISSING_SCRIPT_MODULE_IMPORT', path,
+            'Script imports "' + specifier + '", but no matching relative module exists in this generated behavior output. Imports cannot resolve across separate behavior-pack outputs.');
+        }
+      }
+    }
+  }
   const itemIds = new Set<string>();
   const blockIds = new Set<string>();
   const entityIds = new Set<string>();
@@ -151,6 +182,10 @@ export async function validateModpackContent(
     if (entry.path.toLowerCase().replace(/\\/g, '/') !== 'blocks.json') continue;
     for (const [blockId, definition] of Object.entries(entry.data || {})) {
       if (!blockId.includes(':') || blockId.startsWith('minecraft:')) continue;
+      if (!blockIds.has(blockId)) {
+        add('MISSING_CUSTOM_BLOCK_BEHAVIOR_DEFINITION', entry.path,
+          'Resource block mapping "' + blockId + '" has no matching minecraft:block definition in any generated behavior output.');
+      }
       const visit = (value: any, key = ''): void => {
         if (typeof value === 'string' &&
             ['textures', 'carried_textures', 'up', 'down', 'side', 'north', 'south', 'east', 'west'].includes(key) &&

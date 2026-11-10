@@ -154,6 +154,11 @@ interface MergeAccum {
   shared: Map<string, { kind: SharedKind; entries: SharedEntry[] }>;
   writtenBinaryPaths: Set<string>;
 }
+function validationIssueKey(issue: { code: string; path: string; message: string }): string {
+  const message = issue.message.replace(/^\[[^\]]+\]\s*/, '').replace(/\s+/g, ' ').trim();
+  return issue.code + '|' + issue.path.replace(/\\/g, '/').toLowerCase() + '|' + message;
+}
+
 function newAccum(): MergeAccum {
   return { shared: new Map(), writtenBinaryPaths: new Set() };
 }
@@ -552,10 +557,11 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const normalizedOutputPath = normalizeRegisteredUiPath(outPath);
+    const isLanguageJson = /^texts\/[^/]+\.json$/i.test(lower) && lower !== 'texts/languages.json';
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
       : isStrategyMergeFile(lower) ? 'strategy'
       : registeredUiPaths.has(normalizedOutputPath) ? 'ui'
-      : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
+      : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') || isLanguageJson ? 'deep'
       : lower.endsWith('.lang') ? 'lang' : undefined;
     if (sharedKind) {
       const group = accum.shared.get(outPath) || { kind: sharedKind, entries: [] };
@@ -811,6 +817,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     scriptMajor?: number;
     packCount: number;
     achievementsDisabled: boolean;
+    sourceBaseline: Set<string>;
   }> = [];
 
   // --- Resource Pack (always one output if any RP selected) ---
@@ -820,6 +827,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
+    const sourceBaseline = new Set<string>();
     const registeredUiPaths = await collectRegisteredUiPaths(plan.rp);
     if (iconBytes) {
       rpZip.file(assetsData.IMAGE_FFEH, iconBytes);
@@ -834,11 +842,12 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
       if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
+      const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
+      sourceIssues.forEach(issue => sourceBaseline.add(validationIssueKey(issue)));
+      mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       const aliasMaps = await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
       await applyResourceTerrainAliasMap(zip, aliasMaps.terrain);
       resourceAliasMaps.set(pack.uuid.toLowerCase(), aliasMaps);
-      const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
-      mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
       await accumulatePack(zip, rpZip, accum, renameMaps.get(pack.id), undefined, undefined, pack.name, mergeDiagnostics, pack.id, vanillaAssetWinners, conflicts, registeredUiPaths);
       // Release the loaded archive so its memory can be reclaimed now.
@@ -851,7 +860,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await mergeSubpackHudFiles(rpZip);
     await resolveHudLayoutInZip(rpZip, hudPlacement, mergeDiagnostics);
     const rpValidationIssues = await validateMergedArchive(rpZip, 'Resource Pack');
-    mergeDiagnostics.push(...rpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    mergeDiagnostics.push(...rpValidationIssues.map(issue => `${sourceBaseline.has(validationIssueKey(issue)) ? 'PRE_EXISTING_SOURCE' : 'MERGE_INTRODUCED'} ${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
     blockingValidationErrors.push(...rpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[Resource Pack] ${issue.code}: ${issue.path} — ${issue.message}`));
     const minEngine = resolveTargetEngineVersion(
       targetEngine,
@@ -920,6 +929,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     const dataModuleUUID = stablePackId(`${type}-${major ?? 'data'}-data-module`, groupPacks);
     const scriptModuleUUID = stablePackId(`${type}-${major ?? 'data'}-script-module`, groupPacks);
     const accum = newAccum();
+    const sourceBaseline = new Set<string>();
     if (iconBytes) {
       bpZip.file(assetsData.IMAGE_FFEH, iconBytes);
       accum.writtenBinaryPaths.add(assetsData.IMAGE_FFEH);
@@ -970,9 +980,10 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       } catch {
         mergeDiagnostics.push(`WARNING SOURCE_MANIFEST [${pack.name}]: Could not read the original manifest; review output dependencies.`);
       }
-      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
+      sourceIssues.forEach(issue => sourceBaseline.add(validationIssueKey(issue)));
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
+      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       if (isScriptGroup) {
         const normalizeScriptPath = (value: string) => value.split(String.fromCharCode(92)).join('/').replace(/^\.\//, '').replace(/^\/+/, '').replace(/\/{2,}/g, '/');
         const files = Object.entries(zip.files).filter(([path, file]) => !file.dir && /\.(?:[cm]?js)$/i.test(path));
@@ -1097,7 +1108,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       type: outputType,
       scriptMajor: outputType === 'behavior_script' ? major : undefined,
       packCount: groupPacks.length,
-      achievementsDisabled
+      achievementsDisabled,
+      sourceBaseline
     });
   };
   if (plan.dataBp.length > 0) {
@@ -1155,7 +1167,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   mergeDiagnostics.push(...crossPackIssues.map(issue => `WARNING ${issue.code} [${issue.path}]: ${issue.message}`));
   for (const b of builtBps) {
     const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
-    mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
+    mergeDiagnostics.push(...bpValidationIssues.map(issue => `${b.sourceBaseline.has(validationIssueKey(issue)) ? 'PRE_EXISTING_SOURCE' : 'MERGE_INTRODUCED'} ${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
     blockingValidationErrors.push(...bpValidationIssues.filter(issue => issue.severity === 'error').map(issue => `[${b.label}] ${issue.code}: ${issue.path} — ${issue.message}`));
   }
   if (blockingValidationErrors.length > 0) {

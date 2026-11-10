@@ -108,6 +108,44 @@ export async function collectRegisteredUiPathsFromZip(zip: JSZip): Promise<Set<s
   return paths;
 }
 
+async function resolveManifestText(
+  zip: JSZip,
+  rootFolder: string,
+  key: unknown,
+  fallback: string
+): Promise<string> {
+  if (typeof key !== 'string' || !key.trim()) return fallback;
+  const localizationKey = key.trim();
+  if (!/^[A-Za-z0-9_.-]+$/.test(localizationKey)) return localizationKey;
+
+  const languagesFile = zip.file(rootFolder + 'texts/languages.json');
+  let locales = ['en_US'];
+  if (languagesFile) {
+    try {
+      const parsed = JSON.parse(sanitizeJsonString(await languagesFile.async('text')));
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((value): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]+$/.test(value));
+        if (valid.length) locales = [...new Set(['en_US', ...valid])];
+      }
+    } catch { /* fall back to en_US */ }
+  }
+
+  for (const locale of locales) {
+    const file = zip.file(rootFolder + 'texts/' + locale + '.lang');
+    if (!file) continue;
+    const source = await file.async('text');
+    for (const line of source.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const equals = line.indexOf('=');
+      if (equals < 0 || line.slice(0, equals).trim() !== localizationKey) continue;
+      const value = line.slice(equals + 1).trim();
+      if (value) return value;
+    }
+  }
+  return localizationKey;
+}
+
 export function generateUUID(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     try {
@@ -384,7 +422,12 @@ export async function parseAddonArchive(
 
       packs.push({
         id: generateUUID(),
-        name: header.name || originalFileName?.replace(/\.[^/.]+$/, '') || 'Unnamed Pack',
+        name: await resolveManifestText(
+          loaded,
+          rootFolder,
+          header.name,
+          originalFileName?.replace(/\.[^/.]+$/, '') || 'Unnamed Pack'
+        ),
         type,
         version: Array.isArray(header.version) ? `v${header.version.join('.')}` : (header.version || 'v1.0.0'),
         versionArray: Array.isArray(header.version) ? header.version : [1, 0, 0],
