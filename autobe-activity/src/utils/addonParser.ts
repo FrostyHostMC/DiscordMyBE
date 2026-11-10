@@ -463,7 +463,8 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
         if (fileObj.dir) continue;
         const lower = path.toLowerCase().replace(/\\/g, '/');
         const vanillaAsset = /^textures\/(items?|blocks?|entity|models|environment|particle|gui)\//i.test(lower)
-          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
+          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower)
+          && !customAtlasPaths.has(lower);
         if (vanillaAsset) {
           const bytes = await fileObj.async('uint8array');
           const assetKey = `${pack.type}:${lower}`;
