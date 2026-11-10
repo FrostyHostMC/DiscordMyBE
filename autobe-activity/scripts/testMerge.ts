@@ -128,6 +128,21 @@ test('crafting item catalog merges categories and unique creative groups from ev
   assert.deepEqual(categories[1].groups.map((group: any) => group.group_identifier.icon), ['demo:block']);
 });
 
+test('crafting catalog unions items when add-ons reuse the same group icon', () => {
+  const merged = mergeJsonForFile('item_catalog/crafting_item_catalog.json', [
+    { 'minecraft:crafting_items_catalog': { categories: [
+      { category_name: 'equipment', groups: [{ group_identifier: { icon: 'demo:shared_icon' }, items: ['demo:sword'] }] }
+    ] } },
+    { 'minecraft:crafting_items_catalog': { categories: [
+      { category_name: 'equipment', groups: [{ group_identifier: { icon: 'demo:shared_icon' }, items: ['demo:bow', 'demo:sword'] }] }
+    ] } }
+  ]);
+  const groups = merged['minecraft:crafting_items_catalog'].categories[0].groups;
+  assert.equal(groups.length, 1, 'same icon group remains one creative group');
+  assert.deepEqual(groups[0].items, ['demo:sword', 'demo:bow'],
+    'items from both add-ons must survive even when their group icon is the same');
+});
+
 test('shared render-controller registry retains distinct controllers from colliding files', () => {
   const merged = mergeJsonForFile('render_controllers/translucence.json', [
     { format_version: '1.8.0', 'controller.render.first_addon': { geometry: 'Geometry.default', materials: [{ '*': 'Material.default' }], textures: ['Texture.default'] } },
@@ -535,6 +550,30 @@ await (async () => {
   console.log('✓ conflicting item definitions keep safe additions and preserve the full alternative for review');
 })();
 
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('spawn_rules/mob_surface.json', JSON.stringify({
+    'minecraft:spawn_rules': {
+      description: { identifier: 'demo:mob' },
+      conditions: [{ 'minecraft:spawns_on_surface': {}, 'minecraft:weight': { default: 5 } }]
+    }
+  }));
+  zip.file('spawn_rules/mob_cave.json', JSON.stringify({
+    'minecraft:spawn_rules': {
+      description: { identifier: 'demo:mob' },
+      conditions: [{ 'minecraft:spawns_on_block_filter': { blocks: ['minecraft:stone'] }, 'minecraft:weight': { default: 2 } }]
+    }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics, 'behavior');
+  const active = JSON.parse(await zip.file('spawn_rules/mob_surface.json')!.async('text'));
+  assert.equal(active['minecraft:spawn_rules'].conditions.length, 2,
+    'conditions from both add-ons must be preserved for the same entity spawn rule');
+  assert.equal(zip.file('spawn_rules/mob_cave.json'), null,
+    'the duplicate entity spawn rule is merged into one active definition');
+  console.log('✓ spawn-rule conditions from multiple add-ons are unioned without losing either rule');
+})();
 
 await (async () => {
   const zip = new JSZip();

@@ -12,6 +12,7 @@ import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { scriptModuleOutputPath } from './scriptNamespacing';
 import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
+import { validateModpackContent } from './modpackContentValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
 import { mergeJsonForFile, isPlayerAnimationStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
@@ -172,6 +173,278 @@ async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>
   return paths;
 }
 
+function collectAtlasTexturePaths(value: any): string[] {
+  const paths: string[] = [];
+  const visit = (node: any, key = '') => {
+    if (typeof node === 'string') {
+      if ((key === 'textures' || key === 'texture') && node.includes('/')) paths.push(node.replace(/^\.\//, ''));
+      return;
+    }
+    if (Array.isArray(node)) { node.forEach(child => visit(child, key)); return; }
+    if (node && typeof node === 'object') {
+      for (const [childKey, child] of Object.entries(node)) visit(child, childKey);
+    }
+  };
+  visit(value);
+  return [...new Set(paths)];
+}
+
+async function collectNamespacedAtlasAssetPaths(zip: JSZip): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(zip.files).find(path => path.toLowerCase() === atlasPath);
+    const file = sourcePath ? zip.file(sourcePath) : undefined;
+    if (!file) continue;
+    try {
+      const atlas = JSON.parse(sanitizeJsonString(await file.async('text')));
+      for (const [alias, value] of Object.entries(atlas?.texture_data || {})) {
+        if (!alias.includes(':')) continue; // Unnamespaced aliases may be vanilla overrides.
+        for (const rawPath of collectAtlasTexturePaths(value)) {
+          const normalized = rawPath.replace(/\\/g, '/').replace(/^\.\//, '');
+          const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+            ? [normalized]
+            : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+          const found = candidates.find(candidate => Object.keys(zip.files).some(path => path.toLowerCase() === candidate.toLowerCase()));
+          if (found) paths.add(found.toLowerCase());
+        }
+      }
+    } catch { /* source archive validation reports malformed atlas JSON */ }
+  }
+  return paths;
+}
+
+function fingerprintTextureBytes(bytes: Uint8Array): string {
+  let hash = 2166136261;
+  for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619);
+  return `${bytes.length}:${(hash >>> 0).toString(16)}`;
+}
+
+async function atlasAliasFingerprint(value: any, sourceZip: JSZip | null, accum: MergeAccum | null): Promise<string> {
+  const fingerprints: string[] = [];
+  for (const rawPath of collectAtlasTexturePaths(value).sort()) {
+    const normalized = rawPath.replace(/\\/g, '/').replace(/^\.\//, '');
+    const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+      ? [normalized]
+      : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+    let resolved = false;
+    for (const candidate of candidates) {
+      if (sourceZip) {
+        const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === candidate.toLowerCase());
+        const file = sourcePath ? sourceZip.file(sourcePath) : undefined;
+        if (file) {
+          fingerprints.push(`${candidate}:${fingerprintTextureBytes(await file.async('uint8array'))}`);
+          resolved = true;
+          break;
+        }
+      }
+      if (accum) {
+        const prior = [...accum.shared.entries()].find(([path]) => path.toLowerCase() === candidate.toLowerCase())?.[1];
+        if (prior?.entries.length) {
+          fingerprints.push(`${candidate}:${fingerprintTextureBytes(prior.entries[0].data)}`);
+          resolved = true;
+          break;
+        }
+      }
+    }
+    if (!resolved) fingerprints.push(`${normalized}:unresolved`);
+  }
+  return JSON.stringify(value) + '|' + fingerprints.join('|');
+}
+
+/**
+ * Atlas keys are a second identifier system inside a resource pack. Two addons
+ * can both define "shared_icon" while pointing at different images. The normal
+ * atlas union is first-wins, which silently gives the later addon's items the
+ * wrong icon. Give colliding aliases a source-local name and rewrite only
+ * texture-valued references in that same source archive before accumulation.
+ */
+async function isolateTextureAtlasAliases(
+  sourceZip: JSZip,
+  accum: MergeAccum,
+  sourceLabel: string,
+  diagnostics: string[]
+): Promise<{ item: Map<string, string>; terrain: Map<string, string> }> {
+  const allRenames = { item: new Map<string, string>(), terrain: new Map<string, string>() };
+  const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 16) || 'addon';
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === atlasPath);
+    const sourceFile = sourcePath ? sourceZip.file(sourcePath) : undefined;
+    if (!sourcePath || !sourceFile) continue;
+    let sourceAtlas: any;
+    try {
+      sourceAtlas = JSON.parse(sanitizeJsonString(await sourceFile.async('text')));
+    } catch {
+      continue; // archive validation reports malformed atlas JSON
+    }
+    const textureData = sourceAtlas.texture_data;
+    if (!textureData || typeof textureData !== 'object' || Array.isArray(textureData)) continue;
+
+    const existingAliases = new Map<string, string>();
+    const priorGroup = [...accum.shared.entries()].find(([path]) => path.toLowerCase() === atlasPath)?.[1];
+    if (priorGroup) {
+      for (const entry of priorGroup.entries) {
+        try {
+          const parsed = JSON.parse(sanitizeJsonString(new TextDecoder().decode(entry.data)));
+          for (const [alias, value] of Object.entries(parsed?.texture_data || {})) {
+            if (!existingAliases.has(alias)) existingAliases.set(alias, await atlasAliasFingerprint(value, null, accum));
+          }
+        } catch { /* malformed sources are reported by validation */ }
+      }
+    }
+
+    const occupied = new Set([...existingAliases.keys(), ...Object.keys(textureData)]);
+    const renameMap = new Map<string, string>();
+    for (const [alias, value] of Object.entries(textureData)) {
+      const prior = existingAliases.get(alias);
+      const fingerprint = await atlasAliasFingerprint(value, sourceZip, null);
+      if (prior === undefined || prior === fingerprint) {
+        if (prior === undefined) existingAliases.set(alias, fingerprint);
+        continue;
+      }
+      let replacement = `${alias}__${slug}`;
+      let suffix = 2;
+      while (occupied.has(replacement)) replacement = `${alias}__${slug}_${suffix++}`;
+      occupied.add(replacement);
+      renameMap.set(alias, replacement);
+      diagnostics.push(`INFO TEXTURE_ATLAS_ALIAS_RENAMED [${sourceLabel}:${atlasPath}]: Alias "${alias}" pointed to a different texture in an earlier add-on; renamed this add-on's alias to "${replacement}" and repaired its references.`);
+    }
+    if (!renameMap.size) continue;
+    const targetMap = atlasPath.includes('item_texture') ? allRenames.item : allRenames.terrain;
+    for (const [oldAlias, newAlias] of renameMap) targetMap.set(oldAlias, newAlias);
+
+    for (const [oldAlias, newAlias] of renameMap) {
+      textureData[newAlias] = textureData[oldAlias];
+      delete textureData[oldAlias];
+    }
+    sourceZip.file(sourcePath, JSON.stringify(sourceAtlas, null, 2));
+
+  }
+  return allRenames;
+}
+
+/** Repair legacy blocks.json terrain aliases inside the RP which owns the atlas. */
+async function applyResourceTerrainAliasMap(resourceZip: JSZip, terrainAliases: Map<string, string>): Promise<void> {
+  if (!terrainAliases.size) return;
+  const path = Object.keys(resourceZip.files).find(candidate => candidate.toLowerCase() === 'blocks.json');
+  const file = path ? resourceZip.file(path) : undefined;
+  if (!path || !file) return;
+  try {
+    const data = JSON.parse(sanitizeJsonString(await file.async('text')));
+    let changed = false;
+    for (const [blockId, definition] of Object.entries(data)) {
+      if (!definition || typeof definition !== 'object') continue;
+      const rewrite = (value: any, key = '', parentKey = ''): any => {
+        if (typeof value === 'string') {
+          const isTextureValue = key.toLowerCase() === 'textures' || key.toLowerCase() === 'texture' || parentKey.toLowerCase() === 'textures';
+          if (isTextureValue && terrainAliases.has(value)) {
+            changed = true;
+            return terrainAliases.get(value);
+          }
+          return value;
+        }
+        if (Array.isArray(value)) return value.map(item => rewrite(item, key, parentKey));
+        if (!value || typeof value !== 'object') return value;
+        const output: Record<string, any> = {};
+        for (const [childKey, child] of Object.entries(value)) output[childKey] = rewrite(child, childKey, key);
+        return output;
+      };
+      (data as any)[blockId] = rewrite(definition);
+    }
+    if (changed) resourceZip.file(path, JSON.stringify(data, null, 2));
+  } catch {
+    // Invalid blocks.json remains unchanged and is reported by archive validation.
+  }
+}
+
+/** Apply an RP atlas alias repair to the BP which explicitly depends on that RP. */
+async function applyPairedTextureAliasMaps(
+  behaviorZip: JSZip,
+  behaviorPack: AddonPack,
+  allPacks: AddonPack[],
+  aliasMapsByResourceUuid: Map<string, { item: Map<string, string>; terrain: Map<string, string> }>,
+  diagnostics: string[]
+): Promise<void> {
+  const manifestFile = behaviorZip.file('manifest.json');
+  if (!manifestFile) return;
+  let manifest: any;
+  try { manifest = JSON.parse(sanitizeJsonString(await manifestFile.async('text'))); }
+  catch { return; }
+  const resourcePacks = allPacks.filter(pack => pack.type === 'Resource Pack');
+  const matchedResourceUuids = new Set<string>();
+  // Explicit manifest dependencies are authoritative.
+  for (const dependency of Array.isArray(manifest.dependencies) ? manifest.dependencies : []) {
+    if (typeof dependency?.uuid === 'string' && aliasMapsByResourceUuid.has(dependency.uuid.toLowerCase())) {
+      matchedResourceUuids.add(dependency.uuid.toLowerCase());
+    }
+  }
+  // Some valid Bedrock add-ons omit a BP -> RP dependency. Use source archive
+  // identity only when that archive contains exactly one BP and one RP.
+  if (behaviorPack.sourceFileName) {
+    const sameSource = allPacks.filter(pack => pack.sourceFileName === behaviorPack.sourceFileName);
+    const sourceBps = sameSource.filter(pack => pack.type === 'Behavior Pack');
+    const sourceRps = sameSource.filter(pack => pack.type === 'Resource Pack');
+    if (sourceBps.length === 1 && sourceRps.length === 1) matchedResourceUuids.add(sourceRps[0].uuid.toLowerCase());
+  }
+  // Separate .mcpack uploads often have different filenames but matching pack
+  // names. Pair only when the normalized name is unique on both sides.
+  const normalizePairName = (name: string) => name.toLowerCase()
+    .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
+    .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:behavior|resource)\b$/g, '')
+    .replace(/\b(?:bp|rp)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const behaviorName = normalizePairName(behaviorPack.name);
+  if (behaviorName) {
+    const sameNameBps = allPacks.filter(pack => pack.type === 'Behavior Pack' && normalizePairName(pack.name) === behaviorName);
+    const sameNameRps = resourcePacks.filter(pack => normalizePairName(pack.name) === behaviorName);
+    if (sameNameBps.length === 1 && sameNameRps.length === 1) matchedResourceUuids.add(sameNameRps[0].uuid.toLowerCase());
+  }
+  const itemAliases = new Map<string, string>();
+  const terrainAliases = new Map<string, string>();
+  for (const uuid of matchedResourceUuids) {
+    const maps = aliasMapsByResourceUuid.get(uuid);
+    for (const [oldAlias, newAlias] of maps?.item || []) itemAliases.set(oldAlias, newAlias);
+    for (const [oldAlias, newAlias] of maps?.terrain || []) terrainAliases.set(oldAlias, newAlias);
+  }
+  if (!itemAliases.size && !terrainAliases.size) return;
+  const paths: string[] = [];
+  behaviorZip.forEach((path, file) => {
+    const lower = path.toLowerCase().replace(/\\/g, '/');
+    if (!file.dir && lower.endsWith('.json') && (lower.startsWith('items/') || lower.startsWith('blocks/'))) paths.push(path);
+  });
+  for (const path of paths) {
+    const file = behaviorZip.file(path);
+    if (!file) continue;
+    try {
+      const data = JSON.parse(sanitizeJsonString(await file.async('text')));
+      let changed = false;
+      const isItem = path.toLowerCase().replace(/\\/g, '/').startsWith('items/');
+      const aliases = isItem ? itemAliases : terrainAliases;
+      const visit = (value: any, key = '', parentKey = ''): any => {
+        if (typeof value === 'string') {
+          const relevant = isItem
+            ? key.toLowerCase() === 'texture' || key.toLowerCase() === 'minecraft:icon'
+            : key.toLowerCase() === 'texture';
+          if (relevant && aliases.has(value)) {
+            changed = true;
+            return aliases.get(value);
+          }
+          return value;
+        }
+        if (Array.isArray(value)) return value.map(item => visit(item, key, parentKey));
+        if (!value || typeof value !== 'object') return value;
+        const output: Record<string, any> = {};
+        for (const [childKey, child] of Object.entries(value)) output[childKey] = visit(child, childKey, key);
+        return output;
+      };
+      const rewritten = visit(data);
+      if (changed) behaviorZip.file(path, JSON.stringify(rewritten, null, 2));
+    } catch {
+      diagnostics.push(`WARNING TEXTURE_ALIAS_REFERENCE_UNREADABLE [${behaviorPack.name}:${path}]: Could not safely inspect this JSON file while repairing paired resource-pack texture aliases.`);
+    }
+  }
+}
+
 /** Alternative paths are only safe for definitions which Bedrock loads by ID. */
 function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
   const slash = path.lastIndexOf('/');
@@ -199,21 +472,29 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
   try {
     const data = JSON.parse(sanitizeJsonString(new TextDecoder().decode(bytes)));
     const results: Array<{ type: ConflictItem['type']; identifier: string }> = [];
-    const folder = lower.split('/').filter(Boolean).slice(-2, -1)[0] || '';
+    const segments = lower.split('/').filter(Boolean);
+    const hasFolder = (name: string) => segments.includes(name);
     const roots: Array<[string, ConflictItem['type']]> = [
       ['minecraft:entity', 'entity'], ['minecraft:client_entity', 'entity'],
-      ['minecraft:item', 'item'], ['minecraft:block', 'block'],
+      ['minecraft:item', 'item'], ['minecraft:block', 'block'], ['minecraft:attachable', 'attachable'],
+      ['minecraft:spawn_rules', 'spawn_rule'],
       ['minecraft:recipe_shaped', 'recipe'], ['minecraft:recipe_shapeless', 'recipe'],
-      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe', 'recipe']
+      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe_brewing_mix', 'recipe'],
+      ['minecraft:recipe_brewing_container', 'recipe'], ['minecraft:recipe_smithing_transform', 'recipe'],
+      ['minecraft:recipe_smithing_trim', 'recipe'], ['minecraft:recipe', 'recipe']
     ];
     for (const [root, type] of roots) {
       const identifier = data?.[root]?.description?.identifier;
       if (typeof identifier === 'string') results.push({ type, identifier });
     }
-    if (folder === 'animation_controllers') {
+    if (hasFolder('loot_tables')) {
+      const identifier = lower.replace(/^.*?loot_tables\//, '').replace(/\.json$/, '');
+      if (identifier) results.push({ type: 'loot_table', identifier });
+    }
+    if (hasFolder('animation_controllers')) {
       for (const identifier of Object.keys(data?.animation_controllers || {})) results.push({ type: 'animation_controller', identifier });
     }
-    if (folder === 'render_controllers') {
+    if (hasFolder('render_controllers')) {
       for (const identifier of Object.keys(data?.render_controllers || {})) results.push({ type: 'render_controller', identifier });
     }
     return results;
@@ -238,7 +519,8 @@ function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePac
 }
 
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = [], registeredUiPaths: Set<string> = new Set()): Promise<void> {
-  const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
+  const customAtlasPaths = await collectNamespacedAtlasAssetPaths(zip);
+  const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics, customAtlasPaths);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
@@ -283,7 +565,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       const existing = targetZip.file(outPath);
       if (!existing) targetZip.file(outPath, bytes);
       else if (!sameBytes(await existing.async('uint8array'), bytes)) {
-        const definition = lower.endsWith('.json') && /^(items|entities|blocks|entity|attachables)\//.test(lower);
+        const definition = lower.endsWith('.json') && /^(items|entities|blocks|entity|attachables|recipes|spawn_rules|loot_tables)\//.test(lower);
         let validDefinitions = definition;
         if (definition) {
           try {
@@ -388,35 +670,65 @@ function writeAccum(zip: JSZip, accum: MergeAccum, diagnostics: string[]): void 
     zip.file(path, resultBytes);
   }
 }
-function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<string, Map<string, string>> {
+function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean, packs: AddonPack[]): Map<string, Map<string, string>> {
   const renameMaps = new Map<string, Map<string, string>>();
   const occupied = new Set(conflicts.map(conflict => conflict.identifier));
+  const packById = new Map(packs.map(pack => [pack.id, pack]));
+  const normalizeName = (value: string) => value.toLowerCase()
+    .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
+    .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:behavior|resource)\b$/g, '')
+    .replace(/\b(?:bp|rp)\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const normalizeSource = (value: string) => value.toLowerCase()
+    .replace(/\.(?:mcaddon|mcpack|zip)$/i, '')
+    .replace(/(?:[_\s.-])(?:behavior|resource)(?:[_\s.-]?pack)?$/i, '')
+    .replace(/(?:[_\s.-])(?:bp|rp)$/i, '')
+    .replace(/[^a-z0-9]/g, '');
+  const pairIdentity = (pack: AddonPack) => {
+    const name = normalizeName(pack.name);
+    const source = pack.sourceFileName ? normalizeSource(pack.sourceFileName) : '';
+    return name && source ? `${name}|${source}` : name || source || pack.id;
+  };
+  const mapsByPair = new Map<string, Map<string, string>>();
+
   for (const conflict of conflicts) {
-    if (conflict.type === 'vanilla_asset' || conflict.identifier === 'minecraft:player') continue;
+    if (conflict.type === 'vanilla_asset' || conflict.type === 'loot_table' || conflict.type === 'spawn_rule' || conflict.identifier === 'minecraft:player') continue;
     if (conflict.resolution !== 'prefix_all' && (!autoPrefix || conflict.resolution === 'keep_a' || conflict.resolution === 'keep_b')) continue;
 
-    let map = renameMaps.get(conflict.packB.id);
-    if (!map) {
-      map = new Map();
-      renameMaps.set(conflict.packB.id, map);
+    const sourcePack = packById.get(conflict.packB.id);
+    const pairKey = sourcePack ? pairIdentity(sourcePack) : conflict.packB.id;
+    let pairMap = mapsByPair.get(pairKey);
+    if (!pairMap) { pairMap = new Map(); mapsByPair.set(pairKey, pairMap); }
+    let candidate = pairMap.get(conflict.identifier);
+    if (!candidate) {
+      const prefixName = (sourcePack ? normalizeName(sourcePack.name) : normalizeName(conflict.packB.name)).slice(0, 8) || 'addon';
+      const packToken = pairKey.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6) || 'pack';
+      const colon = conflict.identifier.indexOf(':');
+      const namespace = colon >= 0 ? conflict.identifier.slice(0, colon) : 'custom';
+      const path = colon >= 0 ? conflict.identifier.slice(colon + 1) : conflict.identifier;
+      const baseNamespace = `${namespace}_${prefixName}_${packToken}`;
+      candidate = `${baseNamespace}:${path}`;
+      let suffix = 2;
+      while (occupied.has(candidate)) candidate = `${baseNamespace}_${suffix++}:${path}`;
+      occupied.add(candidate);
+      pairMap.set(conflict.identifier, candidate);
     }
-    if (map.has(conflict.identifier)) continue;
 
-    const prefixName = conflict.packB.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 8) || 'addon';
-    const packToken = conflict.packB.id.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-6) || 'pack';
-    const colon = conflict.identifier.indexOf(':');
-    const namespace = colon >= 0 ? conflict.identifier.slice(0, colon) : 'custom';
-    const path = colon >= 0 ? conflict.identifier.slice(colon + 1) : conflict.identifier;
-    const baseNamespace = `${namespace}_${prefixName}_${packToken}`;
-    let candidate = `${baseNamespace}:${path}`;
-    let suffix = 2;
-    while (occupied.has(candidate)) candidate = `${baseNamespace}_${suffix++}:${path}`;
-    occupied.add(candidate);
-    map.set(conflict.identifier, candidate);
+    // Apply the exact same identifier mapping to the paired BP and RP. Their
+    // entity/client_entity identifiers (and block/item visual references)
+    // must stay synchronized even though the packs have different internal IDs.
+    const pairedPacks = sourcePack
+      ? packs.filter(pack => pairIdentity(pack) === pairKey)
+      : [sourcePack].filter(Boolean) as AddonPack[];
+    for (const pack of pairedPacks) {
+      let map = renameMaps.get(pack.id);
+      if (!map) { map = new Map(); renameMaps.set(pack.id, map); }
+      map.set(conflict.identifier, candidate);
+    }
   }
   return renameMaps;
 }
-
 function slugify(name: string, id: string): string {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 20);
   return base || id.replace(/-/g, '').slice(0, 8);
@@ -476,7 +788,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   onProgress?.('Reading addons', 10);
   const plan = buildMergePlan(packs);
   const mergeDiagnostics: string[] = [];
-  const renameMaps = buildRenameMaps(conflicts, autoPrefix);
+  const renameMaps = buildRenameMaps(conflicts, autoPrefix, packs);
   const vanillaAssetWinners = new Map<string, string>();
   for (const conflict of conflicts) {
     if (conflict.type !== 'vanilla_asset') continue;
@@ -489,6 +801,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const bundleParts: MergedOutput[] = [];
   const blockingValidationErrors: string[] = [];
   let rpHeaderUUID: string | null = null;
+  let mergedResourceZip: JSZip | null = null;
+  const resourceAliasMaps = new Map<string, { item: Map<string, string>; terrain: Map<string, string> }>();
   const builtBps: Array<{
     zip: JSZip;
     label: string;
@@ -502,6 +816,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   // --- Resource Pack (always one output if any RP selected) ---
   if (plan.rp.length > 0) {
     const rpZip = new JSZip();
+    mergedResourceZip = rpZip;
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
@@ -519,6 +834,9 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
       if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
+      const aliasMaps = await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
+      await applyResourceTerrainAliasMap(zip, aliasMaps.terrain);
+      resourceAliasMaps.set(pack.uuid.toLowerCase(), aliasMaps);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
@@ -652,6 +970,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       } catch {
         mergeDiagnostics.push(`WARNING SOURCE_MANIFEST [${pack.name}]: Could not read the original manifest; review output dependencies.`);
       }
+      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       if (isScriptGroup) {
@@ -832,6 +1151,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await yieldToUI();
     await unifyCrossGroupBps(builtBps.map(b => b.zip), mergeDiagnostics);
   }
+  const crossPackIssues = await validateModpackContent(mergedResourceZip, builtBps.map(output => output.zip));
+  mergeDiagnostics.push(...crossPackIssues.map(issue => `WARNING ${issue.code} [${issue.path}]: ${issue.message}`));
   for (const b of builtBps) {
     const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
     mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));

@@ -6,7 +6,7 @@ type Definition = { path: string; root: string; identifier: string; data: any };
 
 const DEFINITION_ROOTS = [
   'minecraft:item', 'minecraft:block', 'minecraft:entity', 'minecraft:client_entity',
-  'minecraft:attachable', 'minecraft:recipe_shaped', 'minecraft:recipe_shapeless',
+  'minecraft:attachable', 'minecraft:spawn_rules', 'minecraft:recipe_shaped', 'minecraft:recipe_shapeless',
   'minecraft:recipe_furnace', 'minecraft:recipe_brewing_mix',
   'minecraft:recipe_brewing_container', 'minecraft:recipe_smithing_transform',
   'minecraft:recipe_smithing_trim', 'minecraft:recipe'
@@ -26,8 +26,8 @@ const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|pre_animati
 function isDefinitionPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/').toLowerCase();
   const segments = normalized.split('/');
-  const folder = segments.length > 1 ? segments[segments.length - 2] : '';
-  return new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']).has(folder) ||
+  const definitionFolders = new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']);
+  return segments.some(segment => definitionFolders.has(segment)) ||
     new Set(['items.json', 'blocks.json', 'entities.json', 'entity.json', 'attachables.json', 'recipes.json']).has(segments[segments.length - 1]);
 }
 

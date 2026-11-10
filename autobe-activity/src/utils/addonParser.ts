@@ -412,6 +412,36 @@ export async function parseAddonArchive(
   return { packs, errors };
 }
 
+async function collectNamespacedAtlasAssetPaths(zip: JSZip): Promise<Set<string>> {
+  const paths = new Set<string>();
+  const collect = (value: any, key = ''): string[] => {
+    if (typeof value === 'string') return (key === 'textures' || key === 'texture') && value.includes('/') ? [value.replace(/^\.\//, '')] : [];
+    if (Array.isArray(value)) return value.flatMap(child => collect(child, key));
+    if (value && typeof value === 'object') return Object.entries(value).flatMap(([childKey, child]) => collect(child, childKey));
+    return [];
+  };
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(zip.files).find(path => path.toLowerCase() === atlasPath);
+    const file = sourcePath ? zip.file(sourcePath) : undefined;
+    if (!file) continue;
+    try {
+      const atlas = JSON.parse(sanitizeJsonString(await file.async('text')));
+      for (const [alias, value] of Object.entries(atlas?.texture_data || {})) {
+        if (!alias.includes(':')) continue;
+        for (const raw of collect(value)) {
+          const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '');
+          const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+            ? [normalized]
+            : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+          const found = candidates.find(candidate => Object.keys(zip.files).some(path => path.toLowerCase() === candidate.toLowerCase()));
+          if (found) paths.add(found.toLowerCase());
+        }
+      }
+    } catch { /* malformed atlas JSON is reported by archive validation */ }
+  }
+  return paths;
+}
+
 // Scans packs for duplicate identifiers and builds conflicts list
 export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[]> {
   const conflicts: ConflictItem[] = [];
@@ -427,12 +457,14 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
       // pipeline will actually process. Otherwise definitions stored inside
       // optimized .brarchive containers evade conflict detection.
       await expandBrarchiveFiles(zip);
+      const customAtlasPaths = await collectNamespacedAtlasAssetPaths(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
         const lower = path.toLowerCase().replace(/\\/g, '/');
         const vanillaAsset = /^textures\/(items?|blocks?|entity|models|environment|particle|gui)\//i.test(lower)
-          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower);
+          && /\.(png|tga|jpg|jpeg|webp)$/i.test(lower)
+          && !customAtlasPaths.has(lower);
         if (vanillaAsset) {
           const bytes = await fileObj.async('uint8array');
           const assetKey = `${pack.type}:${lower}`;
@@ -482,13 +514,18 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             }
           } catch { /* Invalid JSON is reported by archive validation. */ }
         }
+        const normalizedSegments = lower.split('/').filter(Boolean);
         let cat: ConflictItem['type'] | null = null;
-        if (lower.includes('entities/')) cat = 'entity';
-        else if (lower.includes('items/')) cat = 'item';
-        else if (lower.includes('blocks/')) cat = 'block';
-        else if (lower.includes('recipes/')) cat = 'recipe';
-        else if (lower.includes('animation_controllers/')) cat = 'animation_controller';
-        else if (lower.includes('render_controllers/')) cat = 'render_controller';
+        const rootFolder = normalizedSegments[0] || '';
+        if (rootFolder === 'entities' || rootFolder === 'entity') cat = 'entity';
+        else if (rootFolder === 'items') cat = 'item';
+        else if (rootFolder === 'blocks') cat = 'block';
+        else if (rootFolder === 'recipes') cat = 'recipe';
+        else if (rootFolder === 'attachables') cat = 'attachable';
+        else if (rootFolder === 'spawn_rules') cat = 'spawn_rule';
+        else if (rootFolder === 'loot_tables') cat = 'loot_table';
+        else if (rootFolder === 'animation_controllers') cat = 'animation_controller';
+        else if (rootFolder === 'render_controllers') cat = 'render_controller';
 
         if (!cat) continue;
 
@@ -496,10 +533,15 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           const txt = await fileObj.async('text');
           const json = JSON.parse(sanitizeJsonString(txt));
           let ident = '';
-          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier;
+          if (cat === 'entity') ident = json['minecraft:entity']?.description?.identifier || json['minecraft:client_entity']?.description?.identifier;
           else if (cat === 'item') ident = json['minecraft:item']?.description?.identifier;
           else if (cat === 'block') ident = json['minecraft:block']?.description?.identifier;
-          else if (cat === 'recipe') ident = json['minecraft:recipe_shaped']?.description?.identifier || json['minecraft:recipe_shapeless']?.description?.identifier;
+          else if (cat === 'attachable') ident = json['minecraft:attachable']?.description?.identifier;
+          else if (cat === 'spawn_rule') ident = json['minecraft:spawn_rules']?.description?.identifier;
+          else if (cat === 'recipe') {
+            const recipeRoots = ['minecraft:recipe_shaped', 'minecraft:recipe_shapeless', 'minecraft:recipe_furnace', 'minecraft:recipe_brewing_mix', 'minecraft:recipe_brewing_container', 'minecraft:recipe_smithing_transform', 'minecraft:recipe_smithing_trim', 'minecraft:recipe'];
+            ident = recipeRoots.map(root => json[root]?.description?.identifier).find(value => typeof value === 'string') || '';
+          } else if (cat === 'loot_table') ident = normalizedSegments.slice(1).join('/').replace(/\.json$/i, '');
           else if (cat === 'animation_controller') ident = Object.keys(json.animation_controllers || {})[0];
           else if (cat === 'render_controller') ident = Object.keys(json.render_controllers || {})[0];
 
@@ -507,15 +549,34 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             const identifierKey = `${pack.type}:${cat}:${ident}`;
             if (identifierMap.has(identifierKey)) {
               const existing = identifierMap.get(identifierKey)!;
-              const comparison = mergeAdditions(existing.data, json);
-              if (existing.packId !== pack.id && (comparison.changed || comparison.conflicts.length > 0)) {
+              let comparisonBase = existing.data;
+              let comparisonIncoming = json;
+              if (cat === 'spawn_rule') {
+                const root = 'minecraft:spawn_rules';
+                const baseConditions = Array.isArray(existing.data?.[root]?.conditions) ? existing.data[root].conditions : [];
+                const incomingConditions = Array.isArray(json?.[root]?.conditions) ? json[root].conditions : [];
+                const combinedConditions = [...baseConditions];
+                const fingerprints = new Set(combinedConditions.map((condition: any) => JSON.stringify(condition)));
+                for (const condition of incomingConditions) {
+                  const fingerprint = JSON.stringify(condition);
+                  if (!fingerprints.has(fingerprint)) { combinedConditions.push(condition); fingerprints.add(fingerprint); }
+                }
+                comparisonBase = structuredClone(existing.data);
+                comparisonIncoming = structuredClone(json);
+                comparisonBase[root].conditions = combinedConditions;
+                comparisonIncoming[root].conditions = combinedConditions;
+              }
+              const comparison = mergeAdditions(comparisonBase, comparisonIncoming);
+              const requiresWholeDefinitionChoice = ['recipe', 'attachable', 'loot_table'].includes(cat);
+              const wholeDefinitionChanged = requiresWholeDefinitionChoice && JSON.stringify(existing.data) !== JSON.stringify(json);
+              if (existing.packId !== pack.id && (comparison.conflicts.length > 0 || wholeDefinitionChanged)) {
                 conflicts.push({
                   id: generateUUID(),
                   type: cat,
                   identifier: ident,
                   packA: { id: existing.packId, name: existing.packName },
-                  packB: { id: pack.id, name: pack.name },
-                  resolution: 'keep_a'
+                  packB: { id: pack.id, name: pack.name, path },
+                  resolution: cat === 'spawn_rule' || cat === 'loot_table' ? 'keep_a' : 'prefix_all'
                 });
               }
             } else {
@@ -523,7 +584,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             }
           }
         } catch {
-          // ignore individual json parse errors
+          // Invalid JSON is surfaced by the source archive validation pass.
         }
       }
     } catch (error) {

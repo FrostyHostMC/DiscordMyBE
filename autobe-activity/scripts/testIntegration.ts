@@ -191,8 +191,8 @@ assert.notEqual(
 );
 console.log('✓ stable and beta Script API tracks stay in separate outputs');
 
-const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"a":{}}}}';
-const itemB = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"b":{}}}}';
+const itemA = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"minecraft:max_stack_size":16}}}';
+const itemB = '{"minecraft:item":{"description":{"identifier":"demo:shared"},"components":{"minecraft:max_stack_size":64}}}';
 const conflictA = await makePack('Behavior Pack', 'A', { '__brarchive/items/weapons.brarchive': archive('item.json', itemA) });
 const conflictB = await makePack('Behavior Pack', 'B', { 'items/other.json': itemB });
 const conflicts = await detectConflicts([conflictA, conflictB]);
@@ -253,3 +253,164 @@ console.log('✓ malformed merged JSON blocks output generation instead of shipp
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');
+
+async function assertRegistryConflict(type: string, path: string, root: string, identifier: string, valueKey: string) {
+  const first = await makePack('Behavior Pack', `First ${type}`, {
+    [path]: JSON.stringify({ [root]: { description: { identifier }, components: { [valueKey]: { value: 1 } } } })
+  });
+  const second = await makePack('Behavior Pack', `Second ${type}`, {
+    [path]: JSON.stringify({ [root]: { description: { identifier }, components: { [valueKey]: { value: 2 } } } })
+  });
+  const found = await detectConflicts([first, second]);
+  const conflict = found.find(conflict => conflict.type === type && conflict.identifier === identifier);
+  assert.ok(conflict, `preflight must detect duplicate ${type} identifier ${identifier}`);
+  assert.equal(conflict.resolution, type === 'spawn_rule' ? 'keep_a' : 'prefix_all',
+    `preflight must choose a preservation-safe default for ${type}`);
+}
+await assertRegistryConflict('attachable', 'attachables/tool.json', 'minecraft:attachable', 'demo:tool', 'minecraft:render');
+await assertRegistryConflict('spawn_rule', 'spawn_rules/mob.json', 'minecraft:spawn_rules', 'demo:mob', 'minecraft:spawns_on_block_filter');
+await assertRegistryConflict('recipe', 'recipes/potion.json', 'minecraft:recipe_brewing_mix', 'demo:potion_mix', 'input');
+const lootA = await makePack('Behavior Pack', 'Loot A', {
+  'loot_tables/blocks/meteorite.json': JSON.stringify({ pools: [{ rolls: 1, entries: [{ type: 'item', name: 'demo:ore_a' }] }] })
+});
+const lootB = await makePack('Behavior Pack', 'Loot B', {
+  'loot_tables/blocks/meteorite.json': JSON.stringify({ pools: [{ rolls: 1, entries: [{ type: 'item', name: 'demo:ore_b' }] }] })
+});
+const lootConflicts = await detectConflicts([lootA, lootB]);
+const lootConflict = lootConflicts.find(conflict => conflict.type === 'loot_table' && conflict.identifier === 'blocks/meteorite');
+assert.ok(lootConflict, 'preflight must detect nested loot-table path conflicts');
+assert.equal(lootConflict.resolution, 'keep_a', 'path-bound loot tables must require a deliberate winner instead of unsafe prefixing');
+console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
+
+const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
+  'textures/item_texture.json': JSON.stringify({ texture_data: { 'demo:shared_icon': { textures: 'textures/items/shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { 'demo:shared_terrain': { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/shared_icon.png': new Uint8Array([1]),
+  'textures/blocks/shared_block.png': new Uint8Array([2])
+});
+const atlasSecond = await makePack('Resource Pack', 'Second Atlas', {
+  'textures/item_texture.json': JSON.stringify({ texture_data: { 'demo:shared_icon': { textures: 'textures/items/shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { 'demo:shared_terrain': { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/shared_icon.png': new Uint8Array([3]),
+  'textures/blocks/shared_block.png': new Uint8Array([4]),
+  'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'demo:shared_terrain' } })
+});
+const atlasBehavior = await makePack('Behavior Pack', 'Second Atlas Behavior', {
+  'items/atlas_item.json': JSON.stringify({
+    'minecraft:item': {
+      description: { identifier: 'demo:atlas_item' },
+      components: { 'minecraft:icon': { texture: 'demo:shared_icon' } }
+    }
+  }),
+  'blocks/atlas_block.json': JSON.stringify({
+    'minecraft:block': {
+      description: { identifier: 'demo:atlas_block' },
+      components: { 'minecraft:material_instances': { '*': { texture: 'demo:shared_terrain' } } }
+    }
+  })
+});
+// The source archives are the same .mcaddon; this fixture intentionally
+// omits an explicit BP -> RP dependency, as some valid add-ons do.
+atlasBehavior.sourceFileName = atlasSecond.sourceFileName;
+const atlasMerged = await executeMergePacks([atlasFirst, atlasSecond, atlasBehavior], { modpackName: 'Texture Alias Preservation' });
+const atlasRp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'resource')!.blob!);
+const atlasBp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const itemAtlas = JSON.parse(await atlasRp.file('textures/item_texture.json')!.async('text'));
+const terrainAtlas = JSON.parse(await atlasRp.file('textures/terrain_texture.json')!.async('text'));
+const renamedItemAlias = Object.keys(itemAtlas.texture_data).find(key => key.startsWith('demo:shared_icon__second_atlas'));
+const renamedTerrainAlias = Object.keys(terrainAtlas.texture_data).find(key => key.startsWith('demo:shared_terrain__second_atlas'));
+assert.ok(renamedItemAlias, 'a colliding item texture alias must be preserved under a unique name');
+assert.ok(renamedTerrainAlias, 'a colliding terrain texture alias must be preserved under a unique name');
+assert.equal(Object.keys(atlasRp.files).filter(path => path.startsWith('textures/items/') && path.endsWith('.png')).length, 2,
+  'both different binary images using the same original path must survive under distinct output paths');
+assert.equal(Object.keys(atlasRp.files).filter(path => path.startsWith('textures/blocks/') && path.endsWith('.png')).length, 2,
+  'both different block textures using the same original path must survive under distinct output paths');
+const atlasItem = JSON.parse(await atlasBp.file('items/atlas_item.json')!.async('text'));
+assert.equal(atlasItem['minecraft:item'].components['minecraft:icon'].texture, renamedItemAlias,
+  'the paired behavior-pack item icon must be rewritten to the renamed resource alias');
+const atlasBlock = JSON.parse(await atlasBp.file('blocks/atlas_block.json')!.async('text'));
+assert.equal(atlasBlock['minecraft:block'].components['minecraft:material_instances']['*'].texture, renamedTerrainAlias,
+  'the paired behavior-pack block material must be rewritten to the renamed terrain alias');
+const legacyBlocks = JSON.parse(await atlasRp.file('blocks.json')!.async('text'));
+assert.equal(legacyBlocks['demo:atlas_block'].textures, renamedTerrainAlias,
+  'the resource pack legacy blocks.json mapping must follow the renamed terrain alias');
+console.log('✓ colliding item/terrain atlas aliases survive and paired BP/RP references are repaired');
+
+const brokenReferences = await makePack('Behavior Pack', 'Broken references', {
+  'items/missing_spawn_egg.json': JSON.stringify({
+    'minecraft:item': {
+      description: { identifier: 'demo:missing_spawn_egg' },
+      components: {
+        'minecraft:icon': { texture: 'demo:missing_icon' },
+        'minecraft:entity_placer': { entity: 'demo:missing_mob' }
+      }
+    }
+  }),
+  'recipes/missing_recipe.json': JSON.stringify({
+    'minecraft:recipe_shaped': {
+      description: { identifier: 'demo:missing_recipe' },
+      tags: ['crafting_table'],
+      pattern: ['A'],
+      key: { A: { item: 'demo:missing_ingredient' } },
+      result: { item: 'demo:missing_result' }
+    }
+  })
+});
+const referenceCheck = await executeMergePacks([brokenReferences], { modpackName: 'Cross Pack Reference Validation' });
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_SPAWN_EGG_ENTITY'),
+  'cross-pack validation must catch spawn eggs whose entity definition is missing');
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_CUSTOM_ITEM_ICON_ALIAS'),
+  'cross-pack validation must catch namespaced item icon aliases missing from the RP');
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_RECIPE_CONTENT_REFERENCE'),
+  'cross-pack validation must catch recipes referencing missing custom items');
+console.log('✓ cross-pack validation catches missing spawn-egg entities, item icons and recipe ingredients');
+
+const pairABehavior = await makePack('Behavior Pack', 'Pair A Behavior Pack', {
+  'entities/mob.json': JSON.stringify({
+    'minecraft:entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:health': { max: 20 } } }
+  })
+});
+const pairAResource = await makePack('Resource Pack', 'Pair A Resource Pack', {
+  'entity/mob.json': JSON.stringify({
+    'minecraft:client_entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:geometry': { default: 'geometry.pair_a' } } }
+  })
+});
+const pairBBehavior = await makePack('Behavior Pack', 'Pair B Behavior Pack', {
+  'entities/mob.json': JSON.stringify({
+    'minecraft:entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:health': { max: 40 } } }
+  })
+});
+const pairBResource = await makePack('Resource Pack', 'Pair B Resource Pack', {
+  'entity/mob.json': JSON.stringify({
+    'minecraft:client_entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:geometry': { default: 'geometry.pair_b' } } }
+  })
+});
+pairABehavior.sourceFileName = pairAResource.sourceFileName = 'PairA.mcaddon';
+pairBBehavior.sourceFileName = pairBResource.sourceFileName = 'PairB.mcaddon';
+const pairedPacks = [pairABehavior, pairAResource, pairBBehavior, pairBResource];
+const pairedConflicts = await detectConflicts(pairedPacks);
+assert.ok(pairedConflicts.some(conflict => conflict.type === 'entity' && conflict.packB.id === pairBBehavior.id));
+assert.ok(pairedConflicts.some(conflict => conflict.type === 'entity' && conflict.packB.id === pairBResource.id));
+const pairedMerge = await executeMergePacks(pairedPacks, { modpackName: 'Paired Entity Identifier Preservation', conflicts: pairedConflicts });
+const pairedBp = await JSZip.loadAsync(pairedMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const pairedRp = await JSZip.loadAsync(pairedMerge.outputs!.find(output => output.type === 'resource')!.blob!);
+const behaviorEntityIds: string[] = [];
+for (const [path, file] of Object.entries(pairedBp.files)) {
+  if (!file.dir && path.startsWith('entities/') && path.endsWith('.json')) {
+    const data = JSON.parse(await file.async('text'));
+    if (data['minecraft:entity']?.description?.identifier) behaviorEntityIds.push(data['minecraft:entity'].description.identifier);
+  }
+}
+const clientEntityIds: string[] = [];
+for (const [path, file] of Object.entries(pairedRp.files)) {
+  if (!file.dir && path.startsWith('entity/') && path.endsWith('.json')) {
+    const data = JSON.parse(await file.async('text'));
+    if (data['minecraft:client_entity']?.description?.identifier) clientEntityIds.push(data['minecraft:client_entity'].description.identifier);
+  }
+}
+const renamedBehaviorId = behaviorEntityIds.find(id => id !== 'demo:paired_mob');
+const renamedClientId = clientEntityIds.find(id => id !== 'demo:paired_mob');
+assert.ok(renamedBehaviorId, 'the second behavior entity should be safely namespaced');
+assert.equal(renamedClientId, renamedBehaviorId,
+  'the paired resource client_entity must receive the exact same rewritten identifier as its behavior entity');
+console.log('✓ paired behavior/resource entity identifiers remain synchronized when duplicate entities are prefixed');

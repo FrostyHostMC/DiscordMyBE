@@ -4,18 +4,37 @@ import { mergeAdditions, preserveConflict } from './conservativeMerge';
 
 /** Definitions with the same identifier must not be blindly overwritten.
  * Only merge unambiguous additions; leave differing existing values for review. */
-type Kind = 'entity' | 'item' | 'block' | 'attachable';
+type Kind = 'entity' | 'item' | 'block' | 'attachable' | 'spawn_rule';
 const ROOTS: Record<Kind, string> = {
-  entity: 'minecraft:entity', item: 'minecraft:item', block: 'minecraft:block', attachable: 'minecraft:attachable'
+  entity: 'minecraft:entity', item: 'minecraft:item', block: 'minecraft:block', attachable: 'minecraft:attachable', spawn_rule: 'minecraft:spawn_rules'
 };
 function classify(path: string): { kind: Kind; client: boolean } | null {
   const lower = path.toLowerCase();
   if (lower.startsWith('entity/')) return { kind: 'entity', client: true };
   if (lower.startsWith('entities/')) return { kind: 'entity', client: false };
   if (lower.startsWith('attachables/')) return { kind: 'attachable', client: false };
+  if (lower.startsWith('spawn_rules/')) return { kind: 'spawn_rule', client: false };
   if (lower.startsWith('items/')) return { kind: 'item', client: false };
   if (lower.startsWith('blocks/')) return { kind: 'block', client: false };
   return null;
+}
+
+function mergeSpawnRuleAdditions(base: any, incoming: any): { value: any; changed: boolean; conflicts: string[] } {
+  const root = 'minecraft:spawn_rules';
+  const baseCopy = structuredClone(base);
+  const incomingCopy = structuredClone(incoming);
+  const baseConditions = Array.isArray(baseCopy?.[root]?.conditions) ? baseCopy[root].conditions : [];
+  const incomingConditions = Array.isArray(incomingCopy?.[root]?.conditions) ? incomingCopy[root].conditions : [];
+  const combined = [...baseConditions];
+  const seen = new Set(combined.map(condition => JSON.stringify(condition)));
+  for (const condition of incomingConditions) {
+    const fingerprint = JSON.stringify(condition);
+    if (!seen.has(fingerprint)) { combined.push(condition); seen.add(fingerprint); }
+  }
+  if (baseCopy?.[root]) baseCopy[root].conditions = combined;
+  if (incomingCopy?.[root]) incomingCopy[root].conditions = combined;
+  const result = mergeAdditions(baseCopy, incomingCopy);
+  return { ...result, changed: result.changed || combined.length > baseConditions.length };
 }
 
 export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: string[] = [], packType?: 'resource' | 'behavior'): Promise<void> {
@@ -46,7 +65,9 @@ export async function mergeDefinitionsByIdentifier(zip: JSZip, diagnostics: stri
     let merged = first.data;
     let changed = false;
     for (const entry of entries.slice(1)) {
-      const result = mergeAdditions(merged, entry.data);
+      const result = entry.kind === 'spawn_rule'
+        ? mergeSpawnRuleAdditions(merged, entry.data)
+        : mergeAdditions(merged, entry.data);
       // Different attachable rigs must never be combined just because their
       // individual fields happen to be disjoint.
       // Attachable definitions describe one complete visual rig. Combining

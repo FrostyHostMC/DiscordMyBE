@@ -770,7 +770,7 @@ export const App: React.FC = () => {
           }}
           onAutoPrefixAll={() => {
             setConflicts((prev) =>
-              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all' }))
+              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all' }))
             );
             showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
           }}

@@ -52,7 +52,8 @@ export async function planBinaryAssetCollisions(
   targetZip: JSZip,
   sourceLabel: string,
   pathTransform?: (path: string) => string,
-  diagnostics?: string[]
+  diagnostics?: string[],
+  customAtlasPaths: Set<string> = new Set()
 ): Promise<Map<string, string>> {
   const pathMap = new Map<string, string>();
   for (const [sourcePath, sourceFile] of Object.entries(sourceZip.files)) {
@@ -65,7 +66,7 @@ export async function planBinaryAssetCollisions(
       existing.async('uint8array')
     ]);
     if (incomingBytes.length === existingBytes.length && incomingBytes.every((byte, index) => byte === existingBytes[index])) continue;
-    if (isVanillaOverridePath(normalizedPath)) {
+    if (isVanillaOverridePath(normalizedPath) && !customAtlasPaths.has(normalizedPath.toLowerCase())) {
       diagnostics?.push('WARNING VANILLA_ASSET_CONFLICT [' + normalizedPath + ']: Multiple add-ons change a vanilla-facing asset. AutoBE will not rename this path because Minecraft may rely on its original name. An explicit keep-this-add-on choice is required; current merge order determines the temporary winner.');
       continue;
     }
