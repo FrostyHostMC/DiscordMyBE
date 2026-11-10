@@ -336,3 +336,53 @@ assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_CUST
 assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_RECIPE_CONTENT_REFERENCE'),
   'cross-pack validation must catch recipes referencing missing custom items');
 console.log('✓ cross-pack validation catches missing spawn-egg entities, item icons and recipe ingredients');
+
+const pairABehavior = await makePack('Behavior Pack', 'Pair A Behavior Pack', {
+  'entities/mob.json': JSON.stringify({
+    'minecraft:entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:health': { max: 20 } } }
+  })
+});
+const pairAResource = await makePack('Resource Pack', 'Pair A Resource Pack', {
+  'entity/mob.json': JSON.stringify({
+    'minecraft:client_entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:geometry': { default: 'geometry.pair_a' } } }
+  })
+});
+const pairBBehavior = await makePack('Behavior Pack', 'Pair B Behavior Pack', {
+  'entities/mob.json': JSON.stringify({
+    'minecraft:entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:health': { max: 40 } } }
+  })
+});
+const pairBResource = await makePack('Resource Pack', 'Pair B Resource Pack', {
+  'entity/mob.json': JSON.stringify({
+    'minecraft:client_entity': { description: { identifier: 'demo:paired_mob' }, components: { 'minecraft:geometry': { default: 'geometry.pair_b' } } }
+  })
+});
+pairABehavior.sourceFileName = pairAResource.sourceFileName = 'PairA.mcaddon';
+pairBBehavior.sourceFileName = pairBResource.sourceFileName = 'PairB.mcaddon';
+const pairedPacks = [pairABehavior, pairAResource, pairBBehavior, pairBResource];
+const pairedConflicts = await detectConflicts(pairedPacks);
+assert.ok(pairedConflicts.some(conflict => conflict.type === 'entity' && conflict.packB.id === pairBBehavior.id));
+assert.ok(pairedConflicts.some(conflict => conflict.type === 'entity' && conflict.packB.id === pairBResource.id));
+const pairedMerge = await executeMergePacks(pairedPacks, { modpackName: 'Paired Entity Identifier Preservation', conflicts: pairedConflicts });
+const pairedBp = await JSZip.loadAsync(pairedMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const pairedRp = await JSZip.loadAsync(pairedMerge.outputs!.find(output => output.type === 'resource')!.blob!);
+const behaviorEntityIds: string[] = [];
+for (const [path, file] of Object.entries(pairedBp.files)) {
+  if (!file.dir && path.startsWith('entities/') && path.endsWith('.json')) {
+    const data = JSON.parse(await file.async('text'));
+    if (data['minecraft:entity']?.description?.identifier) behaviorEntityIds.push(data['minecraft:entity'].description.identifier);
+  }
+}
+const clientEntityIds: string[] = [];
+for (const [path, file] of Object.entries(pairedRp.files)) {
+  if (!file.dir && path.startsWith('entity/') && path.endsWith('.json')) {
+    const data = JSON.parse(await file.async('text'));
+    if (data['minecraft:client_entity']?.description?.identifier) clientEntityIds.push(data['minecraft:client_entity'].description.identifier);
+  }
+}
+const renamedBehaviorId = behaviorEntityIds.find(id => id !== 'demo:paired_mob');
+const renamedClientId = clientEntityIds.find(id => id !== 'demo:paired_mob');
+assert.ok(renamedBehaviorId, 'the second behavior entity should be safely namespaced');
+assert.equal(renamedClientId, renamedBehaviorId,
+  'the paired resource client_entity must receive the exact same rewritten identifier as its behavior entity');
+console.log('✓ paired behavior/resource entity identifiers remain synchronized when duplicate entities are prefixed');
