@@ -97,7 +97,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {conflicts.some(c => c.type !== 'vanilla_asset' && c.type !== 'loot_table' && c.identifier !== 'minecraft:player') && (
+          {conflicts.some(c => c.type !== 'vanilla_asset' && c.type !== 'loot_table' && c.type !== 'spawn_rule' && c.identifier !== 'minecraft:player') && (
             <button
               type="button"
               onClick={onAutoPrefixAll}
@@ -227,14 +227,14 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                   <button
                     type="button"
                     onClick={() => onUpdateResolution(c.id, 'prefix_all')}
-                    disabled={c.type === 'vanilla_asset' || c.type === 'loot_table'}
+                    disabled={c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule'}
                     className={`py-1.5 px-1 rounded-lg text-[10px] font-semibold border transition-all text-center truncate ${
-                      c.type === 'vanilla_asset' || c.type === 'loot_table' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
+                      c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule' ? 'bg-[#15111F] text-[#716885] border-[#30263F] opacity-50 cursor-not-allowed' : c.resolution === 'prefix_all'
                         ? 'bg-[#762BFF] text-white border-[#A855F7] shadow-[0_0_10px_rgba(118,43,255,0.4)]'
                         : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
                     }`}
                   >
-                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : c.type === 'loot_table' ? 'Choose One Table' : 'Prefix & Keep Both'}
+                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : c.type === 'loot_table' ? 'Choose One Table' : c.type === 'spawn_rule' ? 'Choose One Rule' : 'Prefix & Keep Both'}
                   </button>
                   <button
                     type="button"
