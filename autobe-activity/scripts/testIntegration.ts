@@ -259,29 +259,29 @@ assert.equal(lootConflict.resolution, 'keep_a', 'path-bound loot tables must req
 console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
 
 const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
-  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/shared_icon' } } }),
-  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
-  'textures/items/shared_icon.png': new Uint8Array([1]),
+  'textures/item_texture.json': JSON.stringify({ texture_data: { demo:shared_icon: { textures: 'textures/items/demo:shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { demo:shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/demo:shared_icon.png': new Uint8Array([1]),
   'textures/blocks/shared_block.png': new Uint8Array([2])
 });
 const atlasSecond = await makePack('Resource Pack', 'Second Atlas', {
-  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/shared_icon' } } }),
-  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
-  'textures/items/shared_icon.png': new Uint8Array([3]),
+  'textures/item_texture.json': JSON.stringify({ texture_data: { demo:shared_icon: { textures: 'textures/items/demo:shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { demo:shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/demo:shared_icon.png': new Uint8Array([3]),
   'textures/blocks/shared_block.png': new Uint8Array([4]),
-  'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'shared_terrain' } })
+  'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'demo:shared_terrain' } })
 });
 const atlasBehavior = await makePack('Behavior Pack', 'Second Atlas Behavior', {
   'items/atlas_item.json': JSON.stringify({
     'minecraft:item': {
       description: { identifier: 'demo:atlas_item' },
-      components: { 'minecraft:icon': { texture: 'shared_icon' } }
+      components: { 'minecraft:icon': { texture: 'demo:shared_icon' } }
     }
   }),
   'blocks/atlas_block.json': JSON.stringify({
     'minecraft:block': {
       description: { identifier: 'demo:atlas_block' },
-      components: { 'minecraft:material_instances': { '*': { texture: 'shared_terrain' } } }
+      components: { 'minecraft:material_instances': { '*': { texture: 'demo:shared_terrain' } } }
     }
   })
 });
@@ -293,8 +293,8 @@ const atlasRp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output
 const atlasBp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'behavior_data')!.blob!);
 const itemAtlas = JSON.parse(await atlasRp.file('textures/item_texture.json')!.async('text'));
 const terrainAtlas = JSON.parse(await atlasRp.file('textures/terrain_texture.json')!.async('text'));
-const renamedItemAlias = Object.keys(itemAtlas.texture_data).find(key => key.startsWith('shared_icon__second_atlas'));
-const renamedTerrainAlias = Object.keys(terrainAtlas.texture_data).find(key => key.startsWith('shared_terrain__second_atlas'));
+const renamedItemAlias = Object.keys(itemAtlas.texture_data).find(key => key.startsWith('demo:shared_icon__second_atlas'));
+const renamedTerrainAlias = Object.keys(terrainAtlas.texture_data).find(key => key.startsWith('demo:shared_terrain__second_atlas'));
 assert.ok(renamedItemAlias, 'a colliding item texture alias must be preserved under a unique name');
 assert.ok(renamedTerrainAlias, 'a colliding terrain texture alias must be preserved under a unique name');
 assert.equal(Object.keys(atlasRp.files).filter(path => path.startsWith('textures/items/') && path.endsWith('.png')).length, 2,
