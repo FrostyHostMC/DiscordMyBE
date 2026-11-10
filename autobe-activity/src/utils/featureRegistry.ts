@@ -6,7 +6,7 @@ type Definition = { path: string; root: string; identifier: string; data: any };
 
 const DEFINITION_ROOTS = [
   'minecraft:item', 'minecraft:block', 'minecraft:entity', 'minecraft:client_entity',
-  'minecraft:attachable', 'minecraft:recipe_shaped', 'minecraft:recipe_shapeless',
+  'minecraft:attachable', 'minecraft:spawn_rules', 'minecraft:recipe_shaped', 'minecraft:recipe_shapeless',
   'minecraft:recipe_furnace', 'minecraft:recipe_brewing_mix',
   'minecraft:recipe_brewing_container', 'minecraft:recipe_smithing_transform',
   'minecraft:recipe_smithing_trim', 'minecraft:recipe'
