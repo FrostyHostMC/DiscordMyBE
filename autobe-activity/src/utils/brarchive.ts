@@ -1,11 +1,8 @@
 import type JSZip from 'jszip';
 
 /**
- * Expand Bedrock .brarchive containers used by some packaged addons.
- * Format: 16-byte header, followed by count 256-byte records. Each record
- * stores a length-prefixed UTF-8 filename, payload offset at +248, and size
- * at +252. Unknown or malformed formats are rejected so the merge cannot
- * silently omit packed definitions from conflict detection or output.
+ * Expand Bedrock .brarchive containers before conflict detection and merging.
+ * The archive contains a 16-byte header and 256-byte file records.
  */
 export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): Promise<number> {
   const report = (message: string) => {
@@ -23,7 +20,6 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
     if (bytes.length < 16 || !magic.every((value, index) => bytes[index] === value)) {
       throw new Error('Unsupported .brarchive format: ' + archivePath);
     }
-
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     const count = view.getUint32(8, true);
     if (count > 10000 || 16 + count * 256 > bytes.length) {
@@ -31,9 +27,6 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
     }
     const payloadBase = 16 + count * 256;
     const archiveRelative = archivePath.replace(/^__brarchive\//i, '').replace(/\.brarchive$/i, '');
-    // The archive filename is a container label, not an output directory.
-    // Files belong beside the container in the corresponding Bedrock folder.
-    // The item catalog is the exception: its payload is a root-level catalog.
     const outputDirectory = archiveRelative.toLowerCase() === 'item_catalog'
       ? ''
       : archiveRelative.includes('/') ? archiveRelative.slice(0, archiveRelative.lastIndexOf('/')) : '';
@@ -59,62 +52,54 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
       decoded.push({ name, data: bytes.slice(start, end) });
     }
 
-    const archivePathMap = new Map<string, string>();
+    const pathMap = new Map<string, string>();
+    const destinations = new Map<string, string>();
     for (const entry of decoded) {
       const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
-      const segments = joined.split('/').filter(Boolean);
-      let outputPath = segments.join('/');
+      const outputPath = joined.split('/').filter(Boolean).join('/');
       if (!outputPath || outputPath.split('/').some(part => part === '..' || part === '.')) {
         throw new Error('Unsafe .brarchive output path in ' + archivePath + ': ' + outputPath);
       }
-
-      const existing = zip.file(outputPath);
+      let destination = outputPath;
+      const existing = zip.file(destination);
       if (existing) {
         const previous = await existing.async('uint8array');
         const identical = previous.length === entry.data.length &&
           previous.every((value, index) => value === entry.data[index]);
         if (identical) {
-          // Identical payloads need no duplicate path and no renamed references.
+          destinations.set(entry.name, destination);
           report('Duplicate identical archive entry skipped: ' + outputPath + ' (' + archivePath + ')');
           continue;
         }
-
-        // Never overwrite either payload. Keep the second payload available,
-        // but make the unresolved collision explicit: asset references may
-        // still need a semantic rewrite before this pack is runtime-safe.
         const slash = outputPath.lastIndexOf('/');
         const dot = outputPath.lastIndexOf('.');
         const stem = dot > slash ? outputPath.slice(0, dot) : outputPath;
         const extension = dot > slash ? outputPath.slice(dot) : '';
         let suffix = 2;
         do {
-          outputPath = stem + '.autobe-' + suffix++ + extension;
-        } while (zip.file(outputPath));
-        archivePathMap.set(joined, outputPath);
-        archivePathMap.set(entry.name, outputPath);
-        report(
-          'Conflicting archive path preserved as ' + outputPath +
-          '; original path was ' + joined + ' from ' + archivePath +
-          '. References inside this archive were rewritten when they used an explicit matching path; references elsewhere in the pack remain subject to dependency validation.'
-        );
+          destination = stem + '.autobe-' + suffix++ + extension;
+        } while (zip.file(destination));
+        pathMap.set(joined, destination);
+        pathMap.set(entry.name, destination);
+        report('Conflicting archive path preserved as ' + destination + '; original path was ' + joined + ' from ' + archivePath + '.');
       }
-
-      zip.file(outputPath, entry.data);
+      zip.file(destination, entry.data);
+      destinations.set(entry.name, destination);
       expandedCount++;
     }
 
-    // Rewrite only exact path-valued strings in companion files from this
-    // archive. This avoids broad regex edits to scripts, comments, or unrelated
-    // providers that may legitimately reference the original winning path.
-    if (archivePathMap.size) {
-      const replacements = [...archivePathMap.entries()].sort((a, b) => b[0].length - a[0].length);
+    // Repair exact path-valued JSON references within this archive only.
+    // Cross-pack references are checked by the merged dependency validator;
+    // a pack-wide rewrite here could redirect another add-on to the wrong asset.
+    if (pathMap.size) {
+      const replacements = [...pathMap.entries()].sort((a, b) => b[0].length - a[0].length);
       for (const entry of decoded) {
-        if (!/\\.(?:json|material)$/i.test(entry.name)) continue;
-        const joined = [outputDirectory, entry.name].filter(Boolean).join('/');
-        const destination = archivePathMap.get(joined) || archivePathMap.get(entry.name) || joined;
-        const existing = zip.file(destination);
-        if (!existing) continue;
-        const raw = await existing.async('text');
+        if (!/\.(?:json|material)$/i.test(entry.name)) continue;
+        const destination = destinations.get(entry.name);
+        if (!destination) continue;
+        const file = zip.file(destination);
+        if (!file) continue;
+        const raw = await file.async('text');
         let rewritten = raw;
         try {
           const parsed = JSON.parse(raw);
@@ -123,9 +108,9 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
               let result = value;
               for (const [oldPath, newPath] of replacements) {
                 if (result === oldPath) result = newPath;
-                const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-                const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-                if (oldWithoutExtension !== oldPath && result === oldWithoutExtension) result = newWithoutExtension;
+                const oldBare = oldPath.replace(/\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
+                const newBare = newPath.replace(/\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
+                if (oldBare !== oldPath && result === oldBare) result = newBare;
               }
               return result;
             }
@@ -137,40 +122,19 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
           };
           rewritten = JSON.stringify(visit(parsed), null, 2);
         } catch {
-          // JSONC or other text: replace only quoted exact path tokens.
+          // For JSONC, touch only quoted exact path strings, never arbitrary text.
           for (const [oldPath, newPath] of replacements) {
             rewritten = rewritten.split(JSON.stringify(oldPath)).join(JSON.stringify(newPath));
-            const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-            const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-            if (oldWithoutExtension !== oldPath) {
-              rewritten = rewritten.split(JSON.stringify(oldWithoutExtension)).join(JSON.stringify(newWithoutExtension));
-            }
+            const oldBare = oldPath.replace(/\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
+            const newBare = newPath.replace(/\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\.json)$/i, '');
+            if (oldBare !== oldPath) rewritten = rewritten.split(JSON.stringify(oldBare)).join(JSON.stringify(newBare));
           }
         }
         if (rewritten !== raw) zip.file(destination, rewritten);
       }
-      report('Applied archive-local exact path reference repair for ' + archivePathMap.size / 2 + ' duplicate mapping(s) in ' + archivePath + '.');
-    }
-    zip.remove(archivePath);');
-          const expression = new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}(?![A-Za-z0-9_./-])`, 'g');
-          source = source.replace(expression, (_match, prefix) => prefix + newPath);
-          const oldWithoutExtension = oldPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-          const newWithoutExtension = newPath.replace(/\\.(?:png|tga|jpg|jpeg|webp|ogg|wav|mp3|json|geo\\.json)$/i, '');
-          if (oldWithoutExtension !== oldPath) {
-            const extensionless = oldWithoutExtension.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\      zip.file(outputPath, entry.data);
-      expandedCount++;
-    }
-    zip.remove(archivePath);');
-            const extensionlessExpression = new RegExp(`(^|[^A-Za-z0-9_./-])${extensionless}(?![A-Za-z0-9_./-])`, 'g');
-            source = source.replace(extensionlessExpression, (_match, prefix) => prefix + newWithoutExtension);
-          }
-        }
-        if (source !== before) zip.file(destination, source);
-      }
-      report('Rewrote ' + archivePathMap.size / 2 + ' explicit duplicate path reference mapping(s) inside ' + archivePath + '.');
+      report('Applied archive-local exact path reference repairs in ' + archivePath + '.');
     }
     zip.remove(archivePath);
   }
-
   return expandedCount;
 }
