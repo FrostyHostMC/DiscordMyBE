@@ -254,3 +254,55 @@ const lootConflicts = await detectConflicts([lootA, lootB]);
 assert.ok(lootConflicts.some(conflict => conflict.type === 'loot_table' && conflict.identifier === 'blocks/meteorite'),
   'preflight must detect nested loot-table path conflicts');
 console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
+
+const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
+  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/first_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/first_block' } } }),
+  'textures/items/first_icon.png': new Uint8Array([1]),
+  'textures/blocks/first_block.png': new Uint8Array([2])
+});
+const atlasSecond = await makePack('Resource Pack', 'Second Atlas', {
+  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/second_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/second_block' } } }),
+  'textures/items/second_icon.png': new Uint8Array([3]),
+  'textures/blocks/second_block.png': new Uint8Array([4]),
+  'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'shared_terrain' } })
+});
+const atlasBehavior = await makePack('Behavior Pack', 'Second Atlas Behavior', {
+  'items/atlas_item.json': JSON.stringify({
+    'minecraft:item': {
+      description: { identifier: 'demo:atlas_item' },
+      components: { 'minecraft:icon': { texture: 'shared_icon' } }
+    }
+  }),
+  'blocks/atlas_block.json': JSON.stringify({
+    'minecraft:block': {
+      description: { identifier: 'demo:atlas_block' },
+      components: { 'minecraft:material_instances': { '*': { texture: 'shared_terrain' } } }
+    }
+  })
+});
+const atlasBehaviorZip = await JSZip.loadAsync(atlasBehavior.fileBlob!);
+const atlasBehaviorManifest = JSON.parse(await atlasBehaviorZip.file('manifest.json')!.async('text'));
+atlasBehaviorManifest.dependencies.push({ uuid: atlasSecond.uuid, version: [1, 0, 0] });
+atlasBehaviorZip.file('manifest.json', JSON.stringify(atlasBehaviorManifest));
+atlasBehavior.fileBlob = new Blob([await atlasBehaviorZip.generateAsync({ type: 'uint8array' }) as any]);
+const atlasMerged = await executeMergePacks([atlasFirst, atlasSecond, atlasBehavior], { modpackName: 'Texture Alias Preservation' });
+const atlasRp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'resource')!.blob!);
+const atlasBp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const itemAtlas = JSON.parse(await atlasRp.file('textures/item_texture.json')!.async('text'));
+const terrainAtlas = JSON.parse(await atlasRp.file('textures/terrain_texture.json')!.async('text'));
+const renamedItemAlias = Object.keys(itemAtlas.texture_data).find(key => key.startsWith('shared_icon__second_atlas'));
+const renamedTerrainAlias = Object.keys(terrainAtlas.texture_data).find(key => key.startsWith('shared_terrain__second_atlas'));
+assert.ok(renamedItemAlias, 'a colliding item texture alias must be preserved under a unique name');
+assert.ok(renamedTerrainAlias, 'a colliding terrain texture alias must be preserved under a unique name');
+const atlasItem = JSON.parse(await atlasBp.file('items/atlas_item.json')!.async('text'));
+assert.equal(atlasItem['minecraft:item'].components['minecraft:icon'].texture, renamedItemAlias,
+  'the paired behavior-pack item icon must be rewritten to the renamed resource alias');
+const atlasBlock = JSON.parse(await atlasBp.file('blocks/atlas_block.json')!.async('text'));
+assert.equal(atlasBlock['minecraft:block'].components['minecraft:material_instances']['*'].texture, renamedTerrainAlias,
+  'the paired behavior-pack block material must be rewritten to the renamed terrain alias');
+const legacyBlocks = JSON.parse(await atlasRp.file('blocks.json')!.async('text'));
+assert.equal(legacyBlocks['demo:atlas_block'].textures, renamedTerrainAlias,
+  'the resource pack legacy blocks.json mapping must follow the renamed terrain alias');
+console.log('✓ colliding item/terrain atlas aliases survive and paired BP/RP references are repaired');
