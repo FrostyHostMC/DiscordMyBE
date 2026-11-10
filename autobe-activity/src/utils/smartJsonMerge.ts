@@ -211,16 +211,30 @@ function mergeCatGroup(mergedCat: any, newCat: any): void {
     const cname = nc.category_name;
     if (existing.has(cname)) {
       const eg = (existing.get(cname).groups ??= []);
-      const icons = new Set(
-        eg.filter((g: any) => g && typeof g === 'object').map((g: any) => g.group_identifier?.icon)
-      );
-      for (const ng of nc.groups ?? []) {
-        if (ng && typeof ng === 'object') {
-          const icon = ng.group_identifier?.icon;
-          if (!icons.has(icon)) {
-            eg.push(ng);
-            icons.add(icon);
-          }
+      const groupKey = (group: any) => {
+        if (typeof group?.group_identifier?.icon === 'string' && group.group_identifier.icon) return `icon:${group.group_identifier.icon}`;
+        if (group?.group_identifier && typeof group.group_identifier === 'object') return `identifier:${JSON.stringify(group.group_identifier)}`;
+        return `group:${JSON.stringify(group)}`;
+      };
+      const groupsByKey = new Map<string, any>();
+      for (const group of eg) if (group && typeof group === 'object') groupsByKey.set(groupKey(group), group);
+      for (const incomingGroup of nc.groups ?? []) {
+        if (!incomingGroup || typeof incomingGroup !== 'object') continue;
+        const key = groupKey(incomingGroup);
+        const current = groupsByKey.get(key);
+        if (!current) {
+          const cloned = structuredClone(incomingGroup);
+          eg.push(cloned);
+          groupsByKey.set(key, cloned);
+          continue;
+        }
+        // A shared icon does not mean the groups contain the same items.
+        // Union the item identifiers instead of discarding the later group.
+        if (Array.isArray(incomingGroup.items)) {
+          current.items = unionMergeList(Array.isArray(current.items) ? current.items : [], incomingGroup.items);
+        }
+        for (const [field, value] of Object.entries(incomingGroup)) {
+          if (!(field in current) && field !== 'items') current[field] = structuredClone(value);
         }
       }
     } else {
