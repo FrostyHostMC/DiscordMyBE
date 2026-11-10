@@ -573,6 +573,47 @@ await (async () => {
   assert.equal(zip.file('spawn_rules/mob_cave.json'), null,
     'the duplicate entity spawn rule is merged into one active definition');
   console.log('✓ spawn-rule conditions from multiple add-ons are unioned without losing either rule');
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('blocks/rug.json', JSON.stringify({
+    format_version: '1.21.10',
+    'minecraft:block': { description: { identifier: 'ff:white_rug' }, components: { 'minecraft:geometry': { identifier: 'geometry.rug' } } }
+  }));
+  zip.file('blocks/white_rug.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:white_rug' }, components: { 'minecraft:geometry': { identifier: 'geometry.rug' } } }
+  }));
+  zip.file('blocks/toilet_paper_holder.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:toilet_paper_holder' }, components: {
+      'minecraft:selection_box': { origin: [-6, 4, 2], size: [12, 10, 6] },
+      'minecraft:collision_box': { origin: [-6, 4, 2], size: [12, 10, 6] }
+    } }
+  }));
+  zip.file('blocks/toilet_paper_support.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:toilet_paper_holder' }, components: {
+      'minecraft:selection_box': { origin: [-8, 0, 0], size: [16, 16, 16] },
+      'minecraft:collision_box': { origin: [-8, 0, 0], size: [16, 16, 16] }
+    } }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics, 'behavior');
+  const rug = JSON.parse(await zip.file('blocks/rug.json')!.async('text'));
+  assert.equal(rug.format_version, '1.21.30', 'format_version-only duplicates should merge without a conflict');
+  assert.equal(zip.file('blocks/white_rug.json'), null);
+  assert.ok(!diagnostics.some(message => message.includes('DEFINITION_PARTIAL_CONFLICT') && message.includes('ff:white_rug')));
+  const holder = JSON.parse(await zip.file('blocks/toilet_paper_holder.json')!.async('text'));
+  assert.deepEqual(holder['minecraft:block'].components['minecraft:collision_box'].size, [12, 10, 6],
+    'the first-priority holder dimensions must remain active');
+  assert.ok(diagnostics.some(message => message.includes('DEFINITION_STRUCTURAL_CONFLICT') && message.includes('ff:toilet_paper_holder')),
+    'different collision/selection dimensions must be explicitly reported');
+  assert.ok(Object.keys(zip.files).some(path => path.includes('toilet_paper_support.json.backup')),
+    'the alternative block definition must remain recoverable');
+  console.log('✓ white rug format-only duplicate merges cleanly; toilet holder structural conflict stays intact and is reported');
+})();
+
 })();
 
 await (async () => {
@@ -723,17 +764,16 @@ await (async () => {
     'world.afterEvents.itemUse?.subscribe?.((event) => {});'
   ].join('\n'));
 
+  const original = await zip.file('scripts/main.js')!.async('text');
   const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(changed, 1);
+  assert.equal(changed, 0, 'third-party JavaScript is no longer rewritten by regex');
   const output = await zip.file('scripts/main.js')!.async('text');
-  assert.ok(output.includes('world?.afterEvents?.cameraChange?.subscribe?.('));
-  assert.ok(output.includes('world?.beforeEvents?.inventory?.drop?.subscribe?.('));
-  assert.ok(output.includes('world?.afterEvents?.itemUse?.subscribe?.('));
-  assert.equal(diagnostics.filter(message => message.includes('Guarded statically-addressed')).length, 1);
+  assert.equal(output, original, 'all source script text must remain unchanged');
+  assert.ok(diagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')));
 
   const secondPass = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(secondPass, 0, 'event guard pass must be idempotent');
-  console.log('✓ unavailable Script API event subscriptions are guarded without add-on-specific rules');
+  assert.equal(secondPass, 0, 'the preservation pass must remain idempotent');
+  console.log('✓ arbitrary Script API event subscriptions remain byte-for-byte intact');
 })();
 
 
@@ -752,27 +792,13 @@ await (async () => {
     '};',
     'inventory.setItem(8, item);'
   ].join('\n'));
+  const original = await zip.file('scripts/legacy-item.js')!.async('text');
   const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(changed, 1);
+  assert.equal(changed, 0);
   const output = await zip.file('scripts/legacy-item.js')!.async('text');
-  assert.ok(output.includes('new AutoBEItemStack("minecraft:stick", 1)'));
-  assert.ok(output.includes('ItemLockMode as AutoBEItemLockMode'));
-  assert.ok(output.includes('item.lockMode = AutoBEItemLockMode.slot'));
-  assert.ok(output.includes('item.setCanDestroy([])'));
-  assert.ok(diagnostics.some(message => message.includes('Converted legacy plain-object ItemStack')));
-
-  const unsafe = new JSZip();
-  const unsafeDiagnostics: string[] = [];
-  unsafe.file('scripts/unsafe-item.js', [
-    'const item = { typeId: "custom:item", amount: 1, components: { "minecraft:custom_component": { value: 2 } } };',
-    'inventory.setItem(0, item);'
-  ].join('\n'));
-  await guardUnavailableEventSubscriptions(unsafe, unsafeDiagnostics);
-  const preserved = await unsafe.file('scripts/unsafe-item.js')!.async('text');
-  assert.ok(preserved.includes('"minecraft:custom_component"'));
-  assert.ok(preserved.includes('const item = {'));
-  assert.ok(unsafeDiagnostics.some(message => message.includes('was not rewritten')));
-  console.log('✓ legacy plain-object ItemStacks are converted only when recognized; unknown components are preserved with diagnostics');
+  assert.equal(output, original, 'legacy object-shaped ItemStack code must not be rewritten without AST validation');
+  assert.ok(diagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')));
+  console.log('✓ legacy object-shaped ItemStack code is preserved rather than regex-rewritten');
 })();
 
 

@@ -14,6 +14,7 @@ JSZip.prototype.loadAsync = (async function (this: JSZip, input: any, ...args: a
 const { parseAddonArchive, detectConflicts, sanitizeJsonString } = await import('../src/utils/addonParser.ts');
 const { executeMergePacks, ensureCombinedBlob, buildMergePlan } = await import('../src/utils/mergeEngine.ts');
 const { applySubpackSelection } = await import('../src/utils/subpackProcessor.ts');
+const { guardUnavailableEventSubscriptions } = await import('../src/utils/scriptCompatibility.ts');
 
 let nextId = 0;
 async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, files: Record<string, string | Uint8Array>, scriptVersion?: string) {
@@ -49,6 +50,29 @@ function archive(name: string, content: string): Uint8Array {
   return result;
 }
 
+// Regression: language registries and translation keys must survive shared BP merging.
+const languagePackA = await makePack('Behavior Pack', 'Language A', {
+  'texts/languages.json': JSON.stringify(['en_US']),
+  'texts/en_US.lang': 'pack.name=Pack A\npack.description=Description A\ndemo:item.a=Alpha\n'
+});
+const languagePackB = await makePack('Behavior Pack', 'Language B', {
+  'texts/languages.json': JSON.stringify(['en_US', 'zh_CN', 'es_ES']),
+  'texts/en_US.lang': 'pack.name=Pack B\npack.description=Description B\ndemo:item.b=Bravo\n'
+});
+const languageMerge = await executeMergePacks([languagePackA, languagePackB], {
+  modpackName: 'Language merge regression',
+  conflicts: await detectConflicts([languagePackA, languagePackB])
+});
+const languageOutput = await JSZip.loadAsync(languageMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const mergedLanguages = JSON.parse(await languageOutput.file('texts/languages.json')!.async('text'));
+assert.deepEqual(mergedLanguages, ['en_US', 'zh_CN', 'es_ES'], 'all supported language codes must be unioned');
+const mergedTranslations = await languageOutput.file('texts/en_US.lang')!.async('text');
+assert.ok(mergedTranslations.includes('demo:item.a=Alpha'));
+assert.ok(mergedTranslations.includes('demo:item.b=Bravo'));
+assert.ok(mergedTranslations.includes('pack.name=Pack A'), 'priority winner pack metadata must remain stable');
+assert.ok(!mergedTranslations.includes('pack.name=Pack B'), 'conflicting pack metadata must not overwrite priority winner');
+console.log('✓ language codes and unique translation keys survive BP merge while pack metadata priority remains stable');
+
 const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
 const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
@@ -77,7 +101,7 @@ const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
-assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, 'world?.afterEvents?.playerSpawn?.subscribe?.(event => console.log("handbook"));'].sort());
+assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, scriptB].sort());
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
 assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/test.json'), 'packed camera presets should expand beside the archive container folder');
@@ -335,6 +359,29 @@ const legacyBlocks = JSON.parse(await atlasRp.file('blocks.json')!.async('text')
 assert.equal(legacyBlocks['demo:atlas_block'].textures, renamedTerrainAlias,
   'the resource pack legacy blocks.json mapping must follow the renamed terrain alias');
 console.log('✓ colliding item/terrain atlas aliases survive and paired BP/RP references are repaired');
+
+const scriptRepairFixture = new JSZip();
+const originalScript = [
+  '// world?.beforeEvents?.entityHurt?.subscribe(event => {',
+  '  try {',
+  '    const value = event.damage;',
+  '  } catch (error) {}',
+  '}, { entityFilter: { type: "demo:mob" } });',
+  'world.beforeEvents.entityHurt.subscribe(event => {',
+  '  event.cancel = false;',
+  '});'
+].join('\\n');
+scriptRepairFixture.file('scripts/libs/boss_attack_utils.js', originalScript);
+const scriptRepairDiagnostics: string[] = [];
+const changedScriptCount = await guardUnavailableEventSubscriptions(scriptRepairFixture, scriptRepairDiagnostics);
+assert.equal(changedScriptCount, 0, 'untrusted third-party JavaScript must not be regex-rewritten');
+assert.equal(await scriptRepairFixture.file('scripts/libs/boss_attack_utils.js')!.async('text'), originalScript,
+  'comments and callback bodies must remain byte-for-byte unchanged');
+assert.ok(scriptRepairDiagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')),
+  'the report must disclose that automatic script rewriting was skipped');
+console.log('✓ arbitrary add-on JavaScript and event-like comments are preserved without regex rewriting');
+
+
 
 const brokenReferences = await makePack('Behavior Pack', 'Broken references', {
   'items/missing_spawn_egg.json': JSON.stringify({
