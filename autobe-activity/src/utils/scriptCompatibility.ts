@@ -133,30 +133,26 @@ function guardEventSubscriptions(source: string, path: string, diagnostics: stri
   return { source: updated, changed };
 }
 
+/**
+ * Do not rewrite arbitrary add-on JavaScript with regular expressions.
+ *
+ * A previous event-subscription guard matched text inside comments and could
+ * comment out the opening of a callback while leaving its body active. That
+ * produced invalid scripts in generated packs (for example, an orphaned
+ * closing `});` in boss_attack_utils.js).
+ *
+ * Keep every source script byte-for-byte intact until an AST-based transform
+ * can prove that edits preserve syntax and comment boundaries. Compatibility
+ * issues are reported by archive/runtime validation instead of mutating code.
+ */
 export async function guardUnavailableEventSubscriptions(zip: JSZip, diagnostics?: string[]): Promise<number> {
-  const report = (message: string) => {
-    if (diagnostics) diagnostics.push(message);
-    else console.warn('[AutoBE] ' + message);
-  };
-  const targets: string[] = [];
+  let scriptCount = 0;
   zip.forEach((path, file) => {
-    if (!file.dir && /\.(?:[cm]?js)$/i.test(path)) targets.push(path);
+    if (!file.dir && /\\.(?:[cm]?js)$/i.test(path)) scriptCount++;
   });
-
-  let changedFiles = 0;
-  for (const path of targets) {
-    const file = zip.file(path);
-    if (!file) continue;
-    const original = await file.async('text');
-    const localDiagnostics: string[] = [];
-    const guarded = guardEventSubscriptions(original, path, localDiagnostics);
-    const repaired = repairRecognizableLegacyItemStacks(guarded.source, path, localDiagnostics);
-    for (const message of localDiagnostics) report(message);
-    if (repaired.source !== original) {
-      zip.file(path, repaired.source);
-      changedFiles++;
-      report('Applied generic Script API compatibility repairs in ' + path + '.');
-    }
-  }
-  return changedFiles;
+  const message = 'Skipped automatic JavaScript source rewrites for ' + scriptCount +
+    ' script file(s). AutoBE preserves original script bytes because regex-based event and ItemStack repairs can corrupt comments or syntax; compatibility changes require a syntax-validated AST transform.';
+  if (diagnostics) diagnostics.push(message);
+  else console.warn('[AutoBE] ' + message);
+  return 0;
 }
