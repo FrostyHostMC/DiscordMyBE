@@ -290,7 +290,7 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       const existing = targetZip.file(outPath);
       if (!existing) targetZip.file(outPath, bytes);
       else if (!sameBytes(await existing.async('uint8array'), bytes)) {
-        const definition = lower.endsWith('.json') && /^(items|entities|blocks|entity|attachables|recipes|spawn_rules)\//.test(lower);
+        const definition = lower.endsWith('.json') && /^(items|entities|blocks|entity|attachables|recipes|spawn_rules|loot_tables)\//.test(lower);
         let validDefinitions = definition;
         if (definition) {
           try {
