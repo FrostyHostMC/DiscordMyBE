@@ -751,27 +751,13 @@ await (async () => {
     '};',
     'inventory.setItem(8, item);'
   ].join('\n'));
+  const original = await zip.file('scripts/legacy-item.js')!.async('text');
   const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(changed, 1);
+  assert.equal(changed, 0);
   const output = await zip.file('scripts/legacy-item.js')!.async('text');
-  assert.ok(output.includes('new AutoBEItemStack("minecraft:stick", 1)'));
-  assert.ok(output.includes('ItemLockMode as AutoBEItemLockMode'));
-  assert.ok(output.includes('item.lockMode = AutoBEItemLockMode.slot'));
-  assert.ok(output.includes('item.setCanDestroy([])'));
-  assert.ok(diagnostics.some(message => message.includes('Converted legacy plain-object ItemStack')));
-
-  const unsafe = new JSZip();
-  const unsafeDiagnostics: string[] = [];
-  unsafe.file('scripts/unsafe-item.js', [
-    'const item = { typeId: "custom:item", amount: 1, components: { "minecraft:custom_component": { value: 2 } } };',
-    'inventory.setItem(0, item);'
-  ].join('\n'));
-  await guardUnavailableEventSubscriptions(unsafe, unsafeDiagnostics);
-  const preserved = await unsafe.file('scripts/unsafe-item.js')!.async('text');
-  assert.ok(preserved.includes('"minecraft:custom_component"'));
-  assert.ok(preserved.includes('const item = {'));
-  assert.ok(unsafeDiagnostics.some(message => message.includes('was not rewritten')));
-  console.log('✓ legacy plain-object ItemStacks are converted only when recognized; unknown components are preserved with diagnostics');
+  assert.equal(output, original, 'legacy object-shaped ItemStack code must not be rewritten without AST validation');
+  assert.ok(diagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')));
+  console.log('✓ legacy object-shaped ItemStack code is preserved rather than regex-rewritten');
 })();
 
 
