@@ -573,6 +573,47 @@ await (async () => {
   assert.equal(zip.file('spawn_rules/mob_cave.json'), null,
     'the duplicate entity spawn rule is merged into one active definition');
   console.log('✓ spawn-rule conditions from multiple add-ons are unioned without losing either rule');
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('blocks/rug.json', JSON.stringify({
+    format_version: '1.21.10',
+    'minecraft:block': { description: { identifier: 'ff:white_rug' }, components: { 'minecraft:geometry': { identifier: 'geometry.rug' } } }
+  }));
+  zip.file('blocks/white_rug.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:white_rug' }, components: { 'minecraft:geometry': { identifier: 'geometry.rug' } } }
+  }));
+  zip.file('blocks/toilet_paper_holder.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:toilet_paper_holder' }, components: {
+      'minecraft:selection_box': { origin: [-6, 4, 2], size: [12, 10, 6] },
+      'minecraft:collision_box': { origin: [-6, 4, 2], size: [12, 10, 6] }
+    } }
+  }));
+  zip.file('blocks/toilet_paper_support.json', JSON.stringify({
+    format_version: '1.21.30',
+    'minecraft:block': { description: { identifier: 'ff:toilet_paper_holder' }, components: {
+      'minecraft:selection_box': { origin: [-8, 0, 0], size: [16, 16, 16] },
+      'minecraft:collision_box': { origin: [-8, 0, 0], size: [16, 16, 16] }
+    } }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics, 'behavior');
+  const rug = JSON.parse(await zip.file('blocks/rug.json')!.async('text'));
+  assert.equal(rug.format_version, '1.21.30', 'format_version-only duplicates should merge without a conflict');
+  assert.equal(zip.file('blocks/white_rug.json'), null);
+  assert.ok(!diagnostics.some(message => message.includes('DEFINITION_PARTIAL_CONFLICT') && message.includes('ff:white_rug')));
+  const holder = JSON.parse(await zip.file('blocks/toilet_paper_holder.json')!.async('text'));
+  assert.deepEqual(holder['minecraft:block'].components['minecraft:collision_box'].size, [12, 10, 6],
+    'the first-priority holder dimensions must remain active');
+  assert.ok(diagnostics.some(message => message.includes('DEFINITION_STRUCTURAL_CONFLICT') && message.includes('ff:toilet_paper_holder')),
+    'different collision/selection dimensions must be explicitly reported');
+  assert.ok(Object.keys(zip.files).some(path => path.includes('toilet_paper_support.json.backup')),
+    'the alternative block definition must remain recoverable');
+  console.log('✓ white rug format-only duplicate merges cleanly; toilet holder structural conflict stays intact and is reported');
+})();
+
 })();
 
 await (async () => {
