@@ -483,7 +483,6 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
           } catch { /* Invalid JSON is reported by archive validation. */ }
         }
         const normalizedSegments = lower.split('/').filter(Boolean);
-        const folder = normalizedSegments.length > 1 ? normalizedSegments[normalizedSegments.length - 2] : '';
         let cat: ConflictItem['type'] | null = null;
         if (normalizedSegments.includes('entities') || normalizedSegments.includes('entity')) cat = 'entity';
         else if (normalizedSegments.includes('items')) cat = 'item';
@@ -518,7 +517,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             if (identifierMap.has(identifierKey)) {
               const existing = identifierMap.get(identifierKey)!;
               const comparison = mergeAdditions(existing.data, json);
-              if (existing.packId !== pack.id && (comparison.changed || comparison.conflicts.length > 0)) {
+              if (existing.packId !== pack.id && comparison.conflicts.length > 0) {
                 conflicts.push({
                   id: generateUUID(),
                   type: cat,
