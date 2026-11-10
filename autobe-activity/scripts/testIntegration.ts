@@ -212,6 +212,30 @@ const overlay = await applySubpackSelection(new Blob([await variant.generateAsyn
 assert.equal(await (await JSZip.loadAsync(overlay)).file('ui/sample.json')!.async('text'), 'selected');
 console.log('✓ selected subpack overrides the base regardless of archive order');
 
+// Manifest-declared empty variants are valid Bedrock subpacks. They may have
+// no files or directory entry in the ZIP; selecting one must still succeed,
+// strip the subpack metadata, and avoid leaking files from another variant.
+const emptyVariant = new JSZip();
+emptyVariant.file('manifest.json', JSON.stringify({
+  format_version: 2,
+  header: { name: 'Refine Sounds', description: 'Test', uuid: '11111111-1111-4111-8111-111111111111', version: [1, 0, 0] },
+  modules: [{ type: 'resources', uuid: '22222222-2222-4222-8222-222222222222', version: [1, 0, 0] }],
+  subpacks: [{ folder_name: 'only_sounds', name: 'Only Sounds' }, { folder_name: 'with_particles', name: 'With Particles' }]
+}));
+emptyVariant.file('subpacks/with_particles/particles/spark.json', '{"particle_effect":{}}');
+emptyVariant.file('sounds/sound_definitions.json', '{"sound_definitions":{}}');
+const emptyVariantOutput = await applySubpackSelection(
+  new Blob([await emptyVariant.generateAsync({ type: 'uint8array' }) as any]),
+  'only_sounds'
+);
+const emptyVariantZip = await JSZip.loadAsync(emptyVariantOutput);
+const emptyVariantManifest = JSON.parse(await emptyVariantZip.file('manifest.json')!.async('text'));
+assert.equal(emptyVariantManifest.subpacks, undefined, 'selected empty variant must be finalized like any other selection');
+assert.ok(emptyVariantZip.file('sounds/sound_definitions.json'), 'base sounds must remain available to the empty overlay');
+assert.equal(emptyVariantZip.file('particles/spark.json'), null, 'files from unselected variants must not leak into the selected output');
+console.log('✓ manifest-declared empty subpacks can be selected without a physical folder');
+
+
 const missing = await makePack('Behavior Pack', 'Missing entry', {}, '2.0.0');
 const missingResult = await executeMergePacks([missing], { modpackName: 'Missing' });
 assert.ok(missingResult.outputs?.some(output => output.type === 'behavior_data'), 'a stale script declaration without JavaScript must preserve data as a data-only pack');
