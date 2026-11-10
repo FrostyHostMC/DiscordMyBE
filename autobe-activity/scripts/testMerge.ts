@@ -267,6 +267,8 @@ test('Script API dependency versions normalize strings, numeric arrays, and JSON
   assert.equal(normalizeScriptApiVersion('[2, 10, 0]'), '2.10.0');
   assert.deepEqual(scriptApiVerTuple([2, 10, 0]), [2, 10, 0, 0]);
   assert.equal(highestFullScriptVersion(['2.4.0', [2, 10, 0], '2.9.0']), '2.10.0');
+  assert.equal(highestFullScriptVersion(['2.7.0-beta', '2.7.0']), '2.7.0',
+    'a stable release must outrank its prerelease');
   assert.equal(highestFullScriptVersion([null, undefined, '']), null);
 });
 
