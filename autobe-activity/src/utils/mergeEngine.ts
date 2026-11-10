@@ -366,6 +366,7 @@ async function applyPairedTextureAliasMaps(
   const normalizePairName = (name: string) => name.toLowerCase()
     .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
     .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:behavior|resource)\b$/g, '')
     .replace(/\b(?:bp|rp)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
   const behaviorName = normalizePairName(behaviorPack.name);
@@ -651,6 +652,7 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean, packs: 
   const normalizeName = (value: string) => value.toLowerCase()
     .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
     .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:behavior|resource)\b$/g, '')
     .replace(/\b(?:bp|rp)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
   const normalizeSource = (value: string) => value.toLowerCase()
