@@ -580,11 +580,6 @@ await (async () => {
   const diagnostics: string[] = [];
   zip.file('items/utility_item.json', JSON.stringify({
     'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:icon': { texture: 'utility_item' } } }
-  }));await (async () => {
-  const zip = new JSZip();
-  const diagnostics: string[] = [];
-  zip.file('items/utility_item.json', JSON.stringify({
-    'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:icon': { texture: 'utility_item' } } }
   }));
   zip.file('items/utility_item_extra.json', JSON.stringify({
     'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:food': { nutrition: 2, can_always_eat: true } } }
