@@ -12,6 +12,7 @@ import { mergeSubpackHudFiles } from './subpackHudMerge';
 import { scriptModuleOutputPath } from './scriptNamespacing';
 import { stableUUID } from './stableUuid';
 import { validateMergedArchive } from './mergedArchiveValidation';
+import { validateModpackContent } from './modpackContentValidation';
 import { planBinaryAssetCollisions, rewriteAssetReferences, isVanillaOverridePath, applyVanillaAssetResolutions } from './assetCollision';
 import { mergeAdditions, preserveConflict, sameBytes } from './conservativeMerge';
 import { mergeJsonForFile, isPlayerAnimationStrategyFile, isAnimationRegistryStrategyFile, isCraftingItemCatalogStrategyFile, isUiMergeStrategyFile } from './smartJsonMerge';
@@ -690,6 +691,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const bundleParts: MergedOutput[] = [];
   const blockingValidationErrors: string[] = [];
   let rpHeaderUUID: string | null = null;
+  let mergedResourceZip: JSZip | null = null;
   const resourceAliasMaps = new Map<string, { item: Map<string, string>; terrain: Map<string, string> }>();
   const builtBps: Array<{
     zip: JSZip;
@@ -704,6 +706,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   // --- Resource Pack (always one output if any RP selected) ---
   if (plan.rp.length > 0) {
     const rpZip = new JSZip();
+    mergedResourceZip = rpZip;
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
@@ -1038,6 +1041,8 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     await yieldToUI();
     await unifyCrossGroupBps(builtBps.map(b => b.zip), mergeDiagnostics);
   }
+  const crossPackIssues = await validateModpackContent(mergedResourceZip, builtBps.map(output => output.zip));
+  mergeDiagnostics.push(...crossPackIssues.map(issue => `WARNING ${issue.code} [${issue.path}]: ${issue.message}`));
   for (const b of builtBps) {
     const bpValidationIssues = await validateMergedArchive(b.zip, b.label);
     mergeDiagnostics.push(...bpValidationIssues.map(issue => `${issue.severity.toUpperCase()} ${issue.code} [${issue.path}]: ${issue.message}`));
