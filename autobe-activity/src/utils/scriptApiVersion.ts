@@ -31,7 +31,7 @@ export function normalizeScriptApiVersion(value: unknown): string | null {
 export function scriptApiVerTuple(v: unknown): [number, number, number, number] {
   try {
     const normalized = normalizeScriptApiVersion(v) || '';
-    const clean = normalized.replace(/-beta(?:\.|$)/, '.1.').replace(/-(?:rc|preview|alpha)(?:\.|$)/, '.2.');
+    const clean = normalized.replace(/-(?:beta|rc|preview|alpha)(?:\.|$)/, '.-1.');
     const parts = clean.split('.');
     const out: [number, number, number, number] = [0, 0, 0, 0];
     for (let i = 0; i < 4; i++) {
