@@ -189,6 +189,30 @@ function collectAtlasTexturePaths(value: any): string[] {
   return [...new Set(paths)];
 }
 
+async function collectNamespacedAtlasAssetPaths(zip: JSZip): Promise<Set<string>> {
+  const paths = new Set<string>();
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(zip.files).find(path => path.toLowerCase() === atlasPath);
+    const file = sourcePath ? zip.file(sourcePath) : undefined;
+    if (!file) continue;
+    try {
+      const atlas = JSON.parse(sanitizeJsonString(await file.async('text')));
+      for (const [alias, value] of Object.entries(atlas?.texture_data || {})) {
+        if (!alias.includes(':')) continue; // Unnamespaced aliases may be vanilla overrides.
+        for (const rawPath of collectAtlasTexturePaths(value)) {
+          const normalized = rawPath.replace(/\\/g, '/').replace(/^\.\//, '');
+          const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+            ? [normalized]
+            : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+          const found = candidates.find(candidate => Object.keys(zip.files).some(path => path.toLowerCase() === candidate.toLowerCase()));
+          if (found) paths.add(found.toLowerCase());
+        }
+      }
+    } catch { /* source archive validation reports malformed atlas JSON */ }
+  }
+  return paths;
+}
+
 function fingerprintTextureBytes(bytes: Uint8Array): string {
   let hash = 2166136261;
   for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619);
@@ -495,7 +519,8 @@ function shouldSkipConflictDefinition(path: string, bytes: Uint8Array, sourcePac
 }
 
 async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, renameMap: Map<string, string> | undefined, pathTransform?: (p: string) => string, onPackFile?: () => Promise<void>, sourceLabel = 'addon', diagnostics: string[] = [], sourcePackId?: string, vanillaAssetWinners?: Map<string, string>, conflicts: ConflictItem[] = [], registeredUiPaths: Set<string> = new Set()): Promise<void> {
-  const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics);
+  const customAtlasPaths = await collectNamespacedAtlasAssetPaths(zip);
+  const assetPathMap = await planBinaryAssetCollisions(zip, targetZip, sourceLabel, pathTransform, diagnostics, customAtlasPaths);
   let batchCount = 0;
   for (const [path, fileObj] of Object.entries(zip.files)) {
     const lower = path.toLowerCase();
