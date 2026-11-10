@@ -304,3 +304,32 @@ const legacyBlocks = JSON.parse(await atlasRp.file('blocks.json')!.async('text')
 assert.equal(legacyBlocks['demo:atlas_block'].textures, renamedTerrainAlias,
   'the resource pack legacy blocks.json mapping must follow the renamed terrain alias');
 console.log('✓ colliding item/terrain atlas aliases survive and paired BP/RP references are repaired');
+
+const brokenReferences = await makePack('Behavior Pack', 'Broken references', {
+  'items/missing_spawn_egg.json': JSON.stringify({
+    'minecraft:item': {
+      description: { identifier: 'demo:missing_spawn_egg' },
+      components: {
+        'minecraft:icon': { texture: 'demo:missing_icon' },
+        'minecraft:entity_placer': { entity: 'demo:missing_mob' }
+      }
+    }
+  }),
+  'recipes/missing_recipe.json': JSON.stringify({
+    'minecraft:recipe_shaped': {
+      description: { identifier: 'demo:missing_recipe' },
+      tags: ['crafting_table'],
+      pattern: ['A'],
+      key: { A: { item: 'demo:missing_ingredient' } },
+      result: { item: 'demo:missing_result' }
+    }
+  })
+});
+const referenceCheck = await executeMergePacks([brokenReferences], { modpackName: 'Cross Pack Reference Validation' });
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_SPAWN_EGG_ENTITY'),
+  'cross-pack validation must catch spawn eggs whose entity definition is missing');
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_CUSTOM_ITEM_ICON_ALIAS'),
+  'cross-pack validation must catch namespaced item icon aliases missing from the RP');
+assert.ok(referenceCheck.combinedExtras?.diagnosticsText?.includes('MISSING_RECIPE_CONTENT_REFERENCE'),
+  'cross-pack validation must catch recipes referencing missing custom items');
+console.log('✓ cross-pack validation catches missing spawn-egg entities, item icons and recipe ingredients');
