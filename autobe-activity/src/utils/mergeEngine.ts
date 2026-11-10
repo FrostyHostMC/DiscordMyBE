@@ -213,6 +213,10 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
       const identifier = data?.[root]?.description?.identifier;
       if (typeof identifier === 'string') results.push({ type, identifier });
     }
+    if (folder === 'loot_tables') {
+      const identifier = lower.replace(/^.*?loot_tables\\//, '').replace(/\\.json$/, '');
+      if (identifier) results.push({ type: 'loot_table', identifier });
+    }
     if (folder === 'animation_controllers') {
       for (const identifier of Object.keys(data?.animation_controllers || {})) results.push({ type: 'animation_controller', identifier });
     }
