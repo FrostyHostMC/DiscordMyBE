@@ -243,6 +243,36 @@ async function isolateTextureAtlasAliases(
   return allRenames;
 }
 
+/** Repair legacy blocks.json terrain aliases inside the RP which owns the atlas. */
+async function applyResourceTerrainAliasMap(resourceZip: JSZip, terrainAliases: Map<string, string>): Promise<void> {
+  if (!terrainAliases.size) return;
+  const path = Object.keys(resourceZip.files).find(candidate => candidate.toLowerCase() === 'blocks.json');
+  const file = path ? resourceZip.file(path) : undefined;
+  if (!path || !file) return;
+  try {
+    const data = JSON.parse(sanitizeJsonString(await file.async('text')));
+    let changed = false;
+    for (const [blockId, definition] of Object.entries(data)) {
+      if (!definition || typeof definition !== 'object') continue;
+      const rewrite = (value: any): any => {
+        if (typeof value === 'string' && terrainAliases.has(value)) {
+          changed = true;
+          return terrainAliases.get(value);
+        }
+        if (Array.isArray(value)) return value.map(rewrite);
+        if (!value || typeof value !== 'object') return value;
+        const output: Record<string, any> = {};
+        for (const [key, child] of Object.entries(value)) output[key] = rewrite(child);
+        return output;
+      };
+      (data as any)[blockId] = rewrite(definition);
+    }
+    if (changed) resourceZip.file(path, JSON.stringify(data, null, 2));
+  } catch {
+    // Invalid blocks.json remains unchanged and is reported by archive validation.
+  }
+}
+
 /** Apply an RP atlas alias repair to the BP which explicitly depends on that RP. */
 async function applyPairedTextureAliasMaps(
   behaviorZip: JSZip,
@@ -265,7 +295,7 @@ async function applyPairedTextureAliasMaps(
   if (!itemAliases.size && !terrainAliases.size) return;
   const paths: string[] = [];
   behaviorZip.forEach((path, file) => {
-    const lower = path.toLowerCase().replace(/\\\\/g, '/');
+    const lower = path.toLowerCase().replace(/\\/g, '/');
     if (!file.dir && lower.endsWith('.json') && (lower.startsWith('items/') || lower.startsWith('blocks/'))) paths.push(path);
   });
   for (const path of paths) {
@@ -274,7 +304,7 @@ async function applyPairedTextureAliasMaps(
     try {
       const data = JSON.parse(sanitizeJsonString(await file.async('text')));
       let changed = false;
-      const isItem = path.toLowerCase().replace(/\\\\/g, '/').startsWith('items/');
+      const isItem = path.toLowerCase().replace(/\\/g, '/').startsWith('items/');
       const aliases = isItem ? itemAliases : terrainAliases;
       const visit = (value: any, key = '', parentKey = ''): any => {
         if (typeof value === 'string') {
@@ -658,6 +688,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
       const aliasMaps = await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
+      await applyResourceTerrainAliasMap(zip, aliasMaps.terrain);
       resourceAliasMaps.set(pack.uuid.toLowerCase(), aliasMaps);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
