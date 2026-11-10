@@ -21,7 +21,7 @@ export function normalizeScriptApiVersion(value: unknown): string | null {
   const normalized = String(value).trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === 'beta') return '2.7.0-beta';
-  if (/^\\[\\s*\\d+(?:\\s*,\\s*\\d+){1,3}\\s*\\]$/.test(normalized)) {
+  if (/^\[\s*\d+(?:\s*,\s*\d+){1,3}\s*\]$/.test(normalized)) {
     return normalized.slice(1, -1).split(',').map(part => part.trim()).join('.');
   }
   return normalized;
@@ -31,12 +31,12 @@ export function normalizeScriptApiVersion(value: unknown): string | null {
 export function scriptApiVerTuple(v: unknown): [number, number, number, number] {
   try {
     const normalized = normalizeScriptApiVersion(v) || '';
-    const clean = normalized.replace(/-beta(?:\\.|$)/, '.1.').replace(/-(?:rc|preview|alpha)(?:\\.|$)/, '.2.');
+    const clean = normalized.replace(/-beta(?:\.|$)/, '.1.').replace(/-(?:rc|preview|alpha)(?:\.|$)/, '.2.');
     const parts = clean.split('.');
     const out: [number, number, number, number] = [0, 0, 0, 0];
     for (let i = 0; i < 4; i++) {
       const p = parts[i];
-      out[i] = p && /^\\d+$/.test(p) ? parseInt(p, 10) : 0;
+      out[i] = p && /^\d+$/.test(p) ? parseInt(p, 10) : 0;
     }
     return out;
   } catch {
