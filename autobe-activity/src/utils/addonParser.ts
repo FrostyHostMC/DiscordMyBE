@@ -517,7 +517,8 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
             if (identifierMap.has(identifierKey)) {
               const existing = identifierMap.get(identifierKey)!;
               const comparison = mergeAdditions(existing.data, json);
-              if (existing.packId !== pack.id && comparison.conflicts.length > 0) {
+              const requiresWholeDefinitionChoice = ['recipe', 'spawn_rule', 'attachable', 'loot_table'].includes(cat);
+              if (existing.packId !== pack.id && (comparison.conflicts.length > 0 || (requiresWholeDefinitionChoice && comparison.changed))) {
                 conflicts.push({
                   id: generateUUID(),
                   type: cat,
