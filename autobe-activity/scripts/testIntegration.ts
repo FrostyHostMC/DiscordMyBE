@@ -282,11 +282,9 @@ const atlasBehavior = await makePack('Behavior Pack', 'Second Atlas Behavior', {
     }
   })
 });
-const atlasBehaviorZip = await JSZip.loadAsync(atlasBehavior.fileBlob!);
-const atlasBehaviorManifest = JSON.parse(await atlasBehaviorZip.file('manifest.json')!.async('text'));
-atlasBehaviorManifest.dependencies.push({ uuid: atlasSecond.uuid, version: [1, 0, 0] });
-atlasBehaviorZip.file('manifest.json', JSON.stringify(atlasBehaviorManifest));
-atlasBehavior.fileBlob = new Blob([await atlasBehaviorZip.generateAsync({ type: 'uint8array' }) as any]);
+// The source archives are the same .mcaddon; this fixture intentionally
+// omits an explicit BP -> RP dependency, as some valid add-ons do.
+atlasBehavior.sourceFileName = atlasSecond.sourceFileName;
 const atlasMerged = await executeMergePacks([atlasFirst, atlasSecond, atlasBehavior], { modpackName: 'Texture Alias Preservation' });
 const atlasRp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'resource')!.blob!);
 const atlasBp = await JSZip.loadAsync(atlasMerged.outputs!.find(output => output.type === 'behavior_data')!.blob!);
