@@ -723,17 +723,16 @@ await (async () => {
     'world.afterEvents.itemUse?.subscribe?.((event) => {});'
   ].join('\n'));
 
+  const original = await zip.file('scripts/main.js')!.async('text');
   const changed = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(changed, 1);
+  assert.equal(changed, 0, 'third-party JavaScript is no longer rewritten by regex');
   const output = await zip.file('scripts/main.js')!.async('text');
-  assert.ok(output.includes('world?.afterEvents?.cameraChange?.subscribe?.('));
-  assert.ok(output.includes('world?.beforeEvents?.inventory?.drop?.subscribe?.('));
-  assert.ok(output.includes('world?.afterEvents?.itemUse?.subscribe?.('));
-  assert.equal(diagnostics.filter(message => message.includes('Guarded statically-addressed')).length, 1);
+  assert.equal(output, original, 'all source script text must remain unchanged');
+  assert.ok(diagnostics.some(message => message.includes('Skipped automatic JavaScript source rewrites')));
 
   const secondPass = await guardUnavailableEventSubscriptions(zip, diagnostics);
-  assert.equal(secondPass, 0, 'event guard pass must be idempotent');
-  console.log('✓ unavailable Script API event subscriptions are guarded without add-on-specific rules');
+  assert.equal(secondPass, 0, 'the preservation pass must remain idempotent');
+  console.log('✓ arbitrary Script API event subscriptions remain byte-for-byte intact');
 })();
 
 
