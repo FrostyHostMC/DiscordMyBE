@@ -172,6 +172,108 @@ async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>
   return paths;
 }
 
+/**
+ * Atlas keys are a second identifier system inside a resource pack. Two addons
+ * can both define "shared_icon" while pointing at different images. The normal
+ * atlas union is first-wins, which silently gives the later addon's items the
+ * wrong icon. Give colliding aliases a source-local name and rewrite only
+ * texture-valued references in that same source archive before accumulation.
+ */
+async function isolateTextureAtlasAliases(
+  sourceZip: JSZip,
+  accum: MergeAccum,
+  sourceLabel: string,
+  diagnostics: string[]
+): Promise<void> {
+  const slug = sourceLabel.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 16) || 'addon';
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === atlasPath);
+    const sourceFile = sourcePath ? sourceZip.file(sourcePath) : undefined;
+    if (!sourcePath || !sourceFile) continue;
+    let sourceAtlas: any;
+    try {
+      sourceAtlas = JSON.parse(sanitizeJsonString(await sourceFile.async('text')));
+    } catch {
+      continue; // archive validation reports malformed atlas JSON
+    }
+    const sourceKey = Object.keys(sourceAtlas.texture_data || {}).find(key => key.toLowerCase() === 'texture_data');
+    const textureData = sourceAtlas.texture_data;
+    if (!textureData || typeof textureData !== 'object' || Array.isArray(textureData)) continue;
+
+    const existingAliases = new Map<string, string>();
+    const priorGroup = [...accum.shared.entries()].find(([path]) => path.toLowerCase() === atlasPath)?.[1];
+    if (priorGroup) {
+      for (const entry of priorGroup.entries) {
+        try {
+          const parsed = JSON.parse(sanitizeJsonString(new TextDecoder().decode(entry.data)));
+          for (const [alias, value] of Object.entries(parsed?.texture_data || {})) {
+            if (!existingAliases.has(alias)) existingAliases.set(alias, JSON.stringify(value));
+          }
+        } catch { /* malformed sources are reported by validation */ }
+      }
+    }
+
+    const occupied = new Set([...existingAliases.keys(), ...Object.keys(textureData)]);
+    const renameMap = new Map<string, string>();
+    for (const [alias, value] of Object.entries(textureData)) {
+      const prior = existingAliases.get(alias);
+      const fingerprint = JSON.stringify(value);
+      if (prior === undefined || prior === fingerprint) {
+        if (prior === undefined) existingAliases.set(alias, fingerprint);
+        continue;
+      }
+      let replacement = `${alias}__${slug}`;
+      let suffix = 2;
+      while (occupied.has(replacement)) replacement = `${alias}__${slug}_${suffix++}`;
+      occupied.add(replacement);
+      renameMap.set(alias, replacement);
+      diagnostics.push(`INFO TEXTURE_ATLAS_ALIAS_RENAMED [${sourceLabel}:${atlasPath}]: Alias "${alias}" pointed to a different texture in an earlier add-on; renamed this add-on's alias to "${replacement}" and repaired its references.`);
+    }
+    if (!renameMap.size) continue;
+
+    for (const [oldAlias, newAlias] of renameMap) {
+      textureData[newAlias] = textureData[oldAlias];
+      delete textureData[oldAlias];
+    }
+    sourceZip.file(sourcePath, JSON.stringify(sourceAtlas, null, 2));
+
+    const paths: string[] = [];
+    sourceZip.forEach((path, file) => {
+      if (!file.dir && path !== sourcePath && path.toLowerCase().endsWith('.json')) paths.push(path);
+    });
+    for (const path of paths) {
+      const file = sourceZip.file(path);
+      if (!file) continue;
+      try {
+        const original = JSON.parse(sanitizeJsonString(await file.async('text')));
+        let changed = false;
+        const visit = (value: any, key = '', parentKey = ''): any => {
+          if (typeof value === 'string') {
+            const textureContext = /^(?:texture|textures|minecraft:icon|icon)$/i.test(key) ||
+              /material_instances|minecraft:icon/i.test(parentKey);
+            if (textureContext && renameMap.has(value)) {
+              changed = true;
+              return renameMap.get(value);
+            }
+            return value;
+          }
+          if (Array.isArray(value)) return value.map(item => visit(item, key, parentKey));
+          if (!value || typeof value !== 'object') return value;
+          const output: Record<string, any> = {};
+          for (const [childKey, child] of Object.entries(value)) {
+            output[childKey] = visit(child, childKey, key);
+          }
+          return output;
+        };
+        const rewritten = visit(original);
+        if (changed) sourceZip.file(path, JSON.stringify(rewritten, null, 2));
+      } catch {
+        // Keep non-JSON/invalid source data unchanged; source validation reports it.
+      }
+    }
+  }
+}
+
 /** Alternative paths are only safe for definitions which Bedrock loads by ID. */
 function definitionOutputPath(targetZip: JSZip, path: string, sourceLabel: string): string {
   const slash = path.lastIndexOf('/');
@@ -527,6 +629,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       const expandedArchives = await expandBrarchiveFiles(zip, mergeDiagnostics);
       if (expandedArchives) mergeDiagnostics.push(`INFO BRARCHIVE_EXPANDED [${pack.name}]: Expanded ${expandedArchives} packed file(s) before resource merging.`);
       if (plan.rp.length > 1 && Object.keys(zip.files).some(path => path.toLowerCase().endsWith('.brarchive'))) mergeDiagnostics.push(`WARNING PACKED_ARCHIVE_NOT_SCANNED [${pack.name}]: Packed .brarchive files were preserved, but their internal definitions were not checked for collisions with other add-ons.`);
+      await isolateTextureAtlasAliases(zip, accum, pack.name, mergeDiagnostics);
       const sourceIssues = await validateMergedArchive(zip, `Source Resource Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       await applyFeatureRegistry(zip, rpZip, pack.name, mergeDiagnostics, renameMaps.get(pack.id), false);
