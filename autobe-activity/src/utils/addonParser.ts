@@ -542,7 +542,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
                   identifier: ident,
                   packA: { id: existing.packId, name: existing.packName },
                   packB: { id: pack.id, name: pack.name, path },
-                  resolution: 'keep_a'
+                  resolution: cat === 'spawn_rule' || cat === 'loot_table' ? 'keep_a' : 'prefix_all'
                 });
               }
             } else {
