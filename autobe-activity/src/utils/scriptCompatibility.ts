@@ -148,7 +148,7 @@ function guardEventSubscriptions(source: string, path: string, diagnostics: stri
 export async function guardUnavailableEventSubscriptions(zip: JSZip, diagnostics?: string[]): Promise<number> {
   let scriptCount = 0;
   zip.forEach((path, file) => {
-    if (!file.dir && /\\.(?:[cm]?js)$/i.test(path)) scriptCount++;
+    if (!file.dir && /\.(?:[cm]?js)$/i.test(path)) scriptCount++;
   });
   const message = 'Skipped automatic JavaScript source rewrites for ' + scriptCount +
     ' script file(s). AutoBE preserves original script bytes because regex-based event and ItemStack repairs can corrupt comments or syntax; compatibility changes require a syntax-validated AST transform.';
