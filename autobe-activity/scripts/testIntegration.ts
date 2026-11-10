@@ -238,8 +238,10 @@ async function assertRegistryConflict(type: string, path: string, root: string, 
     [path]: JSON.stringify({ [root]: { description: { identifier }, components: { [valueKey]: { value: 2 } } } })
   });
   const found = await detectConflicts([first, second]);
-  assert.ok(found.some(conflict => conflict.type === type && conflict.identifier === identifier),
-    `preflight must detect duplicate ${type} identifier ${identifier}`);
+  const conflict = found.find(conflict => conflict.type === type && conflict.identifier === identifier);
+  assert.ok(conflict, `preflight must detect duplicate ${type} identifier ${identifier}`);
+  assert.equal(conflict.resolution, type === 'spawn_rule' ? 'keep_a' : 'prefix_all',
+    `preflight must choose a preservation-safe default for ${type}`);
 }
 await assertRegistryConflict('attachable', 'attachables/tool.json', 'minecraft:attachable', 'demo:tool', 'minecraft:render');
 await assertRegistryConflict('spawn_rule', 'spawn_rules/mob.json', 'minecraft:spawn_rules', 'demo:mob', 'minecraft:spawns_on_block_filter');
@@ -251,8 +253,9 @@ const lootB = await makePack('Behavior Pack', 'Loot B', {
   'loot_tables/blocks/meteorite.json': JSON.stringify({ pools: [{ rolls: 1, entries: [{ type: 'item', name: 'demo:ore_b' }] }] })
 });
 const lootConflicts = await detectConflicts([lootA, lootB]);
-assert.ok(lootConflicts.some(conflict => conflict.type === 'loot_table' && conflict.identifier === 'blocks/meteorite'),
-  'preflight must detect nested loot-table path conflicts');
+const lootConflict = lootConflicts.find(conflict => conflict.type === 'loot_table' && conflict.identifier === 'blocks/meteorite');
+assert.ok(lootConflict, 'preflight must detect nested loot-table path conflicts');
+assert.equal(lootConflict.resolution, 'keep_a', 'path-bound loot tables must require a deliberate winner instead of unsafe prefixing');
 console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
 
 const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
