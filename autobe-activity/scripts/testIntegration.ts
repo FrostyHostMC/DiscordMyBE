@@ -61,6 +61,13 @@ function archive(name: string, content: string): Uint8Array {
   return archiveEntries([{ name, content }]);
 }
 
+// Manifest names that are localization keys should display their translated pack name.
+const localizedPack = await makePack('Resource Pack', 'pack.name', {
+  'texts/languages.json': JSON.stringify(['en_US']),
+  'texts/en_US.lang': 'pack.name=Localized Furniture\npack.description=Furniture description\n'
+});
+assert.equal(localizedPack.name, 'Localized Furniture', 'pack.name should resolve from the source pack language file');
+
 // Regression: language registries and translation keys must survive shared BP merging.
 const languagePackA = await makePack('Behavior Pack', 'Language A', {
   'texts/languages.json': JSON.stringify(['en_US']),
