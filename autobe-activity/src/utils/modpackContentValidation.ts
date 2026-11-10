@@ -119,7 +119,7 @@ export async function validateModpackContent(
       const visitLoot = (value: any): void => {
         if (Array.isArray(value)) { value.forEach(visitLoot); return; }
         if (!value || typeof value !== 'object') return;
-        if (value.type === 'item' && isCustomIdentifier(value.name) && !itemIds.has(value.name)) {
+        if (value.type === 'item' && isCustomIdentifier(value.name) && !itemIds.has(value.name) && !blockIds.has(value.name)) {
           add('MISSING_LOOT_ITEM_REFERENCE', entry.path,
             `Loot table references "${value.name}", but no matching custom item exists in any generated behavior output.`);
         }
@@ -136,7 +136,7 @@ export async function validateModpackContent(
       const visit = (value: any, key = ''): void => {
         if (typeof value === 'string' &&
             ['textures', 'carried_textures', 'up', 'down', 'side', 'north', 'south', 'east', 'west'].includes(key) &&
-            !terrainAliases.has(value) && !value.includes('/')) {
+            isCustomIdentifier(value) && !terrainAliases.has(value)) {
           add('MISSING_BLOCK_TEXTURE_ALIAS', entry.path,
             `Block mapping "${blockId}" references terrain alias "${value}", but it is absent from the merged terrain_texture.json.`);
         } else if (Array.isArray(value)) value.forEach(child => visit(child, key));
