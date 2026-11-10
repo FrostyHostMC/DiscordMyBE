@@ -626,6 +626,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
   const bundleParts: MergedOutput[] = [];
   const blockingValidationErrors: string[] = [];
   let rpHeaderUUID: string | null = null;
+  const resourceAliasMaps = new Map<string, { item: Map<string, string>; terrain: Map<string, string> }>();
   const builtBps: Array<{
     zip: JSZip;
     label: string;
@@ -642,7 +643,6 @@ export async function executeMergePacks(packs: AddonPack[], options: {
     rpHeaderUUID = stablePackId('resource-header', plan.rp);
     const rpModuleUUID = stablePackId('resource-module', plan.rp);
     const accum = newAccum();
-    const resourceAliasMaps = new Map<string, { item: Map<string, string>; terrain: Map<string, string> }>();
     const registeredUiPaths = await collectRegisteredUiPaths(plan.rp);
     if (iconBytes) {
       rpZip.file(assetsData.IMAGE_FFEH, iconBytes);
