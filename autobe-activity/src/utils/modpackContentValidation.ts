@@ -36,7 +36,12 @@ export async function validateModpackContent(
   const itemIds = new Set<string>();
   const blockIds = new Set<string>();
   const entityIds = new Set<string>();
+  const clientEntityIds = new Set<string>();
 
+  for (const entry of resourceEntries) {
+    const clientEntity = entry.data?.['minecraft:client_entity']?.description?.identifier;
+    if (typeof clientEntity === 'string') clientEntityIds.add(clientEntity);
+  }
   for (const entry of behaviorEntries) {
     const item = entry.data?.['minecraft:item']?.description?.identifier;
     const block = entry.data?.['minecraft:block']?.description?.identifier;
@@ -59,6 +64,11 @@ export async function validateModpackContent(
   }
 
   for (const entry of behaviorEntries) {
+    const entityId = entry.data?.['minecraft:entity']?.description?.identifier;
+    if (isCustomIdentifier(entityId) && !clientEntityIds.has(entityId)) {
+      add('MISSING_CLIENT_ENTITY_DEFINITION', entry.path,
+        `Behavior entity "${entityId}" has no matching resource-pack minecraft:client_entity definition; it may load without its intended model, textures or render controllers.`);
+    }
     const item = entry.data?.['minecraft:item'];
     if (item) {
       const components = item.components || {};
@@ -126,6 +136,14 @@ export async function validateModpackContent(
         Object.values(value).forEach(visitLoot);
       };
       visitLoot(entry.data);
+    }
+  }
+
+  for (const entry of resourceEntries) {
+    const clientEntityId = entry.data?.['minecraft:client_entity']?.description?.identifier;
+    if (isCustomIdentifier(clientEntityId) && !entityIds.has(clientEntityId)) {
+      add('ORPHAN_CLIENT_ENTITY_DEFINITION', entry.path,
+        `Resource client entity "${clientEntityId}" has no matching behavior minecraft:entity definition in any generated behavior output.`);
     }
   }
 
