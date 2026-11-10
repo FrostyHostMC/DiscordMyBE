@@ -26,8 +26,8 @@ const EXPRESSION_KEYS = /(?:molang|expression|condition|query|script|pre_animati
 function isDefinitionPath(path: string): boolean {
   const normalized = path.replaceAll('\\', '/').toLowerCase();
   const segments = normalized.split('/');
-  const folder = segments.length > 1 ? segments[segments.length - 2] : '';
-  return new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']).has(folder) ||
+  const definitionFolders = new Set(['items', 'blocks', 'entities', 'entity', 'attachables', 'recipes', 'loot_tables', 'spawn_rules']);
+  return segments.some(segment => definitionFolders.has(segment)) ||
     new Set(['items.json', 'blocks.json', 'entities.json', 'entity.json', 'attachables.json', 'recipes.json']).has(segments[segments.length - 1]);
 }
 
