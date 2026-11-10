@@ -309,9 +309,9 @@ async function applyPairedTextureAliasMaps(
   // Separate .mcpack uploads often have different filenames but matching pack
   // names. Pair only when the normalized name is unique on both sides.
   const normalizePairName = (name: string) => name.toLowerCase()
-    .replace(/\\[(?:bp|rp|behavior pack|resource pack)\\]/g, '')
-    .replace(/\\b(?:behavior|resource)\\s*pack\\b/g, '')
-    .replace(/\\b(?:bp|rp)\\b/g, '')
+    .replace(/\[(?:bp|rp|behavior pack|resource pack)\]/g, '')
+    .replace(/\b(?:behavior|resource)\s*pack\b/g, '')
+    .replace(/\b(?:bp|rp)\b/g, '')
     .replace(/[^a-z0-9]/g, '');
   const behaviorName = normalizePairName(behaviorPack.name);
   if (behaviorName) {
