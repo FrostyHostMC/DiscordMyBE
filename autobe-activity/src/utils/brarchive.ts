@@ -80,7 +80,6 @@ export async function expandBrarchiveFiles(zip: JSZip, diagnostics?: string[]): 
           destination = stem + '.autobe-' + suffix++ + extension;
         } while (zip.file(destination));
         pathMap.set(joined, destination);
-        pathMap.set(entry.name, destination);
         report('Conflicting archive path preserved as ' + destination + '; original path was ' + joined + ' from ' + archivePath + '.');
       }
       zip.file(destination, entry.data);
