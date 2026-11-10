@@ -412,6 +412,36 @@ export async function parseAddonArchive(
   return { packs, errors };
 }
 
+async function collectNamespacedAtlasAssetPaths(zip: JSZip): Promise<Set<string>> {
+  const paths = new Set<string>();
+  const collect = (value: any, key = ''): string[] => {
+    if (typeof value === 'string') return (key === 'textures' || key === 'texture') && value.includes('/') ? [value.replace(/^\.\//, '')] : [];
+    if (Array.isArray(value)) return value.flatMap(child => collect(child, key));
+    if (value && typeof value === 'object') return Object.entries(value).flatMap(([childKey, child]) => collect(child, childKey));
+    return [];
+  };
+  for (const atlasPath of ['textures/item_texture.json', 'textures/terrain_texture.json']) {
+    const sourcePath = Object.keys(zip.files).find(path => path.toLowerCase() === atlasPath);
+    const file = sourcePath ? zip.file(sourcePath) : undefined;
+    if (!file) continue;
+    try {
+      const atlas = JSON.parse(sanitizeJsonString(await file.async('text')));
+      for (const [alias, value] of Object.entries(atlas?.texture_data || {})) {
+        if (!alias.includes(':')) continue;
+        for (const raw of collect(value)) {
+          const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '');
+          const candidates = /\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+            ? [normalized]
+            : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+          const found = candidates.find(candidate => Object.keys(zip.files).some(path => path.toLowerCase() === candidate.toLowerCase()));
+          if (found) paths.add(found.toLowerCase());
+        }
+      }
+    } catch { /* malformed atlas JSON is reported by archive validation */ }
+  }
+  return paths;
+}
+
 // Scans packs for duplicate identifiers and builds conflicts list
 export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[]> {
   const conflicts: ConflictItem[] = [];
@@ -427,6 +457,7 @@ export async function detectConflicts(packs: AddonPack[]): Promise<ConflictItem[
       // pipeline will actually process. Otherwise definitions stored inside
       // optimized .brarchive containers evade conflict detection.
       await expandBrarchiveFiles(zip);
+      const customAtlasPaths = await collectNamespacedAtlasAssetPaths(zip);
       // Detect byte-different vanilla-facing textures as explicit user conflicts.
       for (const [path, fileObj] of Object.entries(zip.files)) {
         if (fileObj.dir) continue;
