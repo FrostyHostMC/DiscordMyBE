@@ -557,10 +557,11 @@ async function accumulatePack(zip: JSZip, targetZip: JSZip, accum: MergeAccum, r
       if (updated !== originalText) bytes = new TextEncoder().encode(updated);
     }
     const normalizedOutputPath = normalizeRegisteredUiPath(outPath);
+    const isLanguageJson = /^texts\\/[^/]+\\.json$/i.test(lower) && lower !== 'texts/languages.json';
     const sharedKind: SharedKind | undefined = ARRAY_MERGE_FILES.has(lower) ? 'array'
       : isStrategyMergeFile(lower) ? 'strategy'
       : registeredUiPaths.has(normalizedOutputPath) ? 'ui'
-      : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') ? 'deep'
+      : DEEP_MERGE_FILES.has(lower) || lower.endsWith('.material') || isLanguageJson ? 'deep'
       : lower.endsWith('.lang') ? 'lang' : undefined;
     if (sharedKind) {
       const group = accum.shared.get(outPath) || { kind: sharedKind, entries: [] };
