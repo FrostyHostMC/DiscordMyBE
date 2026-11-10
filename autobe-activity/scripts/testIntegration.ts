@@ -35,19 +35,30 @@ async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, f
   return parsed.packs[0];
 }
 
-function archive(name: string, content: string): Uint8Array {
-  const bytes = new TextEncoder().encode(content);
-  const result = new Uint8Array(16 + 256 + bytes.length);
+function archiveEntries(entries: Array<{ name: string; content: string }>): Uint8Array {
+  const encoded = entries.map(entry => ({ name: new TextEncoder().encode(entry.name), data: new TextEncoder().encode(entry.content) }));
+  const payloadBase = 16 + encoded.length * 256;
+  const payloadSize = encoded.reduce((total, entry) => total + entry.data.length, 0);
+  const result = new Uint8Array(payloadBase + payloadSize);
   result.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26]);
   const view = new DataView(result.buffer);
-  view.setUint32(8, 1, true);
-  view.setUint32(12, 1, true);
-  const encodedName = new TextEncoder().encode(name);
-  result[16] = encodedName.length;
-  result.set(encodedName, 17);
-  view.setUint32(16 + 252, bytes.length, true);
-  result.set(bytes, 16 + 256);
+  view.setUint32(8, encoded.length, true);
+  let payloadOffset = 0;
+  encoded.forEach((entry, index) => {
+    if (entry.name.length < 1 || entry.name.length > 247) throw new Error('Invalid fixture archive name');
+    const recordOffset = 16 + index * 256;
+    result[recordOffset] = entry.name.length;
+    result.set(entry.name, recordOffset + 1);
+    view.setUint32(recordOffset + 248, payloadOffset, true);
+    view.setUint32(recordOffset + 252, entry.data.length, true);
+    result.set(entry.data, payloadBase + payloadOffset);
+    payloadOffset += entry.data.length;
+  });
   return result;
+}
+
+function archive(name: string, content: string): Uint8Array {
+  return archiveEntries([{ name, content }]);
 }
 
 // Regression: language registries and translation keys must survive shared BP merging.
@@ -77,7 +88,7 @@ const player = '{"minecraft:client_entity":{"description":{"identifier":"minecra
 const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
 const scriptB = 'world.afterEvents.playerSpawn.subscribe(event => console.log("handbook"));';
-const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', '__brarchive/cameras/presets.brarchive': archive('test.json', '{"preset":true}') }, '2.7.0');
+const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', 'cameras/test.json': '{"original":true}', '__brarchive/cameras/presets.brarchive': archiveEntries([{ name: 'test.json', content: '{"packed":true}' }, { name: 'index.json', content: '{"asset":"cameras/test.json"}' }]) }, '2.7.0');
 const bpB = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptB }, '2.10.0');
 const rpA = await makePack('Resource Pack', 'First RP', {
   'entity/player.entity.json': player,
@@ -105,6 +116,8 @@ assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('te
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
 assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/test.json'), 'packed camera presets should expand beside the archive container folder');
+assert.ok(bp.file('cameras/test.autobe-2.json'), 'a conflicting packed entry must be retained under a unique path');
+assert.equal(JSON.parse(await bp.file('cameras/index.json')!.async('text')).asset, 'cameras/test.autobe-2.json', 'archive-local references must follow the renamed duplicate');
 const mergedPlayer = JSON.parse(await rp.file('entity/player.entity.json')!.async('text'));
 const playerDescription = mergedPlayer['minecraft:client_entity'].description;
 assert.equal(playerDescription.animations.base_walk, 'animation.base.walk');
