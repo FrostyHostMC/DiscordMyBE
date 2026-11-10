@@ -281,6 +281,7 @@ async function applyResourceTerrainAliasMap(resourceZip: JSZip, terrainAliases: 
 async function applyPairedTextureAliasMaps(
   behaviorZip: JSZip,
   behaviorPack: AddonPack,
+  allPacks: AddonPack[],
   aliasMapsByResourceUuid: Map<string, { item: Map<string, string>; terrain: Map<string, string> }>,
   diagnostics: string[]
 ): Promise<void> {
@@ -289,10 +290,39 @@ async function applyPairedTextureAliasMaps(
   let manifest: any;
   try { manifest = JSON.parse(sanitizeJsonString(await manifestFile.async('text'))); }
   catch { return; }
+  const resourcePacks = allPacks.filter(pack => pack.type === 'Resource Pack');
+  const matchedResourceUuids = new Set<string>();
+  // Explicit manifest dependencies are authoritative.
+  for (const dependency of Array.isArray(manifest.dependencies) ? manifest.dependencies : []) {
+    if (typeof dependency?.uuid === 'string' && aliasMapsByResourceUuid.has(dependency.uuid.toLowerCase())) {
+      matchedResourceUuids.add(dependency.uuid.toLowerCase());
+    }
+  }
+  // Some valid Bedrock add-ons omit a BP -> RP dependency. Use source archive
+  // identity only when that archive contains exactly one BP and one RP.
+  if (behaviorPack.sourceFileName) {
+    const sameSource = allPacks.filter(pack => pack.sourceFileName === behaviorPack.sourceFileName);
+    const sourceBps = sameSource.filter(pack => pack.type === 'Behavior Pack');
+    const sourceRps = sameSource.filter(pack => pack.type === 'Resource Pack');
+    if (sourceBps.length === 1 && sourceRps.length === 1) matchedResourceUuids.add(sourceRps[0].uuid.toLowerCase());
+  }
+  // Separate .mcpack uploads often have different filenames but matching pack
+  // names. Pair only when the normalized name is unique on both sides.
+  const normalizePairName = (name: string) => name.toLowerCase()
+    .replace(/\\[(?:bp|rp|behavior pack|resource pack)\\]/g, '')
+    .replace(/\\b(?:behavior|resource)\\s*pack\\b/g, '')
+    .replace(/\\b(?:bp|rp)\\b/g, '')
+    .replace(/[^a-z0-9]/g, '');
+  const behaviorName = normalizePairName(behaviorPack.name);
+  if (behaviorName) {
+    const sameNameBps = allPacks.filter(pack => pack.type === 'Behavior Pack' && normalizePairName(pack.name) === behaviorName);
+    const sameNameRps = resourcePacks.filter(pack => normalizePairName(pack.name) === behaviorName);
+    if (sameNameBps.length === 1 && sameNameRps.length === 1) matchedResourceUuids.add(sameNameRps[0].uuid.toLowerCase());
+  }
   const itemAliases = new Map<string, string>();
   const terrainAliases = new Map<string, string>();
-  for (const dependency of Array.isArray(manifest.dependencies) ? manifest.dependencies : []) {
-    const maps = typeof dependency?.uuid === 'string' ? aliasMapsByResourceUuid.get(dependency.uuid.toLowerCase()) : undefined;
+  for (const uuid of matchedResourceUuids) {
+    const maps = aliasMapsByResourceUuid.get(uuid);
     for (const [oldAlias, newAlias] of maps?.item || []) itemAliases.set(oldAlias, newAlias);
     for (const [oldAlias, newAlias] of maps?.terrain || []) terrainAliases.set(oldAlias, newAlias);
   }
@@ -827,7 +857,7 @@ export async function executeMergePacks(packs: AddonPack[], options: {
       } catch {
         mergeDiagnostics.push(`WARNING SOURCE_MANIFEST [${pack.name}]: Could not read the original manifest; review output dependencies.`);
       }
-      await applyPairedTextureAliasMaps(zip, pack, resourceAliasMaps, mergeDiagnostics);
+      await applyPairedTextureAliasMaps(zip, pack, packs, resourceAliasMaps, mergeDiagnostics);
       const sourceIssues = await validateMergedArchive(zip, `Source Behavior Pack: ${pack.name}`);
       mergeDiagnostics.push(...sourceIssues.map(issue => `SOURCE BASELINE ${issue.severity.toUpperCase()} ${issue.code} [${pack.name}:${issue.path}]: ${issue.message}`));
       if (isScriptGroup) {
