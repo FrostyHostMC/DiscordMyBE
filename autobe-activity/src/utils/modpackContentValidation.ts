@@ -182,6 +182,10 @@ export async function validateModpackContent(
     if (entry.path.toLowerCase().replace(/\\/g, '/') !== 'blocks.json') continue;
     for (const [blockId, definition] of Object.entries(entry.data || {})) {
       if (!blockId.includes(':') || blockId.startsWith('minecraft:')) continue;
+      if (!blockIds.has(blockId)) {
+        add('MISSING_CUSTOM_BLOCK_BEHAVIOR_DEFINITION', entry.path,
+          'Resource block mapping "' + blockId + '" has no matching minecraft:block definition in any generated behavior output.');
+      }
       const visit = (value: any, key = ''): void => {
         if (typeof value === 'string' &&
             ['textures', 'carried_textures', 'up', 'down', 'side', 'north', 'south', 'east', 'west'].includes(key) &&
