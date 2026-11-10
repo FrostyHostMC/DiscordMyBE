@@ -43,6 +43,7 @@ function archiveEntries(entries: Array<{ name: string; content: string }>): Uint
   result.set([0x7d, 0x27, 0x25, 0xb1, 0xa0, 0x52, 0x70, 0x26]);
   const view = new DataView(result.buffer);
   view.setUint32(8, encoded.length, true);
+  view.setUint32(12, 1, true);
   let payloadOffset = 0;
   encoded.forEach((entry, index) => {
     if (entry.name.length < 1 || entry.name.length > 247) throw new Error('Invalid fixture archive name');
