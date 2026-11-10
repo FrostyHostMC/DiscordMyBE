@@ -36,7 +36,7 @@ export function scriptApiVerTuple(v: unknown): [number, number, number, number] 
     const out: [number, number, number, number] = [0, 0, 0, 0];
     for (let i = 0; i < 4; i++) {
       const p = parts[i];
-      out[i] = p && /^\d+$/.test(p) ? parseInt(p, 10) : 0;
+      out[i] = p && /^-?\d+$/.test(p) ? parseInt(p, 10) : 0;
     }
     return out;
   } catch {
