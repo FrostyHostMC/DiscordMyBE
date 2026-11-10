@@ -92,6 +92,26 @@ assert.ok(mergedTranslations.includes('pack.name=Pack A'), 'priority winner pack
 assert.ok(!mergedTranslations.includes('pack.name=Pack B'), 'conflicting pack metadata must not overwrite priority winner');
 console.log('✓ language codes and unique translation keys survive BP merge while pack metadata priority remains stable');
 
+const localeJsonA = await makePack('Behavior Pack', 'Locale JSON A', {
+  'texts/en_US.json': JSON.stringify({ menu: { title: 'First', shared: 'Priority value' } })
+});
+const localeJsonB = await makePack('Behavior Pack', 'Locale JSON B', {
+  'texts/en_US.json': JSON.stringify({ menu: { subtitle: 'Second add-on', shared: 'Conflicting value' } })
+});
+const localeJsonMerge = await executeMergePacks([localeJsonA, localeJsonB], {
+  modpackName: 'Locale JSON conflict regression',
+  conflicts: await detectConflicts([localeJsonA, localeJsonB])
+});
+const localeJsonOutput = await JSZip.loadAsync(localeJsonMerge.outputs!.find(output => output.type === 'behavior_data')!.blob!);
+const localeJsonActive = JSON.parse(await localeJsonOutput.file('texts/en_US.json')!.async('text'));
+assert.equal(localeJsonActive.menu.title, 'First');
+assert.equal(localeJsonActive.menu.subtitle, 'Second add-on', 'non-conflicting locale JSON keys should be merged');
+assert.equal(localeJsonActive.menu.shared, 'Priority value', 'conflicting locale JSON values should retain the active priority');
+assert.ok(Object.keys(localeJsonOutput.files).some(path => path.startsWith('_autobe_conflicts/') && path.endsWith('/texts/en_US.json.backup')),
+  'the complete conflicting locale JSON should be recoverable from the conflict backup');
+console.log('✓ locale JSON merges unique keys and preserves conflicting values in a recoverable backup');
+
+
 const player = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"base_walk":"animation.base.walk"},"scripts":{"initialize":["variable.is_first_person = query.is_first_person;"],"animate":["base_walk"]}}}}';
 const playerOverlay = '{"minecraft:client_entity":{"description":{"identifier":"minecraft:player","animations":{"addon_emote":"animation.addon.emote"},"scripts":{"animate":["addon_emote"]}}}}';
 const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
