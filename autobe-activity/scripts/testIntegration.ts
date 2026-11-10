@@ -118,6 +118,7 @@ const scriptA = 'import "./helper.js"; world.setDynamicProperty("score", 1);';
 const scriptB = 'world.afterEvents.playerSpawn.subscribe(event => console.log("handbook"));';
 const bpA = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptA, 'scripts/helper.js': 'export const ok = true;', 'cameras/test.json': '{"original":true}', '__brarchive/cameras/presets.brarchive': archiveEntries([{ name: 'test.json', content: '{"packed":true}' }, { name: 'index.json', content: '{"asset":"cameras/test.json"}' }]) }, '2.7.0');
 const bpB = await makePack('Behavior Pack', 'Same name', { 'scripts/main.js': scriptB }, '2.10.0');
+const bpLegacy = await makePack('Behavior Pack', 'Legacy API Pack', { 'scripts/main.js': 'world.afterEvents.playerSpawn.subscribe(() => {});' }, '1.19.0');
 const rpA = await makePack('Resource Pack', 'First RP', {
   'entity/player.entity.json': player,
   'materials/entity.material': '{"materials":{"first":{}}}',
@@ -130,13 +131,17 @@ const rpB = await makePack('Resource Pack', 'Second RP', {
   'textures/custom/gem.png': new Uint8Array([2]),
   'textures/item_texture.json': '{"texture_data":{"second":{"textures":"textures/custom/gem"}}}'
 });
-const packs = [bpA, bpB, rpA, rpB];
+const packs = [bpA, bpB, bpLegacy, rpA, rpB];
 const result = await executeMergePacks(packs, {
   modpackName: 'Integration test',
   conflicts: await detectConflicts(packs),
   subpackSelections: [{ pack: 'Subpack fixture', variant: 'high_resolution' }]
 });
-const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'behavior_script')!.blob!);
+const scriptOutputs = result.outputs!.filter(output => output.type === 'behavior_script');
+assert.equal(scriptOutputs.length, 2, 'Script API v1 and v2 must remain separate generated behavior outputs');
+const bp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 2)!.blob!);
+const legacyBp = await JSZip.loadAsync(scriptOutputs.find(output => output.scriptMajor === 1)!.blob!);
+assert.ok(Object.keys(legacyBp.files).some(path => path.endsWith('/scripts/main.js')), 'the Script API v1 source must remain in its own output');
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
