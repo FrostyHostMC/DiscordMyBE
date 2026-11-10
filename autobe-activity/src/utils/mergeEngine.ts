@@ -199,7 +199,8 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
   try {
     const data = JSON.parse(sanitizeJsonString(new TextDecoder().decode(bytes)));
     const results: Array<{ type: ConflictItem['type']; identifier: string }> = [];
-    const folder = lower.split('/').filter(Boolean).slice(-2, -1)[0] || '';
+    const segments = lower.split('/').filter(Boolean);
+    const hasFolder = (name: string) => segments.includes(name);
     const roots: Array<[string, ConflictItem['type']]> = [
       ['minecraft:entity', 'entity'], ['minecraft:client_entity', 'entity'],
       ['minecraft:item', 'item'], ['minecraft:block', 'block'], ['minecraft:attachable', 'attachable'],
@@ -213,14 +214,14 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
       const identifier = data?.[root]?.description?.identifier;
       if (typeof identifier === 'string') results.push({ type, identifier });
     }
-    if (folder === 'loot_tables') {
+    if (hasFolder('loot_tables')) {
       const identifier = lower.replace(/^.*?loot_tables\\//, '').replace(/\\.json$/, '');
       if (identifier) results.push({ type: 'loot_table', identifier });
     }
-    if (folder === 'animation_controllers') {
+    if (hasFolder('animation_controllers')) {
       for (const identifier of Object.keys(data?.animation_controllers || {})) results.push({ type: 'animation_controller', identifier });
     }
-    if (folder === 'render_controllers') {
+    if (hasFolder('render_controllers')) {
       for (const identifier of Object.keys(data?.render_controllers || {})) results.push({ type: 'render_controller', identifier });
     }
     return results;
