@@ -594,7 +594,7 @@ function buildRenameMaps(conflicts: ConflictItem[], autoPrefix: boolean): Map<st
   const renameMaps = new Map<string, Map<string, string>>();
   const occupied = new Set(conflicts.map(conflict => conflict.identifier));
   for (const conflict of conflicts) {
-    if (conflict.type === 'vanilla_asset' || conflict.identifier === 'minecraft:player') continue;
+    if (conflict.type === 'vanilla_asset' || conflict.type === 'loot_table' || conflict.identifier === 'minecraft:player') continue;
     if (conflict.resolution !== 'prefix_all' && (!autoPrefix || conflict.resolution === 'keep_a' || conflict.resolution === 'keep_b')) continue;
 
     let map = renameMaps.get(conflict.packB.id);
