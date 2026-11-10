@@ -173,6 +173,60 @@ async function collectRegisteredUiPaths(packs: AddonPack[]): Promise<Set<string>
   return paths;
 }
 
+function collectAtlasTexturePaths(value: any): string[] {
+  const paths: string[] = [];
+  const visit = (node: any, key = '') => {
+    if (typeof node === 'string') {
+      if ((key === 'textures' || key === 'texture') && node.includes('/')) paths.push(node.replace(/^\\.\\//, ''));
+      return;
+    }
+    if (Array.isArray(node)) { node.forEach(child => visit(child, key)); return; }
+    if (node && typeof node === 'object') {
+      for (const [childKey, child] of Object.entries(node)) visit(child, childKey);
+    }
+  };
+  visit(value);
+  return [...new Set(paths)];
+}
+
+function fingerprintTextureBytes(bytes: Uint8Array): string {
+  let hash = 2166136261;
+  for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619);
+  return `${bytes.length}:${(hash >>> 0).toString(16)}`;
+}
+
+async function atlasAliasFingerprint(value: any, sourceZip: JSZip | null, accum: MergeAccum | null): Promise<string> {
+  const fingerprints: string[] = [];
+  for (const rawPath of collectAtlasTexturePaths(value).sort()) {
+    const normalized = rawPath.replace(/\\\\/g, '/').replace(/^\\.\\//, '');
+    const candidates = /\\.(?:png|tga|jpg|jpeg|webp)$/i.test(normalized)
+      ? [normalized]
+      : [normalized, ...['.png', '.tga', '.jpg', '.jpeg', '.webp'].map(extension => normalized + extension)];
+    let resolved = false;
+    for (const candidate of candidates) {
+      if (sourceZip) {
+        const sourcePath = Object.keys(sourceZip.files).find(path => path.toLowerCase() === candidate.toLowerCase());
+        const file = sourcePath ? sourceZip.file(sourcePath) : undefined;
+        if (file) {
+          fingerprints.push(`${candidate}:${fingerprintTextureBytes(await file.async('uint8array'))}`);
+          resolved = true;
+          break;
+        }
+      }
+      if (accum) {
+        const prior = [...accum.shared.entries()].find(([path]) => path.toLowerCase() === candidate.toLowerCase())?.[1];
+        if (prior?.entries.length) {
+          fingerprints.push(`${candidate}:${fingerprintTextureBytes(prior.entries[0].data)}`);
+          resolved = true;
+          break;
+        }
+      }
+    }
+    if (!resolved) fingerprints.push(`${normalized}:unresolved`);
+  }
+  return JSON.stringify(value) + '|' + fingerprints.join('|');
+}
+
 /**
  * Atlas keys are a second identifier system inside a resource pack. Two addons
  * can both define "shared_icon" while pointing at different images. The normal
@@ -208,7 +262,7 @@ async function isolateTextureAtlasAliases(
         try {
           const parsed = JSON.parse(sanitizeJsonString(new TextDecoder().decode(entry.data)));
           for (const [alias, value] of Object.entries(parsed?.texture_data || {})) {
-            if (!existingAliases.has(alias)) existingAliases.set(alias, JSON.stringify(value));
+            if (!existingAliases.has(alias)) existingAliases.set(alias, await atlasAliasFingerprint(value, null, accum));
           }
         } catch { /* malformed sources are reported by validation */ }
       }
@@ -218,7 +272,7 @@ async function isolateTextureAtlasAliases(
     const renameMap = new Map<string, string>();
     for (const [alias, value] of Object.entries(textureData)) {
       const prior = existingAliases.get(alias);
-      const fingerprint = JSON.stringify(value);
+      const fingerprint = await atlasAliasFingerprint(value, sourceZip, null);
       if (prior === undefined || prior === fingerprint) {
         if (prior === undefined) existingAliases.set(alias, fingerprint);
         continue;
