@@ -78,7 +78,7 @@ const bp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 
 const rp = await JSZip.loadAsync(result.outputs!.find(output => output.type === 'resource')!.blob!);
 const scripts = Object.keys(bp.files).filter(path => path.endsWith('/scripts/main.js'));
 assert.equal(scripts.length, 2, 'same-named packs must have separate script trees');
-assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, 'world?.afterEvents?.playerSpawn?.subscribe?.(event => console.log("handbook"));'].sort());
+assert.deepEqual((await Promise.all(scripts.map(path => bp.file(path)!.async('text')))).sort(), [scriptA, scriptB].sort());
 assert.ok(bp.file(scripts.find(path => path.includes('_1/'))!.replace('main.js', 'helper.js')));
 assert.match(await bp.file('scripts/Stonebyte.js')!.async('text'), /import ['"]\.\//);
 assert.ok(bp.file('cameras/test.json'), 'packed camera presets should expand beside the archive container folder');
