@@ -229,3 +229,28 @@ console.log('✓ malformed merged JSON blocks output generation instead of shipp
 const unsupported = await makePack('Behavior Pack', 'Bad archive', { '__brarchive/items/bad.brarchive': new Uint8Array([1, 2, 3]) });
 await assert.rejects(detectConflicts([unsupported]), /Unsupported \.brarchive format/);
 console.log('✓ missing scripts and unsupported optimized archives stop the merge');
+
+async function assertRegistryConflict(type: string, path: string, root: string, identifier: string, valueKey: string) {
+  const first = await makePack('Behavior Pack', `First ${type}`, {
+    [path]: JSON.stringify({ [root]: { description: { identifier }, components: { [valueKey]: { value: 1 } } } })
+  });
+  const second = await makePack('Behavior Pack', `Second ${type}`, {
+    [path]: JSON.stringify({ [root]: { description: { identifier }, components: { [valueKey]: { value: 2 } } } })
+  });
+  const found = await detectConflicts([first, second]);
+  assert.ok(found.some(conflict => conflict.type === type && conflict.identifier === identifier),
+    `preflight must detect duplicate ${type} identifier ${identifier}`);
+}
+await assertRegistryConflict('attachable', 'attachables/tool.json', 'minecraft:attachable', 'demo:tool', 'minecraft:render');
+await assertRegistryConflict('spawn_rule', 'spawn_rules/mob.json', 'minecraft:spawn_rules', 'demo:mob', 'minecraft:spawns_on_block_filter');
+await assertRegistryConflict('recipe', 'recipes/potion.json', 'minecraft:recipe_brewing_mix', 'demo:potion_mix', 'input');
+const lootA = await makePack('Behavior Pack', 'Loot A', {
+  'loot_tables/blocks/meteorite.json': JSON.stringify({ pools: [{ rolls: 1, entries: [{ type: 'item', name: 'demo:ore_a' }] }] })
+});
+const lootB = await makePack('Behavior Pack', 'Loot B', {
+  'loot_tables/blocks/meteorite.json': JSON.stringify({ pools: [{ rolls: 1, entries: [{ type: 'item', name: 'demo:ore_b' }] }] })
+});
+const lootConflicts = await detectConflicts([lootA, lootB]);
+assert.ok(lootConflicts.some(conflict => conflict.type === 'loot_table' && conflict.identifier === 'blocks/meteorite'),
+  'preflight must detect nested loot-table path conflicts');
+console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
