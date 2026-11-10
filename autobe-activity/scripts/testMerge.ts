@@ -554,6 +554,35 @@ await (async () => {
 await (async () => {
   const zip = new JSZip();
   const diagnostics: string[] = [];
+  zip.file('spawn_rules/mob_surface.json', JSON.stringify({
+    'minecraft:spawn_rules': {
+      description: { identifier: 'demo:mob' },
+      conditions: [{ minecraft:spawns_on_surface: {}, minecraft:weight: { default: 5 } }]
+    }
+  }));
+  zip.file('spawn_rules/mob_cave.json', JSON.stringify({
+    'minecraft:spawn_rules': {
+      description: { identifier: 'demo:mob' },
+      conditions: [{ minecraft:spawns_on_block_filter: { blocks: ['minecraft:stone'] }, minecraft:weight: { default: 2 } }]
+    }
+  }));
+  await mergeDefinitionsByIdentifier(zip, diagnostics, 'behavior');
+  const active = JSON.parse(await zip.file('spawn_rules/mob_surface.json')!.async('text'));
+  assert.equal(active['minecraft:spawn_rules'].conditions.length, 2,
+    'conditions from both add-ons must be preserved for the same entity spawn rule');
+  assert.equal(zip.file('spawn_rules/mob_cave.json'), null,
+    'the duplicate entity spawn rule is merged into one active definition');
+  console.log('✓ spawn-rule conditions from multiple add-ons are unioned without losing either rule');
+})();
+
+await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
+  zip.file('items/utility_item.json', JSON.stringify({
+    'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:icon': { texture: 'utility_item' } } }
+  }));await (async () => {
+  const zip = new JSZip();
+  const diagnostics: string[] = [];
   zip.file('items/utility_item.json', JSON.stringify({
     'minecraft:item': { description: { identifier: 'demo:utility_item' }, components: { 'minecraft:icon': { texture: 'utility_item' } } }
   }));
