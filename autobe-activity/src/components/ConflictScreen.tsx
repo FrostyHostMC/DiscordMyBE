@@ -56,7 +56,13 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
       case 'block':
         return `Both packs define the block "${c.identifier}". Prefixing keeps both blocks distinct in the creative inventory and recipes.`;
       case 'recipe':
-        return `Both packs define a crafting recipe for "${c.identifier}". Choose which recipe takes priority or let AutoBE namespace both.`;
+        return `Both packs define a recipe with identifier "${c.identifier}". AutoBE checks duplicate recipe identifiers and preserves distinct recipe files.`;
+      case 'spawn_rule':
+        return `Both packs define spawn rules for "${c.identifier}". These control when and where entities can spawn, so conflicting rules need an explicit choice.`;
+      case 'attachable':
+        return `Both packs define an attachable "${c.identifier}". Attachable definitions connect item or entity visuals to geometry, textures and materials, so incompatible rigs should not be combined blindly.`;
+      case 'loot_table':
+        return `Both packs provide a loot table at "${c.identifier}". The table controls drops and rewards; choosing a winner prevents one add-on's loot behavior from being silently replaced.`;
       case 'vanilla_asset':
         return `Both "${c.packA.name}" and "${c.packB.name}" supply different bytes for the same vanilla-facing asset path. Minecraft expects this path to stay unchanged, so AutoBE cannot safely rename it. Choose which add-on's file should be used in the final pack.`;
       default:
@@ -150,7 +156,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
         {/* Filter buttons */}
         {conflicts.length > 0 && (
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
-            {['all', 'entity', 'item', 'block', 'recipe', 'vanilla_asset'].map((t) => (
+            {['all', 'entity', 'item', 'block', 'recipe', 'spawn_rule', 'attachable', 'loot_table', 'animation_controller', 'render_controller', 'vanilla_asset'].map((t) => (
               <button
                 key={t}
                 type="button"
