@@ -259,16 +259,16 @@ assert.equal(lootConflict.resolution, 'keep_a', 'path-bound loot tables must req
 console.log('✓ preflight detects attachable, spawn-rule, brewing-recipe and nested loot-table conflicts');
 
 const atlasFirst = await makePack('Resource Pack', 'First Atlas', {
-  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/first_icon' } } }),
-  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/first_block' } } }),
-  'textures/items/first_icon.png': new Uint8Array([1]),
-  'textures/blocks/first_block.png': new Uint8Array([2])
+  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/shared_icon.png': new Uint8Array([1]),
+  'textures/blocks/shared_block.png': new Uint8Array([2])
 });
 const atlasSecond = await makePack('Resource Pack', 'Second Atlas', {
-  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/second_icon' } } }),
-  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/second_block' } } }),
-  'textures/items/second_icon.png': new Uint8Array([3]),
-  'textures/blocks/second_block.png': new Uint8Array([4]),
+  'textures/item_texture.json': JSON.stringify({ texture_data: { shared_icon: { textures: 'textures/items/shared_icon' } } }),
+  'textures/terrain_texture.json': JSON.stringify({ texture_data: { shared_terrain: { textures: 'textures/blocks/shared_block' } } }),
+  'textures/items/shared_icon.png': new Uint8Array([3]),
+  'textures/blocks/shared_block.png': new Uint8Array([4]),
   'blocks.json': JSON.stringify({ 'demo:atlas_block': { textures: 'shared_terrain' } })
 });
 const atlasBehavior = await makePack('Behavior Pack', 'Second Atlas Behavior', {
