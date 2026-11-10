@@ -11,6 +11,7 @@ import { expandBrarchiveFiles } from '../src/utils/brarchive.ts';
 import { makePackNs, namespaceScriptText, scriptModuleOutputPath } from '../src/utils/scriptNamespacing.ts';
 import { guardUnavailableEventSubscriptions } from '../src/utils/scriptCompatibility.ts';
 import { resolveTargetEngineVersion } from '../src/utils/targetEngine.ts';
+import { highestFullScriptVersion, normalizeScriptApiVersion, scriptApiVerTuple } from '../src/utils/scriptApiVersion.ts';
 import { selectMergeOutputs } from '../src/utils/outputOptions.ts';
 import { rewriteIdentifierTokens, rewriteStaticScriptIdentifierReferences } from '../src/utils/identifierReferences.ts';
 import { validateMergedArchive } from '../src/utils/mergedArchiveValidation.ts';
@@ -258,6 +259,15 @@ test('HUD placement preserve mode does not rewrite overlapping controls', () => 
   assert.equal(result.moved.length, 0);
   assert.equal(result.unresolved.length, 1);
   assert.deepEqual(result.hud, hud);
+});
+
+test('Script API dependency versions normalize strings, numeric arrays, and JSON array strings', () => {
+  assert.equal(normalizeScriptApiVersion('2.10.0'), '2.10.0');
+  assert.equal(normalizeScriptApiVersion([2, 10, 0]), '2.10.0');
+  assert.equal(normalizeScriptApiVersion('[2, 10, 0]'), '2.10.0');
+  assert.deepEqual(scriptApiVerTuple([2, 10, 0]), [2, 10, 0, 0]);
+  assert.equal(highestFullScriptVersion(['2.4.0', [2, 10, 0], '2.9.0']), '2.10.0');
+  assert.equal(highestFullScriptVersion([null, undefined, '']), null);
 });
 
 test('selected Bedrock target is written as the minimum when source packs support it', () => {
