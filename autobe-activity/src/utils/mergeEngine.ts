@@ -202,9 +202,12 @@ function conflictDefinitionsInFile(path: string, bytes: Uint8Array): Array<{ typ
     const folder = lower.split('/').filter(Boolean).slice(-2, -1)[0] || '';
     const roots: Array<[string, ConflictItem['type']]> = [
       ['minecraft:entity', 'entity'], ['minecraft:client_entity', 'entity'],
-      ['minecraft:item', 'item'], ['minecraft:block', 'block'],
+      ['minecraft:item', 'item'], ['minecraft:block', 'block'], ['minecraft:attachable', 'attachable'],
+      ['minecraft:spawn_rules', 'spawn_rule'],
       ['minecraft:recipe_shaped', 'recipe'], ['minecraft:recipe_shapeless', 'recipe'],
-      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe', 'recipe']
+      ['minecraft:recipe_furnace', 'recipe'], ['minecraft:recipe_brewing_mix', 'recipe'],
+      ['minecraft:recipe_brewing_container', 'recipe'], ['minecraft:recipe_smithing_transform', 'recipe'],
+      ['minecraft:recipe_smithing_trim', 'recipe'], ['minecraft:recipe', 'recipe']
     ];
     for (const [root, type] of roots) {
       const identifier = data?.[root]?.description?.identifier;
