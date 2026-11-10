@@ -234,7 +234,7 @@ export const ConflictScreen: React.FC<ConflictScreenProps> = ({
                         : 'bg-[#15111F] text-[#AAA3BB] border-[#30263F] hover:text-white'
                     }`}
                   >
-                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : 'Prefix & Keep Both'}
+                    {c.type === 'vanilla_asset' ? 'Cannot Prefix Vanilla' : c.type === 'loot_table' ? 'Choose One Table' : 'Prefix & Keep Both'}
                   </button>
                   <button
                     type="button"
