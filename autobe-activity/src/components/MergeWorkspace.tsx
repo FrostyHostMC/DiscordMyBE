@@ -19,6 +19,7 @@ import {
 import { AddonPack, MergeSessionConfig } from '@/types/modpack';
 import { PackInspectorModal } from './PackInspectorModal';
 import { parseAddonArchive } from '@/utils/addonParser';
+import { AutoBEFeatureArt } from '@/components/AutoBEBrandArt';
 
 interface MergeWorkspaceProps {
   installedPacks: AddonPack[];
@@ -152,9 +153,9 @@ export const MergeWorkspace: React.FC<MergeWorkspaceProps> = ({
             {pack.iconDataUrl ? (
               <img src={pack.iconDataUrl} alt="" className="w-full h-full object-cover" />
             ) : isBp ? (
-              <ScrollText className="w-4 h-4 text-[#A855F7]" />
+              <AutoBEFeatureArt kind="merge" size={34}/>
             ) : (
-              <Palette className="w-4 h-4 text-[#762BFF]" />
+              <AutoBEFeatureArt kind="addons" size={34}/>
             )}
           </div>
 
