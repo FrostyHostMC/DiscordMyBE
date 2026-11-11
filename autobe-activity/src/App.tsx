@@ -754,3 +754,6 @@ export const App: React.FC = () => {
       </div>}
     </div>
   );
+};
+
+export default App;
