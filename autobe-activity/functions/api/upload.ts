@@ -348,7 +348,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       ]);
       // Tolerate stray spaces, slashes or a trailing dot in PUBLIC_BASE_URL (a trailing dot in a
       // hostname breaks the HTTPS connection: "couldn't establish a secure connection").
-      const base = (env.PUBLIC_BASE_URL || url.origin).trim().replace(/[\s./]+$/, '');
+      const base = url.origin;
       return json({ key: body.key, url: `${base}/api/files/${encodeKey(body.key!)}` });
     }
 
