@@ -26,6 +26,7 @@ interface Env {
 const MAX_BYTES = 500 * 1024 * 1024; // Keep uploads bounded for the small free storage allowance.
 const MAX_PUBLISHED_BYTES = 7_000_000_000; // Leave headroom below the nominal 10 GB R2 free allowance.
 const MAX_PARTS = 200;
+const MAX_PART_BYTES = 10 * 1024 * 1024;
 const PUB_UPLOADS_PER_DAY = 3;
 const TEMP_UPLOADS_PER_DAY = 20;
 
@@ -174,6 +175,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const fileName = safeName(String(body.fileName || 'file.bin'));
       const key = `${kind}/${userId}/${crypto.randomUUID()}/${fileName}`;
       const upload = await env.BUCKET.createMultipartUpload(key, {
+        customMetadata: { ownerId: userId, kind, declaredSize: String(size) },
         httpMetadata: {
           contentType: 'application/octet-stream',
           contentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"`,
@@ -197,8 +199,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         return json({ error: 'Bad upload part request.' }, 400);
       }
       if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
+      const declaredPartLength = Number(request.headers.get('content-length') || 0);
+      if (declaredPartLength > MAX_PART_BYTES) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
       const data = await request.arrayBuffer();
       if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
+      if (data.byteLength > MAX_PART_BYTES) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
       const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
       return json({ partNumber: part.partNumber, etag: part.etag });
     }
@@ -209,12 +214,27 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         uploadId?: string;
         parts?: Array<{ partNumber: number; etag: string }>;
       };
-      if (!Array.isArray(body.parts) || body.parts.length === 0) {
+      if (!Array.isArray(body.parts) || body.parts.length === 0 || body.parts.length > MAX_PARTS) {
         return json({ error: 'Bad complete request.' }, 400);
       }
       if (!(await isAuthorized(body.key, body.uploadId))) return json({ error: 'Upload token rejected.' }, 401);
+      const seenParts = new Set<number>();
+      for (const part of body.parts) {
+        if (!Number.isInteger(part?.partNumber) || part.partNumber < 1 || part.partNumber > MAX_PARTS ||
+            typeof part.etag !== 'string' || part.etag.length === 0 || part.etag.length > 256 || seenParts.has(part.partNumber)) {
+          return json({ error: 'Invalid or duplicate upload part metadata.' }, 400);
+        }
+        seenParts.add(part.partNumber);
+      }
       const parts = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
       await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
+      const completed = await env.BUCKET.head(body.key!);
+      if (!completed || completed.customMetadata?.declaredSize !== String(completed.size) ||
+          completed.customMetadata?.kind !== body.key!.split('/')[0] ||
+          !body.key!.startsWith(String(completed.customMetadata?.kind) + '/' + String(completed.customMetadata?.ownerId) + '/')) {
+        await env.BUCKET.delete(body.key!).catch(() => {});
+        return json({ error: 'Completed upload failed its ownership or size integrity check.' }, 400);
+      }
       // Tolerate stray spaces, slashes or a trailing dot in PUBLIC_BASE_URL (a trailing dot in a
       // hostname breaks the HTTPS connection: "couldn't establish a secure connection").
       const base = (env.PUBLIC_BASE_URL || url.origin).trim().replace(/[\s./]+$/, '');
