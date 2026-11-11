@@ -131,12 +131,27 @@ export async function onRequestPost(context: Ctx) {
       return json({ error: 'Missing required fields' }, 400);
     }
 
-    // Only accept files that were uploaded through our own /api/upload (kind "pub").
+    // A published listing must point to a completed R2 object uploaded by this
+    // exact Discord account. A path prefix alone is not proof of ownership.
+    let blobUrl: URL;
+    let objectKey: string;
     try {
-      const blobUrl = new URL(String(data.blob_url));
-      if (!blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad path');
+      blobUrl = new URL(String(data.blob_url), new URL(request.url).origin);
+      if (blobUrl.origin !== new URL(request.url).origin ||
+          !blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad origin or path');
+      objectKey = blobUrl.pathname.slice('/api/files/'.length)
+        .split('/').map((part) => decodeURIComponent(part)).join('/');
+      if (!objectKey.startsWith(`pub/${userId}/`) || objectKey.includes('..')) throw new Error('not owned');
     } catch {
-      return json({ error: 'Invalid file link. Upload the modpack through the app first.' }, 400);
+      return json({ error: 'Invalid or unowned file link. Upload the modpack through your own account first.' }, 400);
+    }
+    const uploadedObject = await env.BUCKET.head(objectKey);
+    if (!uploadedObject ||
+        uploadedObject.customMetadata?.ownerId !== userId ||
+        uploadedObject.customMetadata?.kind !== 'pub' ||
+        uploadedObject.customMetadata?.declaredSize !== String(uploadedObject.size) ||
+        Number(data.size) !== uploadedObject.size) {
+      return json({ error: 'The uploaded file could not be verified as your completed upload. Please upload it again.' }, 400);
     }
 
     const publishCount = await consumePublishQuota(env, userId);
@@ -270,12 +285,21 @@ export async function onRequestDelete(context: Ctx) {
     if (!row) return json({ error: 'Modpack not found' }, 404);
     if (row.author_id !== userId) return json({ error: 'You can only delete your own modpacks' }, 403);
 
-    // Remove the permanent R2 object too; otherwise deleted community packs leak storage forever.
+    // Delete only an object whose immutable upload metadata matches this listing's
+    // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
-      const fileUrl = new URL(row.blob_url);
-      const prefix = '/api/files/';
-      if (fileUrl.pathname.startsWith(`${prefix}pub/`)) {
-        const key = fileUrl.pathname.slice(prefix.length).split('/').map((part) => decodeURIComponent(part)).join('/');
+      const fileUrl = new URL(row.blob_url, new URL(request.url).origin);
+      if (fileUrl.origin !== new URL(request.url).origin || !fileUrl.pathname.startsWith('/api/files/pub/')) {
+        return json({ error: 'Stored file reference failed its safety check; no file was deleted.' }, 409);
+      }
+      const key = fileUrl.pathname.slice('/api/files/'.length)
+        .split('/').map((part) => decodeURIComponent(part)).join('/');
+      const object = await env.BUCKET.head(key);
+      if (object) {
+        if (!key.startsWith(`pub/${userId}/`) || object.customMetadata?.ownerId !== userId ||
+            object.customMetadata?.kind !== 'pub') {
+          return json({ error: 'Stored file ownership check failed; no file was deleted.' }, 409);
+        }
         await env.BUCKET.delete(key);
       }
     }
