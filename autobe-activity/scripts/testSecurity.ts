@@ -4,7 +4,7 @@ import { getOwnedPublishedObjectKey, isOwnedPublishedObject } from '../functions
 const base = 'https://discordmybe.pages.dev';
 const owner = '123456789012345678';
 const other = '987654321098765432';
-const ownKey = `pub/${owner}/upload-uuid/modpack.mcaddon';
+const ownKey = `pub/${owner}/upload-uuid/modpack.mcaddon`;
 const ownUrl = `${base}/api/files/${ownKey.split('/').map(encodeURIComponent).join('/')}`;
 
 assert.equal(getOwnedPublishedObjectKey(ownUrl, owner, base), ownKey);
