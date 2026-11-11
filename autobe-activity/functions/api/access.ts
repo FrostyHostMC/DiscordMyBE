@@ -1,4 +1,5 @@
 interface Env {
+  DISCORD_CLIENT_ID: string;
   DISCORD_BOT_TOKEN: string;
   DISCORD_GUILD_ID: string;
   DISCORD_REQUIRED_ROLE_ID: string;
