@@ -77,7 +77,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
         throw new Error(data.error || 'Failed to fetch community modpacks');
       }
 
-      setModpacks(data.modpacks || []);
+      setModpacks((data.modpacks || []).filter((item: CommunityModpack) => item.content_type !== 'addon'));
       setError(null);
     } catch (err) {
       console.error('Failed to fetch community modpacks:', err);
@@ -148,7 +148,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
         setSelectedModpack(null);
         setNotice('This modpack is no longer available.');
       } else {
-        setModpacks(data.modpacks || []);
+        setModpacks((data.modpacks || []).filter((item: CommunityModpack) => item.content_type !== 'addon'));
         setSelectedModpack(latest);
       }
     } catch (err) {
