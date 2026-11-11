@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { vibrate } from '@aippy/runtime/device';
 import { Info, X } from 'lucide-react';
+import { AutoBEFeatureArt, AutoBEWordmark } from '@/components/AutoBEBrandArt';
 import tweaksConfig from '@/config/tweaksConfig.json';
 
 import {
@@ -717,156 +718,39 @@ export const App: React.FC = () => {
 
 
   return (
-    <div className="relative w-full h-[100dvh] min-h-[100svh] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] bg-[#08070D] text-[#F7F5FC] flex flex-col overflow-hidden font-sans select-none">
-      {/* Toast Notification Banner */}
-      {toastMessage && (
-        <div className="fixed top-[calc(env(safe-area-inset-top)+4.25rem)] left-3 right-3 sm:left-auto sm:right-4 z-[100] p-3 rounded-xl bg-[#15111F]/95 border border-[#762BFF]/60 text-xs font-semibold text-white shadow-[0_0_20px_rgba(118,43,255,0.4)] flex items-center justify-between gap-3 max-w-md animate-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center gap-2 min-w-0">
-            <Info className="w-4 h-4 text-[#A855F7] shrink-0" />
-            <span className="break-words line-clamp-5">{toastMessage}</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setToastMessage(null)}
-            className="text-[#AAA3BB] hover:text-white p-0.5"
-            aria-label="Dismiss"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-
-      {/* Subpack Variant Selection (before merging) */}
-      {subpackPromptPacks && (
-        <SubpackSelectModal
-          packs={subpackPromptPacks}
-          onConfirm={handleSubpackConfirm}
-          onCancel={handleSubpackCancel}
-        />
-      )}
-
-      {/* Screen Router */}
-      {screen === 'script_check' && mergePlan && (
-        <ScriptCheckScreen
-          plan={mergePlan}
-          selectedPacks={getSelectedPacks()}
-          onContinue={() => {
-            triggerHaptic(50);
-            handleSoundTap();
-            runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current, pendingOutputOptionsRef.current);
-          }}
-          onBack={() => setScreen('main')}
-        />
-      )}
-
-      {screen === 'conflicts' && (
-        <ConflictScreen
-          conflicts={conflicts}
-          autoMerge={autoMerge}
-          packs={getSelectedPacks()}
-          onUpdateResolution={(cid, res) => {
-            setConflicts((prev) =>
-              prev.map((c) => (c.id === cid ? { ...c, resolution: res } : c))
-            );
-          }}
-          onAutoPrefixAll={() => {
-            setConflicts((prev) =>
-              prev.map((c) => ({ ...c, resolution: c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all' }))
-            );
-            showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.');
-          }}
-          onProceedMerge={() => {
-            openScriptCheck(getSelectedPacks());
-          }}
-          onBack={() => setScreen('main')}
-        />
-      )}
-
-      {screen === 'merging' && (
-        <MergingScreen
-          currentStep={mergeStep}
-          progress={mergeProgress}
-          packCount={selectedPackIds.length}
-          onCancel={() => setScreen('main')}
-        />
-      )}
-
-      {screen === 'merge_complete' && justCompletedModpack && (
-        <MergeCompleteScreen
-          modpack={justCompletedModpack}
-          // NOTE: wrap in arrow functions — passing the handler directly hands it the click
-          // event as its `modpack` argument, which caused "Modpack file not available".
-          onInstallToMinecraft={() => handleInstallToMinecraft()}
-          onSaveToFiles={() => handleInstallToMinecraft()}
-          onShare={handleShareModpack}
-          onDownloadOutput={handleDownloadOutput}
-          onDone={() => {
-            setJustCompletedModpack(null);
-            navigateTab('workspace');
-          }}
-          onRename={(newName) => {
-            setJustCompletedModpack({
-              ...justCompletedModpack,
-              name: newName,
-              outputFileName: `${newName.replace(/\s+/g, '_')}.mcaddon`
-            });
-          }}
-          onPublish={handlePublishModpack}
-          isPublishing={isPublishing}
-          activeTransfer={activeTransfer}
-          transferProgress={transferProgress}
-          transferStatus={transferStatus}
-        />
-      )}
-
-      {screen === 'community' && (
-        <CommunityModpacksScreen
-          onBack={() => setScreen('main')}
-          onDownload={handleDownloadCommunityModpack}
-          currentUserId={discordUser?.id}
-        />
-      )}
-
-      {/* Main studio: only the in-memory merge session and public community remain. */}
-      {screen === 'main' && (
-        <div className="flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden">
-          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-[#30263F]/70 bg-[#100D18] px-4 py-3">
-            <div>
-              <div className="text-sm font-black tracking-tight text-white">Auto<span className="text-[#A855F7]">BE</span></div>
-              <div className="text-[10px] text-[#AAA3BB]">Bedrock Add-on Merger</div>
-            </div>
-            <nav className="flex items-center gap-2">
-              <button type="button" onClick={() => navigateTab('workspace')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'workspace' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Merge Workspace</button>
-              <button type="button" onClick={() => navigateTab('community')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'community' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Modpack Community</button>
-              <button type="button" onClick={() => navigateTab('community_addons')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'community_addons' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Addon Library</button>
-            </nav>
-          </header>
-          <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            {currentTab === 'workspace' ? (
-              <MergeWorkspace
-                installedPacks={installedPacks}
-                selectedPackIds={selectedPackIds}
-                onTogglePack={handleTogglePack}
-                onSelectAll={handleSelectAll}
-                onClearSelection={handleClearSelection}
-                onStartMergeFlow={handleStartMergeFlow}
-                onImportPacks={handleImportPacks}
-              />
-            ) : currentTab === 'community' ? (
-              <CommunityModpacksScreen
-                onBack={() => navigateTab('workspace')}
-                onDownload={handleDownloadCommunityModpack}
-                currentUserId={discordUser?.id}
-              />
-            ) : (
-              <CommunityAddonsScreen onBack={() => navigateTab('workspace')} currentUserId={discordUser?.id} />
-            )}
+    <div className="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-[#090713] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]">
+      {toastMessage && <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-[100] mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl border border-violet-400/40 bg-[#17102C]/95 p-3 text-xs font-semibold text-white shadow-2xl backdrop-blur-xl sm:left-auto sm:right-5"><div className="flex min-w-0 items-center gap-2"><Info className="h-4 w-4 shrink-0 text-violet-300"/><span className="break-words">{toastMessage}</span></div><button type="button" onClick={() => setToastMessage(null)} aria-label="Dismiss notification" className="rounded-lg p-1 text-violet-200/70 hover:bg-white/10 hover:text-white"><X className="h-4 w-4"/></button></div>}
+      {subpackPromptPacks && <SubpackSelectModal packs={subpackPromptPacks} onConfirm={handleSubpackConfirm} onCancel={handleSubpackCancel}/>}
+      {screen === 'script_check' && mergePlan && <ScriptCheckScreen plan={mergePlan} selectedPacks={getSelectedPacks()} onContinue={() => { triggerHaptic(50); handleSoundTap(); runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current, pendingOutputOptionsRef.current); }} onBack={() => setScreen('main')}/>}
+      {screen === 'conflicts' && <ConflictScreen conflicts={conflicts} autoMerge={autoMerge} packs={getSelectedPacks()} onUpdateResolution={(cid,res) => setConflicts(prev => prev.map(c => c.id === cid ? {...c,resolution:res} : c))} onAutoPrefixAll={() => { setConflicts(prev => prev.map(c => ({...c,resolution:c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all'})); showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.'); }} onProceedMerge={() => openScriptCheck(getSelectedPacks())} onBack={() => setScreen('main')}/>}
+      {screen === 'merging' && <MergingScreen currentStep={mergeStep} progress={mergeProgress} packCount={selectedPackIds.length} onCancel={() => setScreen('main')}/>}
+      {screen === 'merge_complete' && justCompletedModpack && <MergeCompleteScreen modpack={justCompletedModpack} onInstallToMinecraft={() => handleInstallToMinecraft()} onSaveToFiles={() => handleInstallToMinecraft()} onShare={handleShareModpack} onDownloadOutput={handleDownloadOutput} onDone={() => {setJustCompletedModpack(null);navigateTab('workspace');}} onRename={newName => setJustCompletedModpack({...justCompletedModpack,name:newName,outputFileName:`${newName.replace(/\\s+/g,'_')}.mcaddon`})} onPublish={handlePublishModpack} isPublishing={isPublishing} activeTransfer={activeTransfer} transferProgress={transferProgress} transferStatus={transferStatus}/>}
+      {screen === 'community' && <CommunityModpacksScreen onBack={() => setScreen('main')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id}/>}
+      {screen === 'main' && <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+        <aside className="hidden w-[248px] shrink-0 flex-col border-r border-violet-300/10 bg-[#0D0A18] px-4 py-5 lg:flex">
+          <AutoBEWordmark/>
+          <div className="mt-10 px-3 text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/40">Workspace</div>
+          <nav className="mt-3 space-y-1" aria-label="Main navigation">
+            <button onClick={() => navigateTab('workspace')} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${currentTab==='workspace'?'border border-violet-300/25 bg-violet-500/15 text-white shadow-[inset_3px_0_0_#A78BFA]':'text-[#AAA1C0] hover:bg-white/[.04] hover:text-white'}`}><AutoBEFeatureArt kind="merge" size={40}/><span><span className="block text-sm font-bold">Merger</span><span className="block text-[10px] text-[#837995]">Build your modpack</span></span></button>
+            <button onClick={() => navigateTab('community')} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${currentTab==='community'?'border border-violet-300/25 bg-violet-500/15 text-white':'text-[#AAA1C0] hover:bg-white/[.04] hover:text-white'}`}><AutoBEFeatureArt kind="community" size={40}/><span><span className="block text-sm font-bold">Community</span><span className="block text-[10px] text-[#837995]">Discover modpacks</span></span></button>
+            <button onClick={() => navigateTab('community_addons')} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition ${currentTab==='community_addons'?'border border-violet-300/25 bg-violet-500/15 text-white':'text-[#AAA1C0] hover:bg-white/[.04] hover:text-white'}`}><AutoBEFeatureArt kind="addons" size={40}/><span><span className="block text-sm font-bold">Addon Library</span><span className="block text-[10px] text-[#837995]">Browse individual packs</span></span></button>
+          </nav>
+          <div className="mt-auto overflow-hidden rounded-2xl border border-violet-300/15 bg-gradient-to-br from-[#211342] to-[#100D1C] p-4"><AutoBEFeatureArt kind="home" size={78}/><div className="mt-2 text-sm font-extrabold">Build. Merge. Explore.</div><p className="mt-1 text-xs leading-relaxed text-[#A99FBE]">Your Bedrock toolkit, with room for bigger ideas.</p><div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-emerald-300"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_#34D399]"/> Studio ready</div></div>
+        </aside>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="flex shrink-0 items-center justify-between gap-3 border-b border-violet-300/10 bg-[#0D0A18]/95 px-4 py-3 backdrop-blur-xl sm:px-6"><div className="lg:hidden"><AutoBEWordmark/></div><div className="hidden min-w-0 items-center gap-2 text-xs text-[#9B91AE] lg:flex"><span className="text-violet-200/50">Studio</span><span>/</span><span className="font-semibold text-white">{currentTab==='workspace'?'Merger workspace':currentTab==='community'?'Community modpacks':'Addon library'}</span></div><div className="ml-auto flex items-center gap-3"><div className="hidden text-right sm:block"><div className="text-xs font-bold text-white">{discordUser?.global_name || discordUser?.username || 'Discord member'}</div><div className="text-[10px] text-[#8E849F]">AutoBE Studio</div></div><div className="grid h-9 w-9 place-items-center rounded-xl border border-violet-300/20 bg-violet-500/10 text-xs font-black text-violet-200">{(discordUser?.global_name || discordUser?.username || 'A').slice(0,1).toUpperCase()}</div></div></header>
+          <nav className="flex shrink-0 gap-2 overflow-x-auto border-b border-violet-300/10 bg-[#100B1D] px-3 py-2 lg:hidden" aria-label="Mobile navigation">
+            <button onClick={() => navigateTab('workspace')} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${currentTab==='workspace'?'bg-violet-500/20 text-white':'text-[#A99FBE]'}`}><AutoBEFeatureArt kind="merge" size={25}/> Merger</button>
+            <button onClick={() => navigateTab('community')} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${currentTab==='community'?'bg-violet-500/20 text-white':'text-[#A99FBE]'}`}><AutoBEFeatureArt kind="community" size={25}/> Community</button>
+            <button onClick={() => navigateTab('community_addons')} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${currentTab==='community_addons'?'bg-violet-500/20 text-white':'text-[#A99FBE]'}`}><AutoBEFeatureArt kind="addons" size={25}/> Addon Library</button>
+          </nav>
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_70%_0%,rgba(109,40,217,.12),transparent_42%),#090713]">
+            {currentTab==='workspace' ? <>
+              <section className="relative mx-4 mt-4 overflow-hidden rounded-2xl border border-violet-300/15 bg-gradient-to-r from-[#21113D] via-[#17102C] to-[#100D1B] p-5 sm:mx-6 sm:mt-6 sm:p-7"><div className="pointer-events-none absolute -right-8 -top-10 opacity-30"><AutoBEFeatureArt kind="home" size={230}/></div><div className="relative z-10 max-w-2xl"><div className="mb-2 text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/70">Your Bedrock creation studio</div><h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Make more room for <span className="text-violet-300">imagination.</span></h1><p className="mt-2 max-w-lg text-xs leading-relaxed text-[#B9ADC9] sm:text-sm">Bring your favorite addons together, resolve conflicts, and build a pack that feels like yours.</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{installedPacks.length} imported packs</span><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{selectedPackIds.length} selected for merge</span></div></div></section>
+              <div className="mx-4 mb-6 mt-5 sm:mx-6"><div className="mb-3 flex items-center justify-between gap-3"><div><div className="text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/55">Build workspace</div><h2 className="mt-1 text-lg font-extrabold text-white">Merger</h2></div><div className="text-[10px] text-[#847995]">Import · Organize · Analyze · Export</div></div><MergeWorkspace installedPacks={installedPacks} selectedPackIds={selectedPackIds} onTogglePack={handleTogglePack} onSelectAll={handleSelectAll} onClearSelection={handleClearSelection} onStartMergeFlow={handleStartMergeFlow} onImportPacks={handleImportPacks}/></div>
+            </> : currentTab==='community' ? <CommunityModpacksScreen onBack={() => navigateTab('workspace')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id}/> : <CommunityAddonsScreen onBack={() => navigateTab('workspace')} currentUserId={discordUser?.id}/>}
           </main>
         </div>
-      )}
-
+      </div>}
     </div>
   );
-};
-
-export default App;
