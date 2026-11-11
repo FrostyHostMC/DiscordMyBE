@@ -21,3 +21,13 @@ bucket_name = "autobe-modpacks"
 binding = "DB"
 database_name = "autobe-community-modpacks"
 database_id = "87c441f7-ef60-4478-a337-57cc02dcabbb"
+
+# Preview deployments must never share production storage or community data.
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "autobe-community-modpacks-preview"
+database_id = "17c2d77c-f035-456b-acae-471709996d85"
