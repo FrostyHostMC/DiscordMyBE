@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS community_modpacks (
   downloads INTEGER DEFAULT 0,
   blob_url TEXT NOT NULL,
   file_name TEXT NOT NULL,
-  included_packs TEXT -- JSON array of pack info
+  included_packs TEXT, -- JSON array of pack info
+  content_type TEXT NOT NULL DEFAULT 'modpack',
+  category TEXT NOT NULL DEFAULT 'Other'
 );
 
 CREATE INDEX IF NOT EXISTS idx_community_modpacks_created_at ON community_modpacks(created_at DESC);
