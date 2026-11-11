@@ -16,10 +16,11 @@
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "generate:codebase": "npx tsx scripts/generateCodebaseArchive.ts",
-    "test": "npm run test:merge && npm run test:verify && npm run test:integration",
+    "test": "npm run test:merge && npm run test:verify && npm run test:integration && npm run test:security",
     "test:merge": "tsx scripts/testMerge.ts",
     "test:verify": "tsx scripts/testVerification.ts",
-    "test:integration": "tsx scripts/testIntegration.ts"
+    "test:integration": "tsx scripts/testIntegration.ts",
+    "test:security": "tsx scripts/testSecurity.ts"
   },
   "dependencies": {
     "@aippy/runtime": "^0.4.1",
