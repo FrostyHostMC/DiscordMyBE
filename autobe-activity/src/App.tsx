@@ -29,6 +29,7 @@ import { MergingScreen } from '@/components/MergingScreen';
 import { MergeCompleteScreen } from '@/components/MergeCompleteScreen';
 import { SubpackSelectModal } from '@/components/SubpackSelectModal';
 import { CommunityModpacksScreen } from '@/components/CommunityModpacksScreen';
+import { CommunityAddonsScreen } from '@/components/CommunityAddonsScreen';
 
 const tweaks = aippyTweaks(tweaksConfig);
 
@@ -103,7 +104,7 @@ export const App: React.FC = () => {
   const navigateTab = (tab: TabType) => {
     triggerHaptic(30);
     handleSoundTap();
-    setCurrentTab(tab === 'community' ? 'community' : 'workspace');
+    setCurrentTab(tab === 'community' || tab === 'community_addons' ? tab : 'workspace');
     setScreen('main');
   };
 
@@ -837,6 +838,7 @@ export const App: React.FC = () => {
             <nav className="flex items-center gap-2">
               <button type="button" onClick={() => navigateTab('workspace')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'workspace' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Merge Workspace</button>
               <button type="button" onClick={() => navigateTab('community')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'community' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Modpack Community</button>
+              <button type="button" onClick={() => navigateTab('community_addons')} className={`rounded-lg px-3 py-2 text-xs font-bold ${currentTab === 'community_addons' ? 'bg-[#762BFF] text-white' : 'border border-[#30263F] text-[#AAA3BB] hover:text-white'}`}>Addon Library</button>
             </nav>
           </header>
           <main className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
@@ -850,12 +852,14 @@ export const App: React.FC = () => {
                 onStartMergeFlow={handleStartMergeFlow}
                 onImportPacks={handleImportPacks}
               />
-            ) : (
+            ) : currentTab === 'community' ? (
               <CommunityModpacksScreen
                 onBack={() => navigateTab('workspace')}
                 onDownload={handleDownloadCommunityModpack}
                 currentUserId={discordUser?.id}
               />
+            ) : (
+              <CommunityAddonsScreen onBack={() => navigateTab('workspace')} currentUserId={discordUser?.id} />
             )}
           </main>
         </div>
