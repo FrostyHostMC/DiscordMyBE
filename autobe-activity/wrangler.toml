@@ -31,3 +31,11 @@ bucket_name = "autobe-modpacks-preview"
 binding = "DB"
 database_name = "autobe-community-modpacks-preview"
 database_id = "17c2d77c-f035-456b-acae-471709996d85"
+
+[env.preview.vars]
+VITE_DISCORD_CLIENT_ID = "1471599214717829120"
+DISCORD_CLIENT_ID = "1471599214717829120"
+DISCORD_GUILD_ID = "1561951163065180251"
+DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
+DISCORD_OAUTH_REDIRECT_URI = "https://discordmybe.pages.dev/"
+PUBLIC_BASE_URL = "https://discordmybe.pages.dev"
