@@ -15,7 +15,7 @@ const json = (body: unknown, status = 200) =>
   });
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
+  if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
     return json({ error: 'Role verification is not configured on the server.' }, 500);
   }
 
