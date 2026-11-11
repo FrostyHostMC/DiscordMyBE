@@ -133,7 +133,7 @@ export async function onRequestPost(context: Ctx) {
     // A published listing must point to a completed R2 object uploaded by this
     // exact Discord account. A path prefix alone is not proof of ownership.
     const objectKey = getOwnedPublishedObjectKey(
-      String(data.blob_url), userId, env.PUBLIC_BASE_URL || request.url,
+      String(data.blob_url), userId, request.url,
     );
     if (!objectKey) {
       return json({ error: 'Invalid or unowned file link. Upload the modpack through your own account first.' }, 400);
@@ -279,7 +279,7 @@ export async function onRequestDelete(context: Ctx) {
     // Delete only an object whose immutable upload metadata matches this listing's
     // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
-      const key = getOwnedPublishedObjectKey(row.blob_url, userId, env.PUBLIC_BASE_URL || request.url);
+      const key = getOwnedPublishedObjectKey(row.blob_url, userId, request.url);
       if (key) {
         const object = await env.BUCKET.head(key);
         // Older listings may point to pre-hardening objects without ownership
