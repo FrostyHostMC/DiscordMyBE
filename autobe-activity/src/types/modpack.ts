@@ -81,6 +81,7 @@ export type TabType =
   | 'rp_library'
   | 'library'
   | 'community'
+  | 'community_addons'
   | 'conflicts_tool'
   | 'dependencies_tool'
   | 'history_tool'
