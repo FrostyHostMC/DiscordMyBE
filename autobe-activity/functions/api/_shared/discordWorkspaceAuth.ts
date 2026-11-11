@@ -32,7 +32,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 }
 async function fingerprint(token: string, env: WorkspaceDiscordEnv): Promise<string> {
   const source = new TextEncoder().encode([
-    token, env.DISCORD_GUILD_ID, env.DISCORD_REQUIRED_ROLE_ID,
+    token, env.DISCORD_CLIENT_ID, env.DISCORD_GUILD_ID, env.DISCORD_REQUIRED_ROLE_ID,
   ].join(':'));
   const digest = await crypto.subtle.digest('SHA-256', source);
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -42,7 +42,7 @@ function retryAfter(response: Response): Record<string, string> {
   return value ? { 'retry-after': value } : {};
 }
 async function verify(token: string, env: WorkspaceDiscordEnv): Promise<AuthResult> {
-  const meResponse = await fetch('https://discord.com/api/v10/users/@me', {
+  const meResponse = await fetch('https://discord.com/api/v10/oauth2/@me', {
     headers: { authorization: `Bearer ${token}` },
   });
   if (meResponse.status === 401) return json({ error: 'Discord session expired. Reopen AutoBE.' }, 401);
@@ -51,8 +51,9 @@ async function verify(token: string, env: WorkspaceDiscordEnv): Promise<AuthResu
     console.error('[Workspace auth] Discord user lookup failed:', meResponse.status);
     return json({ error: `Discord account verification failed (HTTP ${meResponse.status}). Retry shortly; your local packs are safe.` }, 502);
   }
-  const me = await meResponse.json() as { id?: string };
-  if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
+  const oauth = await meResponse.json() as { application?: { id?: string }; user?: { id?: string } };
+  if (oauth.application?.id !== env.DISCORD_CLIENT_ID || !oauth.user?.id) return json({ error: 'This Discord session was not issued to AutoBE or the account could not be verified.' }, 401);
+  const me = oauth.user;
 
   const memberResponse = await fetch(
     `https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`,

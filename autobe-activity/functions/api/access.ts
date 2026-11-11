@@ -1,4 +1,5 @@
 interface Env {
+  DISCORD_CLIENT_ID: string;
   DISCORD_BOT_TOKEN: string;
   DISCORD_GUILD_ID: string;
   DISCORD_REQUIRED_ROLE_ID: string;
@@ -14,7 +15,7 @@ const json = (body: unknown, status = 200) =>
   });
 
 export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
+  if (!env.DISCORD_CLIENT_ID || !env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) {
     return json({ error: 'Role verification is not configured on the server.' }, 500);
   }
 
@@ -26,7 +27,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   // Validate the user's OAuth token with Discord; never trust a user ID supplied by the browser.
   let meResponse: Response;
   try {
-    meResponse = await fetch('https://discord.com/api/v10/users/@me', {
+    meResponse = await fetch('https://discord.com/api/v10/oauth2/@me', {
       headers: { authorization: `Bearer ${match[1]}` },
     });
   } catch (error) {
@@ -42,10 +43,12 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     return json({ error: `Discord account verification failed (HTTP ${meResponse.status}).` }, 502);
   }
 
-  const me = await meResponse.json() as { id?: string; username?: string; global_name?: string | null };
-  if (!me.id) {
+  const oauth = await meResponse.json() as { application?: { id?: string }; user?: { id?: string; username?: string; global_name?: string | null } };
+  if (oauth.application?.id !== env.DISCORD_CLIENT_ID || !oauth.user?.id) {
     return json({ allowed: false, reason: 'Discord could not verify your account.' }, 401);
   }
+
+  const me = oauth.user;
 
   // This endpoint uses the bot token only on the server. The bot must be in the target guild.
   let memberResponse: Response;

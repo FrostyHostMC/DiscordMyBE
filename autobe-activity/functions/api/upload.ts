@@ -26,6 +26,7 @@ interface Env {
 const MAX_BYTES = 500 * 1024 * 1024; // Keep uploads bounded for the small free storage allowance.
 const MAX_PUBLISHED_BYTES = 7_000_000_000; // Leave headroom below the nominal 10 GB R2 free allowance.
 const MAX_PARTS = 200;
+const PART_BYTES = 8 * 1024 * 1024; // Must match the browser uploader's fixed 8 MiB chunks.
 const PUB_UPLOADS_PER_DAY = 3;
 const TEMP_UPLOADS_PER_DAY = 20;
 
@@ -46,6 +47,25 @@ async function ensureCommunityTable(env: Env): Promise<void> {
     file_name TEXT NOT NULL,
     included_packs TEXT
   )`).run();
+}
+
+async function ensureUploadTrackingTables(env: Env): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_sessions (
+      upload_id TEXT PRIMARY KEY, object_key TEXT NOT NULL, user_id TEXT NOT NULL,
+      kind TEXT NOT NULL, declared_size INTEGER NOT NULL, created_at INTEGER NOT NULL
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_parts (
+      upload_id TEXT NOT NULL, part_number INTEGER NOT NULL, etag TEXT NOT NULL,
+      size INTEGER NOT NULL, PRIMARY KEY (upload_id, part_number)
+    )`),
+  ]);
+  // R2 aborts stale multipart uploads after seven days. Keep D1 bookkeeping bounded too.
+  const expiredBefore = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id IN (SELECT upload_id FROM autobe_upload_sessions WHERE created_at < ?)').bind(expiredBefore),
+    env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE created_at < ?').bind(expiredBefore),
+  ]);
 }
 
 async function consumeDailyQuota(env: Env, userId: string, kind: string): Promise<number> {
@@ -112,6 +132,44 @@ async function sign(env: Env, key: string, uploadId: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<ArrayBuffer | null> {
+  if (!request.body) return new ArrayBuffer(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output.buffer;
+}
+
+async function readJsonWithinLimit<T>(request: Request, maxBytes: number): Promise<T | null> {
+  const body = await readBodyWithinLimit(request, maxBytes);
+  if (body === null || body.byteLength === 0) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as T;
+  } catch {
+    return null;
+  }
+}
+
 const encodeKey = (key: string) => key.split('/').map(encodeURIComponent).join('/');
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -130,8 +188,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (action === 'create' && request.method === 'POST') {
       const userId = await authenticate(request, env);
       if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
-      const body = (await request.json()) as { fileName?: string; kind?: string; size?: number };
+      const body = await readJsonWithinLimit<{ fileName?: string; kind?: string; size?: number }>(request, 8 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized upload request.' }, 400);
       if (!env.DB) return json({ error: 'Publishing is temporarily unavailable because the rate-limit database is not configured.' }, 503);
+      await ensureUploadTrackingTables(env);
       const kind = body.kind === 'pub' ? 'pub' : 'temp';
       const size = Number(body.size) || 0;
       if (size <= 0 || size > MAX_BYTES) {
@@ -174,11 +234,20 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const fileName = safeName(String(body.fileName || 'file.bin'));
       const key = `${kind}/${userId}/${crypto.randomUUID()}/${fileName}`;
       const upload = await env.BUCKET.createMultipartUpload(key, {
+        customMetadata: { ownerId: userId, kind, declaredSize: String(size) },
         httpMetadata: {
           contentType: 'application/octet-stream',
           contentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"`,
         },
       });
+      try {
+        await env.DB.prepare(
+          'INSERT INTO autobe_upload_sessions (upload_id, object_key, user_id, kind, declared_size, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(upload.uploadId, key, userId, kind, size, Date.now()).run();
+      } catch (error) {
+        await upload.abort().catch(() => {});
+        throw error;
+      }
       return json({ key, uploadId: upload.uploadId, uploadToken: await sign(env, key, upload.uploadId) });
     }
 
@@ -197,34 +266,101 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         return json({ error: 'Bad upload part request.' }, 400);
       }
       if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
-      const data = await request.arrayBuffer();
-      if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
+      const session = await env.DB.prepare(
+        'SELECT object_key, declared_size FROM autobe_upload_sessions WHERE upload_id = ?'
+      ).bind(uploadId).first<{ object_key: string; declared_size: number }>();
+      if (!session || session.object_key !== key) return json({ error: 'Upload session not found or expired.' }, 401);
+      const totalParts = Math.ceil(session.declared_size / PART_BYTES);
+      if (partNumber > totalParts) return json({ error: 'Part number exceeds the declared file size.' }, 400);
+      const expectedPartBytes = partNumber < totalParts
+        ? PART_BYTES
+        : session.declared_size - (PART_BYTES * (totalParts - 1));
+      const declaredPartLength = Number(request.headers.get('content-length') || 0);
+      if (declaredPartLength > PART_BYTES) return json({ error: 'Upload part exceeds the 8 MiB part limit.' }, 413);
+      const data = await readBodyWithinLimit(request, PART_BYTES);
+      if (data === null) return json({ error: 'Upload part exceeds the 8 MiB part limit.' }, 413);
+      if (data.byteLength !== expectedPartBytes) {
+        return json({ error: 'Upload part size does not match the expected chunk size.' }, 400);
+      }
       const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
+      await env.DB.prepare(`
+        INSERT INTO autobe_upload_parts (upload_id, part_number, etag, size) VALUES (?, ?, ?, ?)
+        ON CONFLICT(upload_id, part_number) DO UPDATE SET etag = excluded.etag, size = excluded.size
+      `).bind(uploadId, partNumber, part.etag, data.byteLength).run();
       return json({ partNumber: part.partNumber, etag: part.etag });
     }
 
     if (action === 'complete' && request.method === 'POST') {
-      const body = (await request.json()) as {
+      const body = await readJsonWithinLimit<{
         key?: string;
         uploadId?: string;
         parts?: Array<{ partNumber: number; etag: string }>;
-      };
-      if (!Array.isArray(body.parts) || body.parts.length === 0) {
+      }>(request, 64 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized completion request.' }, 400);
+      if (!Array.isArray(body.parts) || body.parts.length === 0 || body.parts.length > MAX_PARTS) {
         return json({ error: 'Bad complete request.' }, 400);
       }
       if (!(await isAuthorized(body.key, body.uploadId))) return json({ error: 'Upload token rejected.' }, 401);
-      const parts = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
+      const seenParts = new Set<number>();
+      for (const part of body.parts) {
+        if (!Number.isInteger(part?.partNumber) || part.partNumber < 1 || part.partNumber > MAX_PARTS ||
+            typeof part.etag !== 'string' || part.etag.length === 0 || part.etag.length > 256 || seenParts.has(part.partNumber)) {
+          return json({ error: 'Invalid or duplicate upload part metadata.' }, 400);
+        }
+        seenParts.add(part.partNumber);
+      }
+      const session = await env.DB.prepare(
+        'SELECT object_key, user_id, kind, declared_size FROM autobe_upload_sessions WHERE upload_id = ?'
+      ).bind(body.uploadId).first<{ object_key: string; user_id: string; kind: string; declared_size: number }>();
+      if (!session || session.object_key !== body.key ||
+          !body.key!.startsWith(`${session.kind}/${session.user_id}/`) ||
+          !['temp', 'pub'].includes(session.kind) ||
+          !Number.isSafeInteger(session.declared_size) || session.declared_size <= 0 || session.declared_size > MAX_BYTES) {
+        return json({ error: 'Upload session ownership or size validation failed.' }, 401);
+      }
+      const recorded = await env.DB.prepare(
+        'SELECT part_number, etag, size FROM autobe_upload_parts WHERE upload_id = ? ORDER BY part_number'
+      ).bind(body.uploadId).all<{ part_number: number; etag: string; size: number }>();
+      const recordedParts = recorded.results || [];
+      const supplied = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
+      const actualBytes = recordedParts.reduce((total, part) => total + Number(part.size || 0), 0);
+      const partsMatch = recordedParts.length === supplied.length &&
+        recordedParts.every((part, index) =>
+          part.part_number === supplied[index].partNumber && part.etag === supplied[index].etag &&
+          Number.isSafeInteger(part.size) && part.size > 0 && part.size <= MAX_PART_BYTES);
+      if (!partsMatch || actualBytes !== session.declared_size) {
+        return json({ error: 'Uploaded part sizes do not match the declared file size. The upload was not completed.' }, 400);
+      }
+      const parts = supplied;
       await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
+      const completed = await env.BUCKET.head(body.key!);
+      if (!completed || completed.size !== session.declared_size ||
+          completed.customMetadata?.declaredSize !== String(completed.size) ||
+          completed.customMetadata?.ownerId !== session.user_id ||
+          completed.customMetadata?.kind !== session.kind ||
+          !body.key!.startsWith(`${session.kind}/${session.user_id}/`)) {
+        await env.BUCKET.delete(body.key!).catch(() => {});
+        return json({ error: 'Completed upload failed its ownership or size integrity check.' }, 400);
+      }
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id = ?').bind(body.uploadId),
+        env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE upload_id = ?').bind(body.uploadId),
+      ]);
       // Tolerate stray spaces, slashes or a trailing dot in PUBLIC_BASE_URL (a trailing dot in a
       // hostname breaks the HTTPS connection: "couldn't establish a secure connection").
-      const base = (env.PUBLIC_BASE_URL || url.origin).trim().replace(/[\s./]+$/, '');
+      const base = url.origin;
       return json({ key: body.key, url: `${base}/api/files/${encodeKey(body.key!)}` });
     }
 
     if (action === 'abort' && request.method === 'POST') {
-      const body = (await request.json()) as { key?: string; uploadId?: string };
+      const body = await readJsonWithinLimit<{ key?: string; uploadId?: string }>(request, 4 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized abort request.' }, 400);
       if (await isAuthorized(body.key, body.uploadId)) {
         await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).abort().catch(() => {});
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id = ?').bind(body.uploadId),
+          env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE upload_id = ?').bind(body.uploadId),
+        ]);
       }
       return json({ ok: true });
     }

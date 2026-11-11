@@ -13,11 +13,13 @@
  * request body or URL, so nobody can edit/delete/publish as someone else.
  */
 import type { Context } from '@cloudflare/workers-types';
+import { getOwnedPublishedObjectKey, isOwnedPublishedObject } from '../_shared/uploadOwnership';
 
 interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
+  PUBLIC_BASE_URL?: string;
 }
 
 type Ctx = Context & { env: Env };
@@ -99,10 +101,7 @@ async function ensureTable(env: Env): Promise<void> {
 
 function fail(label: string, error: unknown) {
   console.error(`[Community] ${label}:`, error);
-  return json(
-    { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
-    500
-  );
+  return json({ error: 'Internal server error' }, 500);
 }
 
 export async function onRequestPost(context: Ctx) {
@@ -131,12 +130,19 @@ export async function onRequestPost(context: Ctx) {
       return json({ error: 'Missing required fields' }, 400);
     }
 
-    // Only accept files that were uploaded through our own /api/upload (kind "pub").
-    try {
-      const blobUrl = new URL(String(data.blob_url));
-      if (!blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad path');
-    } catch {
-      return json({ error: 'Invalid file link. Upload the modpack through the app first.' }, 400);
+    // A published listing must point to a completed R2 object uploaded by this
+    // exact Discord account. A path prefix alone is not proof of ownership.
+    const objectKey = getOwnedPublishedObjectKey(
+      String(data.blob_url), userId, request.url,
+    );
+    if (!objectKey) {
+      return json({ error: 'Invalid or unowned file link. Upload the modpack through your own account first.' }, 400);
+    }
+    const uploadedObject = await env.BUCKET.head(objectKey);
+    if (!uploadedObject ||
+        !isOwnedPublishedObject(uploadedObject.customMetadata, uploadedObject.size, userId) ||
+        Number(data.size) !== uploadedObject.size) {
+      return json({ error: 'The uploaded file could not be verified as your completed upload. Please upload it again.' }, 400);
     }
 
     const publishCount = await consumePublishQuota(env, userId);
@@ -270,13 +276,18 @@ export async function onRequestDelete(context: Ctx) {
     if (!row) return json({ error: 'Modpack not found' }, 404);
     if (row.author_id !== userId) return json({ error: 'You can only delete your own modpacks' }, 403);
 
-    // Remove the permanent R2 object too; otherwise deleted community packs leak storage forever.
+    // Delete only an object whose immutable upload metadata matches this listing's
+    // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
-      const fileUrl = new URL(row.blob_url);
-      const prefix = '/api/files/';
-      if (fileUrl.pathname.startsWith(`${prefix}pub/`)) {
-        const key = fileUrl.pathname.slice(prefix.length).split('/').map((part) => decodeURIComponent(part)).join('/');
-        await env.BUCKET.delete(key);
+      const key = getOwnedPublishedObjectKey(row.blob_url, userId, request.url);
+      if (key) {
+        const object = await env.BUCKET.head(key);
+        // Older listings may point to pre-hardening objects without ownership
+        // metadata. Let the author remove the listing, but never delete an object
+        // unless its immutable R2 metadata proves ownership.
+        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
+          await env.BUCKET.delete(key);
+        }
       }
     }
     await env.DB.prepare('DELETE FROM community_modpacks WHERE id = ?').bind(id).run();
