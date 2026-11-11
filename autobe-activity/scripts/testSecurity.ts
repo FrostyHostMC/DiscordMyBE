@@ -13,6 +13,8 @@ assert.equal(getOwnedPublishedObjectKey(`${base}/api/files/pub/${other}/id/file.
 assert.equal(getOwnedPublishedObjectKey(`${base}/api/files/temp/${owner}/id/file.mcaddon`, owner, base), null);
 assert.equal(getOwnedPublishedObjectKey(`${base}/api/files/pub/${owner}/../${other}/file.mcaddon`, owner, base), null);
 assert.equal(getOwnedPublishedObjectKey('javascript:alert(1)', owner, base), null);
+assert.equal(getOwnedPublishedObjectKey('https://attacker.example/api/files/pub/' + owner + '/id/file.mcaddon', owner, base), null);
+assert.equal(getOwnedPublishedObjectKey('http://discordmybe.pages.dev/api/files/pub/' + owner + '/id/file.mcaddon', owner, base), null);
 
 const valid = { ownerId: owner, kind: 'pub', declaredSize: '12345' };
 assert.equal(isOwnedPublishedObject(valid, 12345, owner), true);
