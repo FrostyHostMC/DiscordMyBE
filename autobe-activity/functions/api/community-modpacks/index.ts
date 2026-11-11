@@ -97,6 +97,12 @@ async function ensureTable(env: Env): Promise<void> {
   if (!names.has('detail_images')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN detail_images TEXT').run();
   }
+  if (!names.has('content_type')) {
+    await env.DB.prepare("ALTER TABLE community_modpacks ADD COLUMN content_type TEXT NOT NULL DEFAULT 'modpack'").run();
+  }
+  if (!names.has('category')) {
+    await env.DB.prepare("ALTER TABLE community_modpacks ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'").run();
+  }
 }
 
 function fail(label: string, error: unknown) {
@@ -128,6 +134,13 @@ export async function onRequestPost(context: Ctx) {
 
     if (!data.name || !data.description || !data.author || !data.blob_url || !data.file_name) {
       return json({ error: 'Missing required fields' }, 400);
+    }
+    const contentType = data.content_type === 'addon' ? 'addon' : 'modpack';
+    const allowedCategories = ['Horror', 'Medieval', 'Fantasy', 'Survival', 'Technology', 'Magic', 'PvP', 'Adventure', 'Weapons', 'Mobs', 'Blocks', 'Decorations', 'Utility', 'Other'];
+    const category = allowedCategories.includes(String(data.category)) ? String(data.category) : 'Other';
+    const safeInputFileName = String(data.file_name).split('/').pop()?.split('\\\\').pop() || '';
+    if (contentType === 'addon' && !/\\.(mcaddon|mcpack)$/i.test(safeInputFileName)) {
+      return json({ error: 'Community addons must be uploaded as .mcaddon or .mcpack files.' }, 400);
     }
 
     // A published listing must point to a completed R2 object uploaded by this
@@ -207,7 +220,9 @@ export async function onRequestPost(context: Ctx) {
         0,
         String(data.blob_url),
         safeFileName,
-        safeIncludedPacksJson
+        safeIncludedPacksJson,
+        contentType,
+        category
       )
       .run();
 
