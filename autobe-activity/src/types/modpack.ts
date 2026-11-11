@@ -104,7 +104,9 @@ export interface CommunityModpack {
   downloads: number;
   blob_url: string;
   file_name: string;
-  content_type?: 'modpack' | 'addon';\n  category?: string;\n  included_packs: Array<{
+  content_type?: 'modpack' | 'addon';
+  category?: string;
+  included_packs: Array<{
     name: string;
     type: string;
     version: string;
