@@ -138,8 +138,8 @@ export async function onRequestPost(context: Ctx) {
     const contentType = data.content_type === 'addon' ? 'addon' : 'modpack';
     const allowedCategories = ['Horror', 'Medieval', 'Fantasy', 'Survival', 'Technology', 'Magic', 'PvP', 'Adventure', 'Weapons', 'Mobs', 'Blocks', 'Decorations', 'Utility', 'Other'];
     const category = allowedCategories.includes(String(data.category)) ? String(data.category) : 'Other';
-    const safeInputFileName = String(data.file_name).split('/').pop()?.split('\\\\').pop() || '';
-    if (contentType === 'addon' && !/\\.(mcaddon|mcpack)$/i.test(safeInputFileName)) {
+    const safeInputFileName = String(data.file_name).split(/[\\/]/).pop() || '';
+    if (contentType === 'addon' && !/\.(mcaddon|mcpack)$/i.test(safeInputFileName)) {
       return json({ error: 'Community addons must be uploaded as .mcaddon or .mcpack files.' }, 400);
     }
 
