@@ -26,7 +26,7 @@ interface Env {
 const MAX_BYTES = 500 * 1024 * 1024; // Keep uploads bounded for the small free storage allowance.
 const MAX_PUBLISHED_BYTES = 7_000_000_000; // Leave headroom below the nominal 10 GB R2 free allowance.
 const MAX_PARTS = 200;
-const MAX_PART_BYTES = 10 * 1024 * 1024;
+const PART_BYTES = 8 * 1024 * 1024; // Must match the browser uploader's fixed 8 MiB chunks.
 const PUB_UPLOADS_PER_DAY = 3;
 const TEMP_UPLOADS_PER_DAY = 20;
 
@@ -59,6 +59,12 @@ async function ensureUploadTrackingTables(env: Env): Promise<void> {
       upload_id TEXT NOT NULL, part_number INTEGER NOT NULL, etag TEXT NOT NULL,
       size INTEGER NOT NULL, PRIMARY KEY (upload_id, part_number)
     )`),
+  ]);
+  // R2 aborts stale multipart uploads after seven days. Keep D1 bookkeeping bounded too.
+  const expiredBefore = Date.now() - 8 * 24 * 60 * 60 * 1000;
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id IN (SELECT upload_id FROM autobe_upload_sessions WHERE created_at < ?)').bind(expiredBefore),
+    env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE created_at < ?').bind(expiredBefore),
   ]);
 }
 
@@ -249,11 +255,22 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         return json({ error: 'Bad upload part request.' }, 400);
       }
       if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
+      const session = await env.DB.prepare(
+        'SELECT object_key, declared_size FROM autobe_upload_sessions WHERE upload_id = ?'
+      ).bind(uploadId).first<{ object_key: string; declared_size: number }>();
+      if (!session || session.object_key !== key) return json({ error: 'Upload session not found or expired.' }, 401);
+      const totalParts = Math.ceil(session.declared_size / PART_BYTES);
+      if (partNumber > totalParts) return json({ error: 'Part number exceeds the declared file size.' }, 400);
+      const expectedPartBytes = partNumber < totalParts
+        ? PART_BYTES
+        : session.declared_size - (PART_BYTES * (totalParts - 1));
       const declaredPartLength = Number(request.headers.get('content-length') || 0);
-      if (declaredPartLength > MAX_PART_BYTES) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
-      const data = await readBodyWithinLimit(request, MAX_PART_BYTES);
-      if (data === null) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
-      if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
+      if (declaredPartLength > PART_BYTES) return json({ error: 'Upload part exceeds the 8 MiB part limit.' }, 413);
+      const data = await readBodyWithinLimit(request, PART_BYTES);
+      if (data === null) return json({ error: 'Upload part exceeds the 8 MiB part limit.' }, 413);
+      if (data.byteLength !== expectedPartBytes) {
+        return json({ error: 'Upload part size does not match the expected chunk size.' }, 400);
+      }
       const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
       await env.DB.prepare(`
         INSERT INTO autobe_upload_parts (upload_id, part_number, etag, size) VALUES (?, ?, ?, ?)
