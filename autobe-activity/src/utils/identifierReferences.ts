@@ -101,7 +101,7 @@ export function rewriteStaticScriptIdentifierReferences(
 /** True when a dynamic template literal contains an identifier that could not be safely rewritten. */
 export function hasDynamicTemplateIdentifierReference(source: string, renameMap?: Map<string, string>): boolean {
   if (!renameMap?.size) return false;
-  const templates = source.match(/`(?:\\.|[^`\\])*`/gs) || [];
+  const templates: string[] = source.match(/`(?:\\.|[^`\\])*`/gs) ?? [];
   return templates.some(template =>
     template.includes('${') && [...renameMap.keys()].some(identifier => template.includes(identifier))
   );
