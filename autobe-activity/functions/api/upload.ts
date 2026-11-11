@@ -160,6 +160,16 @@ async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<
   return output.buffer;
 }
 
+async function readJsonWithinLimit<T>(request: Request, maxBytes: number): Promise<T | null> {
+  const body = await readBodyWithinLimit(request, maxBytes);
+  if (body === null || body.byteLength === 0) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as T;
+  } catch {
+    return null;
+  }
+}
+
 const encodeKey = (key: string) => key.split('/').map(encodeURIComponent).join('/');
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -178,7 +188,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (action === 'create' && request.method === 'POST') {
       const userId = await authenticate(request, env);
       if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
-      const body = (await request.json()) as { fileName?: string; kind?: string; size?: number };
+      const body = await readJsonWithinLimit<{ fileName?: string; kind?: string; size?: number }>(request, 8 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized upload request.' }, 400);
       if (!env.DB) return json({ error: 'Publishing is temporarily unavailable because the rate-limit database is not configured.' }, 503);
       await ensureUploadTrackingTables(env);
       const kind = body.kind === 'pub' ? 'pub' : 'temp';
@@ -280,11 +291,12 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (action === 'complete' && request.method === 'POST') {
-      const body = (await request.json()) as {
+      const body = await readJsonWithinLimit<{
         key?: string;
         uploadId?: string;
         parts?: Array<{ partNumber: number; etag: string }>;
-      };
+      }>(request, 64 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized completion request.' }, 400);
       if (!Array.isArray(body.parts) || body.parts.length === 0 || body.parts.length > MAX_PARTS) {
         return json({ error: 'Bad complete request.' }, 400);
       }
@@ -341,7 +353,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     }
 
     if (action === 'abort' && request.method === 'POST') {
-      const body = (await request.json()) as { key?: string; uploadId?: string };
+      const body = await readJsonWithinLimit<{ key?: string; uploadId?: string }>(request, 4 * 1024);
+      if (!body) return json({ error: 'Invalid or oversized abort request.' }, 400);
       if (await isAuthorized(body.key, body.uploadId)) {
         await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).abort().catch(() => {});
         await env.DB.batch([
