@@ -19,6 +19,7 @@ interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
+  PUBLIC_BASE_URL?: string;
 }
 
 type Ctx = Context & { env: Env };
@@ -132,7 +133,7 @@ export async function onRequestPost(context: Ctx) {
     // A published listing must point to a completed R2 object uploaded by this
     // exact Discord account. A path prefix alone is not proof of ownership.
     const objectKey = getOwnedPublishedObjectKey(
-      String(data.blob_url), userId, new URL(request.url).origin,
+      String(data.blob_url), userId, env.PUBLIC_BASE_URL || request.url,
     );
     if (!objectKey) {
       return json({ error: 'Invalid or unowned file link. Upload the modpack through your own account first.' }, 400);
@@ -278,16 +279,15 @@ export async function onRequestDelete(context: Ctx) {
     // Delete only an object whose immutable upload metadata matches this listing's
     // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
-      const key = getOwnedPublishedObjectKey(row.blob_url, userId, new URL(request.url).origin);
-      if (!key) {
-        return json({ error: 'Stored file reference failed its safety check; no file was deleted.' }, 409);
-      }
-      const object = await env.BUCKET.head(key);
-      if (object) {
-        if (!isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
-          return json({ error: 'Stored file ownership check failed; no file was deleted.' }, 409);
+      const key = getOwnedPublishedObjectKey(row.blob_url, userId, env.PUBLIC_BASE_URL || request.url);
+      if (key) {
+        const object = await env.BUCKET.head(key);
+        // Older listings may point to pre-hardening objects without ownership
+        // metadata. Let the author remove the listing, but never delete an object
+        // unless its immutable R2 metadata proves ownership.
+        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
+          await env.BUCKET.delete(key);
         }
-        await env.BUCKET.delete(key);
       }
     }
     await env.DB.prepare('DELETE FROM community_modpacks WHERE id = ?').bind(id).run();
