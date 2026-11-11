@@ -13,6 +13,7 @@
  * request body or URL, so nobody can edit/delete/publish as someone else.
  */
 import type { Context } from '@cloudflare/workers-types';
+import { getOwnedPublishedObjectKey, isOwnedPublishedObject } from '../_shared/uploadOwnership';
 
 interface Env {
   DB: D1Database;
@@ -130,23 +131,15 @@ export async function onRequestPost(context: Ctx) {
 
     // A published listing must point to a completed R2 object uploaded by this
     // exact Discord account. A path prefix alone is not proof of ownership.
-    let blobUrl: URL;
-    let objectKey: string;
-    try {
-      blobUrl = new URL(String(data.blob_url), new URL(request.url).origin);
-      if (!['https:', 'http:'].includes(blobUrl.protocol) ||
-          !blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad URL or path');
-      objectKey = blobUrl.pathname.slice('/api/files/'.length)
-        .split('/').map((part) => decodeURIComponent(part)).join('/');
-      if (!objectKey.startsWith(`pub/${userId}/`) || objectKey.includes('..')) throw new Error('not owned');
-    } catch {
+    const objectKey = getOwnedPublishedObjectKey(
+      String(data.blob_url), userId, new URL(request.url).origin,
+    );
+    if (!objectKey) {
       return json({ error: 'Invalid or unowned file link. Upload the modpack through your own account first.' }, 400);
     }
     const uploadedObject = await env.BUCKET.head(objectKey);
     if (!uploadedObject ||
-        uploadedObject.customMetadata?.ownerId !== userId ||
-        uploadedObject.customMetadata?.kind !== 'pub' ||
-        uploadedObject.customMetadata?.declaredSize !== String(uploadedObject.size) ||
+        !isOwnedPublishedObject(uploadedObject.customMetadata, uploadedObject.size, userId) ||
         Number(data.size) !== uploadedObject.size) {
       return json({ error: 'The uploaded file could not be verified as your completed upload. Please upload it again.' }, 400);
     }
@@ -285,16 +278,13 @@ export async function onRequestDelete(context: Ctx) {
     // Delete only an object whose immutable upload metadata matches this listing's
     // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
-      const fileUrl = new URL(row.blob_url, new URL(request.url).origin);
-      if (!['https:', 'http:'].includes(fileUrl.protocol) || !fileUrl.pathname.startsWith('/api/files/pub/')) {
+      const key = getOwnedPublishedObjectKey(row.blob_url, userId, new URL(request.url).origin);
+      if (!key) {
         return json({ error: 'Stored file reference failed its safety check; no file was deleted.' }, 409);
       }
-      const key = fileUrl.pathname.slice('/api/files/'.length)
-        .split('/').map((part) => decodeURIComponent(part)).join('/');
       const object = await env.BUCKET.head(key);
       if (object) {
-        if (!key.startsWith(`pub/${userId}/`) || object.customMetadata?.ownerId !== userId ||
-            object.customMetadata?.kind !== 'pub') {
+        if (!isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
           return json({ error: 'Stored file ownership check failed; no file was deleted.' }, 409);
         }
         await env.BUCKET.delete(key);
