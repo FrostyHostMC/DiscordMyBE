@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Box, Download, Image as ImageIcon, Loader2, Plus, Search, Upload, X } from 'lucide-react';
+import { ArrowLeft, Box, Download, Image as ImageIcon, Loader2, Plus, Search, Upload, X, Trash2 } from 'lucide-react';
 import { uploadToCloud } from '@/utils/cloudUpload';
 import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 
@@ -110,6 +110,22 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
     } finally { setPublishing(false); setProgress(0); }
   };
 
+  const deleteAddon = async (addon: CommunityAddon) => {
+    if (!currentUserId || addon.author_id !== currentUserId) return;
+    if (!window.confirm(`Delete "${addon.name}" from the Community library?`)) return;
+    try {
+      const response = await fetch(`/api/community-modpacks?id=${encodeURIComponent(addon.id)}`, {
+        method: 'DELETE', headers: authHeaders(),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not delete addon.');
+      setNotice('Addon removed from the Community library.');
+      await load();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : 'Could not delete addon.');
+    }
+  };
+
   const download = async (addon: CommunityAddon) => {
     try {
       await fetch(`/api/community-modpacks?action=download&id=${encodeURIComponent(addon.id)}`, { method: 'POST', headers: authHeaders() });
@@ -141,6 +157,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
           <p className="line-clamp-3 min-h-12 text-xs text-[#AAA3BB]">{addon.description}</p>
           <div className="flex justify-between text-[10px] text-[#716885]"><span>by {addon.author}</span><span>v{addon.version} · {formatSize(addon.size)}</span></div>
           <button onClick={()=>void download(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-2 text-xs font-bold"><Download size={14}/> Download {addon.file_name.toLowerCase().endsWith('.mcpack') ? 'MCPack' : 'MCAddon'}</button>
+          {currentUserId && addon.author_id === currentUserId && <button onClick={()=>void deleteAddon(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 py-2 text-xs font-semibold text-red-300"><Trash2 size={13}/> Delete my addon</button>}
         </div>
       </article>)}</div>}
     </main>
