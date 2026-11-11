@@ -52,9 +52,8 @@ async function verify(token: string, env: WorkspaceDiscordEnv): Promise<AuthResu
     return json({ error: `Discord account verification failed (HTTP ${meResponse.status}). Retry shortly; your local packs are safe.` }, 502);
   }
   const oauth = await meResponse.json() as { application?: { id?: string }; user?: { id?: string } };
-  if (oauth.application?.id !== env.DISCORD_CLIENT_ID) return json({ error: 'This Discord session was not issued to AutoBE.' }, 401);
+  if (oauth.application?.id !== env.DISCORD_CLIENT_ID || !oauth.user?.id) return json({ error: 'This Discord session was not issued to AutoBE or the account could not be verified.' }, 401);
   const me = oauth.user;
-  if (!me.id) return json({ error: 'Discord could not verify your account.' }, 401);
 
   const memberResponse = await fetch(
     `https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(me.id)}`,
