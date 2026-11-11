@@ -113,6 +113,34 @@ async function sign(env: Env, key: string, uploadId: string): Promise<string> {
   return btoa(String.fromCharCode(...new Uint8Array(sig))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
+async function readBodyWithinLimit(request: Request, maxBytes: number): Promise<ArrayBuffer | null> {
+  if (!request.body) return new ArrayBuffer(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const output = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output.buffer;
+}
+
 const encodeKey = (key: string) => key.split('/').map(encodeURIComponent).join('/');
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
@@ -201,9 +229,9 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
       const declaredPartLength = Number(request.headers.get('content-length') || 0);
       if (declaredPartLength > MAX_PART_BYTES) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
-      const data = await request.arrayBuffer();
+      const data = await readBodyWithinLimit(request, MAX_PART_BYTES);
+      if (data === null) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
       if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
-      if (data.byteLength > MAX_PART_BYTES) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
       const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
       return json({ partNumber: part.partNumber, etag: part.etag });
     }
