@@ -7,8 +7,9 @@ export interface PublishedUploadMetadata {
 /** Extract only a public R2 key owned by the authenticated account. */
 export function getOwnedPublishedObjectKey(blobUrl: string, userId: string, baseUrl: string): string | null {
   try {
-    const url = new URL(blobUrl, baseUrl);
-    if (!['https:', 'http:'].includes(url.protocol) || !url.pathname.startsWith('/api/files/pub/')) return null;
+    const trustedOrigin = new URL(baseUrl).origin;
+    const url = new URL(blobUrl, trustedOrigin);
+    if (url.protocol !== 'https:' || url.origin !== trustedOrigin || !url.pathname.startsWith('/api/files/pub/')) return null;
     const key = url.pathname.slice('/api/files/'.length)
       .split('/').map((part) => decodeURIComponent(part)).join('/');
     if (!key.startsWith(`pub/${userId}/`) || key.includes('..')) return null;
