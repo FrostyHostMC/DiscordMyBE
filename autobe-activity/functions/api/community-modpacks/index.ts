@@ -99,10 +99,7 @@ async function ensureTable(env: Env): Promise<void> {
 
 function fail(label: string, error: unknown) {
   console.error(`[Community] ${label}:`, error);
-  return json(
-    { error: 'Internal server error', details: error instanceof Error ? error.message : String(error) },
-    500
-  );
+  return json({ error: 'Internal server error' }, 500);
 }
 
 export async function onRequestPost(context: Ctx) {
@@ -137,8 +134,8 @@ export async function onRequestPost(context: Ctx) {
     let objectKey: string;
     try {
       blobUrl = new URL(String(data.blob_url), new URL(request.url).origin);
-      if (blobUrl.origin !== new URL(request.url).origin ||
-          !blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad origin or path');
+      if (!['https:', 'http:'].includes(blobUrl.protocol) ||
+          !blobUrl.pathname.startsWith('/api/files/pub/')) throw new Error('bad URL or path');
       objectKey = blobUrl.pathname.slice('/api/files/'.length)
         .split('/').map((part) => decodeURIComponent(part)).join('/');
       if (!objectKey.startsWith(`pub/${userId}/`) || objectKey.includes('..')) throw new Error('not owned');
@@ -289,7 +286,7 @@ export async function onRequestDelete(context: Ctx) {
     // verified author. Never trust a mutable database URL as deletion authority.
     if (env.BUCKET && row.blob_url) {
       const fileUrl = new URL(row.blob_url, new URL(request.url).origin);
-      if (fileUrl.origin !== new URL(request.url).origin || !fileUrl.pathname.startsWith('/api/files/pub/')) {
+      if (!['https:', 'http:'].includes(fileUrl.protocol) || !fileUrl.pathname.startsWith('/api/files/pub/')) {
         return json({ error: 'Stored file reference failed its safety check; no file was deleted.' }, 409);
       }
       const key = fileUrl.pathname.slice('/api/files/'.length)
