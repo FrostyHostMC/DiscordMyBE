@@ -49,6 +49,19 @@ async function ensureCommunityTable(env: Env): Promise<void> {
   )`).run();
 }
 
+async function ensureUploadTrackingTables(env: Env): Promise<void> {
+  await env.DB.batch([
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_sessions (
+      upload_id TEXT PRIMARY KEY, object_key TEXT NOT NULL, user_id TEXT NOT NULL,
+      kind TEXT NOT NULL, declared_size INTEGER NOT NULL, created_at INTEGER NOT NULL
+    )`),
+    env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_parts (
+      upload_id TEXT NOT NULL, part_number INTEGER NOT NULL, etag TEXT NOT NULL,
+      size INTEGER NOT NULL, PRIMARY KEY (upload_id, part_number)
+    )`),
+  ]);
+}
+
 async function consumeDailyQuota(env: Env, userId: string, kind: string): Promise<number> {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
     scope TEXT NOT NULL,
@@ -161,6 +174,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
       const body = (await request.json()) as { fileName?: string; kind?: string; size?: number };
       if (!env.DB) return json({ error: 'Publishing is temporarily unavailable because the rate-limit database is not configured.' }, 503);
+      await ensureUploadTrackingTables(env);
       const kind = body.kind === 'pub' ? 'pub' : 'temp';
       const size = Number(body.size) || 0;
       if (size <= 0 || size > MAX_BYTES) {
@@ -209,6 +223,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
           contentDisposition: `attachment; filename="${fileName.replace(/"/g, '')}"`,
         },
       });
+      try {
+        await env.DB.prepare(
+          'INSERT INTO autobe_upload_sessions (upload_id, object_key, user_id, kind, declared_size, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(upload.uploadId, key, userId, kind, size, Date.now()).run();
+      } catch (error) {
+        await upload.abort().catch(() => {});
+        throw error;
+      }
       return json({ key, uploadId: upload.uploadId, uploadToken: await sign(env, key, upload.uploadId) });
     }
 
@@ -233,6 +255,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       if (data === null) return json({ error: 'Upload part exceeds the 10 MB part limit.' }, 413);
       if (data.byteLength === 0) return json({ error: 'Empty part.' }, 400);
       const part = await env.BUCKET.resumeMultipartUpload(key!, uploadId!).uploadPart(partNumber, data);
+      await env.DB.prepare(`
+        INSERT INTO autobe_upload_parts (upload_id, part_number, etag, size) VALUES (?, ?, ?, ?)
+        ON CONFLICT(upload_id, part_number) DO UPDATE SET etag = excluded.etag, size = excluded.size
+      `).bind(uploadId, partNumber, part.etag, data.byteLength).run();
       return json({ partNumber: part.partNumber, etag: part.etag });
     }
 
@@ -254,15 +280,43 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
         }
         seenParts.add(part.partNumber);
       }
-      const parts = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
+      const session = await env.DB.prepare(
+        'SELECT object_key, user_id, kind, declared_size FROM autobe_upload_sessions WHERE upload_id = ?'
+      ).bind(body.uploadId).first<{ object_key: string; user_id: string; kind: string; declared_size: number }>();
+      if (!session || session.object_key !== body.key ||
+          !body.key!.startsWith(`${session.kind}/${session.user_id}/`) ||
+          !['temp', 'pub'].includes(session.kind) ||
+          !Number.isSafeInteger(session.declared_size) || session.declared_size <= 0 || session.declared_size > MAX_BYTES) {
+        return json({ error: 'Upload session ownership or size validation failed.' }, 401);
+      }
+      const recorded = await env.DB.prepare(
+        'SELECT part_number, etag, size FROM autobe_upload_parts WHERE upload_id = ? ORDER BY part_number'
+      ).bind(body.uploadId).all<{ part_number: number; etag: string; size: number }>();
+      const recordedParts = recorded.results || [];
+      const supplied = [...body.parts].sort((a, b) => a.partNumber - b.partNumber);
+      const actualBytes = recordedParts.reduce((total, part) => total + Number(part.size || 0), 0);
+      const partsMatch = recordedParts.length === supplied.length &&
+        recordedParts.every((part, index) =>
+          part.part_number === supplied[index].partNumber && part.etag === supplied[index].etag &&
+          Number.isSafeInteger(part.size) && part.size > 0 && part.size <= MAX_PART_BYTES);
+      if (!partsMatch || actualBytes !== session.declared_size) {
+        return json({ error: 'Uploaded part sizes do not match the declared file size. The upload was not completed.' }, 400);
+      }
+      const parts = supplied;
       await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
       const completed = await env.BUCKET.head(body.key!);
-      if (!completed || completed.customMetadata?.declaredSize !== String(completed.size) ||
-          completed.customMetadata?.kind !== body.key!.split('/')[0] ||
-          !body.key!.startsWith(String(completed.customMetadata?.kind) + '/' + String(completed.customMetadata?.ownerId) + '/')) {
+      if (!completed || completed.size !== session.declared_size ||
+          completed.customMetadata?.declaredSize !== String(completed.size) ||
+          completed.customMetadata?.ownerId !== session.user_id ||
+          completed.customMetadata?.kind !== session.kind ||
+          !body.key!.startsWith(`${session.kind}/${session.user_id}/`)) {
         await env.BUCKET.delete(body.key!).catch(() => {});
         return json({ error: 'Completed upload failed its ownership or size integrity check.' }, 400);
       }
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id = ?').bind(body.uploadId),
+        env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE upload_id = ?').bind(body.uploadId),
+      ]);
       // Tolerate stray spaces, slashes or a trailing dot in PUBLIC_BASE_URL (a trailing dot in a
       // hostname breaks the HTTPS connection: "couldn't establish a secure connection").
       const base = (env.PUBLIC_BASE_URL || url.origin).trim().replace(/[\s./]+$/, '');
@@ -273,6 +327,10 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const body = (await request.json()) as { key?: string; uploadId?: string };
       if (await isAuthorized(body.key, body.uploadId)) {
         await env.BUCKET.resumeMultipartUpload(body.key!, body.uploadId!).abort().catch(() => {});
+        await env.DB.batch([
+          env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id = ?').bind(body.uploadId),
+          env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE upload_id = ?').bind(body.uploadId),
+        ]);
       }
       return json({ ok: true });
     }
