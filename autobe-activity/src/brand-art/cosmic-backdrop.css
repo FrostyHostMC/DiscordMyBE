@@ -1,0 +1,134 @@
+/* AutoBE's original animated nebula backdrop.
+   Kept as a separate stylesheet because App.tsx imports it directly.
+   All artwork is rendered locally; no remote image/GIF requests are required. */
+.autobe-cosmic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  contain: paint;
+  background:
+    radial-gradient(ellipse at 52% 42%, rgba(62, 15, 112, .24), transparent 48%),
+    radial-gradient(ellipse at 16% 78%, rgba(73, 16, 123, .28), transparent 48%),
+    #080510;
+}
+.autobe-cosmic-backdrop--app { z-index: -1; }
+.autobe-cosmic-backdrop--loading {
+  z-index: 0;
+  inset: 0;
+  background-color: #080510;
+}
+.cosmic-nebula {
+  position: absolute;
+  inset: -28%;
+  border-radius: 50%;
+  filter: blur(clamp(42px, 8vw, 120px));
+  opacity: .68;
+  transform: translate3d(0,0,0);
+  will-change: transform;
+}
+.cosmic-nebula--violet {
+  background:
+    radial-gradient(ellipse at 28% 36%, rgba(109, 25, 193, .82) 0%, rgba(81, 19, 145, .48) 22%, transparent 53%),
+    radial-gradient(ellipse at 73% 68%, rgba(79, 19, 142, .72) 0%, rgba(55, 12, 103, .38) 25%, transparent 56%);
+  animation: nebula-drift-a 48s ease-in-out infinite alternate;
+}
+.cosmic-nebula--indigo {
+  inset: -36%;
+  opacity: .58;
+  background:
+    radial-gradient(ellipse at 72% 25%, rgba(80, 34, 166, .64), transparent 38%),
+    radial-gradient(ellipse at 38% 76%, rgba(56, 17, 111, .72), transparent 44%);
+  animation: nebula-drift-b 62s ease-in-out infinite alternate;
+}
+.cosmic-nebula--magenta {
+  inset: -42%;
+  opacity: .28;
+  background:
+    radial-gradient(ellipse at 52% 48%, rgba(174, 44, 222, .48), transparent 25%),
+    radial-gradient(ellipse at 22% 64%, rgba(124, 34, 198, .42), transparent 31%);
+  animation: nebula-pulse 34s ease-in-out infinite alternate;
+}
+.cosmic-nebula-noise {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  opacity: .5;
+  mix-blend-mode: screen;
+  animation: nebula-noise-drift 58s ease-in-out infinite alternate;
+}
+.cosmic-starfield {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  will-change: opacity, transform;
+}
+.cosmic-starfield--fine {
+  opacity: .46;
+  background-image:
+    radial-gradient(1px 1px at 13% 19%, rgba(255,255,255,.9) 98%, transparent),
+    radial-gradient(1px 1px at 38% 72%, rgba(220,190,255,.85) 98%, transparent),
+    radial-gradient(1px 1px at 77% 31%, rgba(255,255,255,.8) 98%, transparent),
+    radial-gradient(1px 1px at 88% 84%, rgba(195,153,255,.8) 98%, transparent),
+    radial-gradient(1px 1px at 57% 48%, rgba(255,255,255,.75) 98%, transparent);
+  background-size: 181px 197px, 237px 251px, 293px 277px, 317px 289px, 211px 229px;
+  animation: star-drift 95s linear infinite, star-twinkle 8s ease-in-out infinite alternate;
+}
+.cosmic-starfield--bright {
+  opacity: .55;
+  background-image:
+    radial-gradient(2px 2px at 18% 34%, rgba(232,203,255,.95) 98%, transparent),
+    radial-gradient(2px 2px at 64% 21%, rgba(255,255,255,.9) 98%, transparent),
+    radial-gradient(2px 2px at 82% 68%, rgba(196,143,255,.9) 98%, transparent),
+    radial-gradient(1.5px 1.5px at 43% 86%, rgba(255,255,255,.85) 98%, transparent);
+  background-size: 397px 367px, 463px 421px, 509px 487px, 431px 449px;
+  animation: star-twinkle 5.5s ease-in-out infinite alternate-reverse;
+}
+.cosmic-nebula-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5,3,12,.2), transparent 24%, transparent 72%, rgba(5,3,12,.42)),
+    radial-gradient(ellipse at center, transparent 38%, rgba(3,2,8,.48) 100%);
+}
+@keyframes nebula-drift-a {
+  from { transform: translate3d(-2%, 1%, 0) rotate(-5deg) scale(1); }
+  to { transform: translate3d(3%, -2%, 0) rotate(6deg) scale(1.08); }
+}
+@keyframes nebula-drift-b {
+  from { transform: translate3d(2%, -1%, 0) rotate(4deg) scale(1.02); }
+  to { transform: translate3d(-3%, 2%, 0) rotate(-6deg) scale(1.1); }
+}
+@keyframes nebula-pulse {
+  from { transform: scale(.94) translate3d(-1%, 1%, 0); opacity: .2; }
+  to { transform: scale(1.08) translate3d(2%, -1%, 0); opacity: .38; }
+}
+@keyframes nebula-noise-drift {
+  from { transform: translate3d(-.5%, .3%, 0) scale(1); opacity: .36; }
+  to { transform: translate3d(.7%, -.4%, 0) scale(1.025); opacity: .56; }
+}
+@keyframes star-drift {
+  from { transform: translate3d(0,0,0); }
+  to { transform: translate3d(-2.5%, 1.5%, 0); }
+}
+@keyframes star-twinkle {
+  from { filter: brightness(.72); }
+  to { filter: brightness(1.28); }
+}
+.autobe-loading-screen > .autobe-cosmic-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+.autobe-loading-copy {
+  position: relative;
+  z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cosmic-nebula,
+  .cosmic-nebula-noise,
+  .cosmic-starfield { animation: none !important; }
+}
