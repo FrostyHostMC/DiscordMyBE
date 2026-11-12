@@ -1,6 +1,6 @@
 /**
  * GET /api/admin/usage
- * Owner-only published-storage estimate. Authorization is bound to the fixed owner Discord ID.
+ * Owner-only published-storage estimate. Authorization is bound to the authorized admin Discord IDs.
  */
 import type { Context } from '@cloudflare/workers-types';
 
@@ -19,14 +19,14 @@ const json = (body: unknown, status = 200) =>
 
 export async function onRequestGet({ request, env }: Ctx) {
   const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
-  if (!match) return json({ error: 'Sign in with the owner Discord account to view usage.' }, 401);
+  if (!match) return json({ error: 'Sign in with an authorized admin Discord account to view usage.' }, 401);
   try {
     const auth = await fetch('https://discord.com/api/v10/oauth2/@me', {
       headers: { authorization: `Bearer ${match[1]}` },
     });
     if (!auth.ok) return json({ error: 'Discord session expired. Reopen the Activity and try again.' }, 401);
     const info = await auth.json() as { application?: { id?: string }; user?: { id?: string } };
-    if (info.application?.id !== env.DISCORD_CLIENT_ID || info.user?.id !== '1122949730419347487') {
+    if (info.application?.id !== env.DISCORD_CLIENT_ID || !['1122949730419347487','900117843272663040'].includes(String(info.user?.id||''))) {
       return json({ error: 'You do not have permission to view storage usage.' }, 403);
     }
     const published = await env.DB.prepare(
