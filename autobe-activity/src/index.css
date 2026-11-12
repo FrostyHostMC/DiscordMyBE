@@ -81,145 +81,24 @@ button, input, select, textarea {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
-/* Shared animated nebula background. Use an actual IMG element so animated GIF frames
-   are decoded consistently by mobile Discord webviews and desktop browsers. */
-.autobe-global-background {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background: #08050f;
-  isolation: isolate;
-}
-.autobe-global-background > img {
-  position: absolute;
-  inset: 0;
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  image-rendering: auto;
-  transform: translateZ(0);
-}
-.autobe-global-background__shade {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(7, 4, 17, .12), rgba(7, 4, 17, .28)),
-    radial-gradient(ellipse at 50% 42%, transparent 10%, rgba(5, 2, 12, .24) 100%);
-}
-.autobe-moon-mark {
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 0 18px rgba(139, 92, 246, .42));
-}
-.autobe-loading-screen {
-  position: fixed;
-  inset: var(--autobe-host-top-inset) 0 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  isolation: isolate;
-  background: #08050f;
-}
-.autobe-loading-media {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-}
-.autobe-loading-screen::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(180deg, rgba(8, 4, 18, .12), rgba(8, 4, 18, .38));
-}
-.autobe-loading-copy {
-  position: relative;
-  z-index: 2;
-  width: min(90vw, 620px);
-  padding: clamp(1.25rem, 5vw, 3rem);
-  text-align: center;
-  text-shadow: 0 3px 28px rgba(0, 0, 0, .8);
-}
-.autobe-loading-kicker {
-  margin-bottom: .85rem;
-  color: #e3cfff;
-  font-size: clamp(.58rem, 1.8vw, .78rem);
-  font-weight: 800;
-  letter-spacing: .28em;
-}
-.autobe-loading-copy h1 {
-  color: #fff;
-  font-size: clamp(1.45rem, 5vw, 2.65rem);
-  font-weight: 900;
-  line-height: 1.08;
-  text-wrap: balance;
-}
-.autobe-loading-status {
-  margin-top: 1.15rem;
-  color: rgba(248, 240, 255, .88);
-  font-size: clamp(.78rem, 2.4vw, 1rem);
-}
-/* Animated category titles float over the page; never put them in a boxed tile. */
-.autobe-animated-banner {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: min(58vw, 390px);
-  max-width: 100%;
-  height: auto;
-  min-height: 0;
-  flex: 0 1 auto;
-  overflow: visible;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-.autobe-animated-banner img {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: clamp(4.25rem, 17vw, 7rem);
-  object-fit: contain;
-  object-position: center;
-  mix-blend-mode: screen;
-  filter: drop-shadow(0 5px 18px rgba(8, 2, 20, .72));
-}
-.autobe-animated-banner--modpacks { width: min(56vw, 430px); }
-.autobe-animated-banner--addons { width: min(56vw, 430px); }
-@media (max-width: 480px) {
-  .autobe-animated-banner { width: min(55vw, 300px); }
-  .autobe-animated-banner img { max-height: 5.25rem; }
-}
-@media (min-width: 768px) {
-  .autobe-animated-banner { width: min(34vw, 430px); }
-  .autobe-animated-banner img { max-height: 7rem; }
-}
-.autobe-access-loading {
-  position: fixed;
-  inset: var(--autobe-host-top-inset) 0 0;
-  z-index: 200;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  isolation: isolate;
-  padding: clamp(1rem, 4vw, 2rem);
-  background: #08050f;
-  color: #fff;
-}
-.autobe-access-loading > section {
-  z-index: 2;
-}
-.autobe-global-background ~ div.flex.min-h-0 {
-  position: relative;
-  z-index: 1;
-}
+
+/* Native CSS cosmic artwork: no remote images or legacy GIF dependencies. */
+.autobe-cosmic-backdrop{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;isolation:isolate;background:radial-gradient(ellipse at 50% 110%,#32105f 0%,#160925 42%,#070510 78%);contain:paint}
+.autobe-cosmic-backdrop--app{position:fixed}
+.cosmic-cloud{position:absolute;display:block;inset:-28%;filter:blur(clamp(34px,7vw,100px));opacity:.78;will-change:transform}
+.cosmic-cloud--one{background:conic-gradient(from 30deg at 48% 50%,transparent 0 12%,rgba(80,20,180,.05) 18%,rgba(119,28,255,.52) 27%,rgba(35,8,85,.12) 36%,transparent 44%,rgba(108,30,210,.38) 58%,transparent 72%);animation:cosmic-drift-one 42s ease-in-out infinite alternate}
+.cosmic-cloud--two{inset:-38%;opacity:.48;background:radial-gradient(ellipse at 24% 35%,rgba(89,25,180,.75),transparent 36%),radial-gradient(ellipse at 77% 68%,rgba(72,18,155,.7),transparent 34%),radial-gradient(ellipse at 62% 12%,rgba(134,35,255,.42),transparent 28%);animation:cosmic-drift-two 54s ease-in-out infinite alternate}
+.cosmic-stars{position:absolute;inset:0;opacity:.52;background-image:radial-gradient(1px 1px at 12% 21%,#fff 99%,transparent),radial-gradient(1px 1px at 31% 74%,#d9baff 99%,transparent),radial-gradient(2px 2px at 73% 28%,#fff 99%,transparent),radial-gradient(1px 1px at 84% 83%,#c89aff 99%,transparent),radial-gradient(1px 1px at 57% 58%,#fff 99%,transparent),radial-gradient(1px 1px at 9% 88%,#c89aff 99%,transparent);background-size:230px 210px,280px 260px,360px 300px,310px 280px,190px 230px,250px 270px;animation:cosmic-twinkle 9s ease-in-out infinite alternate}
+.cosmic-horizon{position:absolute;inset:auto -10% -38% -10%;height:68%;background:radial-gradient(ellipse at 50% 0%,rgba(125,32,255,.24),transparent 58%);filter:blur(34px)}
+@keyframes cosmic-drift-one{from{transform:translate3d(-2%,1%,0) rotate(-7deg) scale(1)}to{transform:translate3d(3%,-2%,0) rotate(8deg) scale(1.08)}}
+@keyframes cosmic-drift-two{from{transform:translate3d(2%,-1%,0) rotate(5deg)}to{transform:translate3d(-3%,2%,0) rotate(-6deg)}}
+@keyframes cosmic-twinkle{from{opacity:.32}to{opacity:.7}}
+.autobe-moon-mark{width:3rem;height:3rem;flex:none;border-radius:50%;background:radial-gradient(circle at 36% 30%,#f1dfff 0 3%,#a45bff 13%,#47118c 42%,#11051e 70%);box-shadow:inset -8px -9px 18px #05020d,0 0 0 2px rgba(193,145,255,.35),0 0 28px rgba(142,65,255,.65);position:relative}
+.autobe-moon-mark:before{content:"";position:absolute;inset:15%;border:2px solid rgba(224,190,255,.85);border-left-color:transparent;border-bottom-color:transparent;border-radius:50%;transform:rotate(-35deg);box-shadow:0 0 12px #a855f7}
+.autobe-moon-mark:after{content:"";position:absolute;width:145%;height:38%;left:-22%;top:31%;border:2px solid #c084fc;border-left-color:transparent;border-right-color:transparent;border-radius:50%;transform:rotate(-25deg);filter:drop-shadow(0 0 5px #a855f7)}
+.autobe-animated-banner{display:flex;align-items:center;justify-content:center;width:min(58vw,390px);max-width:100%;height:auto;overflow:visible;background:transparent}
+.autobe-animated-banner__word{position:relative;display:inline-block;padding:.15em .28em .22em;color:#fff;font-weight:1000;font-size:clamp(1.65rem,7vw,3.6rem);line-height:1;letter-spacing:.015em;text-transform:uppercase;text-shadow:0 2px 0 #d7c5ff,0 5px 0 #38116b,0 8px 0 #140522,0 0 24px rgba(166,89,255,.85);filter:drop-shadow(0 8px 15px rgba(5,0,15,.85));animation:brand-float 5s ease-in-out infinite}
+.autobe-animated-banner__word:before{content:"";position:absolute;z-index:-1;inset:18% -9%;border:2px solid rgba(191,133,255,.8);border-left-color:transparent;border-right-color:transparent;border-radius:50%;transform:rotate(-8deg);box-shadow:0 0 18px rgba(157,78,255,.8)}
+.autobe-animated-banner--addons .autobe-animated-banner__word,.autobe-animated-banner--modpacks .autobe-animated-banner__word{font-size:clamp(1.6rem,6.8vw,3.35rem)}
+@keyframes brand-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@media(prefers-reduced-motion:reduce){.cosmic-cloud,.cosmic-stars,.autobe-animated-banner__word{animation:none!important}}
