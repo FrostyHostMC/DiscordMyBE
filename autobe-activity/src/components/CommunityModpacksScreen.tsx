@@ -46,7 +46,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingModpack, setEditingModpack] = useState<CommunityModpack | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', description: '', detail_description: '', version: '' });
+  const [editForm, setEditForm] = useState({ name: '', description: '', detail_description: '', version: '', license_id: 'LicenseRef-All-Rights-Reserved' });
   const [editGalleryImages, setEditGalleryImages] = useState<string[]>([]);
   const [editIcon, setEditIcon] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -129,7 +129,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       name: modpack.name,
       description: modpack.description,
       detail_description: modpack.detail_description || '',
-      version: modpack.version
+      version: modpack.version,
+      license_id: modpack.license_id || 'LicenseRef-All-Rights-Reserved'
     });
     setEditIcon(modpack.icon_data_url || null);
     setEditGalleryImages(Array.isArray(modpack.detail_images) ? modpack.detail_images.slice(0, 3) : []);
@@ -765,6 +766,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                   onChange={(e) => setEditForm({ ...editForm, version: e.target.value })}
                   className="w-full px-3 py-2 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm focus:border-[#762BFF] focus:outline-none transition-colors"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-[#AAA3BB] mb-1.5">Project license</label>
+                <select value={editForm.license_id} onChange={(e) => setEditForm({ ...editForm, license_id: e.target.value })} className="w-full px-3 py-3 rounded-lg bg-[#08070D] border border-[#30263F] text-white text-sm">
+                  {Object.entries(LICENSE_LABELS).map(([id,label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+                <p className="mt-1 text-[10px] text-[#716885]">You can change the license on older modpacks too. Only choose a license you are authorized to apply.</p>
               </div>
 
               <div className="flex gap-2 pt-2">
