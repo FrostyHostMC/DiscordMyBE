@@ -75,6 +75,11 @@ async function eligibleCreator(userId:string,env:Env):Promise<boolean>{
  return role&&!!uploads;
 }
 async function init(db:D1Database){
+ await db.prepare(`CREATE TABLE IF NOT EXISTS community_modpacks (
+  id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT NOT NULL,author TEXT NOT NULL,author_id TEXT NOT NULL,
+  author_avatar TEXT,version TEXT NOT NULL,total_packs INTEGER NOT NULL,size INTEGER NOT NULL,icon_data_url TEXT,
+  created_at INTEGER NOT NULL,downloads INTEGER DEFAULT 0,blob_url TEXT NOT NULL,file_name TEXT NOT NULL,included_packs TEXT
+ )`).run();
  const statements=[
  "CREATE TABLE IF NOT EXISTS community_creator_profiles (user_id TEXT PRIMARY KEY,bio TEXT NOT NULL DEFAULT '',website TEXT NOT NULL DEFAULT '',youtube TEXT NOT NULL DEFAULT '',twitch TEXT NOT NULL DEFAULT '',updated_at INTEGER NOT NULL)",
  'CREATE TABLE IF NOT EXISTS community_likes (user_id TEXT NOT NULL,item_id TEXT NOT NULL,created_at INTEGER NOT NULL,PRIMARY KEY(user_id,item_id))',
