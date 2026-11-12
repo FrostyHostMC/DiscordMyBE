@@ -19,6 +19,9 @@ interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
+  DISCORD_BOT_TOKEN: string;
+  DISCORD_GUILD_ID: string;
+  DISCORD_REQUIRED_ROLE_ID: string;
   PUBLIC_BASE_URL?: string;
 }
 
@@ -29,6 +32,27 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
+
+async function verifyCommunityRole(userId: string, env: Env): Promise<'present'|'missing'|'unknown'> {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) return 'unknown';
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+    if (response.status === 404) {
+      const error = await response.json().catch(() => null) as { code?: number } | null;
+      return error?.code === 10007 ? 'missing' : 'unknown';
+    }
+    if (response.status === 429 || response.status >= 500 || !response.ok) return 'unknown';
+    const member = await response.json() as { roles?: string[] };
+    return Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID) ? 'present' : 'missing';
+  } catch { return 'unknown'; }
+}
+const ROLE_REQUIRED_MESSAGE = 'You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
+async function requireCommunityRole(userId: string, env: Env): Promise<Response | null> {
+  const status = await verifyCommunityRole(userId, env);
+  if (status === 'missing') return json({ error: ROLE_REQUIRED_MESSAGE, code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
+  if (status === 'unknown') return json({ error: 'We could not verify your Discord role right now. Please try again shortly.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
+  return null;
+}
 
 async function consumePublishQuota(env: Env, userId: string): Promise<number> {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
@@ -138,6 +162,8 @@ export async function onRequestPost(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord. Close and reopen the Activity, then try again.' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
     const bearer = (request.headers.get('authorization') || '').match(/^Bearer\\s+(.+)$/i)?.[1];
     let authorAvatar: string | null = null;
     let authorDisplayName: string | null = null;
@@ -289,6 +315,10 @@ export async function onRequestGet(context: Ctx) {
   const { env, request } = context;
   try {
     if (!env.DB) return json({ error: 'Database not configured' }, 500);
+    const userId = await verifyDiscordUser(request, env);
+    if (!userId) return json({ error: 'Sign in through Discord to use Community features.', code: 'DISCORD_AUTH_REQUIRED' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
     await ensureTable(env);
 
     const { results } = await env.DB.prepare(
