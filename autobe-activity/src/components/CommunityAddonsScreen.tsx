@@ -10,7 +10,7 @@ interface CommunityAddon {
   version: string; size: number; icon_data_url?: string; created_at: number; downloads: number;
   blob_url: string; file_name: string; category?: Category; content_type?: string;
 }
-interface Props { onBack: () => void; currentUserId?: string; }
+interface Props { onBack: () => void; currentUserId?: string; onOpenCreator?: (creatorId:string)=>void; }
 
 const authHeaders = () => {
   const auth = getDiscordAuth();
@@ -18,7 +18,7 @@ const authHeaders = () => {
 };
 const formatSize = (bytes: number) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
 
-export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }) => {
+export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, onOpenCreator }) => {
   const [addons, setAddons] = useState<CommunityAddon[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -39,6 +39,9 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
   const [socialBusy,setSocialBusy]=useState<string|null>(null);
   const [featuredAddons,setFeaturedAddons]=useState<CommunityAddon[]>([]);
   const [addonStats,setAddonStats]=useState<Record<string,{likes:number;reviewCount:number;averageRating:number}>>({});
+  const [creatorSearch,setCreatorSearch]=useState('');
+  const [creatorResults,setCreatorResults]=useState<Array<{author_id:string;author:string;uploads:number;followers:number}>>([]);
+  const [creatorSearchLoading,setCreatorSearchLoading]=useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -65,6 +68,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
   };
   useEffect(() => { void load(); }, []);
 
+  useEffect(()=>{const q=creatorSearch.trim();if(q.length<2){setCreatorResults([]);return;}const timer=window.setTimeout(async()=>{const auth=getDiscordAuth();if(!auth?.token)return;setCreatorSearchLoading(true);try{const r=await fetch('/api/community-social?action=creators&q='+encodeURIComponent(q),{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});const d=await r.json();if(r.ok)setCreatorResults(d.creators||[]);}catch(e){console.warn('Creator search failed',e);}finally{setCreatorSearchLoading(false);}},250);return()=>window.clearTimeout(timer);},[creatorSearch]);
   const filtered = useMemo(() => addons.filter(item =>
     (category === 'All' || item.category === category) &&
     [item.name, item.description, item.author, item.category || ''].some(value => value.toLowerCase().includes(search.toLowerCase()))
@@ -179,6 +183,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
         <button onClick={() => setShowUpload(true)} className="inline-flex items-center gap-2 rounded-lg bg-[#762BFF] px-3 py-2 text-xs font-bold"><Plus size={15}/> Upload addon</button>
       </div>
       <div className="relative mt-4"><Search size={15} className="absolute left-3 top-2.5 text-[#716885]"/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search addons, creators, or themes..." className="w-full rounded-lg border border-[#30263F] bg-[#15111F] py-2 pl-9 pr-3 text-sm outline-none focus:border-[#762BFF]"/></div>
+      <div className="relative mt-2 max-w-lg"><input value={creatorSearch} onChange={e=>setCreatorSearch(e.target.value)} placeholder="Find eligible creators…" className="w-full rounded-lg border border-[#30263F] bg-[#15111F] py-2 pl-3 pr-3 text-xs outline-none focus:border-[#762BFF]"/>{creatorSearch.trim().length>=2&&<div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-[#30263F] bg-[#100D18] shadow-xl">{creatorSearchLoading?<p className="p-3 text-xs text-[#AAA3BB]">Searching eligible creators…</p>:creatorResults.length===0?<p className="p-3 text-xs text-[#AAA3BB]">No eligible creators found.</p>:creatorResults.map(c=><button key={c.author_id} onClick={()=>onOpenCreator?.(c.author_id)} className="flex w-full items-center justify-between border-b border-white/5 p-3 text-left text-xs hover:bg-white/5"><span className="font-bold">{c.author}</span><span className="text-[10px] text-[#AAA3BB]">{c.uploads} uploads · {c.followers} followers</span></button>)}</div>}</div>
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">{['All', ...CATEGORIES].map(item=><button key={item} onClick={()=>setCategory(item)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold ${category===item?'border-[#762BFF] bg-[#762BFF] text-white':'border-[#30263F] bg-[#15111F] text-[#AAA3BB]'}`}>{item}</button>)}</div>
     </header>
     <main className="min-h-0 flex-1 overflow-y-auto p-4">
