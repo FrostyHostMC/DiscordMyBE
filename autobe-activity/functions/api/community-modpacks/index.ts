@@ -113,6 +113,7 @@ async function ensureTable(env: Env): Promise<void> {
   if (!names.has('featured')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
   }
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (item_id TEXT PRIMARY KEY,author_id TEXT NOT NULL,item_name TEXT NOT NULL,reason TEXT NOT NULL,detected_at INTEGER NOT NULL,last_updated_at INTEGER,last_download_at INTEGER,status TEXT NOT NULL DEFAULT 'candidate')`).run();
   const lifecycleColumns: Array<[string, string]> = [
     ['last_updated_at', 'INTEGER'], ['last_download_at', 'INTEGER'],
     ['role_removed_at', 'INTEGER'], ['role_purge_after', 'INTEGER'],
@@ -416,6 +417,7 @@ export async function onRequestPatch(context: Ctx) {
     updates.push('last_updated_at = ?', 'inactivity_warning_at = NULL', 'inactivity_purge_after = NULL', "lifecycle_state = 'active'");
     values.push(Date.now());
     values.push(id);
+    await env.DB.prepare('DELETE FROM community_cleanup_preview WHERE item_id = ?').bind(id).run();
     await env.DB.prepare(`UPDATE community_modpacks SET ${updates.join(', ')} WHERE id = ?`)
       .bind(...values)
       .run();
