@@ -52,7 +52,12 @@ async function discordRole(env: Env, userId: string): Promise<"present" | "missi
     const response = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${userId}`, {
       headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
     });
-    if (response.status === 404) return "missing";
+    if (response.status === 404) {
+      const error = await response.json().catch(() => null) as { code?: number } | null;
+      // Discord code 10007 is specifically "Unknown Member". Unknown Guild,
+      // unknown route, and other 404s must never be treated as role loss.
+      return error?.code === 10007 ? "missing" : "unknown";
+    }
     if (response.status === 429 || response.status >= 500) return "unknown";
     if (!response.ok) {
       console.error("[Lifecycle] Discord role lookup failed", response.status);
