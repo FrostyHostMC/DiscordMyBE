@@ -74,7 +74,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const fetchCommunityModpacks = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const response = await fetch('/api/community-modpacks', { headers: authHeaders(), cache: 'no-store' });
       const data = await response.json();
 
       console.log('Community modpacks response:', data);
@@ -140,7 +140,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     if (!selectedModpack) return;
     setDetailsLoading(true);
     try {
-      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const response = await fetch('/api/community-modpacks', { headers: authHeaders(), cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to refresh modpack');
       const latest = (data.modpacks || []).find((item: CommunityModpack) => item.id === selectedModpack.id);
