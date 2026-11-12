@@ -7,7 +7,7 @@ A separate Cloudflare Worker checks verified Community creators against Discord 
 - The Worker checks up to 200 previously published creator accounts every five minutes (UTC), using a persisted cursor to cover larger Communities across successive runs.
 - If Discord confirms that a creator no longer has the required role, all of that creator's Community uploads are immediately hidden and their exact, ownership-verified R2 files and D1 listings are deleted in that scan.
 - There is **no grace period** for role loss. This is separate from the optional age-based cleanup setting.
-- Community API requests also check the signed-in user's role. A missing role returns `DISCORD_ROLE_REQUIRED` with the required-role verification message; the app exits Community and displays that message. The merger workspace remains available.
+- Every app session checks the signed-in user's role at startup and every 30 seconds. A missing role returns `DISCORD_ROLE_REQUIRED`, immediately gates the entire AutoBE Activity, and displays the unverified-role message. Re-adding the role allows the user to verify again. The merger is gated too.
 - If a file cannot be safely verified for deletion, its listing remains hidden and the Worker retries on a later scan. It never deletes an R2 object unless its public key, immutable owner metadata, kind, and exact size match.
 - Only Discord's specific `Unknown Member` response or a confirmed member response without the required role counts as role loss. API errors, rate limits, missing configuration, and 5xx responses are unknown and do not trigger deletion.
 
