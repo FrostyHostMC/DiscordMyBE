@@ -6,7 +6,7 @@ import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 const CATEGORIES = ['Horror', 'Medieval', 'Fantasy', 'Survival', 'Technology', 'Magic', 'PvP', 'Adventure', 'Weapons', 'Mobs', 'Blocks', 'Decorations', 'Utility', 'Other'] as const;
 type Category = typeof CATEGORIES[number];
 interface CommunityAddon {
-  id: string; name: string; description: string; author: string; author_id: string;
+  id: string; name: string; description: string; author: string; author_id: string; author_avatar?: string | null;
   version: string; size: number; icon_data_url?: string; created_at: number; downloads: number;
   blob_url: string; file_name: string; category?: Category; content_type?: string;
 }
@@ -155,7 +155,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
         <div className="flex h-36 items-center justify-center bg-[#15111F]">{addon.icon_data_url ? <img src={addon.icon_data_url} alt="" className="h-full w-full object-cover"/> : <ImageIcon className="text-[#716885]" size={34}/>}</div>
         <div className="space-y-2 p-3"><div className="flex items-start justify-between gap-2"><h2 className="text-sm font-bold">{addon.name}</h2><span className="rounded-full border border-[#762BFF]/40 px-2 py-0.5 text-[10px] text-[#C4A7FF]">{addon.category || 'Other'}</span></div>
           <p className="line-clamp-3 min-h-12 text-xs text-[#AAA3BB]">{addon.description}</p>
-          <div className="flex justify-between text-[10px] text-[#716885]"><span>by {addon.author}</span><span>v{addon.version} · {formatSize(addon.size)}</span></div>
+          <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)}</span></div>
           <button onClick={()=>void download(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-2 text-xs font-bold"><Download size={14}/> Download {addon.file_name.toLowerCase().endsWith('.mcpack') ? 'MCPack' : 'MCAddon'}</button>
           {currentUserId && addon.author_id === currentUserId && <button onClick={()=>void deleteAddon(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 py-2 text-xs font-semibold text-red-300"><Trash2 size={13}/> Delete my addon</button>}
         </div>
