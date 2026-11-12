@@ -334,9 +334,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     .slice(0, 3);
 
   return (
-    <div className="flex flex-col h-full bg-[#08070D] text-white select-none overflow-hidden">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-white select-none">
       {/* Header */}
-      <div className="px-4 sm:px-6 py-4 border-b border-[#30263F]/70 bg-[#100D18]">
+      <div className="px-4 sm:px-6 py-4 border-b border-[#30263F]/55 bg-[#100D18]/55 backdrop-blur-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <button
@@ -348,7 +348,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               <ArrowLeft className="w-4 h-4" />
             </button>
             <div className="min-w-0 flex-1">
-              <div className="autobe-animated-banner"><img src="/assets/modpacks-logo.gif" alt="Modpacks" /></div>
+              <div className="autobe-animated-banner autobe-animated-banner--modpacks"><img src="/assets/modpacks-logo.gif" alt="Modpacks" /></div>
               <h1 className="sr-only">Community Modpacks</h1>
               <p className="text-xs text-[#AAA3BB] mt-0.5">
                 {modpacks.length} shared modpack{modpacks.length === 1 ? '' : 's'}
