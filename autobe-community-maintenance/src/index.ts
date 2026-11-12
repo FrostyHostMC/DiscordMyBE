@@ -84,7 +84,8 @@ async function deleteOwnedObject(env: Env, row: { blob_url: string; author_id: s
   const key = publishedObjectKey(row.blob_url, row.author_id);
   if (!key) throw new Error("The upload URL is not a verifiable public object key.");
   const object = await env.BUCKET.head(key);
-  if (!object || object.customMetadata?.ownerId !== row.author_id ||
+  if (!object) return; // The listing can be removed; its object is already absent.
+  if (object.customMetadata?.ownerId !== row.author_id ||
       object.customMetadata?.kind !== "pub" ||
       object.customMetadata?.declaredSize !== String(object.size) ||
       object.size !== Number(row.size)) {
@@ -140,24 +141,23 @@ async function runLifecycle(env: Env) {
     if (role === "missing") {
       summary.roleLossCandidates += uploads.results?.length || 0;
       for (const row of uploads.results || []) {
-        await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'candidate') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,last_updated_at=excluded.last_updated_at,last_download_at=excluded.last_download_at,status='candidate'")
-          .bind(row.id, userId, row.name, "discord_role_missing", now, row.last_updated_at, row.last_download_at).run();
-
-        if (!row.role_removed_at) {
-          await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=?,role_purge_after=?,lifecycle_state='role_grace' WHERE id=?")
-            .bind(now, now + Number(settings.role_grace_days || 30) * DAY, row.id).run();
-          await notify(env.DB, userId, "lifecycle_role_removed", row.id, `Your upload "${row.name}" has been hidden because your required Community Discord role is no longer active. Restore the role within 30 days to keep it published.`);
-          await audit(env.DB, row, "hidden", "discord_role_removed");
-          summary.hidden++;
-        } else if (Number(row.role_purge_after || 0) <= now) {
-          try {
-            await deleteOwnedObject(env, row);
-            await env.DB.prepare("DELETE FROM community_modpacks WHERE id=?").bind(row.id).run();
-            await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
-            await audit(env.DB, row, "deleted", "discord_role_grace_expired");
-            await notify(env.DB, userId, "lifecycle_removed", row.id, `Your upload "${row.name}" was removed after the 30-day Discord role restoration period expired.`);
-            summary.deleted++;
-          } catch (error) { summary.errors++; console.error("[Lifecycle] Safe deletion blocked", row.id, error); }
+        // Losing the required role is an immediate revocation, not an inactivity
+        // grace period. Hide first, then delete the exact verified R2 object and
+        // its listing. Failed ownership checks keep the listing hidden and retry.
+        await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=COALESCE(role_removed_at,?),role_purge_after=?,lifecycle_state='role_removed' WHERE id=?")
+          .bind(now, now, row.id).run();
+        try {
+          await deleteOwnedObject(env, row);
+          await env.DB.prepare("DELETE FROM community_modpacks WHERE id=?").bind(row.id).run();
+          await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
+          await audit(env.DB, row, "deleted", "discord_role_removed");
+          await notify(env.DB, userId, "lifecycle_removed", row.id, `Your upload "${row.name}" and its published file were removed because your required Discord role was taken away. Restore the role and verify again before publishing new content.`);
+          summary.deleted++;
+        } catch (error) {
+          summary.errors++;
+          await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'blocked') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,status='blocked'")
+            .bind(row.id, userId, row.name, "discord_role_deletion_blocked", now, row.last_updated_at, row.last_download_at).run();
+          console.error("[Lifecycle] Safe deletion blocked; listing remains hidden", row.id, error);
         }
       }
       await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
@@ -167,11 +167,9 @@ async function runLifecycle(env: Env) {
     for (const row of uploads.results || []) {
       await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=? AND reason='discord_role_missing'").bind(row.id).run();
       if (row.role_removed_at) {
-        await env.DB.prepare("UPDATE community_modpacks SET is_hidden=0,role_removed_at=NULL,role_purge_after=NULL,lifecycle_state='active' WHERE id=?").bind(row.id).run();
-        await notify(env.DB, userId, "lifecycle_role_restored", row.id, `Your upload "${row.name}" is visible in Community again because your Discord role was restored.`);
-        await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
-        await audit(env.DB, row, "restored", "discord_role_restored");
-        summary.restored++;
+        // Once role revocation has started, deleted content is never silently
+        // republished if the role is later re-added. The creator must re-verify
+        // and upload again.
         continue;
       }
       const updated = Number(row.last_updated_at || row.created_at || now);
