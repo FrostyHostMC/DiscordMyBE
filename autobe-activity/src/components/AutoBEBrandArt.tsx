@@ -65,7 +65,11 @@ export const AutoBEFeatureArt: React.FC<{ kind: AutoBEArtKind; size?: number; cl
 
 export const AutoBEWordmark: React.FC = () => (
   <div className="flex items-center gap-3">
-    <img src="/assets/autobe-logo.gif" alt="AutoBE" className="h-12 w-12 shrink-0 rounded-xl object-cover" />
-    <div className="text-[10px] font-semibold tracking-[.16em] text-violet-100/75">MERGE · CREATE · SHARE</div>
-  </div>
-);
+<img
+  src="/assets/autobe-logo.gif"
+  alt="AutoBE"
+  className="h-12 w-12 shrink-0 rounded-xl object-cover"
+/>
+<div className="text-[10px] font-semibold tracking-[.16em] text-violet-100/75">
+  MERGE · CREATE · SHARE
+</div>
