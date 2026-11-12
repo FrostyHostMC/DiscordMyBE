@@ -76,6 +76,7 @@ async function ensureTable(env: Env): Promise<void> {
       description TEXT NOT NULL,
       author TEXT NOT NULL,
       author_id TEXT NOT NULL,
+      author_avatar TEXT,
       version TEXT NOT NULL,
       total_packs INTEGER NOT NULL,
       size INTEGER NOT NULL,
@@ -91,6 +92,9 @@ async function ensureTable(env: Env): Promise<void> {
   // Migrate databases created before detailed descriptions and gallery images existed.
   const columns = await env.DB.prepare('PRAGMA table_info(community_modpacks)').all<{ name: string }>();
   const names = new Set((columns.results || []).map((column) => column.name));
+  if (!names.has('author_avatar')) {
+    await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN author_avatar TEXT').run();
+  }
   if (!names.has('detail_description')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN detail_description TEXT').run();
   }
@@ -117,6 +121,15 @@ export async function onRequestPost(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord. Close and reopen the Activity, then try again.' }, 401);
+    const bearer = (request.headers.get('authorization') || '').match(/^Bearer\\s+(.+)$/i)?.[1];
+    let authorAvatar: string | null = null;
+    if (bearer) {
+      const profileResponse = await fetch('https://discord.com/api/v10/oauth2/@me', { headers: { authorization: `Bearer ${bearer}` } });
+      if (profileResponse.ok) {
+        const profile = await profileResponse.json() as { application?: { id?: string }; user?: { id?: string; avatar?: string | null } };
+        if (profile.application?.id === env.DISCORD_CLIENT_ID && profile.user?.id === userId) authorAvatar = profile.user.avatar ?? null;
+      }
+    }
 
     await ensureTable(env);
 
@@ -203,7 +216,7 @@ export async function onRequestPost(context: Ctx) {
 
     const id = crypto.randomUUID();
     const result = await env.DB.prepare(
-      'INSERT INTO community_modpacks (id, name, description, author, author_id, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
       .bind(
         id,
@@ -211,6 +224,7 @@ export async function onRequestPost(context: Ctx) {
         safeDescription,
         safeAuthor,
         userId, // verified Discord id, not whatever the request claims
+        authorAvatar,
         safeVersion,
         Number(data.total_packs) || 0,
         Number(data.size) || 0,
