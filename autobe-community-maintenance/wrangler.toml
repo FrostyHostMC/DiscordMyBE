@@ -28,3 +28,17 @@ head_sampling_rate = 1
 [observability.traces]
 enabled = true
 head_sampling_rate = 0.01
+
+# Explicit preview bindings keep lifecycle testing isolated from production uploads.
+[env.preview.vars]
+DISCORD_GUILD_ID = "1561951163065180251"
+DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
+
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks-preview"
+
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "autobe-community-modpacks-preview"
+database_id = "17c2d77c-f035-456b-acae-471709996d85"
