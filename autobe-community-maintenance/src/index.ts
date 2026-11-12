@@ -31,7 +31,7 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_settings (
     id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 0,
     inactivity_months INTEGER NOT NULL DEFAULT 24, no_download_months INTEGER NOT NULL DEFAULT 12,
-    role_grace_days INTEGER NOT NULL DEFAULT 30, inactivity_grace_days INTEGER NOT NULL DEFAULT 90,
+    role_grace_days INTEGER NOT NULL DEFAULT 0, inactivity_grace_days INTEGER NOT NULL DEFAULT 90,
     unread_extension_days INTEGER NOT NULL DEFAULT 180, updated_at INTEGER NOT NULL
   )`).run();
   await db.prepare("INSERT OR IGNORE INTO community_cleanup_settings (id,enabled,updated_at) VALUES (1,0,?)").bind(Date.now()).run();
