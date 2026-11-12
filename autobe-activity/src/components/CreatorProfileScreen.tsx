@@ -22,7 +22,7 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
   const [saving, setSaving] = useState(false);
   const [socialError, setSocialError] = useState('');
   const [isOwner, setIsOwner] = useState(false);
-  const [adminData, setAdminData] = useState<{uploads:any[];creators:any[];featuredCreators:any[];categories:string[];badges:string[];cleanup?:{settings:any;pending:any[];recent:any[]}}>({uploads:[],creators:[],featuredCreators:[],categories:[],badges:[]});
+  const [adminData, setAdminData] = useState<{uploads:any[];creators:any[];featuredCreators:any[];categories:string[];badges:string[];cleanup?:{settings:any;pending:any[];recent:any[];preview?:Array<{id:string;author_id:string;name:string;reason:string;detected_at:number;last_updated_at?:number|null;last_download_at?:number|null;status?:string}>}}>({uploads:[],creators:[],featuredCreators:[],categories:[],badges:[]});
   const [adminCreatorId, setAdminCreatorId] = useState('');
   const [adminBadge, setAdminBadge] = useState('Featured Creator');
   const [adminUploadId, setAdminUploadId] = useState('');
