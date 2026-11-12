@@ -186,7 +186,7 @@ async function runLifecycle(env: Env) {
   await env.DB.prepare("INSERT OR IGNORE INTO community_cleanup_scan_state (id,cursor_user_id,updated_at) VALUES (1,'',?)").bind(now).run();
   const scanState = await env.DB.prepare("SELECT cursor_user_id FROM community_cleanup_scan_state WHERE id=1").first<{cursor_user_id:string}>();
   const cursor = scanState?.cursor_user_id || '';
-  const page = await env.DB.prepare("SELECT DISTINCT author_id FROM community_modpacks WHERE lifecycle_state!='deleted' AND author_id>? ORDER BY author_id LIMIT 201")
+  const page = await env.DB.prepare("SELECT user_id author_id FROM community_verified_creators WHERE user_id>? ORDER BY user_id LIMIT 201")
     .bind(cursor).all<{ author_id: string }>();
   const hasMore = (page.results || []).length > 200;
   const creators = (page.results || []).slice(0, 200);
