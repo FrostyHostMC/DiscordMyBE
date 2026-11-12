@@ -111,10 +111,19 @@ async function runLifecycle(env: Env) {
   await ensureSchema(env.DB);
   const settings = await env.DB.prepare("SELECT * FROM community_cleanup_settings WHERE id=1").first<any>();
   const now = Date.now();
-  const users = await env.DB.prepare("SELECT DISTINCT author_id FROM community_modpacks WHERE lifecycle_state!='deleted'").all<{ author_id: string }>();
-  const summary = { permanentDeletionEnabled: !!settings?.enabled, checkedCreators: 0, roleLossCandidates: 0, hidden: 0, restored: 0, inactivityCandidates: 0, warned: 0, deleted: 0, errors: 0 };
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_scan_state (
+    id INTEGER PRIMARY KEY CHECK(id=1), cursor_user_id TEXT NOT NULL DEFAULT '', updated_at INTEGER NOT NULL
+  )`).run();
+  await env.DB.prepare("INSERT OR IGNORE INTO community_cleanup_scan_state (id,cursor_user_id,updated_at) VALUES (1,'',?)").bind(now).run();
+  const scanState = await env.DB.prepare("SELECT cursor_user_id FROM community_cleanup_scan_state WHERE id=1").first<{cursor_user_id:string}>();
+  const cursor = scanState?.cursor_user_id || '';
+  const page = await env.DB.prepare("SELECT DISTINCT author_id FROM community_modpacks WHERE lifecycle_state!='deleted' AND author_id>? ORDER BY author_id LIMIT 201")
+    .bind(cursor).all<{ author_id: string }>();
+  const hasMore = (page.results || []).length > 200;
+  const creators = (page.results || []).slice(0, 200);
+  const summary = { permanentDeletionEnabled: !!settings?.enabled, checkedCreators: 0, roleLossCandidates: 0, hidden: 0, restored: 0, inactivityCandidates: 0, warned: 0, deleted: 0, errors: 0, moreCreatorsQueued: hasMore };
 
-  for (const creator of users.results || []) {
+  for (const creator of creators) {
     const userId = String(creator.author_id);
     if (!/^\d{17,20}$/.test(userId)) continue;
     summary.checkedCreators++;
@@ -197,9 +206,21 @@ async function runLifecycle(env: Env) {
         }
       }
     }
+    await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1")
+      .bind(userId, now).run();
   }
+  if (!hasMore) await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id='',updated_at=? WHERE id=1").bind(now).run();
   console.log("[Lifecycle] Daily scan", JSON.stringify(summary));
   return summary;
+}
+
+async function secureSecretEquals(provided: string, expected: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const [left, right] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(provided)),
+    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
+  ]);
+  return crypto.subtle.timingSafeEqual(left, right);
 }
 
 export default {
@@ -207,7 +228,8 @@ export default {
     ctx.waitUntil(runLifecycle(env));
   },
   async fetch(request: Request, env: Env) {
-    if (request.method !== "POST" || request.headers.get("x-autobe-maintenance-key") !== env.MAINTENANCE_KEY) {
+    const providedKey = request.headers.get("x-autobe-maintenance-key") || "";
+    if (request.method !== "POST" || !env.MAINTENANCE_KEY || !await secureSecretEquals(providedKey, env.MAINTENANCE_KEY)) {
       return json({ error: "Not found" }, 404);
     }
     try { return json(await runLifecycle(env)); }
