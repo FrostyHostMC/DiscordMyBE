@@ -132,6 +132,36 @@ async function deleteOwnedObject(env: Env, row: { blob_url: string; author_id: s
   await env.BUCKET.delete(key);
 }
 
+async function deleteCreatorObjects(env:Env,userId:string){
+  for (const kind of ["pub","temp"] as const) {
+    let cursor:string|undefined;
+    do {
+      try {
+        const page=await env.BUCKET.list({prefix:`${kind}/${userId}/`,limit:1000,...(cursor?{cursor}:{})});
+        for (const item of page.objects) {
+          try {
+            const object=await env.BUCKET.head(item.key);
+            if (!object) continue;
+            const metadata=object.customMetadata;
+            if (metadata?.ownerId!==userId || metadata?.kind!==kind ||
+                metadata?.declaredSize!==String(object.size) || object.size!==item.size) {
+              console.error("[Lifecycle] Retained R2 object with unverified owner metadata",item.key);
+              continue;
+            }
+            await env.BUCKET.delete(item.key);
+          } catch (error) {
+            console.error("[Lifecycle] Could not remove owned R2 object",item.key,error);
+          }
+        }
+        cursor=page.truncated?page.cursor:undefined;
+      } catch (error) {
+        console.error("[Lifecycle] R2 owner-prefix cleanup failed",kind,userId,error);
+        break;
+      }
+    } while (cursor);
+  }
+}
+
 async function audit(db: D1Database, row: any, action: string, reason: string, details?: unknown) {
   await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at,details) VALUES (?,?,?,?,?,?,?)")
     .bind(crypto.randomUUID(), row.id, row.author_id, action, reason, Date.now(), details ? JSON.stringify(details).slice(0, 1000) : null).run();
@@ -222,6 +252,7 @@ async function runLifecycle(env: Env) {
           console.error("[Lifecycle] Safe deletion blocked; listing remains hidden", row.id, error);
         }
       }
+      await deleteCreatorObjects(env,userId);
       await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
       continue;
     }
