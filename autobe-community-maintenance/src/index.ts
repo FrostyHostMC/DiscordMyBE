@@ -132,6 +132,7 @@ async function runLifecycle(env: Env) {
           try {
             await deleteOwnedObject(env, row);
             await env.DB.prepare("DELETE FROM community_modpacks WHERE id=?").bind(row.id).run();
+            await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
             await audit(env.DB, row, "deleted", "discord_role_grace_expired");
             await notify(env.DB, userId, "lifecycle_removed", row.id, `Your upload "${row.name}" was removed after the 30-day Discord role restoration period expired.`);
             summary.deleted++;
@@ -145,6 +146,7 @@ async function runLifecycle(env: Env) {
       if (row.role_removed_at && settings?.enabled) {
         await env.DB.prepare("UPDATE community_modpacks SET is_hidden=0,role_removed_at=NULL,role_purge_after=NULL,lifecycle_state='active' WHERE id=?").bind(row.id).run();
         await notify(env.DB, userId, "lifecycle_role_restored", row.id, `Your upload "${row.name}" is visible in Community again because your Discord role was restored.`);
+        await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
         await audit(env.DB, row, "restored", "discord_role_restored");
         summary.restored++;
         continue;
@@ -181,6 +183,7 @@ async function runLifecycle(env: Env) {
           try {
             await deleteOwnedObject(env, row);
             await env.DB.prepare("DELETE FROM community_modpacks WHERE id=?").bind(row.id).run();
+            await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
             await audit(env.DB, row, "deleted", "long_term_inactivity");
             await notify(env.DB, userId, "lifecycle_removed", row.id, `Your upload "${row.name}" was removed after the long-term inactivity grace period.`);
             summary.deleted++;
