@@ -451,12 +451,20 @@ export async function onRequestPatch(context: Ctx) {
     const data = (await request.json()) as Record<string, any>;
     const updates: string[] = [];
     const values: unknown[] = [];
-    for (const field of ['name', 'description', 'version', 'icon_data_url', 'detail_description', 'detail_images'] as const) {
+    for (const field of ['name', 'description', 'version', 'icon_data_url', 'detail_description', 'detail_images', 'category', 'license_id'] as const) {
       if (data[field] === undefined) continue;
       let value: unknown = data[field];
       if (field === 'name') value = String(value).slice(0, 120);
       if (field === 'description') value = String(value).slice(0, 2000);
       if (field === 'version') value = String(value).slice(0, 40);
+      if (field === 'category') {
+        const allowedCategories = ['Horror','Medieval','Fantasy','Survival','Technology','Magic','PvP','Adventure','Weapons','Mobs','Blocks','Decorations','Utility','Other'];
+        if (!allowedCategories.includes(String(value))) return json({ error: 'Choose a valid category.' }, 400);
+      }
+      if (field === 'license_id') {
+        const allowedLicenses = ['LicenseRef-All-Rights-Reserved','MIT','Apache-2.0','GPL-2.0-only','GPL-3.0-only','BSD-2-Clause','BSD-3-Clause','MPL-2.0','LGPL-2.1-only','LGPL-3.0-only','CC0-1.0','CC-BY-4.0','CC-BY-SA-4.0','Unlicense','LicenseRef-Custom'];
+        if (!allowedLicenses.includes(String(value))) return json({ error: 'Choose a valid license.' }, 400);
+      }
       if (field === 'icon_data_url') {
         value = typeof value === 'string' && value.length <= 100_000 ? value : null;
       }
