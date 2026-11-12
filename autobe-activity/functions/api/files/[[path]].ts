@@ -27,7 +27,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env, params }) =>
   if (key.startsWith('pub/')) {
     if (!env.DB) return new Response('Community storage is temporarily unavailable.', { status: 503 });
     const ownerId = key.split('/')[1] || '';
-    if (!/^\\d{17,20}$/.test(ownerId)) return new Response('Not found', { status: 404 });
+    if (!/^\d{17,20}$/.test(ownerId)) return new Response('Not found', { status: 404 });
     const publicPath = `/api/files/${key.split('/').map(encodeURIComponent).join('/')}`;
     try {
       const visible = await env.DB.prepare("SELECT 1 yes FROM community_modpacks WHERE author_id=? AND COALESCE(is_hidden,0)=0 AND instr(blob_url,?)>0 LIMIT 1")
