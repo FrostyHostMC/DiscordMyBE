@@ -7,7 +7,7 @@ DISCORD_GUILD_ID = "1561951163065180251"
 DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
 
 [triggers]
-crons = ["0 4 * * *"]
+crons = ["*/5 * * * *"]
 
 [[r2_buckets]]
 binding = "BUCKET"
