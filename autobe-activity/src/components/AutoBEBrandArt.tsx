@@ -73,3 +73,5 @@ export const AutoBEWordmark: React.FC = () => (
 <div className="text-[10px] font-semibold tracking-[.16em] text-violet-100/75">
   MERGE · CREATE · SHARE
 </div>
+  </div>
+);
