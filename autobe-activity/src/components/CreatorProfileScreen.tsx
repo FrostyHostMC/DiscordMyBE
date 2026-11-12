@@ -74,7 +74,12 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
     if (!user?.id) { setError('Your Discord profile is not available. Reopen AutoBE through Discord.'); setLoading(false); return; }
     setLoading(true); setError('');
     try {
-      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const currentAuth = getDiscordAuth();
+      if (!currentAuth?.token) throw new Error('Your Discord session is not available. Reopen AutoBE through Discord and try again.');
+      const response = await fetch('/api/community-modpacks', {
+        headers: { Authorization: `Bearer ${currentAuth.token}` },
+        cache: 'no-store',
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not load your published content.');
       setItems((data.modpacks || []).filter((item: CommunityModpack) => item.author_id === user.id));
