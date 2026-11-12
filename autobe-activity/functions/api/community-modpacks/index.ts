@@ -56,11 +56,13 @@ async function verifyCommunityRole(userId: string, env: Env): Promise<'present'|
     const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
     if (response.status === 404) {
       const error = await response.json().catch(() => null) as { code?: number } | null;
-      return error?.code === 10007 ? 'missing' : 'unknown';
+      return error?.code === 10007 && await requiredRoleIsConfigured(env) ? 'missing' : 'unknown';
     }
     if (response.status === 429 || response.status >= 500 || !response.ok) return 'unknown';
     const member = await response.json() as { roles?: string[] };
-    return Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID) ? 'present' : 'missing';
+    const hasRole = Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID);
+    if (!hasRole && !await requiredRoleIsConfigured(env)) return 'unknown';
+    return hasRole ? 'present' : 'missing';
   } catch { return 'unknown'; }
 }
 const ROLE_REQUIRED_MESSAGE = 'You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
