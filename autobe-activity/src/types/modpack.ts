@@ -108,6 +108,7 @@ export interface CommunityModpack {
   file_name: string;
   content_type?: 'modpack' | 'addon';
   category?: string;
+  license_id?: string;
   last_updated_at?: number | null;
   last_download_at?: number | null;
   role_removed_at?: number | null;
