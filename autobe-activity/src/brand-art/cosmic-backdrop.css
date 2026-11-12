@@ -1,58 +1,118 @@
-/* AutoBE's locally-rendered animated nebula. No emoji, remote image, or GIF URL. */
-.autobe-cosmic-backdrop{
-  position:fixed;inset:0;z-index:0;display:block;overflow:hidden;isolation:isolate;
-  pointer-events:none;background:#07040e;contain:paint;
+/* Locally hosted animated AutoBE artwork, layered behind the application UI. */
+.autobe-cosmic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  background: #07040e;
 }
-.autobe-cosmic-backdrop--app{z-index:0}
-.autobe-cosmic-backdrop--loading{z-index:0}
-.cosmic-nebula{position:absolute;inset:-28%;border-radius:48%;filter:blur(clamp(42px,9vw,120px));will-change:transform;transform:translateZ(0)}
-.cosmic-nebula--violet{
+.autobe-cosmic-backdrop__base,
+.autobe-cosmic-backdrop__clouds,
+.autobe-cosmic-backdrop__shade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.autobe-cosmic-backdrop__base {
+  z-index: 0;
+  object-fit: cover;
+  object-position: center;
+  opacity: .78;
+}
+.autobe-cosmic-backdrop__clouds {
+  z-index: 1;
+  object-fit: cover;
+  object-position: center;
+  opacity: .42;
+  mix-blend-mode: screen;
+}
+.autobe-cosmic-backdrop__shade {
+  z-index: 2;
   background:
-    radial-gradient(ellipse at 27% 28%,rgba(105,25,190,.88) 0,rgba(82,18,153,.48) 24%,transparent 53%),
-    radial-gradient(ellipse at 69% 70%,rgba(102,29,190,.82) 0,rgba(62,14,117,.48) 28%,transparent 58%),
-    radial-gradient(ellipse at 55% 12%,rgba(128,38,220,.58) 0,transparent 43%);
-  animation:autobe-nebula-float-a 38s ease-in-out infinite alternate;
+    linear-gradient(180deg, rgba(7,4,14,.26), rgba(7,4,14,.48)),
+    radial-gradient(ellipse at 50% 36%, transparent 12%, rgba(5,2,12,.3) 78%);
 }
-.cosmic-nebula--indigo{
-  inset:-36%;opacity:.76;
-  background:
-    radial-gradient(ellipse at 72% 31%,rgba(43,16,98,.9) 0,transparent 48%),
-    radial-gradient(ellipse at 24% 75%,rgba(74,18,135,.78) 0,transparent 48%),
-    conic-gradient(from 205deg at 50% 48%,transparent 0 12%,rgba(95,27,173,.36) 22%,transparent 39%,rgba(65,20,132,.5) 57%,transparent 73%);
-  animation:autobe-nebula-float-b 52s ease-in-out infinite alternate;
+.autobe-cosmic-backdrop--app { z-index: -1; }
+.autobe-access-screen {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100dvh;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 1.25rem;
+  color: #F8F5FF;
+  background: #080414;
 }
-.cosmic-nebula--magenta{
-  inset:-18%;opacity:.48;filter:blur(clamp(48px,11vw,145px));
-  background:radial-gradient(ellipse at 51% 48%,rgba(167,55,231,.48) 0,rgba(110,32,177,.2) 23%,transparent 55%);
-  animation:autobe-nebula-pulse 19s ease-in-out infinite alternate;
+.autobe-access-screen::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(5,2,12,.2), rgba(5,2,12,.7)),
+    url('/assets/Locked%20Out%20Background.gif') center / cover no-repeat;
+  transform: scale(1.02);
 }
-.cosmic-nebula-noise{position:absolute;inset:-12%;width:124%;height:124%;opacity:.26;mix-blend-mode:screen}
-.cosmic-starfield{position:absolute;inset:-20%;background-repeat:repeat;will-change:transform,opacity}
-.cosmic-starfield--fine{
-  opacity:.5;background-image:
-    radial-gradient(1px 1px at 19px 31px,rgba(255,255,255,.85) 99%,transparent),
-    radial-gradient(1px 1px at 83px 117px,rgba(218,188,255,.9) 99%,transparent),
-    radial-gradient(1px 1px at 151px 59px,rgba(255,255,255,.72) 99%,transparent),
-    radial-gradient(1px 1px at 211px 173px,rgba(188,143,255,.8) 99%,transparent);
-  background-size:247px 223px,293px 271px,337px 301px,389px 347px;
-  animation:autobe-stars-drift 110s linear infinite;
+.autobe-access-card {
+  width: 100%;
+  max-width: 28rem;
+  padding: 1.5rem;
+  text-align: center;
+  border: 1px solid rgba(196,181,253,.2);
+  border-radius: 1.25rem;
+  background: rgba(13,8,27,.86);
+  box-shadow: 0 24px 90px rgba(0,0,0,.5), 0 0 50px rgba(109,40,217,.18);
+  backdrop-filter: blur(18px);
 }
-.cosmic-starfield--bright{
-  opacity:.46;background-image:
-    radial-gradient(2px 2px at 48px 79px,rgba(255,226,255,.95) 40%,rgba(185,111,255,.55) 65%,transparent 100%),
-    radial-gradient(2px 2px at 181px 143px,rgba(255,255,255,.9) 40%,rgba(168,103,255,.45) 70%,transparent 100%),
-    radial-gradient(1.5px 1.5px at 277px 37px,rgba(255,255,255,.9) 50%,transparent 100%);
-  background-size:337px 283px,421px 359px,503px 433px;
-  animation:autobe-stars-twinkle 7s ease-in-out infinite alternate;
+.autobe-access-logo {
+  display: block;
+  width: min(100%, 19rem);
+  height: auto;
+  max-height: 8rem;
+  margin: 0 auto .5rem;
+  object-fit: contain;
 }
-.cosmic-nebula-vignette{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 43%,transparent 25%,rgba(5,2,12,.16) 68%,rgba(4,2,9,.68) 120%)}
-@keyframes autobe-nebula-float-a{0%{transform:translate3d(-3%,1%,0) rotate(-7deg) scale(1)}100%{transform:translate3d(3%,-2%,0) rotate(8deg) scale(1.12)}}
-@keyframes autobe-nebula-float-b{0%{transform:translate3d(2%,-2%,0) rotate(8deg) scale(1.08)}100%{transform:translate3d(-3%,2%,0) rotate(-8deg) scale(.98)}}
-@keyframes autobe-nebula-pulse{0%{transform:scale(.88);opacity:.28}100%{transform:scale(1.13);opacity:.56}}
-@keyframes autobe-stars-drift{0%{transform:translate3d(0,0,0)}100%{transform:translate3d(-5%,3%,0)}}
-@keyframes autobe-stars-twinkle{0%{opacity:.22}100%{opacity:.62}}
-.autobe-loading-screen{background:transparent!important}
-.autobe-loading-screen>.autobe-cosmic-backdrop{position:absolute;inset:0}
-@media(prefers-reduced-motion:reduce){
-  .cosmic-nebula,.cosmic-nebula-noise,.cosmic-starfield{animation:none!important}
+.autobe-loading-screen {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  min-height: 100dvh;
+  width: 100%;
+  place-items: center;
+  overflow: hidden;
+  padding: 1.5rem;
+  color: #fff;
+  background: #07040e;
+}
+.autobe-loading-screen::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  content: "";
+  background: linear-gradient(180deg, rgba(5,2,12,.12), rgba(5,2,12,.5)),
+    url('/assets/Loading%20Screen.gif') center / cover no-repeat;
+}
+.autobe-loading-copy {
+  align-self: end;
+  width: min(100%, 34rem);
+  margin-bottom: clamp(1rem, 6vh, 4rem);
+  padding: 1rem 1.25rem;
+  text-align: center;
+  border: 1px solid rgba(196,181,253,.18);
+  border-radius: 1rem;
+  background: rgba(9,5,20,.66);
+  backdrop-filter: blur(12px);
+}
+.autobe-loading-kicker { color: #c4b5fd; font-size: 10px; font-weight: 800; letter-spacing: .2em; }
+.autobe-loading-copy h1 { margin-top: .5rem; font-size: clamp(1.25rem, 3vw, 1.8rem); font-weight: 900; }
+.autobe-loading-status { margin-top: .35rem; color: #d4c8e7; font-size: .85rem; }
+@media (prefers-reduced-motion: reduce) {
+  .autobe-cosmic-backdrop__base,
+  .autobe-cosmic-backdrop__clouds { animation: none; }
 }
