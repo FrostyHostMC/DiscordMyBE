@@ -13,7 +13,6 @@ import {
   X,
   Search,
   ArrowUpRight,
-  Info,
   RefreshCw,
   Image as ImageIcon,
   Eye,
@@ -52,14 +51,15 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
-  const [usage, setUsage] = useState<{
-    publishedModpacks: number;
-    estimatedPublishedGiB: number;
-    percentOfR2FreeStorage: number;
-    uploadStartsInLast24Hours: number;
-    warning: string;
-  } | null>(null);
-  const [usageLoading, setUsageLoading] = useState(false);
+  const [featuredUploads,setFeaturedUploads]=useState<CommunityModpack[]>([]);
+  const [featuredCreators,setFeaturedCreators]=useState<Array<{user_id:string;author:string;uploads:number;downloads:number}>>([]);
+  const [leaderboard,setLeaderboard]=useState<Array<{author_id:string;author:string;uploads:number;downloads:number;likes:number;followers:number}>>([]);
+  const [socialStats,setSocialStats]=useState<any>(null);
+  const [reviewRating,setReviewRating]=useState(5);
+  const [reviewBody,setReviewBody]=useState('');
+  const [collectionChoices,setCollectionChoices]=useState<any[]>([]);
+  const [selectedCollection,setSelectedCollection]=useState('');
+  const [socialBusy,setSocialBusy]=useState(false);
 
   useEffect(() => {
     void fetchCommunityModpacks();
@@ -78,27 +78,18 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       }
 
       setModpacks((data.modpacks || []).filter((item: CommunityModpack) => item.content_type !== 'addon'));
+      const auth=getDiscordAuth();
+      if(auth?.token){
+        const discoveryResponse=await fetch('/api/community-social?action=discovery',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
+        const discovery=await discoveryResponse.json();
+        if(discoveryResponse.ok){setFeaturedUploads(discovery.featuredUploads||[]);setFeaturedCreators(discovery.featuredCreators||[]);setLeaderboard(discovery.leaders||[]);}
+      }
       setError(null);
     } catch (err) {
       console.error('Failed to fetch community modpacks:', err);
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
       if (!silent) setLoading(false);
-    }
-  };
-
-  const loadUsage = async () => {
-    setUsageLoading(true);
-    try {
-      const response = await fetch('/api/admin/usage', { headers: authHeaders(), cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Could not load Cloudflare usage');
-      setUsage(data);
-      setNotice(null);
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Could not load Cloudflare usage');
-    } finally {
-      setUsageLoading(false);
     }
   };
 
@@ -136,6 +127,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     setEditGalleryImages(Array.isArray(modpack.detail_images) ? modpack.detail_images.slice(0, 3) : []);
   };
 
+  useEffect(()=>{if(selectedModpack)void loadSocialDetails(selectedModpack);else setSocialStats(null);},[selectedModpack?.id]);
+
   const refreshDetails = async () => {
     if (!selectedModpack) return;
     setDetailsLoading(true);
@@ -158,6 +151,26 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     }
   };
 
+  const postSocial = async (payload:Record<string,unknown>) => {
+    const auth=getDiscordAuth(); if(!auth?.token)throw new Error('Reconnect Discord to use Community features.');
+    const response=await fetch('/api/community-social',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.token}`},body:JSON.stringify(payload)});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'Community action failed.');return data;
+  };
+  const loadSocialDetails = async (item:CommunityModpack) => {
+    const auth=getDiscordAuth();if(!auth?.token)return;
+    const headers={Authorization:`Bearer ${auth.token}`};
+    const [stats,lists]=await Promise.all([
+      fetch('/api/community-social?action=item&id='+encodeURIComponent(item.id),{headers,cache:'no-store'}).then(r=>r.json()),
+      fetch('/api/community-social?action=collections',{headers,cache:'no-store'}).then(r=>r.json())
+    ]);
+    setSocialStats(stats);setCollectionChoices(lists.collections||[]);
+  };
+  const runSocial = async (payload:Record<string,unknown>) => {
+    if(!selectedModpack)return;setSocialBusy(true);setNotice(null);
+    try{await postSocial(payload);await loadSocialDetails(selectedModpack);}
+    catch(e){setNotice(e instanceof Error?e.message:'Community action failed.');}
+    finally{setSocialBusy(false);}
+  };
   const handleIconFile = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -343,15 +356,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </button>
-            <button
-              type="button"
-              onClick={() => void loadUsage()}
-              disabled={usageLoading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs text-[#AAA3BB] hover:text-white disabled:opacity-50"
-            >
-              <Info className="w-3.5 h-3.5" />
-              {usageLoading ? 'Checking…' : 'Storage usage'}
-            </button>
           </div>
         </div>
 
@@ -372,7 +376,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
-        {!loading && !error && topCreators.length > 0 && (
+        {!loading && !error && (featuredUploads.length>0||featuredCreators.length>0) && (
+          <section className="space-y-3 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4">
+            <div><h2 className="text-sm font-bold text-amber-100">Featured in the Community</h2><p className="text-[10px] text-[#AAA3BB]">Selected uploads and creators</p></div>
+            {featuredCreators.length>0&&<div className="flex flex-wrap gap-2">{featuredCreators.map(c=><span key={c.user_id} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-[10px] font-semibold text-amber-100">{cleanDiscordDisplayName(c.author||'Creator')} · {c.uploads} uploads</span>)}</div>}
+            {featuredUploads.length>0&&<div className="grid gap-2 sm:grid-cols-2">{featuredUploads.map(item=><button type="button" key={item.id} onClick={()=>setSelectedModpack(item)} className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-left hover:border-amber-300/30"><div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5">{item.icon_data_url?<img src={item.icon_data_url} alt="" className="h-full w-full object-cover"/>:<Box className="m-3 h-5 w-5 text-amber-200"/>}</div><div className="min-w-0"><div className="truncate text-xs font-bold text-white">{item.name}</div><div className="truncate text-[10px] text-[#AAA3BB]">by {cleanDiscordDisplayName(item.author)} · {item.downloads} downloads</div></div><Trophy className="ml-auto h-4 w-4 shrink-0 text-amber-200"/></button>)}</div>}
+          </section>
+        )}
+        {!loading && !error && (leaderboard.length>0||topCreators.length>0) && (
           <section className="rounded-xl border border-[#762BFF]/30 bg-gradient-to-br from-[#171027] to-[#100D18] p-4">
             <div className="mb-3 flex items-center gap-2">
               <Trophy className="h-4 w-4 text-[#C4A7FF]" aria-hidden="true" />
@@ -382,7 +393,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               </div>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {topCreators.map((creator, index) => (
+              {(leaderboard.length ? leaderboard.map(c=>({id:c.author_id,name:cleanDiscordDisplayName(c.author)||'Creator',modpackCount:c.uploads,downloads:c.downloads,likes:c.likes,followers:c.followers})) : topCreators).slice(0,3).map((creator, index) => (
                 <div key={creator.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#30263F] bg-[#0D0B19]/80 p-3">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-[#762BFF]/25 text-[#D9C5FF]' : 'bg-[#201A2E] text-[#AAA3BB]'}`}>
                     #{index + 1}
@@ -397,15 +408,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               ))}
             </div>
           </section>
-        )}
-        {usage && (
-          <div className="p-3 rounded-lg border border-[#30263F] bg-[#100D18] text-xs text-[#AAA3BB] space-y-1">
-            <p className="font-bold text-white">Cloudflare usage estimate</p>
-            <p>Published packs: {usage.publishedModpacks}</p>
-            <p>Published archive storage estimate: {usage.estimatedPublishedGiB} GiB / 10 GB free R2 allowance ({usage.percentOfR2FreeStorage}%)</p>
-            <p>Upload starts in last 24 hours: {usage.uploadStartsInLast24Hours}</p>
-            <p className="text-[10px] text-amber-300">{usage.warning}</p>
-          </div>
         )}
         {notice && (
           <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300 break-words" onClick={() => setNotice(null)}>
@@ -587,6 +589,21 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 )}
               </div>
             </div>
+            <section className="rounded-xl border border-violet-400/20 bg-gradient-to-br from-[#171027] to-[#100D18] p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-bold">Community activity</h2><p className="mt-1 text-[10px] text-[#AAA3BB]">{socialStats?.reviewCount||0} reviews · {Number(socialStats?.averageRating||0).toFixed(1)} / 5 average · {socialStats?.followers||0} creator followers</p></div><span className="text-xs text-violet-200">♥ {socialStats?.likes||0} likes</span></div>
+              <div className="flex flex-wrap gap-2">
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'like',itemId:selectedModpack.id})} className="rounded-lg border border-violet-300/20 bg-violet-500/15 px-3 py-2 text-xs font-bold text-violet-100 disabled:opacity-50">{socialStats?.liked?'♥ Liked':'♡ Like'}</button>
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'favorite',itemId:selectedModpack.id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-50">{socialStats?.favorited?'★ Saved':'☆ Save'}</button>
+                {selectedModpack.author_id && selectedModpack.author_id!==currentUserId && <button disabled={socialBusy} onClick={()=>void runSocial({action:'follow',creatorId:selectedModpack.author_id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-50">{socialStats?.followingCreator?'Following creator':'Follow creator'}</button>}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[100px_1fr_auto]">
+                <select value={reviewRating} onChange={e=>setReviewRating(Number(e.target.value))} className="rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs">{[5,4,3,2,1].map(n=><option key={n} value={n}>{n} / 5 stars</option>)}</select>
+                <input value={reviewBody} onChange={e=>setReviewBody(e.target.value)} maxLength={1000} placeholder="Write a review (optional)" className="min-w-0 rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs"/>
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'review',itemId:selectedModpack.id,rating:reviewRating,body:reviewBody})} className="rounded-lg bg-violet-500 px-3 py-2 text-xs font-bold disabled:opacity-50">Post review</button>
+              </div>
+              {collectionChoices.length>0&&<div className="flex flex-wrap gap-2"><select value={selectedCollection} onChange={e=>setSelectedCollection(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs"><option value="">Add to your collection…</option>{collectionChoices.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select><button disabled={!selectedCollection||socialBusy} onClick={()=>void runSocial({action:'collection_add',collectionId:selectedCollection,itemId:selectedModpack.id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-40">Add</button></div>}
+              <div className="space-y-2">{(socialStats?.reviews||[]).slice(0,5).map((r:any)=><div key={r.user_id} className="rounded-lg bg-black/20 p-3"><div className="text-xs font-bold text-amber-200">{'★'.repeat(r.rating)}{'☆'.repeat(5-r.rating)}</div>{r.body&&<p className="mt-1 text-xs text-[#D5CEE3]">{r.body}</p>}</div>)}</div>
+            </section>
             <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-2">
               <h2 className="text-sm font-bold">About this modpack</h2>
               <p className="text-sm text-[#D5CEE3] whitespace-pre-wrap break-words">{selectedModpack.description || 'No description provided.'}</p>

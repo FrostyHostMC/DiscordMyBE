@@ -1,14 +1,12 @@
 /**
  * GET /api/admin/usage
- * Lightweight published-storage estimate. Set ADMIN_DISCORD_USER_ID as a
- * Pages secret/variable to enable access; never exposes object keys or URLs.
+ * Owner-only published-storage estimate. Authorization is bound to the fixed owner Discord ID.
  */
 import type { Context } from '@cloudflare/workers-types';
 
 interface Env {
   DB: D1Database;
   DISCORD_CLIENT_ID: string;
-  ADMIN_DISCORD_USER_ID?: string;
 }
 
 type Ctx = Context & { env: Env };
@@ -20,9 +18,6 @@ const json = (body: unknown, status = 200) =>
   });
 
 export async function onRequestGet({ request, env }: Ctx) {
-  if (!env.ADMIN_DISCORD_USER_ID) {
-    return json({ error: 'Usage dashboard is not configured. Set ADMIN_DISCORD_USER_ID in Cloudflare Pages variables.' }, 503);
-  }
   const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
   if (!match) return json({ error: 'Sign in with the owner Discord account to view usage.' }, 401);
   try {
@@ -31,7 +26,7 @@ export async function onRequestGet({ request, env }: Ctx) {
     });
     if (!auth.ok) return json({ error: 'Discord session expired. Reopen the Activity and try again.' }, 401);
     const info = await auth.json() as { application?: { id?: string }; user?: { id?: string } };
-    if (info.application?.id !== env.DISCORD_CLIENT_ID || info.user?.id !== env.ADMIN_DISCORD_USER_ID) {
+    if (info.application?.id !== env.DISCORD_CLIENT_ID || info.user?.id !== '1122949730419347487') {
       return json({ error: 'You do not have permission to view storage usage.' }, 403);
     }
     const published = await env.DB.prepare(
