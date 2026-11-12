@@ -64,14 +64,16 @@ export const AutoBEFeatureArt: React.FC<{ kind: AutoBEArtKind; size?: number; cl
 };
 
 export const AutoBEWordmark: React.FC = () => (
-  <div className="flex items-center gap-3">
-<img
-  src="/assets/autobe-logo.gif"
-  alt="AutoBE"
-  className="h-12 w-12 shrink-0 rounded-xl object-cover"
-/>
-<div className="text-[10px] font-semibold tracking-[.16em] text-violet-100/75">
-  MERGE · CREATE · SHARE
-</div>
+  <div className="flex min-w-0 items-center gap-3">
+    <img
+      src="/assets/autobe-logo.gif"
+      alt="AutoBE moon logo"
+      className="h-14 w-14 shrink-0 rounded-xl object-cover shadow-[0_0_24px_rgba(139,92,246,.28)] sm:h-16 sm:w-16"
+      decoding="async"
+    />
+    <div className="min-w-0">
+      <div className="text-xl font-black tracking-tight text-white sm:text-2xl">Auto<span className="text-violet-300">BE</span></div>
+      <div className="mt-0.5 text-[9px] font-semibold tracking-[.16em] text-violet-100/75 sm:text-[10px]">MERGE · CREATE · SHARE</div>
+    </div>
   </div>
 );
