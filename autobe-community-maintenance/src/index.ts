@@ -107,7 +107,7 @@ async function runLifecycle(env: Env) {
   const settings = await env.DB.prepare("SELECT * FROM community_cleanup_settings WHERE id=1").first<any>();
   const now = Date.now();
   const users = await env.DB.prepare("SELECT DISTINCT author_id FROM community_modpacks WHERE lifecycle_state!='deleted'").all<{ author_id: string }>();
-  const summary = { preview: !settings?.enabled, checkedCreators: 0, roleLossCandidates: 0, hidden: 0, restored: 0, inactivityCandidates: 0, warned: 0, deleted: 0, errors: 0 };
+  const summary = { permanentDeletionEnabled: !!settings?.enabled, checkedCreators: 0, roleLossCandidates: 0, hidden: 0, restored: 0, inactivityCandidates: 0, warned: 0, deleted: 0, errors: 0 };
 
   for (const creator of users.results || []) {
     const userId = String(creator.author_id);
@@ -143,7 +143,8 @@ async function runLifecycle(env: Env) {
     }
 
     for (const row of uploads.results || []) {
-      if (row.role_removed_at && settings?.enabled) {
+      await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=? AND reason='discord_role_missing'").bind(row.id).run();
+      if (row.role_removed_at) {
         await env.DB.prepare("UPDATE community_modpacks SET is_hidden=0,role_removed_at=NULL,role_purge_after=NULL,lifecycle_state='active' WHERE id=?").bind(row.id).run();
         await notify(env.DB, userId, "lifecycle_role_restored", row.id, `Your upload "${row.name}" is visible in Community again because your Discord role was restored.`);
         await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
