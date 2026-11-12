@@ -48,8 +48,8 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
   const [creatorResults,setCreatorResults]=useState<Array<{author_id:string;author:string;uploads:number;followers:number}>>([]);
   const [creatorSearchLoading,setCreatorSearchLoading]=useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = async (silent = false) => {
+    if(!silent)setLoading(true);
     try {
       const response = await fetch('/api/community-modpacks', { headers: { Authorization: `Bearer ${getDiscordAuth()?.token || ''}` }, cache: 'no-store' });
       const data = await response.json();
@@ -70,7 +70,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not load community addons.');
-    } finally { setLoading(false); }
+    } finally { if(!silent)setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
 
@@ -82,18 +82,36 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
 
   const communityAction = async (addon:CommunityAddon,action:'like'|'favorite'|'follow'|'review') => {
     const auth=getDiscordAuth();if(!auth?.token){setNotice('Reconnect Discord to use Community features.');return;}
+    if(socialBusy===addon.id)return;
     setSocialBusy(addon.id);setNotice('');
+    const flagKey=action==='like'?'liked':action==='favorite'?'favorited':'following';
+    const previousFlag=socialFlags[addon.id]?.[flagKey];
+    const previousStats=addonStats[addon.id];
+    const optimisticActive=!previousFlag;
+    if(action!=='review'){
+      setSocialFlags(current=>({...current,[addon.id]:{...current[addon.id],[flagKey]:optimisticActive}}));
+      if(action==='like')setAddonStats(current=>({...current,[addon.id]:{likes:Math.max(0,(current[addon.id]?.likes||0)+(optimisticActive?1:-1)),reviewCount:current[addon.id]?.reviewCount||0,averageRating:current[addon.id]?.averageRating||0}}));
+    }
     try{
       const body:any={action,itemId:addon.id};
       if(action==='follow')body.creatorId=addon.author_id;
       if(action==='review'){body.rating=reviewRatings[addon.id]||5;body.body=reviewTexts[addon.id]||'';}
       const response=await fetch('/api/community-social',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.token}`},body:JSON.stringify(body)});
       const data=await response.json();if(!response.ok)throw new Error(data.error||'Community action failed.');
-      if(action!=='review')setSocialFlags(current=>({...current,[addon.id]:{...current[addon.id],[action==='like'?'liked':action==='favorite'?'favorited':'following']:!!data.active}}));
-      await load();
-      if(action==='review')setNotice('Your review was saved.');
-    }catch(e){setNotice(e instanceof Error?e.message:'Community action failed.');}
-    finally{setSocialBusy(null);}
+      if(action!=='review'){
+        setSocialFlags(current=>({...current,[addon.id]:{...current[addon.id],[flagKey]:!!data.active}}));
+        if(action==='like'&&!!data.active!==optimisticActive)setAddonStats(current=>({...current,[addon.id]:{likes:Math.max(0,(current[addon.id]?.likes||0)+(data.active?1:-1)),reviewCount:current[addon.id]?.reviewCount||0,averageRating:current[addon.id]?.averageRating||0}}));
+      }else{
+        setNotice('Your review was saved.');
+        void load(true);
+      }
+    }catch(e){
+      if(action!=='review'){
+        setSocialFlags(current=>({...current,[addon.id]:{...current[addon.id],[flagKey]:!!previousFlag}}));
+        if(action==='like'&&previousStats)setAddonStats(current=>({...current,[addon.id]:previousStats}));
+      }
+      setNotice(e instanceof Error?e.message:'Community action failed.');
+    }finally{setSocialBusy(null);}
   };
 
   const chooseCover = (image?: File) => {

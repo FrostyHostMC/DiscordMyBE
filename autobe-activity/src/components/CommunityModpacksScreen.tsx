@@ -164,21 +164,41 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     const response=await fetch('/api/community-social',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.token}`},body:JSON.stringify(payload)});
     const data=await response.json();if(!response.ok)throw new Error(data.error||'Community action failed.');return data;
   };
-  const loadSocialDetails = async (item:CommunityModpack) => {
+  const loadSocialDetails = async (item:CommunityModpack, includeCollections=true) => {
     const auth=getDiscordAuth();if(!auth?.token)return;
     const headers={Authorization:`Bearer ${auth.token}`};
-    const [stats,lists]=await Promise.all([
-      fetch('/api/community-social?action=item&id='+encodeURIComponent(item.id),{headers,cache:'no-store'}).then(r=>r.json()),
-      fetch('/api/community-social?action=collections',{headers,cache:'no-store'}).then(r=>r.json())
-    ]);
-    setSocialStats(stats);setCollectionChoices(lists.collections||[]);
+    const statsRequest=fetch('/api/community-social?action=item&id='+encodeURIComponent(item.id),{headers,cache:'no-store'}).then(r=>r.json());
+    const [stats,lists]=await Promise.all([statsRequest,includeCollections?fetch('/api/community-social?action=collections',{headers,cache:'no-store'}).then(r=>r.json()):Promise.resolve(null)]);
+    setSocialStats(stats);
+    if(lists)setCollectionChoices(lists.collections||[]);
   };
   const runSocial = async (payload:Record<string,unknown>) => {
-    if(!selectedModpack)return;setSocialBusy(true);setNotice(null);
-    try{await postSocial(payload);await loadSocialDetails(selectedModpack);}
-    catch(e){setNotice(e instanceof Error?e.message:'Community action failed.');}
-    finally{setSocialBusy(false);}
+    if(!selectedModpack||socialBusy)return;
+    setNotice(null);
+    const action=String(payload.action||'');
+    const previous=socialStats;
+    const key=action==='like'?'liked':action==='favorite'?'favorited':'followingCreator';
+    const optimisticActive=!Boolean(previous?.[key]);
+    if(action==='like'||action==='favorite'||action==='follow'){
+      setSocialStats((current:any)=>({...current,[key]:optimisticActive,...(action==='like'?{likes:Math.max(0,Number(current?.likes||0)+(optimisticActive?1:-1))}:{}),...(action==='follow'?{followers:Math.max(0,Number(current?.followers||0)+(optimisticActive?1:-1))}:{})}));
+    }
+    setSocialBusy(true);
+    try{
+      const result=await postSocial(payload);
+      if(action==='like'||action==='favorite'||action==='follow'){
+        const correction=!!result.active===optimisticActive?0:(result.active?1:-1);
+        setSocialStats((current:any)=>({...current,[key]:!!result.active,...(action==='like'?{likes:Math.max(0,Number(current?.likes||0)+correction)}:{}),...(action==='follow'?{followers:Math.max(0,Number(current?.followers||0)+correction)}:{})}));
+      }else if(action==='review'){
+        await loadSocialDetails(selectedModpack,false);
+      }else if(action==='collection_add'){
+        await loadSocialDetails(selectedModpack,true);
+      }
+    }catch(e){
+      if(previous)setSocialStats(previous);
+      setNotice(e instanceof Error?e.message:'Community action failed.');
+    }finally{setSocialBusy(false);}
   };
+
   const handleIconFile = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
