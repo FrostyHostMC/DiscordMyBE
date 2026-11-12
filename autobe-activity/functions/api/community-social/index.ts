@@ -25,6 +25,16 @@ async function auditRevocation(db:D1Database,row:any,userId:string){
  await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),row.id,userId,'deleted','discord_role_removed',Date.now()).run();
 }
 async function revokeVerifiedCreator(userId:string,env:Env,baseUrl:string){
+ await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_sessions (upload_id TEXT PRIMARY KEY,object_key TEXT NOT NULL,user_id TEXT NOT NULL,kind TEXT NOT NULL,declared_size INTEGER NOT NULL,created_at INTEGER NOT NULL)`).run();
+ await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_parts (upload_id TEXT NOT NULL,part_number INTEGER NOT NULL,etag TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(upload_id,part_number))`).run();
+ const sessions=await env.DB.prepare("SELECT upload_id,object_key FROM autobe_upload_sessions WHERE user_id=?").bind(userId).all<{upload_id:string;object_key:string}>();
+ for(const session of sessions.results||[]){
+  await env.BUCKET.resumeMultipartUpload(session.object_key,session.upload_id).abort().catch(()=>{});
+  await env.DB.batch([
+   env.DB.prepare("DELETE FROM autobe_upload_parts WHERE upload_id=?").bind(session.upload_id),
+   env.DB.prepare("DELETE FROM autobe_upload_sessions WHERE upload_id=?").bind(session.upload_id)
+  ]);
+ }
  const rows=await env.DB.prepare("SELECT id,name,author_id,blob_url,size FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
  for(const row of rows.results||[]){
   const now=Date.now();
