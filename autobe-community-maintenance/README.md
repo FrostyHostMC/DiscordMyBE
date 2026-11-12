@@ -4,7 +4,7 @@ This is a separate Cloudflare Worker because Pages Functions are request-driven 
 
 ## Safety defaults
 
-- The Worker runs daily at 04:00 UTC.
+- The Worker runs every five minutes (UTC), so previously verified creators are rechecked promptly.
 - It creates lifecycle columns and audit/settings tables idempotently.
 - Confirmed role loss hides the creator's Community uploads after the next daily scan, even while permanent cleanup is paused. Discord lookup failures, rate limits, and server errors are treated as unknown and never as role loss.
 - Permanent cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). Role-loss hiding and the 30-day restoration window remain active; permanent deletion waits until the owner explicitly enables it. Inactivity candidates are previewed but not warned or deleted while disabled.
