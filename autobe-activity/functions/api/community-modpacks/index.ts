@@ -362,6 +362,8 @@ export async function onRequestDelete(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
 
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
@@ -401,6 +403,8 @@ export async function onRequestPatch(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
 
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
