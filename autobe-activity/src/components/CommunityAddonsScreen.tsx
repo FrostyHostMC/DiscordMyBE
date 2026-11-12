@@ -46,7 +46,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
   const load = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const response = await fetch('/api/community-modpacks', { headers: { Authorization: `Bearer ${getDiscordAuth()?.token || ''}` }, cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not load community addons.');
       const addonRows=(data.modpacks || []).filter((item: CommunityAddon) => item.content_type === 'addon');
