@@ -6,22 +6,20 @@ This is a separate Cloudflare Worker because Pages Functions are request-driven 
 
 - The Worker runs daily at 04:00 UTC.
 - It creates lifecycle columns and audit/settings tables idempotently.
-- Permanent cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). Daily role checks still hide uploads after a confirmed role loss so ineligible creators are not left discoverable. They receive a 30-day restoration window; permanent deletion is paused until the owner enables it. Inactivity candidates are previewed but not warned or deleted while disabled.
-- Discord lookup failures, rate limits, and server errors are treated as unknown. They never count as role loss.
+- Confirmed role loss hides the creator's Community uploads after the next daily scan, even while permanent cleanup is paused. Discord lookup failures, rate limits, and server errors are treated as unknown and never as role loss.
+- Permanent cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). Role-loss hiding and the 30-day restoration window remain active; permanent deletion waits until the owner explicitly enables it. Inactivity candidates are previewed but not warned or deleted while disabled.
 - Before deleting an R2 object, the Worker checks the URL namespace, immutable R2 owner metadata, object kind, declared size, and D1 size. If any check fails, it retains the object and logs an error.
-- The first release intentionally uses the conservative fixed policy: 30-day role restoration window; 24 months since update plus 12 months without downloads for inactivity; 90-day warning window and up to 180 days total when the warning remains unread.
-- A future owner control should enable cleanup only after preview results have been reviewed. No automatic destructive cleanup is enabled by deployment.
+- The inactivity policy is intentionally conservative: 24 months since update AND 12 months without downloads, followed by a 90-day warning period and up to 180 days from the original warning when it remains unread.
+- Creators can select **Keep published** in My Profile to reset the inactivity clock for an individual upload. Publishing something new does not reset older uploads.
 
 ## Required secrets
 
 Set these on the Worker (not in source control):
 
 - `DISCORD_BOT_TOKEN`: bot token for a bot installed in the configured guild.
-- `DISCORD_GUILD_ID`: the AutoBE Community guild ID.
-- `DISCORD_REQUIRED_ROLE_ID`: the publishing eligibility role ID.
 - `MAINTENANCE_KEY`: a long random value used only for a manual authenticated scan.
 
-The guild and role IDs are already present in the Pages project's Wrangler vars, but Worker secrets should be configured separately. Never put the bot token or maintenance key in `wrangler.toml`.
+The guild and role IDs are non-secret Wrangler vars aligned with the Pages configuration. Never put the bot token or maintenance key in `wrangler.toml`.
 
 ## Deploy
 
@@ -29,14 +27,14 @@ From `autobe-community-maintenance/`:
 
 ```sh
 npx wrangler secret put DISCORD_BOT_TOKEN
-npx wrangler secret put DISCORD_GUILD_ID
-npx wrangler secret put DISCORD_REQUIRED_ROLE_ID
 npx wrangler secret put MAINTENANCE_KEY
 npx wrangler deploy
 ```
 
 The Worker uses the same production D1 database and R2 bucket as the Community publishing API. Do not deploy it against preview bindings. The scheduled handler is UTC.
 
-## Important rollout note
+## Rollout
 
-The current profile admin UI does not enable this Worker by itself. Keep the settings row disabled until the preview scan output and Discord bot permissions have been checked. Enabling the setting requires an owner-authenticated control in the Pages API; do not toggle it manually without reviewing the candidate counts.
+The first deployment performs a read-only inactivity preview and enforces role-based visibility. Permanent deletion stays disabled until you review the preview results in the owner-only Community Cleanup section inside My Profile and explicitly enable permanent cleanup there.
+
+The Worker must be deployed separately from the Cloudflare Pages site. The GitHub pull request does not deploy it automatically.
