@@ -68,7 +68,7 @@ export const AutoBEWordmark: React.FC = () => (
     <img
       src="/assets/autobe-logo.gif"
       alt="AutoBE moon logo"
-      className="h-14 w-14 shrink-0 rounded-xl object-cover shadow-[0_0_24px_rgba(139,92,246,.28)] sm:h-16 sm:w-16"
+      className="autobe-moon-mark h-12 w-12 shrink-0 object-contain sm:h-14 sm:w-14"
       decoding="async"
     />
     <div className="min-w-0">
