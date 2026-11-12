@@ -125,10 +125,17 @@ async function runLifecycle(env: Env) {
 
   for (const creator of creators) {
     const userId = String(creator.author_id);
-    if (!/^\d{17,20}$/.test(userId)) continue;
+    if (!/^\d{17,20}$/.test(userId)) {
+      await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
+      continue;
+    }
     summary.checkedCreators++;
     const role = await discordRole(env, userId);
-    if (role === "unknown") { summary.errors++; continue; }
+    if (role === "unknown") {
+      summary.errors++;
+      await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
+      continue;
+    }
     const uploads = await env.DB.prepare("SELECT * FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
     if (role === "missing") {
       summary.roleLossCandidates += uploads.results?.length || 0;
@@ -153,6 +160,7 @@ async function runLifecycle(env: Env) {
           } catch (error) { summary.errors++; console.error("[Lifecycle] Safe deletion blocked", row.id, error); }
         }
       }
+      await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
       continue;
     }
 
