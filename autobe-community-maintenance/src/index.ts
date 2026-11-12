@@ -35,6 +35,8 @@ async function ensureSchema(db: D1Database) {
     if (!names.has(name)) await db.prepare(`ALTER TABLE community_modpacks ADD COLUMN ${name} ${type}`).run();
   }
   await db.prepare("UPDATE community_modpacks SET last_updated_at=created_at WHERE last_updated_at IS NULL").run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_sessions (upload_id TEXT PRIMARY KEY,object_key TEXT NOT NULL,user_id TEXT NOT NULL,kind TEXT NOT NULL,declared_size INTEGER NOT NULL,created_at INTEGER NOT NULL)`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_parts (upload_id TEXT NOT NULL,part_number INTEGER NOT NULL,etag TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(upload_id,part_number))`).run();
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_settings (
     id INTEGER PRIMARY KEY CHECK(id=1), enabled INTEGER NOT NULL DEFAULT 0,
     inactivity_months INTEGER NOT NULL DEFAULT 24, no_download_months INTEGER NOT NULL DEFAULT 12,
@@ -164,6 +166,14 @@ async function runLifecycle(env: Env) {
       }
       await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?")
         .bind(now, now, userId).run();
+      const sessions = await env.DB.prepare("SELECT upload_id,object_key FROM autobe_upload_sessions WHERE user_id=?").bind(userId).all<{upload_id:string;object_key:string}>();
+      for (const session of sessions.results || []) {
+        await env.BUCKET.resumeMultipartUpload(session.object_key,session.upload_id).abort().catch(() => {});
+        await env.DB.batch([
+          env.DB.prepare("DELETE FROM autobe_upload_parts WHERE upload_id=?").bind(session.upload_id),
+          env.DB.prepare("DELETE FROM autobe_upload_sessions WHERE upload_id=?").bind(session.upload_id),
+        ]);
+      }
       summary.roleLossCandidates += uploads.results?.length || 0;
       for (const row of uploads.results || []) {
         // Losing the required role is an immediate revocation, not an inactivity
