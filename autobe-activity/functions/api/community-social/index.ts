@@ -19,7 +19,7 @@ async function hasCommunityRole(userId:string,env:Env):Promise<boolean>{
  }catch{return false;}
 }
 async function eligibleCreator(userId:string,env:Env):Promise<boolean>{
- if(!/^\\d{17,20}$/.test(userId))return false;
+ if(!/^\d{17,20}$/.test(userId))return false;
  const [role,uploads]=await Promise.all([
   hasCommunityRole(userId,env),
   env.DB.prepare("SELECT 1 yes FROM community_modpacks WHERE author_id=? AND COALESCE(is_hidden,0)=0 LIMIT 1").bind(userId).first()
@@ -57,7 +57,7 @@ export async function onRequestGet({request,env}:Ctx){
  return json({creators});
  }
  if(action==='creator'){
- const id=u.searchParams.get('id')||'';if(!/^\\d{17,20}$/.test(id))return json({error:'Creator not found.'},404);
+ const id=u.searchParams.get('id')||'';if(!/^\d{17,20}$/.test(id))return json({error:'Creator not found.'},404);
  if(!await eligibleCreator(id,env))return json({error:'This creator is not currently discoverable.'},404);
  const [profile,uploads,stats,badges,following]=await Promise.all([
   env.DB.prepare('SELECT bio,website,youtube,twitch FROM community_creator_profiles WHERE user_id=?').bind(id).first(),
