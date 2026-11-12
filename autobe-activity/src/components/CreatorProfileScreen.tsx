@@ -17,6 +17,7 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
   const [badges, setBadges] = useState<Array<{ badge: string }>>([]);
   const [notifications, setNotifications] = useState<Array<{ id: string; message: string; created_at: number; read_at: number | null }>>([]);
   const [collections, setCollections] = useState<Array<{ id: string; title: string; item_count: number }>>([]);
+  const [favorites,setFavorites]=useState<Array<{id:string;name:string;author:string;content_type:string;downloads:number}>>([]);
   const [newCollection, setNewCollection] = useState('');
   const [saving, setSaving] = useState(false);
   const [socialError, setSocialError] = useState('');
@@ -50,14 +51,15 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
   const loadSocial = async () => {
     if (!auth?.token) return;
     const headers = { Authorization: `Bearer ${auth.token}` };
-    const [me, notes, lists] = await Promise.all([
+    const [me, notes, lists, saved] = await Promise.all([
       fetch('/api/community-social', { headers, cache: 'no-store' }).then(r => r.json()),
       fetch('/api/community-social?action=notifications', { headers, cache: 'no-store' }).then(r => r.json()),
       fetch('/api/community-social?action=collections', { headers, cache: 'no-store' }).then(r => r.json()),
+      fetch('/api/community-social?action=favorites', { headers, cache: 'no-store' }).then(r => r.json()),
     ]);
     setProfile(me.profile || { bio: '', website: '', youtube: '', twitch: '' });
     setFollowers(me.followers || 0); setFollowing(me.following || 0); setBadges(me.badges || []);
-    setNotifications(notes.notifications || []); setCollections(lists.collections || []);
+    setNotifications(notes.notifications || []); setCollections(lists.collections || []); setFavorites(saved.favorites || []);
     setIsOwner(!!me.isOwner);
     if (me.isOwner) {
       const response = await fetch('/api/community-social?action=admin', { headers, cache: 'no-store' });
@@ -131,6 +133,7 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
           <div className="text-[10px] font-extrabold uppercase tracking-[.18em] text-violet-200/60">Your community</div><h3 className="mt-1 text-lg font-black">Collections & notifications</h3>
           <div className="mt-3 flex gap-2"><input value={newCollection} onChange={e=>setNewCollection(e.target.value)} maxLength={80} className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" placeholder="New collection name"/><button onClick={async()=>{try{await social('collection_create',{title:newCollection});setNewCollection('');await loadSocial();}catch(e){setSocialError(e instanceof Error?e.message:'Could not create collection.');}}} className="rounded-xl border border-violet-300/20 bg-violet-500/15 px-3 text-xs font-bold text-violet-100">Create</button></div>
           <div className="mt-3 space-y-2">{collections.map(c=><div key={c.id} className="flex justify-between rounded-xl bg-black/20 px-3 py-2 text-xs"><span className="font-semibold">{c.title}</span><span className="text-[#A99FBE]">{c.item_count} items</span></div>)}{collections.length===0&&<p className="text-xs text-[#8F85A1]">Your collections will appear here.</p>}</div>
+          <div className="mt-4 border-t border-white/10 pt-3"><div className="mb-2 text-xs font-bold">Saved uploads</div><div className="max-h-32 space-y-2 overflow-y-auto">{favorites.slice(0,10).map(item=><div key={item.id} className="flex items-center justify-between gap-2 rounded-lg bg-black/20 px-3 py-2"><span className="min-w-0 truncate text-xs font-semibold">{item.name}<span className="ml-2 text-[9px] font-normal text-[#8F85A1]">{item.content_type==='addon'?'Addon':'Modpack'}</span></span><span className="shrink-0 text-[10px] text-[#8F85A1]">{Number(item.downloads||0).toLocaleString()} downloads</span></div>)}{favorites.length===0&&<p className="text-xs text-[#8F85A1]">Uploads you save from the Community will appear here.</p>}</div></div>
           <div className="mt-4 border-t border-white/10 pt-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold">Recent notifications</span><button onClick={async()=>{try{await social('notifications_read');await loadSocial();}catch(e){setSocialError(e instanceof Error?e.message:'Could not update notifications.');}}} className="text-[10px] font-bold text-violet-200">Mark all read</button></div>
           <div className="max-h-36 space-y-2 overflow-y-auto">{notifications.slice(0,8).map(n=><div key={n.id} className={`rounded-lg px-3 py-2 text-xs ${n.read_at?'bg-black/10 text-[#8F85A1]':'bg-violet-500/10 text-violet-100'}`}>{n.message}</div>)}{notifications.length===0&&<p className="text-xs text-[#8F85A1]">No activity yet.</p>}</div></div>
         </div>
