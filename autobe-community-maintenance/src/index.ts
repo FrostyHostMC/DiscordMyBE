@@ -4,6 +4,7 @@ export interface Env {
   DISCORD_BOT_TOKEN: string;
   DISCORD_GUILD_ID: string;
   DISCORD_REQUIRED_ROLE_ID: string;
+  MAINTENANCE_KEY?: string;
 }
 
 const DAY = 86_400_000;
@@ -18,6 +19,7 @@ async function ensureSchema(db: D1Database) {
   const additions: Array<[string, string]> = [
     ["last_updated_at", "INTEGER"],
     ["last_download_at", "INTEGER"],
+    ["is_hidden", "INTEGER NOT NULL DEFAULT 0"],
     ["role_removed_at", "INTEGER"],
     ["role_purge_after", "INTEGER"],
     ["inactivity_warning_at", "INTEGER"],
