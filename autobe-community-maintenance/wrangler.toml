@@ -1,6 +1,10 @@
 name = "autobe-community-maintenance"
 main = "src/index.ts"
-compatibility_date = "2026-11-11"\n\n[vars]\nDISCORD_GUILD_ID = "1561951163065180251"\nDISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
+compatibility_date = "2026-11-11"
+
+[vars]
+DISCORD_GUILD_ID = "1561951163065180251"
+DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
 
 [triggers]
 crons = ["0 4 * * *"]
