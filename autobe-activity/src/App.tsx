@@ -98,7 +98,7 @@ export const App: React.FC = () => {
   // required Discord role ejects them from Community without interrupting the
   // merger workspace; reopening Community checks the role again.
   useEffect(() => {
-    if (currentTab !== 'community' && currentTab !== 'community_addons') return;
+    if (!showCreatorProfile && currentTab !== 'community' && currentTab !== 'community_addons') return;
     const checkAccess = async () => {
       const auth = getDiscordAuth();
       if (!auth?.token) return;
@@ -122,7 +122,7 @@ export const App: React.FC = () => {
     void checkAccess();
     const interval = window.setInterval(() => void checkAccess(), 30_000);
     return () => window.clearInterval(interval);
-  }, [currentTab]);
+  }, [currentTab, showCreatorProfile]);
 
   const triggerHaptic = (duration = 50) => {
     if (hapticTweak) {
