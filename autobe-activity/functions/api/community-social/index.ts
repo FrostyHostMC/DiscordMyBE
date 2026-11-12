@@ -42,6 +42,29 @@ const ROLE_REQUIRED_MESSAGE='You no longer have the required AutoBE Discord role
 async function auditRevocation(db:D1Database,row:any,userId:string){
  await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),row.id,userId,'deleted','discord_role_removed',Date.now()).run();
 }
+async function deleteVerifiedUserObjects(env:Env,userId:string){
+ for(const kind of ['pub','temp'] as const){
+  let cursor:string|undefined;
+  do{
+   try{
+    const page=await env.BUCKET.list({prefix:`${kind}/${userId}/`,limit:1000,...(cursor?{cursor}:{})});
+    for(const item of page.objects){
+     try{
+      const object=await env.BUCKET.head(item.key);
+      if(!object)continue;
+      const metadata=object.customMetadata;
+      if(metadata?.ownerId!==userId||metadata?.kind!==kind||metadata?.declaredSize!==String(object.size)||object.size!==item.size){
+       console.error('[CommunitySocial] Retained R2 object with unverified ownership metadata',item.key);
+       continue;
+      }
+      await env.BUCKET.delete(item.key);
+     }catch(error){console.error('[CommunitySocial] Could not remove owned R2 object',item.key,error);}
+    }
+    cursor=page.truncated?page.cursor:undefined;
+   }catch(error){console.error('[CommunitySocial] R2 owner-prefix cleanup failed',kind,userId,error);break;}
+  }while(cursor);
+ }
+}
 async function revokeVerifiedCreator(userId:string,env:Env,baseUrl:string){
  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_sessions (upload_id TEXT PRIMARY KEY,object_key TEXT NOT NULL,user_id TEXT NOT NULL,kind TEXT NOT NULL,declared_size INTEGER NOT NULL,created_at INTEGER NOT NULL)`).run();
  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_upload_parts (upload_id TEXT NOT NULL,part_number INTEGER NOT NULL,etag TEXT NOT NULL,size INTEGER NOT NULL,PRIMARY KEY(upload_id,part_number))`).run();
@@ -73,6 +96,7 @@ async function revokeVerifiedCreator(userId:string,env:Env,baseUrl:string){
    console.error('[CommunitySocial] Role-loss deletion safely blocked',row.id,error);
   }
  }
+ await deleteVerifiedUserObjects(env,userId);
  await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?").bind(Date.now(),Date.now(),userId).run();
 }
 async function requireRole(me:{id:string},env:Env,request:Request){
