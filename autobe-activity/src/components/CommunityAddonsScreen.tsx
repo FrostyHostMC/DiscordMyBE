@@ -40,6 +40,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
   const [reviewTexts,setReviewTexts]=useState<Record<string,string>>({});
   const [socialBusy,setSocialBusy]=useState<string|null>(null);
   const [featuredAddons,setFeaturedAddons]=useState<CommunityAddon[]>([]);
+  const [addonLeaders,setAddonLeaders]=useState<Array<{author_id:string;author:string;uploads:number;downloads:number}>>([]);
   const [addonStats,setAddonStats]=useState<Record<string,{likes:number;reviewCount:number;averageRating:number}>>({});
   const [creatorSearch,setCreatorSearch]=useState('');
   const [creatorResults,setCreatorResults]=useState<Array<{author_id:string;author:string;uploads:number;followers:number}>>([]);
@@ -57,12 +58,13 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
       if(auth?.token){
         const [states,discovery]=await Promise.all([
           fetch('/api/community-social?action=items',{headers:{Authorization:'Bearer '+auth.token},cache:'no-store'}).then(r=>r.json()),
-          fetch('/api/community-social?action=discovery',{headers:{Authorization:'Bearer '+auth.token},cache:'no-store'}).then(r=>r.json())
+          fetch('/api/community-social?action=discovery&content_type=addon',{headers:{Authorization:'Bearer '+auth.token},cache:'no-store'}).then(r=>r.json())
         ]);
         const flags=new Map((states.items||[]).map((x:any)=>[x.id,x]));
         setAddonStats(Object.fromEntries((states.items||[]).map((x:any)=>[x.id,{likes:Number(x.likes)||0,reviewCount:Number(x.reviewCount)||0,averageRating:Number(x.averageRating)||0}])));
         setSocialFlags(Object.fromEntries(addonRows.map(item=>{const x:any=flags.get(item.id)||{};return [item.id,{liked:!!x.liked,favorited:!!x.favorited,following:!!x.followingCreator}];})));
         setFeaturedAddons((discovery.featuredUploads||[]).filter((x:CommunityAddon)=>x.content_type==='addon'));
+         setAddonLeaders(discovery.leaders||[]);
       }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not load community addons.');
@@ -190,14 +192,15 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
     </header>
     <main className="min-h-0 flex-1 overflow-y-auto p-4">
       {notice && <div className={`mb-3 rounded-lg border p-3 text-xs ${notice.includes('required AutoBE Discord role') ? 'border-amber-300/30 bg-amber-300/10 text-amber-100' : 'border-[#762BFF]/40 bg-[#762BFF]/10 text-[#D9C5FF]'}`}>{notice}</div>}
-      {!loading&&featuredAddons.length>0&&<section className="mb-4 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4"><h2 className="mb-3 text-sm font-bold text-amber-100">Featured Addons</h2><div className="grid gap-2 sm:grid-cols-2">{featuredAddons.map(item=><button key={item.id} onClick={()=>{setSearch(item.name);setCategory("All");}} className="rounded-lg border border-white/10 bg-black/20 p-3 text-left text-xs font-bold">{item.name}<span className="mt-1 block text-[10px] font-normal text-[#AAA3BB]">by {item.author}</span></button>)}</div></section>}
+      {!loading&&addonLeaders.length>0&&<section className="mb-4 rounded-xl border border-[#762BFF]/30 bg-[#171027] p-4"><h2 className="mb-3 text-sm font-bold text-white">Top Addon Creators</h2><div className="grid gap-2 sm:grid-cols-3">{addonLeaders.slice(0,3).map((creator,index)=><button key={creator.author_id} onClick={()=>onOpenCreator?.(creator.author_id)} className="rounded-lg border border-white/10 bg-black/20 p-3 text-left"><span className="block text-xs font-bold text-white">#{index+1} {creator.author}</span><span className="mt-1 block text-[10px] text-[#AAA3BB]">{creator.uploads} addons · {creator.downloads} downloads</span></button>)}</div></section>}
+       {!loading&&featuredAddons.length>0&&<section className="mb-4 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4"><h2 className="mb-3 text-sm font-bold text-amber-100">Featured Addons</h2><div className="grid gap-2 sm:grid-cols-2">{featuredAddons.map(item=><button key={item.id} onClick={()=>{setSearch(item.name);setCategory("All");}} className="rounded-lg border border-white/10 bg-black/20 p-3 text-left text-xs font-bold">{item.name}<span className="mt-1 block text-[10px] font-normal text-[#AAA3BB]">by {item.author}</span></button>)}</div></section>}
       {loading ? <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#A855F7]"/></div> :
       filtered.length === 0 ? <div className="py-20 text-center"><Box className="mx-auto mb-3 text-[#716885]" size={34}/><p className="font-semibold">{search || category !== 'All' ? 'No addons found' : 'No community addons yet'}</p><p className="mt-1 text-xs text-[#AAA3BB]">Upload the first addon or try another category.</p></div> :
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(addon=><article key={addon.id} className="overflow-hidden rounded-xl border border-[#30263F] bg-[#100D18]">
         <div className="flex h-36 items-center justify-center bg-[#15111F]">{addon.icon_data_url ? <img src={addon.icon_data_url} alt="" className="h-full w-full object-contain bg-black/20"/> : <ImageIcon className="text-[#716885]" size={34}/>}</div>
         <div className="space-y-2 p-3"><div className="flex items-start justify-between gap-2"><h2 className="text-sm font-bold">{addon.name}</h2><span className="rounded-full border border-[#762BFF]/40 px-2 py-0.5 text-[10px] text-[#C4A7FF]">{addon.category || 'Other'}</span></div>
           <p className="line-clamp-3 min-h-12 text-xs text-[#AAA3BB]">{addon.description}</p>
-          <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)}</span></div>
+          <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)} · {Number(addon.downloads)||0} downloads</span></div>
           <div className="flex items-center justify-between text-[10px] text-[#AAA3BB]"><span>♥ {addonStats[addon.id]?.likes||0} likes</span><span>{addonStats[addon.id]?.reviewCount||0} reviews · {(addonStats[addon.id]?.averageRating||0).toFixed(1)} ★</span></div>
           <button onClick={()=>void download(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-2 text-xs font-bold"><Download size={14}/> Download {addon.file_name.toLowerCase().endsWith('.mcpack') ? 'MCPack' : 'MCAddon'}</button>
           <div className="grid grid-cols-2 gap-2">
