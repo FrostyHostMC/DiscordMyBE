@@ -25,6 +25,7 @@ async function init(db:D1Database){
  ];for(const sql of statements)await db.prepare(sql).run();
  const columns=await db.prepare('PRAGMA table_info(community_modpacks)').all<{name:string}>();
  if(!(columns.results||[]).some(c=>c.name==='featured'))await db.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
+ if(!(columns.results||[]).some(c=>c.name==='is_hidden'))await db.prepare('ALTER TABLE community_modpacks ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0').run();
 }
 async function notify(db:D1Database,to:string,actor:string,kind:string,item:string|null,message:string){if(!to||to===actor)return;await db.prepare('INSERT INTO community_notifications (id,user_id,actor_id,kind,item_id,message,created_at) VALUES (?,?,?,?,?,?,?)').bind(crypto.randomUUID(),to,actor,kind,item,message.slice(0,240),Date.now()).run();}
 const owner=(id:string)=>id===OWNER_DISCORD_ID;
@@ -33,7 +34,7 @@ export async function onRequestGet({request,env}:Ctx){
  try{await init(env.DB);const u=new URL(request.url),action=u.searchParams.get('action')||'me';
  if(action==='admin'){if(!owner(me.id))return json({error:'Owner access only.'},403);
  const [uploads,creators,featured]=await Promise.all([
- env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured FROM community_modpacks ORDER BY created_at DESC LIMIT 250').all(),
+ env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured,is_hidden FROM community_modpacks ORDER BY created_at DESC LIMIT 250').all(),
  env.DB.prepare('SELECT author_id,MAX(author) author,COUNT(*) uploads,COALESCE(SUM(downloads),0) downloads FROM community_modpacks GROUP BY author_id ORDER BY uploads DESC,downloads DESC LIMIT 150').all(),
  env.DB.prepare('SELECT user_id,featured_at FROM community_featured_creators ORDER BY featured_at DESC').all()]);
  return json({uploads:uploads.results||[],creators:creators.results||[],featuredCreators:featured.results||[],categories:CATEGORIES,badges:BADGES});}
@@ -80,6 +81,7 @@ export async function onRequestPost({request,env}:Ctx){
  if(a==='admin_feature_creator'){const creator=String(d.creatorId||'');if(!/^\d{17,20}$/.test(creator)||!await env.DB.prepare('SELECT 1 yes FROM community_modpacks WHERE author_id=? LIMIT 1').bind(creator).first())return json({error:'Creator not found.'},404);if(d.featured)await env.DB.prepare('INSERT OR IGNORE INTO community_featured_creators (user_id,featured_at) VALUES (?,?)').bind(creator,now).run();else await env.DB.prepare('DELETE FROM community_featured_creators WHERE user_id=?').bind(creator).run();return json({success:true});}
  if(a==='admin_badge'){const creator=String(d.creatorId||''),badge=String(d.badge||'');if(!/^\d{17,20}$/.test(creator)||!BADGES.includes(badge))return json({error:'Choose a valid creator and badge.'},400);if(!await env.DB.prepare('SELECT 1 yes FROM community_modpacks WHERE author_id=? LIMIT 1').bind(creator).first())return json({error:'Creator not found.'},404);if(d.enabled===false)await env.DB.prepare('DELETE FROM community_badges WHERE user_id=? AND badge=?').bind(creator,badge).run();else await env.DB.prepare('INSERT OR IGNORE INTO community_badges (user_id,badge,awarded_at) VALUES (?,?,?)').bind(creator,badge,now).run();return json({success:true});}
  if(a==='admin_category'){const upload=String(d.uploadId||''),category=String(d.category||'');if(!CATEGORIES.includes(category))return json({error:'Invalid category.'},400);const r=await env.DB.prepare('UPDATE community_modpacks SET category=? WHERE id=?').bind(category,upload).run();if(!r.meta?.changes)return json({error:'Upload not found.'},404);return json({success:true});}
+ if(a==='admin_visibility'){const upload=String(d.uploadId||''),hidden=!!d.hidden,r=await env.DB.prepare('UPDATE community_modpacks SET is_hidden=? WHERE id=?').bind(hidden?1:0,upload).run();if(!r.meta?.changes)return json({error:'Upload not found.'},404);return json({success:true});}
  return json({error:'Unknown Community action.'},400);
  }catch(e){console.error('[CommunitySocial] POST',e);return json({error:'Community action could not be saved.'},503);}
 }
