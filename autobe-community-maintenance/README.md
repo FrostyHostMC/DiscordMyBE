@@ -4,7 +4,7 @@ A separate Cloudflare Worker checks verified Community creators against Discord 
 
 ## Discord role revocation
 
-- The Worker checks up to 200 previously published creator accounts every five minutes (UTC), using a persisted cursor to cover larger Communities across successive runs.
+- The Worker checks up to 200 previously verified Discord accounts every five minutes (UTC), including accounts with temporary uploads but no published listing, using a persisted cursor to cover larger Communities across successive runs.
 - If Discord confirms that a creator no longer has the required role, all of that creator's Community uploads are immediately hidden and their exact, ownership-verified R2 files and D1 listings are deleted in that scan.
 - There is **no grace period** for role loss. This is separate from the optional age-based cleanup setting.
 - Every app session checks the signed-in user's role at startup and every 30 seconds. A missing role returns `DISCORD_ROLE_REQUIRED`, immediately gates the entire AutoBE Activity, and displays the unverified-role message. Re-adding the role allows the user to verify again. The merger is gated too.
