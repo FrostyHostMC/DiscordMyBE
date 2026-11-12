@@ -39,6 +39,11 @@ async function ensureSchema(db: D1Database) {
     id TEXT PRIMARY KEY, item_id TEXT, author_id TEXT NOT NULL, action TEXT NOT NULL,
     reason TEXT NOT NULL, created_at INTEGER NOT NULL, details TEXT
   )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (
+    item_id TEXT PRIMARY KEY, author_id TEXT NOT NULL, item_name TEXT NOT NULL,
+    reason TEXT NOT NULL, detected_at INTEGER NOT NULL, last_updated_at INTEGER,
+    last_download_at INTEGER, status TEXT NOT NULL DEFAULT 'candidate'
+  )`).run();
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_community_modpacks_lifecycle ON community_modpacks(lifecycle_state,role_purge_after,inactivity_purge_after)").run();
 }
 
@@ -114,6 +119,8 @@ async function runLifecycle(env: Env) {
     if (role === "missing") {
       summary.roleLossCandidates += uploads.results?.length || 0;
       for (const row of uploads.results || []) {
+        await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'candidate') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,last_updated_at=excluded.last_updated_at,last_download_at=excluded.last_download_at,status='candidate'")
+          .bind(row.id, userId, row.name, "discord_role_missing", now, row.last_updated_at, row.last_download_at).run();
         if (!settings?.enabled) continue;
         if (!row.role_removed_at) {
           await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=?,role_purge_after=?,lifecycle_state='role_grace' WHERE id=?")
@@ -146,6 +153,12 @@ async function runLifecycle(env: Env) {
       const lastDownload = Number(row.last_download_at || 0);
       const oldEnough = now - updated >= Number(settings?.inactivity_months || 24) * 30.4375 * DAY;
       const quietEnough = !lastDownload || now - lastDownload >= Number(settings?.no_download_months || 12) * 30.4375 * DAY;
+      if (oldEnough && quietEnough) {
+        await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'candidate') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,last_updated_at=excluded.last_updated_at,last_download_at=excluded.last_download_at,status='candidate'")
+          .bind(row.id, userId, row.name, "long_term_inactivity", now, updated, lastDownload || null).run();
+      } else {
+        await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
+      }
       if (oldEnough && quietEnough && !row.inactivity_warning_at) {
         summary.inactivityCandidates++;
         if (settings?.enabled) {
