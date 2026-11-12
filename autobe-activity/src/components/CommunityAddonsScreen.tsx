@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Box, Download, Image as ImageIcon, Loader2, Plus, Search, Upload, X, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, Download, Edit, Image as ImageIcon, Loader2, Plus, Search, Upload, X, Trash2 } from 'lucide-react';
 import { uploadToCloud } from '@/utils/cloudUpload';
 import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
 
