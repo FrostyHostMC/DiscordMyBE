@@ -769,8 +769,6 @@ export const App: React.FC = () => {
       endTransfer();
     }
   };
-
-
   if (roleAccessStatus === 'unverified' || roleAccessStatus === 'error') {
     return (
       <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#090713] p-5 text-[#F8F5FF]">
@@ -786,9 +784,17 @@ export const App: React.FC = () => {
     );
   }
   if (roleAccessStatus === 'checking') {
-    return <div className="autobe-loading-screen" role="status" aria-live="polite"><span className="sr-only">Verifying your Discord role…</span></div>;
-  }
-
+  return (
+    <div className="autobe-loading-screen" role="status" aria-live="polite">
+      <img
+        src="/assets/loading-screen.gif"
+        alt="Loading a wonderful place"
+        className="relative z-10 h-full w-full object-cover"
+      />
+      <span className="sr-only">Verifying your Discord role…</span>
+    </div>
+  );
+}
   return (
     <div className={"relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden " + (showCreatorProfile || publicCreatorId ? "bg-[#090713]" : "bg-transparent") + " pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]"}>
 {!showCreatorProfile && !publicCreatorId && <div aria-hidden="true" className="autobe-global-background" />}
