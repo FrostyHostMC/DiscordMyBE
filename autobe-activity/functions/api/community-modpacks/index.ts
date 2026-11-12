@@ -19,6 +19,9 @@ interface Env {
   DB: D1Database;
   BUCKET: R2Bucket;
   DISCORD_CLIENT_ID: string;
+  DISCORD_BOT_TOKEN: string;
+  DISCORD_GUILD_ID: string;
+  DISCORD_REQUIRED_ROLE_ID: string;
   PUBLIC_BASE_URL?: string;
 }
 
@@ -29,6 +32,33 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
+
+async function verifyCommunityRole(userId: string, env: Env): Promise<'present'|'missing'|'unknown'> {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) return 'unknown';
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`, { headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` } });
+    if (response.status === 404) {
+      const error = await response.json().catch(() => null) as { code?: number } | null;
+      return error?.code === 10007 ? 'missing' : 'unknown';
+    }
+    if (response.status === 429 || response.status >= 500 || !response.ok) return 'unknown';
+    const member = await response.json() as { roles?: string[] };
+    return Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID) ? 'present' : 'missing';
+  } catch { return 'unknown'; }
+}
+const ROLE_REQUIRED_MESSAGE = 'You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
+async function requireCommunityRole(userId: string, env: Env): Promise<Response | null> {
+  await ensureTable(env);
+  const status = await verifyCommunityRole(userId, env);
+  if (status === 'missing') return json({ error: ROLE_REQUIRED_MESSAGE, code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
+  if (status === 'unknown') return json({ error: 'We could not verify your Discord role right now. Please try again shortly.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
+  const now = Date.now();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)").run();
+  const registryHasRows = await env.DB.prepare("SELECT 1 yes FROM community_verified_creators LIMIT 1").first();
+  if (!registryHasRows) await env.DB.prepare("INSERT OR IGNORE INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) SELECT author_id,MIN(created_at),MAX(created_at),NULL FROM community_modpacks GROUP BY author_id").run();
+  await env.DB.prepare("INSERT INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) VALUES (?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,revoked_at=NULL").bind(userId,now,now).run();
+  return null;
+}
 
 async function consumePublishQuota(env: Env, userId: string): Promise<number> {
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS autobe_rate_limits (
@@ -113,6 +143,17 @@ async function ensureTable(env: Env): Promise<void> {
   if (!names.has('featured')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
   }
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (item_id TEXT PRIMARY KEY,author_id TEXT NOT NULL,item_name TEXT NOT NULL,reason TEXT NOT NULL,detected_at INTEGER NOT NULL,last_updated_at INTEGER,last_download_at INTEGER,status TEXT NOT NULL DEFAULT 'candidate')`).run();
+  const lifecycleColumns: Array<[string, string]> = [
+    ['last_updated_at', 'INTEGER'], ['last_download_at', 'INTEGER'],
+    ['role_removed_at', 'INTEGER'], ['role_purge_after', 'INTEGER'],
+    ['inactivity_warning_at', 'INTEGER'], ['inactivity_purge_after', 'INTEGER'],
+    ['lifecycle_state', "TEXT NOT NULL DEFAULT 'active'"],
+  ];
+  for (const [column, type] of lifecycleColumns) {
+    if (!names.has(column)) await env.DB.prepare(`ALTER TABLE community_modpacks ADD COLUMN ${column} ${type}`).run();
+  }
+  await env.DB.prepare('UPDATE community_modpacks SET last_updated_at=created_at WHERE last_updated_at IS NULL').run();
 }
 
 function fail(label: string, error: unknown) {
@@ -127,6 +168,8 @@ export async function onRequestPost(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord. Close and reopen the Activity, then try again.' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
     const bearer = (request.headers.get('authorization') || '').match(/^Bearer\\s+(.+)$/i)?.[1];
     let authorAvatar: string | null = null;
     let authorDisplayName: string | null = null;
@@ -146,7 +189,7 @@ export async function onRequestPost(context: Ctx) {
     if (new URL(request.url).searchParams.get('action') === 'download') {
       const id = new URL(request.url).searchParams.get('id');
       if (!id) return json({ error: 'Missing modpack id' }, 400);
-      const updated = await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1 WHERE id = ?').bind(id).run();
+      const updated = await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1, last_download_at = ? WHERE id = ?').bind(Date.now(), id).run();
       if (!updated.meta?.changes) return json({ error: 'Modpack not found' }, 404);
       const row = await env.DB.prepare('SELECT downloads FROM community_modpacks WHERE id = ?').bind(id).first<{ downloads: number }>();
       return json({ success: true, downloads: Number(row?.downloads) || 0 });
@@ -226,7 +269,7 @@ export async function onRequestPost(context: Ctx) {
 
     const id = crypto.randomUUID();
     const result = await env.DB.prepare(
-      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category, last_updated_at, lifecycle_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
       .bind(
         id,
@@ -246,7 +289,9 @@ export async function onRequestPost(context: Ctx) {
         safeFileName,
         safeIncludedPacksJson,
         contentType,
-        category
+        category,
+        Date.now(),
+        'active'
       )
       .run();
 
@@ -276,6 +321,10 @@ export async function onRequestGet(context: Ctx) {
   const { env, request } = context;
   try {
     if (!env.DB) return json({ error: 'Database not configured' }, 500);
+    const userId = await verifyDiscordUser(request, env);
+    if (!userId) return json({ error: 'Sign in through Discord to use Community features.', code: 'DISCORD_AUTH_REQUIRED' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
     await ensureTable(env);
 
     const { results } = await env.DB.prepare(
@@ -319,14 +368,16 @@ export async function onRequestDelete(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
 
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
 
     await ensureTable(env);
-    const row = await env.DB.prepare('SELECT author_id, blob_url FROM community_modpacks WHERE id = ?')
+    const row = await env.DB.prepare('SELECT author_id, blob_url, size FROM community_modpacks WHERE id = ?')
       .bind(id)
-      .first<{ author_id: string; blob_url: string }>();
+      .first<{ author_id: string; blob_url: string; size: number }>();
     if (!row) return json({ error: 'Modpack not found' }, 404);
     if (row.author_id !== userId) return json({ error: 'You can only delete your own modpacks' }, 403);
 
@@ -339,7 +390,7 @@ export async function onRequestDelete(context: Ctx) {
         // Older listings may point to pre-hardening objects without ownership
         // metadata. Let the author remove the listing, but never delete an object
         // unless its immutable R2 metadata proves ownership.
-        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
+        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId) && object.size === Number(row.size)) {
           await env.BUCKET.delete(key);
         }
       }
@@ -358,6 +409,8 @@ export async function onRequestPatch(context: Ctx) {
 
     const userId = await verifyDiscordUser(request, env);
     if (!userId) return json({ error: 'Not authenticated with Discord' }, 401);
+    const roleFailure = await requireCommunityRole(userId, env);
+    if (roleFailure) return roleFailure;
 
     const id = new URL(request.url).searchParams.get('id');
     if (!id) return json({ error: 'Missing id' }, 400);
@@ -401,7 +454,10 @@ export async function onRequestPatch(context: Ctx) {
     }
     if (updates.length === 0) return json({ error: 'No fields to update' }, 400);
 
+    updates.push('last_updated_at = ?', 'inactivity_warning_at = NULL', 'inactivity_purge_after = NULL', "lifecycle_state = 'active'");
+    values.push(Date.now());
     values.push(id);
+    await env.DB.prepare('DELETE FROM community_cleanup_preview WHERE item_id = ?').bind(id).run();
     await env.DB.prepare(`UPDATE community_modpacks SET ${updates.join(', ')} WHERE id = ?`)
       .bind(...values)
       .run();

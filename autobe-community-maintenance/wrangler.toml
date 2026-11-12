@@ -1,0 +1,30 @@
+name = "autobe-community-maintenance"
+main = "src/index.ts"
+compatibility_date = "2026-11-11"
+
+[vars]
+DISCORD_GUILD_ID = "1561951163065180251"
+DISCORD_REQUIRED_ROLE_ID = "1561952044498030593"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "autobe-community-modpacks"
+database_id = "87c441f7-ef60-4478-a337-57cc02dcabbb"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01
