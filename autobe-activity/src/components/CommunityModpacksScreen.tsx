@@ -60,6 +60,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     warning: string;
   } | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [featuredUploads,setFeaturedUploads]=useState<CommunityModpack[]>([]);
+  const [featuredCreators,setFeaturedCreators]=useState<Array<{user_id:string;author:string;uploads:number;downloads:number}>>([]);
+  const [leaderboard,setLeaderboard]=useState<Array<{author_id:string;author:string;uploads:number;downloads:number;likes:number;followers:number}>>([]);
   const [socialStats,setSocialStats]=useState<any>(null);
   const [reviewRating,setReviewRating]=useState(5);
   const [reviewBody,setReviewBody]=useState('');
@@ -84,6 +87,12 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       }
 
       setModpacks((data.modpacks || []).filter((item: CommunityModpack) => item.content_type !== 'addon'));
+      const auth=getDiscordAuth();
+      if(auth?.token){
+        const discoveryResponse=await fetch('/api/community-social?action=discovery',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
+        const discovery=await discoveryResponse.json();
+        if(discoveryResponse.ok){setFeaturedUploads(discovery.featuredUploads||[]);setFeaturedCreators(discovery.featuredCreators||[]);setLeaderboard(discovery.leaders||[]);}
+      }
       setError(null);
     } catch (err) {
       console.error('Failed to fetch community modpacks:', err);
@@ -400,7 +409,14 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
       {/* Content Area */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24 space-y-3 max-w-4xl mx-auto w-full">
-        {!loading && !error && topCreators.length > 0 && (
+        {!loading && !error && (featuredUploads.length>0||featuredCreators.length>0) && (
+          <section className="space-y-3 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4">
+            <div><h2 className="text-sm font-bold text-amber-100">Featured in the Community</h2><p className="text-[10px] text-[#AAA3BB]">Selected uploads and creators</p></div>
+            {featuredCreators.length>0&&<div className="flex flex-wrap gap-2">{featuredCreators.map(c=><span key={c.user_id} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-[10px] font-semibold text-amber-100">{cleanDiscordDisplayName(c.author||'Creator')} · {c.uploads} uploads</span>)}</div>}
+            {featuredUploads.length>0&&<div className="grid gap-2 sm:grid-cols-2">{featuredUploads.map(item=><button type="button" key={item.id} onClick={()=>setSelectedModpack(item)} className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-left hover:border-amber-300/30"><div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5">{item.icon_data_url?<img src={item.icon_data_url} alt="" className="h-full w-full object-cover"/>:<Box className="m-3 h-5 w-5 text-amber-200"/>}</div><div className="min-w-0"><div className="truncate text-xs font-bold text-white">{item.name}</div><div className="truncate text-[10px] text-[#AAA3BB]">by {cleanDiscordDisplayName(item.author)} · {item.downloads} downloads</div></div><Trophy className="ml-auto h-4 w-4 shrink-0 text-amber-200"/></button>)}</div>}
+          </section>
+        )}
+        {!loading && !error && (leaderboard.length>0||topCreators.length>0) && (
           <section className="rounded-xl border border-[#762BFF]/30 bg-gradient-to-br from-[#171027] to-[#100D18] p-4">
             <div className="mb-3 flex items-center gap-2">
               <Trophy className="h-4 w-4 text-[#C4A7FF]" aria-hidden="true" />
@@ -410,7 +426,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               </div>
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-              {topCreators.map((creator, index) => (
+              {(leaderboard.length ? leaderboard.map(c=>({id:c.author_id,name:cleanDiscordDisplayName(c.author)||'Creator',modpackCount:c.uploads,downloads:c.downloads,likes:c.likes,followers:c.followers})) : topCreators).slice(0,3).map((creator, index) => (
                 <div key={creator.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#30263F] bg-[#0D0B19]/80 p-3">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-[#762BFF]/25 text-[#D9C5FF]' : 'bg-[#201A2E] text-[#AAA3BB]'}`}>
                     #{index + 1}
