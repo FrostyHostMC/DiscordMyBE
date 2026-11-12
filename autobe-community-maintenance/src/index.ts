@@ -208,4 +208,4 @@ export default {
     try { return json(await runLifecycle(env)); }
     catch (error) { console.error("[Lifecycle] Scan failed", error); return json({ error: "Lifecycle scan failed safely." }, 500); }
   },
-};
+} satisfies ExportedHandler<Env>;
