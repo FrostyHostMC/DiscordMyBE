@@ -24,14 +24,14 @@ const ROLE_REQUIRED_MESSAGE='You no longer have the required AutoBE Discord role
 async function auditRevocation(db:D1Database,row:any,userId:string){
  await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),row.id,userId,'deleted','discord_role_removed',Date.now()).run();
 }
-async function revokeVerifiedCreator(userId:string,env:Env){
+async function revokeVerifiedCreator(userId:string,env:Env,baseUrl:string){
  await init(env.DB);
  const rows=await env.DB.prepare("SELECT id,name,author_id,blob_url,size FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
  for(const row of rows.results||[]){
   const now=Date.now();
   await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=COALESCE(role_removed_at,?),role_purge_after=?,lifecycle_state='role_removed' WHERE id=?").bind(now,now,row.id).run();
   try{
-   const key=getOwnedPublishedObjectKey(String(row.blob_url||''),userId,'https://autobe.invalid');
+   const key=getOwnedPublishedObjectKey(String(row.blob_url||''),userId,baseUrl);
    if(!key)throw new Error('Published object key could not be verified; listing remains hidden.');
    const object=await env.BUCKET.head(key);
    if(object&&!isOwnedPublishedObject(object.customMetadata,object.size,userId))throw new Error('Immutable R2 ownership metadata failed verification; listing remains hidden.');
@@ -48,7 +48,7 @@ async function revokeVerifiedCreator(userId:string,env:Env){
  }
  await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?").bind(Date.now(),Date.now(),userId).run();
 }
-async function requireRole(me:{id:string},env:Env){
+async function requireRole(me:{id:string},env:Env,request:Request){
  const now=Date.now();
  await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)").run();
  const status=await communityRoleStatus(me.id,env);
@@ -58,7 +58,7 @@ async function requireRole(me:{id:string},env:Env){
  }
  if(status==='missing'){
   const previouslyVerified=await env.DB.prepare("SELECT 1 yes FROM community_verified_creators WHERE user_id=?").bind(me.id).first();
-  if(previouslyVerified)await revokeVerifiedCreator(me.id,env);
+  if(previouslyVerified)await revokeVerifiedCreator(me.id,env,request.url);
   return json({error:ROLE_REQUIRED_MESSAGE,code:'DISCORD_ROLE_REQUIRED',verified:false},403);
  }
  return json({error:'We could not verify your Discord role right now. Please try again shortly.',code:'DISCORD_ROLE_CHECK_UNAVAILABLE'},503);
@@ -102,7 +102,7 @@ async function notify(db:D1Database,to:string,actor:string,kind:string,item:stri
 const owner=(id:string)=>id===OWNER_DISCORD_ID;
 export async function onRequestGet({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
- const roleFailure=await requireRole(me,env);if(roleFailure)return roleFailure;
+ const roleFailure=await requireRole(me,env,request);if(roleFailure)return roleFailure;
  try{await init(env.DB);const u=new URL(request.url),action=u.searchParams.get('action')||'me';
  if(action==='creators'){
  const q=(u.searchParams.get('q')||'').trim().slice(0,48);
