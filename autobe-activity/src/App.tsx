@@ -94,6 +94,36 @@ export const App: React.FC = () => {
     toastTimerRef.current = window.setTimeout(() => setToastMessage(null), durationMs);
   };
 
+  // Revalidate Community access while the user is browsing it. Losing the
+  // required Discord role ejects them from Community without interrupting the
+  // merger workspace; reopening Community checks the role again.
+  useEffect(() => {
+    if (currentTab !== 'community' && currentTab !== 'community_addons') return;
+    const checkAccess = async () => {
+      const auth = getDiscordAuth();
+      if (!auth?.token) return;
+      try {
+        const response = await fetch('/api/community-social?action=me', {
+          headers: { Authorization: `Bearer ${auth.token}` },
+          cache: 'no-store',
+        });
+        if (response.status !== 403) return;
+        const data = await response.json() as { error?: string; code?: string };
+        if (data.code !== 'DISCORD_ROLE_REQUIRED') return;
+        setCurrentTab('workspace');
+        setScreen('main');
+        setShowCreatorProfile(false);
+        setPublicCreatorId(null);
+        showToast(data.error || 'You no longer have the required AutoBE Discord role. Rejoin the role and reopen AutoBE to verify again.', 7000);
+      } catch {
+        // A transient network failure must never revoke a user's local session.
+      }
+    };
+    void checkAccess();
+    const interval = window.setInterval(() => void checkAccess(), 30_000);
+    return () => window.clearInterval(interval);
+  }, [currentTab]);
+
   const triggerHaptic = (duration = 50) => {
     if (hapticTweak) {
       vibrate(duration).catch(() => {});
