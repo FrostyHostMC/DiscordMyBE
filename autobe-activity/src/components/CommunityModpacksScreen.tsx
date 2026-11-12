@@ -86,7 +86,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setModpacks((data.modpacks || []).filter((item: CommunityModpack) => item.content_type !== 'addon'));
       const auth=getDiscordAuth();
       if(auth?.token){
-        const discoveryResponse=await fetch('/api/community-social?action=discovery',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
+        const discoveryResponse=await fetch('/api/community-social?action=discovery&content_type=modpack',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
         const discovery=await discoveryResponse.json();
         if(discoveryResponse.ok){setFeaturedUploads(discovery.featuredUploads||[]);setFeaturedCreators(discovery.featuredCreators||[]);setLeaderboard(discovery.leaders||[]);}
       }
@@ -486,7 +486,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center gap-1 text-[10px] text-[#AAA3BB]">
                       <Download className="w-3 h-3" />
-                      <span>{modpack.downloads}</span>
+                      <span>{Number(modpack.downloads)||0} downloads</span>
                     </div>
                     {currentUserId && modpack.author_id === currentUserId && (
                       <button
