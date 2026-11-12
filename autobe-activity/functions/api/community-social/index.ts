@@ -29,9 +29,10 @@ async function requireRole(me:{id:string},env:Env){
 async function eligibleCreator(userId:string,env:Env):Promise<boolean>{
  if(!/^\d{17,20}$/.test(userId))return false;
  const [role,uploads]=await Promise.all([
-  communityRoleStatus(userId,env).then(status=>status==='present'),
+  communityRoleStatus(userId,env),
   env.DB.prepare("SELECT 1 yes FROM community_modpacks WHERE author_id=? AND COALESCE(is_hidden,0)=0 LIMIT 1").bind(userId).first()
  ]);
+ if(role!=='present')return false;
  return role&&!!uploads;
 }
 async function init(db:D1Database){
