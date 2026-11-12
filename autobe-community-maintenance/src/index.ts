@@ -44,6 +44,10 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_verified_creators (
     user_id TEXT PRIMARY KEY, verified_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, revoked_at INTEGER
   )`).run();
+  const registryHasRows = await db.prepare("SELECT 1 yes FROM community_verified_creators LIMIT 1").first();
+  if (!registryHasRows) {
+    await db.prepare("INSERT OR IGNORE INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) SELECT author_id,MIN(created_at),MAX(created_at),NULL FROM community_modpacks GROUP BY author_id").run();
+  }
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (
     item_id TEXT PRIMARY KEY, author_id TEXT NOT NULL, item_name TEXT NOT NULL,
     reason TEXT NOT NULL, detected_at INTEGER NOT NULL, last_updated_at INTEGER,
