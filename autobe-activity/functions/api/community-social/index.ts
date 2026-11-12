@@ -52,9 +52,9 @@ export async function onRequestGet({request,env}:Ctx){
  if(action==='creators'){
  const q=(u.searchParams.get('q')||'').trim().slice(0,48);
  if(q.length<2)return json({creators:[]});
- const rows=await env.DB.prepare("SELECT m.author_id,MAX(m.author) author,MAX(m.author_avatar) author_avatar,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,COALESCE((SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id),0) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 AND (m.author LIKE ? OR m.author_id=?) GROUP BY m.author_id ORDER BY uploads DESC,downloads DESC LIMIT 20").bind(`%${q}%`,q).all<any>();
+ const rows=await env.DB.prepare("SELECT m.author_id,MAX(m.author) author,MAX(m.author_avatar) author_avatar,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,COALESCE((SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id),0) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 AND (m.author LIKE ? OR m.author_id=?) GROUP BY m.author_id ORDER BY uploads DESC,downloads DESC LIMIT 100").bind(`%${q}%`,q).all<any>();
  const checked=await Promise.all((rows.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null));const creators=checked.filter(Boolean);
- return json({creators});
+ return json({creators:creators.slice(0,20)});
  }
  if(action==='creator'){
  const id=u.searchParams.get('id')||'';if(!/^\d{17,20}$/.test(id))return json({error:'Creator not found.'},404);
@@ -81,8 +81,8 @@ export async function onRequestGet({request,env}:Ctx){
  const [featuredUploads,featuredCreators,leaders]=await Promise.all([
  env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured FROM community_modpacks WHERE featured=1 AND COALESCE(is_hidden,0)=0 ORDER BY created_at DESC LIMIT 12').all(),
  env.DB.prepare('SELECT f.user_id,MAX(m.author) author,COUNT(m.id) uploads,COALESCE(SUM(m.downloads),0) downloads FROM community_featured_creators f LEFT JOIN community_modpacks m ON m.author_id=f.user_id GROUP BY f.user_id ORDER BY f.featured_at DESC LIMIT 12').all(),
- env.DB.prepare('SELECT m.author_id,MAX(m.author) author,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,(SELECT COUNT(*) FROM community_likes l JOIN community_modpacks lm ON lm.id=l.item_id WHERE lm.author_id=m.author_id) likes,(SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 GROUP BY m.author_id ORDER BY likes DESC,followers DESC,downloads DESC LIMIT 10').all()]);
- const [checkedFeatured,checkedLeaders]=await Promise.all([Promise.all((featuredCreators.results||[]).map(async c=>await eligibleCreator(String(c.user_id),env)?c:null)),Promise.all((leaders.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null))]);return json({featuredUploads:featuredUploads.results||[],featuredCreators:checkedFeatured.filter(Boolean),leaders:checkedLeaders.filter(Boolean)});}
+ env.DB.prepare('SELECT m.author_id,MAX(m.author) author,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,(SELECT COUNT(*) FROM community_likes l JOIN community_modpacks lm ON lm.id=l.item_id WHERE lm.author_id=m.author_id) likes,(SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 GROUP BY m.author_id ORDER BY likes DESC,followers DESC,downloads DESC LIMIT 100').all()]);
+ const [checkedFeatured,checkedLeaders]=await Promise.all([Promise.all((featuredCreators.results||[]).map(async c=>await eligibleCreator(String(c.user_id),env)?c:null)),Promise.all((leaders.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null))]);return json({featuredUploads:featuredUploads.results||[],featuredCreators:checkedFeatured.filter(Boolean),leaders:checkedLeaders.filter(Boolean).slice(0,10)});}
  if(action==='item'){const id=u.searchParams.get('id');if(!id)return json({error:'Missing upload id.'},400);
  const [likes,favorites,ratings,followers,liked,saved,followed,reviews]=await Promise.all([
  env.DB.prepare('SELECT COUNT(*) count FROM community_likes WHERE item_id=?').bind(id).first<any>(),
