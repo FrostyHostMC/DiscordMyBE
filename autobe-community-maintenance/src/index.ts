@@ -51,6 +51,10 @@ async function ensureSchema(db: D1Database) {
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_verified_creators (
     user_id TEXT PRIMARY KEY, verified_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, revoked_at INTEGER
   )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS community_role_config_validation (
+    id INTEGER PRIMARY KEY CHECK(id=1), guild_id TEXT NOT NULL, role_id TEXT NOT NULL,
+    is_valid INTEGER NOT NULL, checked_at INTEGER NOT NULL
+  )`).run();
   const registryHasRows = await db.prepare("SELECT 1 yes FROM community_verified_creators LIMIT 1").first();
   if (!registryHasRows) {
     await db.prepare("INSERT OR IGNORE INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) SELECT author_id,MIN(created_at),MAX(created_at),NULL FROM community_modpacks GROUP BY author_id").run();
@@ -63,8 +67,23 @@ async function ensureSchema(db: D1Database) {
   await db.prepare("CREATE INDEX IF NOT EXISTS idx_community_modpacks_lifecycle ON community_modpacks(lifecycle_state,role_purge_after,inactivity_purge_after)").run();
 }
 
+async function validateRoleConfig(env:Env,force=false):Promise<boolean>{
+  if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return false;
+  const now=Date.now();
+  const cached=await env.DB.prepare("SELECT guild_id,role_id,is_valid,checked_at FROM community_role_config_validation WHERE id=1").first<{guild_id:string;role_id:string;is_valid:number;checked_at:number}>();
+  if(!force&&cached&&cached.guild_id===env.DISCORD_GUILD_ID&&cached.role_id===env.DISCORD_REQUIRED_ROLE_ID&&now-Number(cached.checked_at)<5*60*1000)return cached.is_valid===1;
+  try{
+    const response=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/roles`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
+    if(!response.ok)return false;
+    const roles=await response.json() as Array<{id?:string}>;
+    const valid=Array.isArray(roles)&&roles.some(role=>role.id===env.DISCORD_REQUIRED_ROLE_ID);
+    await env.DB.prepare("INSERT INTO community_role_config_validation (id,guild_id,role_id,is_valid,checked_at) VALUES (1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=excluded.guild_id,role_id=excluded.role_id,is_valid=excluded.is_valid,checked_at=excluded.checked_at").bind(env.DISCORD_GUILD_ID,env.DISCORD_REQUIRED_ROLE_ID,valid?1:0,now).run();
+    return valid;
+  }catch{return false;}
+}
+
 async function discordRole(env: Env, userId: string): Promise<"present" | "missing" | "unknown"> {
-  try {
+  if(!await validateRoleConfig(env))return 'unknown';\n  try {
     const response = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${userId}`, {
       headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
     });
@@ -139,6 +158,11 @@ async function runLifecycle(env: Env) {
   const hasMore = (page.results || []).length > 200;
   const creators = (page.results || []).slice(0, 200);
   const summary = { permanentDeletionEnabled: !!settings?.enabled, checkedCreators: 0, roleLossCandidates: 0, hidden: 0, restored: 0, inactivityCandidates: 0, warned: 0, deleted: 0, errors: 0, moreCreatorsQueued: hasMore };
+  if (!await validateRoleConfig(env, true)) {
+    summary.errors++;
+    console.error("[Lifecycle] Required Discord role could not be validated; no creator cleanup was performed.");
+    return summary;
+  }
 
   for (const creator of creators) {
     const userId = String(creator.author_id);
