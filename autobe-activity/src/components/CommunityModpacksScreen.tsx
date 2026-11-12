@@ -434,7 +434,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <Globe className="w-12 h-12 text-[#30263F] mb-3" />
             <p className="text-sm font-semibold text-white">Failed to load</p>
-            <p className="text-xs text-[#AAA3BB] mt-1 max-w-xs">{error}</p>
+            <p className={`text-xs mt-1 max-w-xs ${error.includes('required AutoBE Discord role') ? 'text-amber-100' : 'text-[#AAA3BB]'}`}>{error}</p>
             <button
               type="button"
               onClick={() => void fetchCommunityModpacks()}
