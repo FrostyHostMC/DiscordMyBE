@@ -189,7 +189,7 @@ button, input, select, textarea {
 .autobe-access-loading > section {
   z-index: 2;
 }
-.autobe-global-background ~ * {
+.autobe-global-background ~ div.flex.min-h-0 {
   position: relative;
   z-index: 1;
 }
