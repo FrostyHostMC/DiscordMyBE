@@ -37,6 +37,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
   const [reviewRatings,setReviewRatings]=useState<Record<string,number>>({});
   const [reviewTexts,setReviewTexts]=useState<Record<string,string>>({});
   const [socialBusy,setSocialBusy]=useState<string|null>(null);
+  const [featuredAddons,setFeaturedAddons]=useState<CommunityAddon[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -44,7 +45,18 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
       const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not load community addons.');
-      setAddons((data.modpacks || []).filter((item: CommunityAddon) => item.content_type === 'addon'));
+      const addonRows=(data.modpacks || []).filter((item: CommunityAddon) => item.content_type === 'addon');
+      setAddons(addonRows);
+      const auth=getDiscordAuth();
+      if(auth?.token){
+        const [states,discovery]=await Promise.all([
+          fetch('/api/community-social?action=items',{headers:{Authorization:'Bearer '+auth.token},cache:'no-store'}).then(r=>r.json()),
+          fetch('/api/community-social?action=discovery',{headers:{Authorization:'Bearer '+auth.token},cache:'no-store'}).then(r=>r.json())
+        ]);
+        const flags=new Map((states.items||[]).map((x:any)=>[x.id,x]));
+        setSocialFlags(Object.fromEntries(addonRows.map(item=>{const x:any=flags.get(item.id)||{};return [item.id,{liked:!!x.liked,favorited:!!x.favorited,following:!!x.followingCreator}];})));
+        setFeaturedAddons((discovery.featuredUploads||[]).filter((x:CommunityAddon)=>x.content_type==='addon'));
+      }
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'Could not load community addons.');
     } finally { setLoading(false); }
@@ -168,6 +180,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
     </header>
     <main className="min-h-0 flex-1 overflow-y-auto p-4">
       {notice && <div className="mb-3 rounded-lg border border-[#762BFF]/40 bg-[#762BFF]/10 p-3 text-xs text-[#D9C5FF]">{notice}</div>}
+      {!loading&&featuredAddons.length>0&&<section className="mb-4 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4"><h2 className="mb-3 text-sm font-bold text-amber-100">Featured Addons</h2><div className="grid gap-2 sm:grid-cols-2">{featuredAddons.map(item=><button key={item.id} onClick={()=>{setSearch(item.name);setCategory("All");}} className="rounded-lg border border-white/10 bg-black/20 p-3 text-left text-xs font-bold">{item.name}<span className="mt-1 block text-[10px] font-normal text-[#AAA3BB]">by {item.author}</span></button>)}</div></section>}
       {loading ? <div className="flex justify-center py-16"><Loader2 className="animate-spin text-[#A855F7]"/></div> :
       filtered.length === 0 ? <div className="py-20 text-center"><Box className="mx-auto mb-3 text-[#716885]" size={34}/><p className="font-semibold">{search || category !== 'All' ? 'No addons found' : 'No community addons yet'}</p><p className="mt-1 text-xs text-[#AAA3BB]">Upload the first addon or try another category.</p></div> :
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(addon=><article key={addon.id} className="overflow-hidden rounded-xl border border-[#30263F] bg-[#100D18]">
