@@ -107,6 +107,12 @@ async function ensureTable(env: Env): Promise<void> {
   if (!names.has('category')) {
     await env.DB.prepare("ALTER TABLE community_modpacks ADD COLUMN category TEXT NOT NULL DEFAULT 'Other'").run();
   }
+  if (!names.has('is_hidden')) {
+    await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN is_hidden INTEGER NOT NULL DEFAULT 0').run();
+  }
+  if (!names.has('featured')) {
+    await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
+  }
 }
 
 function fail(label: string, error: unknown) {
@@ -273,7 +279,7 @@ export async function onRequestGet(context: Ctx) {
     await ensureTable(env);
 
     const { results } = await env.DB.prepare(
-      'SELECT * FROM community_modpacks ORDER BY created_at DESC'
+      'SELECT * FROM community_modpacks WHERE COALESCE(is_hidden, 0) = 0 ORDER BY featured DESC, created_at DESC'
     ).all();
 
     const modpacks = (results || []).map((row: Record<string, unknown>) => {
