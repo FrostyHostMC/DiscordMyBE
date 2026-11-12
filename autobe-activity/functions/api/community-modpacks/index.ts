@@ -134,7 +134,8 @@ async function ensureTable(env: Env): Promise<void> {
       downloads INTEGER DEFAULT 0,
       blob_url TEXT NOT NULL,
       file_name TEXT NOT NULL,
-      included_packs TEXT
+      included_packs TEXT,
+       license_id TEXT NOT NULL DEFAULT 'LicenseRef-All-Rights-Reserved'
     )`
   ).run();
 
@@ -149,6 +150,9 @@ async function ensureTable(env: Env): Promise<void> {
   }
   if (!names.has('detail_images')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN detail_images TEXT').run();
+  }
+  if (!names.has('license_id')) {
+    await env.DB.prepare("ALTER TABLE community_modpacks ADD COLUMN license_id TEXT NOT NULL DEFAULT 'LicenseRef-All-Rights-Reserved'").run();
   }
   if (!names.has('content_type')) {
     await env.DB.prepare("ALTER TABLE community_modpacks ADD COLUMN content_type TEXT NOT NULL DEFAULT 'modpack'").run();
@@ -223,6 +227,8 @@ export async function onRequestPost(context: Ctx) {
     const contentType = data.content_type === 'addon' ? 'addon' : 'modpack';
     const allowedCategories = ['Horror', 'Medieval', 'Fantasy', 'Survival', 'Technology', 'Magic', 'PvP', 'Adventure', 'Weapons', 'Mobs', 'Blocks', 'Decorations', 'Utility', 'Other'];
     const category = allowedCategories.includes(String(data.category)) ? String(data.category) : 'Other';
+    const allowedLicenses = ["LicenseRef-All-Rights-Reserved","MIT","Apache-2.0","GPL-2.0-only","GPL-3.0-only","BSD-2-Clause","BSD-3-Clause","MPL-2.0","LGPL-2.1-only","LGPL-3.0-only","CC0-1.0","CC-BY-4.0","CC-BY-SA-4.0","Unlicense","LicenseRef-Custom"];
+    const licenseId = allowedLicenses.includes(String(data.license_id)) ? String(data.license_id) : 'LicenseRef-All-Rights-Reserved';
     const safeInputFileName = String(data.file_name).split(/[\\/]/).pop() || '';
     if (contentType === 'addon' && !/\.(mcaddon|mcpack)$/i.test(safeInputFileName)) {
       return json({ error: 'Community addons must be uploaded as .mcaddon or .mcpack files.' }, 400);
@@ -288,7 +294,7 @@ export async function onRequestPost(context: Ctx) {
 
     const id = crypto.randomUUID();
     const result = await env.DB.prepare(
-      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category, last_updated_at, lifecycle_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category, last_updated_at, lifecycle_state, license_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
       .bind(
         id,
@@ -310,7 +316,8 @@ export async function onRequestPost(context: Ctx) {
         contentType,
         category,
         Date.now(),
-        'active'
+        'active',
+        licenseId
       )
       .run();
 

@@ -639,7 +639,7 @@ export const App: React.FC = () => {
     setTransferStatus('');
   };
 
-  const handlePublishModpack = async (communityIconDataUrl?: string | null) => {
+  const handlePublishModpack = async (communityIconDataUrl?: string | null, licenseId = 'LicenseRef-All-Rights-Reserved') => {
     if (justCompletedModpack?.generateAddon === false) { showToast('Community publishing requires a combined .mcaddon. Enable Combined Addon in the workspace and merge again.'); return; }
     if (!justCompletedModpack || !beginTransfer('publish', 'Building modpack')) return;
 
