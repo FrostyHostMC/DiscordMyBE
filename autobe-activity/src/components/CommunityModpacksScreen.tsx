@@ -13,7 +13,6 @@ import {
   X,
   Search,
   ArrowUpRight,
-  Info,
   RefreshCw,
   Image as ImageIcon,
   Eye,
@@ -409,15 +408,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
               ))}
             </div>
           </section>
-        )}
-        {usage && (
-          <div className="p-3 rounded-lg border border-[#30263F] bg-[#100D18] text-xs text-[#AAA3BB] space-y-1">
-            <p className="font-bold text-white">Cloudflare usage estimate</p>
-            <p>Published packs: {usage.publishedModpacks}</p>
-            <p>Published archive storage estimate: {usage.estimatedPublishedGiB} GiB / 10 GB free R2 allowance ({usage.percentOfR2FreeStorage}%)</p>
-            <p>Upload starts in last 24 hours: {usage.uploadStartsInLast24Hours}</p>
-            <p className="text-[10px] text-amber-300">{usage.warning}</p>
-          </div>
         )}
         {notice && (
           <div className="p-3 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300 break-words" onClick={() => setNotice(null)}>
