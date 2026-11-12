@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Box, Download, Image as ImageIcon, Loader2, Plus, Search, Upload, X, Trash2 } from 'lucide-react';
 import { uploadToCloud } from '@/utils/cloudUpload';
 import { getDiscordAuth, getDiscordUser } from '@/utils/discordAuth';
@@ -25,6 +25,8 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
   const [category, setCategory] = useState<string>('All');
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const addonFileInput = useRef<HTMLInputElement>(null);
+  const coverFileInput = useRef<HTMLInputElement>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [version, setVersion] = useState('1.0.0');
@@ -209,19 +211,46 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
         </div>
       </article>)}</div>}
     </main>
-    {showUpload && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-3"><div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl border border-[#30263F] bg-[#100D18] p-5">
-      <div className="mb-4 flex items-center justify-between"><h2 className="text-base font-bold">Publish a Community Addon</h2><button onClick={()=>!publishing&&setShowUpload(false)} aria-label="Close"><X size={18}/></button></div>
-      <div className="space-y-3">
-        <label className="block text-xs font-semibold text-[#AAA3BB]">Addon file (.mcaddon or .mcpack)<input type="file" accept=".mcaddon,.mcpack,application/zip" onChange={e=>{const picked=e.target.files?.[0]||null;if(picked&&!/\.(mcaddon|mcpack)$/i.test(picked.name)){setNotice('Only .mcaddon and .mcpack files are supported.');setFile(null);}else{setFile(picked);if(picked&&!name)setName(picked.name.replace(/\.(mcaddon|mcpack)$/i,''));}}} className="mt-1 block w-full text-xs"/></label>
-        <label className="block text-xs font-semibold text-[#AAA3BB]">Addon name<input value={name} onChange={e=>setName(e.target.value)} maxLength={120} className="mt-1 w-full rounded-lg border border-[#30263F] bg-[#08070D] p-2 text-sm text-white"/></label>
-        <label className="block text-xs font-semibold text-[#AAA3BB]">Description<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={2000} rows={4} placeholder="What does this addon add? Include features, compatibility, and credits." className="mt-1 w-full rounded-lg border border-[#30263F] bg-[#08070D] p-2 text-sm text-white"/></label>
-        <div className="grid grid-cols-2 gap-3"><label className="block text-xs font-semibold text-[#AAA3BB]">Theme<select value={selectedCategory} onChange={e=>setSelectedCategory(e.target.value as Category)} className="mt-1 w-full rounded-lg border border-[#30263F] bg-[#08070D] p-2 text-sm">{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label><label className="block text-xs font-semibold text-[#AAA3BB]">Version<input value={version} onChange={e=>setVersion(e.target.value)} maxLength={40} className="mt-1 w-full rounded-lg border border-[#30263F] bg-[#08070D] p-2 text-sm"/></label></div>
-        <label className="block text-xs font-semibold text-[#AAA3BB]">Cover image (PNG, JPG, WebP)<input type="file" accept="image/png,image/jpeg,image/webp" onChange={e=>chooseCover(e.target.files?.[0])} className="mt-1 block w-full text-xs"/></label>
-        {cover && <img src={cover} alt="Addon cover preview" className="h-24 w-24 rounded-lg border border-[#30263F] object-cover"/>}
-        {file && <p className="text-xs text-[#AAA3BB]">Selected: {file.name} · {formatSize(file.size)}</p>}
-        {publishing && <div><div className="mb-1 flex justify-between text-xs text-[#AAA3BB]"><span>Uploading addon…</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#30263F]"><div className="h-full bg-[#A855F7]" style={{width:`${progress}%`}}/></div></div>}
-        <button disabled={publishing||!file} onClick={()=>void publish()} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-3 text-sm font-bold disabled:opacity-50">{publishing?<><Loader2 className="animate-spin" size={16}/> Publishing…</>:<><Upload size={16}/> Publish addon</>}</button>
+    {showUpload && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-2 sm:p-4">
+      <div className="flex max-h-[94dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl border border-[#403252] bg-[#100D18] shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+          <div><h2 className="text-lg font-bold">Publish a Community Addon</h2><p className="mt-1 text-xs text-[#AAA3BB]">Share an installable .mcaddon or .mcpack with the Community.</p></div>
+          <button onClick={()=>!publishing&&setShowUpload(false)} aria-label="Close" className="rounded-lg p-2 text-[#AAA3BB] hover:bg-white/10"><X size={20}/></button>
+        </div>
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
+          <section>
+            <div className="mb-2 text-sm font-semibold text-white">Addon file <span className="text-[#AAA3BB] font-normal">(.mcaddon or .mcpack)</span></div>
+            <input ref={addonFileInput} type="file" disabled={publishing} onChange={e=>{const picked=e.target.files?.[0]||null;if(picked&&!/\.(mcaddon|mcpack)$/i.test(picked.name)){setNotice('Choose the original .mcaddon or .mcpack file. ZIP files must be renamed only if they are actually a Bedrock addon package.');setFile(null);}else{setFile(picked);setNotice('');if(picked&&!name)setName(picked.name.replace(/\.(mcaddon|mcpack)$/i,''));}e.currentTarget.value='';}} className="sr-only"/>
+            <div className="rounded-xl border border-dashed border-violet-300/40 bg-violet-500/[0.06] p-4 sm:p-5">
+              <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
+                <div className="rounded-xl bg-violet-400/10 p-3 text-violet-200"><Upload size={24}/></div>
+                <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">{file ? file.name : 'Choose your addon package'}</div><p className="mt-1 text-xs text-[#AAA3BB]">{file ? `${formatSize(file.size)} · Ready to upload` : 'Select an .mcaddon or .mcpack from your device Files.'}</p></div>
+                <button type="button" disabled={publishing} onClick={()=>addonFileInput.current?.click()} className="min-h-11 w-full rounded-lg border border-violet-300/30 bg-violet-500/15 px-4 py-3 text-sm font-bold text-violet-100 disabled:opacity-50 sm:w-auto">Browse files</button>
+              </div>
+              {file && <button type="button" onClick={()=>setFile(null)} className="mt-3 text-xs font-semibold text-rose-300 underline">Remove selected file</button>}
+            </div>
+          </section>
+          <label className="block text-sm font-semibold text-[#C9C1D5]">Addon name<input value={name} onChange={e=>setName(e.target.value)} maxLength={120} placeholder="Name your addon" className="mt-2 min-h-12 w-full rounded-xl border border-[#403252] bg-[#08070D] px-4 py-3 text-base text-white outline-none focus:border-violet-400"/></label>
+          <label className="block text-sm font-semibold text-[#C9C1D5]">Description<textarea value={description} onChange={e=>setDescription(e.target.value)} maxLength={2000} rows={5} placeholder="What does this addon add? Include features, compatibility, and credits." className="mt-2 min-h-36 w-full resize-y rounded-xl border border-[#403252] bg-[#08070D] px-4 py-3 text-base leading-relaxed text-white outline-none focus:border-violet-400"/></label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <label className="block text-sm font-semibold text-[#C9C1D5]">Theme<select value={selectedCategory} onChange={e=>setSelectedCategory(e.target.value as Category)} className="mt-2 min-h-12 w-full rounded-xl border border-[#403252] bg-[#08070D] px-4 py-3 text-base text-white">{CATEGORIES.map(c=><option key={c}>{c}</option>)}</select></label>
+            <label className="block text-sm font-semibold text-[#C9C1D5]">Version<input value={version} onChange={e=>setVersion(e.target.value)} maxLength={40} placeholder="1.0.0" className="mt-2 min-h-12 w-full rounded-xl border border-[#403252] bg-[#08070D] px-4 py-3 text-base text-white outline-none focus:border-violet-400"/></label>
+          </div>
+          <section>
+            <div className="mb-2 text-sm font-semibold text-white">Cover image <span className="font-normal text-[#AAA3BB]">(optional · PNG, JPG, WebP)</span></div>
+            <input ref={coverFileInput} type="file" accept="image/png,image/jpeg,image/webp" disabled={publishing} onChange={e=>{chooseCover(e.target.files?.[0]);e.currentTarget.value='';}} className="sr-only"/>
+            <div className="flex flex-col gap-3 rounded-xl border border-[#30263F] bg-black/20 p-4 sm:flex-row sm:items-center">
+              {cover ? <img src={cover} alt="Addon cover preview" className="h-28 w-28 rounded-xl border border-white/10 object-cover"/> : <div className="flex h-28 w-28 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/15 bg-white/[0.03] text-[#716885]"><ImageIcon size={30}/></div>}
+              <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">{cover ? 'Cover image selected' : 'Add a cover image'}</div><p className="mt-1 text-xs leading-relaxed text-[#AAA3BB]">A clear image helps people recognize your addon. You can publish without one.</p><button type="button" disabled={publishing} onClick={()=>coverFileInput.current?.click()} className="mt-3 min-h-11 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{cover ? 'Change cover image' : 'Choose cover image'}</button>{cover&&<button type="button" onClick={()=>setCover(null)} className="ml-3 text-xs font-semibold text-rose-300 underline">Remove</button>}</div>
+            </div>
+          </section>
+          {publishing && <div className="rounded-xl border border-violet-300/20 bg-violet-500/[0.06] p-3"><div className="mb-2 flex justify-between text-xs text-[#C9C1D5]"><span>Uploading addon package…</span><span>{progress}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#30263F]"><div className="h-full bg-[#A855F7] transition-all" style={{width:`${progress}%`}}/></div><p className="mt-2 text-[11px] text-[#AAA3BB]">Keep AutoBE open until publishing finishes.</p></div>}
+          {notice && <div className="rounded-lg border border-violet-300/20 bg-violet-500/10 p-3 text-xs leading-relaxed text-violet-100">{notice}</div>}
+        </div>
+        <div className="shrink-0 border-t border-white/10 bg-[#100D18] px-5 py-4 sm:px-6">
+          <button disabled={publishing||!file} onClick={()=>void publish()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-[#762BFF] px-4 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{publishing?<><Loader2 className="animate-spin" size={17}/> Publishing…</>:<><Upload size={17}/> Publish addon</>}</button>
+        </div>
       </div>
-    </div></div>}
+    </div>}
   </div>;
 };
