@@ -245,6 +245,21 @@ export async function onRequestPost(context: Ctx) {
       .run();
 
     console.log('[Community] Inserted', id, 'success:', result.success);
+    // Notify every creator follower about the new public upload.
+    try {
+      await env.DB.prepare(`CREATE TABLE IF NOT EXISTS community_notifications (
+        id TEXT PRIMARY KEY,user_id TEXT NOT NULL,actor_id TEXT NOT NULL,kind TEXT NOT NULL,
+        item_id TEXT,message TEXT NOT NULL,created_at INTEGER NOT NULL,read_at INTEGER
+      )`).run();
+      const followers = await env.DB.prepare('SELECT follower_id FROM community_follows WHERE creator_id = ?').bind(userId).all<{follower_id:string}>();
+      const batch = (followers.results || []).filter(row => row.follower_id !== userId).slice(0,500).map(row =>
+        env.DB.prepare('INSERT INTO community_notifications (id,user_id,actor_id,kind,item_id,message,created_at) VALUES (?,?,?,?,?,?,?)')
+          .bind(crypto.randomUUID(),row.follower_id,userId,'new_upload',id,`${safeAuthor} published a new ${contentType}: ${safeName}`.slice(0,240),Date.now())
+      );
+      if (batch.length) await env.DB.batch(batch);
+    } catch (notificationError) {
+      console.warn('[Community] New-upload notifications could not be created:', notificationError);
+    }
     return json({ id, success: true }, 201);
   } catch (error) {
     return fail('POST error', error);
