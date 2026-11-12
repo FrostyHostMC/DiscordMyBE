@@ -33,6 +33,10 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
   const [progress, setProgress] = useState(0);
   const [publishing, setPublishing] = useState(false);
   const [notice, setNotice] = useState('');
+  const [socialFlags,setSocialFlags]=useState<Record<string,{liked?:boolean;favorited?:boolean;following?:boolean}>>({});
+  const [reviewRatings,setReviewRatings]=useState<Record<string,number>>({});
+  const [reviewTexts,setReviewTexts]=useState<Record<string,string>>({});
+  const [socialBusy,setSocialBusy]=useState<string|null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -51,6 +55,21 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
     (category === 'All' || item.category === category) &&
     [item.name, item.description, item.author, item.category || ''].some(value => value.toLowerCase().includes(search.toLowerCase()))
   ), [addons, category, search]);
+
+  const communityAction = async (addon:CommunityAddon,action:'like'|'favorite'|'follow'|'review') => {
+    const auth=getDiscordAuth();if(!auth?.token){setNotice('Reconnect Discord to use Community features.');return;}
+    setSocialBusy(addon.id);setNotice('');
+    try{
+      const body:any={action,itemId:addon.id};
+      if(action==='follow')body.creatorId=addon.author_id;
+      if(action==='review'){body.rating=reviewRatings[addon.id]||5;body.body=reviewTexts[addon.id]||'';}
+      const response=await fetch('/api/community-social',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.token}`},body:JSON.stringify(body)});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Community action failed.');
+      setSocialFlags(current=>({...current,[addon.id]:{...current[addon.id],[action==='like'?'liked':action==='favorite'?'favorited':'following']:action==='review'?true:!!data.active}}));
+      if(action==='review')setNotice('Your review was saved.');
+    }catch(e){setNotice(e instanceof Error?e.message:'Community action failed.');}
+    finally{setSocialBusy(null);}
+  };
 
   const chooseCover = (image?: File) => {
     if (!image) return;
@@ -157,6 +176,13 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId }
           <p className="line-clamp-3 min-h-12 text-xs text-[#AAA3BB]">{addon.description}</p>
           <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)}</span></div>
           <button onClick={()=>void download(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-2 text-xs font-bold"><Download size={14}/> Download {addon.file_name.toLowerCase().endsWith('.mcpack') ? 'MCPack' : 'MCAddon'}</button>
+          <div className="grid grid-cols-2 gap-2">
+            <button disabled={socialBusy===addon.id} onClick={()=>void communityAction(addon,'like')} className="rounded-lg border border-violet-300/20 bg-violet-500/10 py-2 text-[11px] font-bold text-violet-100 disabled:opacity-50">{socialFlags[addon.id]?.liked?'♥ Liked':'♡ Like'}</button>
+            <button disabled={socialBusy===addon.id} onClick={()=>void communityAction(addon,'favorite')} className="rounded-lg border border-white/10 py-2 text-[11px] font-bold disabled:opacity-50">{socialFlags[addon.id]?.favorited?'★ Saved':'☆ Save'}</button>
+          </div>
+          {currentUserId && addon.author_id!==currentUserId && <button disabled={socialBusy===addon.id} onClick={()=>void communityAction(addon,'follow')} className="w-full rounded-lg border border-white/10 py-2 text-[11px] font-bold disabled:opacity-50">{socialFlags[addon.id]?.following?'Following creator':'Follow creator'}</button>}
+          <div className="flex gap-2"><select value={reviewRatings[addon.id]||5} onChange={e=>setReviewRatings(v=>({...v,[addon.id]:Number(e.target.value)}))} className="rounded-lg border border-white/10 bg-[#08070D] px-2 text-[10px]">{[5,4,3,2,1].map(n=><option key={n} value={n}>{n} ★</option>)}</select><input value={reviewTexts[addon.id]||''} onChange={e=>setReviewTexts(v=>({...v,[addon.id]:e.target.value}))} maxLength={1000} placeholder="Write a review…" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#08070D] px-2 py-2 text-[10px]"/><button disabled={socialBusy===addon.id} onClick={()=>void communityAction(addon,'review')} className="rounded-lg bg-violet-500/20 px-2 text-[10px] font-bold disabled:opacity-50">Post</button></div>
+
           {currentUserId && addon.author_id === currentUserId && <button onClick={()=>void deleteAddon(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 py-2 text-xs font-semibold text-red-300"><Trash2 size={13}/> Delete my addon</button>}
         </div>
       </article>)}</div>}
