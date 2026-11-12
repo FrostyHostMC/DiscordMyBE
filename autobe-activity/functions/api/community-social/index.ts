@@ -1,5 +1,6 @@
 import type { Context } from '@cloudflare/workers-types';
-interface Env { DB: D1Database; DISCORD_CLIENT_ID: string; DISCORD_BOT_TOKEN: string; DISCORD_GUILD_ID: string; DISCORD_REQUIRED_ROLE_ID: string }
+import { getOwnedPublishedObjectKey, isOwnedPublishedObject } from '../_shared/uploadOwnership';
+interface Env { DB: D1Database; BUCKET: R2Bucket; DISCORD_CLIENT_ID: string; DISCORD_BOT_TOKEN: string; DISCORD_GUILD_ID: string; DISCORD_REQUIRED_ROLE_ID: string }
 type Ctx = Context & { env: Env };
 const OWNER_DISCORD_ID='1122949730419347487';
 const CATEGORIES=['Horror','Medieval','Fantasy','Survival','Technology','Magic','PvP','Adventure','Weapons','Mobs','Blocks','Decorations','Utility','Other'];
@@ -20,10 +21,46 @@ async function communityRoleStatus(userId:string,env:Env):Promise<'present'|'mis
  }catch{return 'unknown';}
 }
 const ROLE_REQUIRED_MESSAGE='You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
+async function auditRevocation(db:D1Database,row:any,userId:string){
+ await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),row.id,userId,'deleted','discord_role_removed',Date.now()).run();
+}
+async function revokeVerifiedCreator(userId:string,env:Env){
+ await init(env.DB);
+ const rows=await env.DB.prepare("SELECT id,name,author_id,blob_url,size FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
+ for(const row of rows.results||[]){
+  const now=Date.now();
+  await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=COALESCE(role_removed_at,?),role_purge_after=?,lifecycle_state='role_removed' WHERE id=?").bind(now,now,row.id).run();
+  try{
+   const key=getOwnedPublishedObjectKey(String(row.blob_url||''),userId,'https://autobe.invalid');
+   if(!key)throw new Error('Published object key could not be verified; listing remains hidden.');
+   const object=await env.BUCKET.head(key);
+   if(object&&!isOwnedPublishedObject(object.customMetadata,object.size,userId))throw new Error('Immutable R2 ownership metadata failed verification; listing remains hidden.');
+   if(object&&object.size!==Number(row.size))throw new Error('R2 object size mismatch; listing remains hidden.');
+   if(object)await env.BUCKET.delete(key);
+   await env.DB.prepare("DELETE FROM community_modpacks WHERE id=?").bind(row.id).run();
+   await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(row.id).run();
+   await auditRevocation(env.DB,row,userId);
+   await notify(env.DB,userId,'0','lifecycle_removed',row.id,`Your upload "${row.name}" and its published file were removed because your required Discord role was taken away. Restore the role and verify again before publishing new content.`);
+  }catch(error){
+   await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'blocked') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,status='blocked'").bind(row.id,userId,row.name,'discord_role_deletion_blocked',now,null,null).run();
+   console.error('[CommunitySocial] Role-loss deletion safely blocked',row.id,error);
+  }
+ }
+ await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?").bind(Date.now(),Date.now(),userId).run();
+}
 async function requireRole(me:{id:string},env:Env){
+ const now=Date.now();
+ await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)").run();
  const status=await communityRoleStatus(me.id,env);
- if(status==='present')return null;
- if(status==='missing')return json({error:ROLE_REQUIRED_MESSAGE,code:'DISCORD_ROLE_REQUIRED',verified:false},403);
+ if(status==='present'){
+  await env.DB.prepare("INSERT INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) VALUES (?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,revoked_at=NULL").bind(me.id,now,now).run();
+  return null;
+ }
+ if(status==='missing'){
+  const previouslyVerified=await env.DB.prepare("SELECT 1 yes FROM community_verified_creators WHERE user_id=?").bind(me.id).first();
+  if(previouslyVerified)await revokeVerifiedCreator(me.id,env);
+  return json({error:ROLE_REQUIRED_MESSAGE,code:'DISCORD_ROLE_REQUIRED',verified:false},403);
+ }
  return json({error:'We could not verify your Discord role right now. Please try again shortly.',code:'DISCORD_ROLE_CHECK_UNAVAILABLE'},503);
 }
 async function eligibleCreator(userId:string,env:Env):Promise<boolean>{
@@ -47,7 +84,8 @@ async function init(db:D1Database){
  'CREATE TABLE IF NOT EXISTS community_notifications (id TEXT PRIMARY KEY,user_id TEXT NOT NULL,actor_id TEXT NOT NULL,kind TEXT NOT NULL,item_id TEXT,message TEXT NOT NULL,created_at INTEGER NOT NULL,read_at INTEGER)',
  'CREATE INDEX IF NOT EXISTS idx_community_notifications_user ON community_notifications(user_id,created_at DESC)',
  'CREATE TABLE IF NOT EXISTS community_badges (user_id TEXT NOT NULL,badge TEXT NOT NULL,awarded_at INTEGER NOT NULL,PRIMARY KEY(user_id,badge))',
- 'CREATE TABLE IF NOT EXISTS community_featured_creators (user_id TEXT PRIMARY KEY,featured_at INTEGER NOT NULL)'
+ 'CREATE TABLE IF NOT EXISTS community_featured_creators (user_id TEXT PRIMARY KEY,featured_at INTEGER NOT NULL)',
+ 'CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)'
  ];for(const sql of statements)await db.prepare(sql).run();
  const columns=await db.prepare('PRAGMA table_info(community_modpacks)').all<{name:string}>();
  if(!(columns.results||[]).some(c=>c.name==='featured'))await db.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
