@@ -110,6 +110,10 @@ button, input, select, textarea {
     linear-gradient(180deg, rgba(7, 4, 17, .12), rgba(7, 4, 17, .28)),
     radial-gradient(ellipse at 50% 42%, transparent 10%, rgba(5, 2, 12, .24) 100%);
 }
+.autobe-moon-mark {
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 18px rgba(139, 92, 246, .42));
+}
 .autobe-loading-screen {
   position: fixed;
   inset: var(--autobe-host-top-inset) 0 0;
