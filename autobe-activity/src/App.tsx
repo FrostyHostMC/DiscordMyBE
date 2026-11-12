@@ -784,19 +784,20 @@ export const App: React.FC = () => {
     );
   }
   if (roleAccessStatus === 'checking') {
+    return (
+      <div className="autobe-loading-screen" role="status" aria-live="polite">
+        <img src="/assets/loading-screen.gif" alt="" className="autobe-loading-media" />
+        <div className="autobe-loading-copy">
+          <p className="autobe-loading-kicker">AUTOBE · BEDROCK MERGING STUDIO</p>
+          <h1>Loading a wonderful place</h1>
+          <p className="autobe-loading-status">Verifying your Discord access…</p>
+        </div>
+        <span className="sr-only">Verifying your Discord role…</span>
+      </div>
+    );
+  }
   return (
-    <div className="autobe-loading-screen" role="status" aria-live="polite">
-      <img
-        src="/assets/loading-screen.gif"
-        alt="Loading a wonderful place"
-        className="relative z-10 h-full w-full object-cover"
-      />
-      <span className="sr-only">Verifying your Discord role…</span>
-    </div>
-  );
-}
-  return (
-    <div className={"relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden " + (showCreatorProfile || publicCreatorId ? "bg-[#090713]" : "bg-transparent") + " pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]"}>
+    <div className={"isolate relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden " + (showCreatorProfile || publicCreatorId ? "bg-[#090713]" : "bg-transparent") + " pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]"}>
 {!showCreatorProfile && !publicCreatorId && <div aria-hidden="true" className="autobe-global-background" />}
       {toastMessage && <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-[100] mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl border border-violet-400/40 bg-[#17102C]/95 p-3 text-xs font-semibold text-white shadow-2xl backdrop-blur-xl sm:left-auto sm:right-5"><div className="flex min-w-0 items-center gap-2"><Info className="h-4 w-4 shrink-0 text-violet-300"/><span className="break-words">{toastMessage}</span></div><button type="button" onClick={() => setToastMessage(null)} aria-label="Dismiss notification" className="rounded-lg p-1 text-violet-200/70 hover:bg-white/10 hover:text-white"><X className="h-4 w-4"/></button></div>}
       {subpackPromptPacks && <SubpackSelectModal packs={subpackPromptPacks} onConfirm={handleSubpackConfirm} onCancel={handleSubpackCancel}/>}
@@ -825,7 +826,7 @@ export const App: React.FC = () => {
             <button onClick={() => navigateTab('community')} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${currentTab==='community'?'bg-violet-500/20 text-white':'text-[#A99FBE]'}`}><AutoBEFeatureArt kind="community" size={25}/> Community</button>
             <button onClick={() => navigateTab('community_addons')} className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${currentTab==='community_addons'?'bg-violet-500/20 text-white':'text-[#A99FBE]'}`}><AutoBEFeatureArt kind="addons" size={25}/> Addon Library</button>
           </nav>
-          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_70%_0%,rgba(109,40,217,.18),transparent_42%),rgba(9,7,19,.66)] backdrop-blur-[1px]">
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[radial-gradient(ellipse_at_70%_0%,rgba(109,40,217,.16),transparent_42%),rgba(9,7,19,.24)] backdrop-blur-[1px]">
             {currentTab==='workspace' ? <>
               <section className="relative mx-4 mt-4 overflow-hidden rounded-2xl border border-violet-300/15 bg-gradient-to-r from-[#21113D] via-[#17102C] to-[#100D1B] p-5 sm:mx-6 sm:mt-6 sm:p-7"><div className="pointer-events-none absolute -right-8 -top-10 opacity-30"><AutoBEFeatureArt kind="home" size={230}/></div><div className="relative z-10 max-w-2xl"><div className="mb-2 text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/70">Your Bedrock creation studio</div><h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Make more room for <span className="text-violet-300">imagination.</span></h1><p className="mt-2 max-w-lg text-xs leading-relaxed text-[#B9ADC9] sm:text-sm">Bring your favorite addons together, resolve conflicts, and build a pack that feels like yours.</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{installedPacks.length} imported packs</span><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{selectedPackIds.length} selected for merge</span></div></div></section>
               <div className="mx-4 mb-6 mt-5 sm:mx-6"><div className="mb-3 flex items-center justify-between gap-3"><div><div className="text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/55">Build workspace</div><h2 className="mt-1 text-lg font-extrabold text-white">Merger</h2></div><div className="text-[10px] text-[#847995]">Import · Organize · Analyze · Export</div></div><MergeWorkspace installedPacks={installedPacks} selectedPackIds={selectedPackIds} onTogglePack={handleTogglePack} onSelectAll={handleSelectAll} onClearSelection={handleClearSelection} onStartMergeFlow={handleStartMergeFlow} onImportPacks={handleImportPacks}/></div>

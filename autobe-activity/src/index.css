@@ -81,7 +81,115 @@ button, input, select, textarea {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
-/* Shared animated nebula background: behind app chrome, never intercepts taps. */
-.autobe-global-background { position:fixed; inset:0; z-index:0; pointer-events:none; background-image:linear-gradient(rgba(7,4,17,.48),rgba(7,4,17,.58)),url("/assets/app-background.gif"); background-position:center; background-size:cover; background-repeat:no-repeat; transform:translateZ(0); }
-.autobe-loading-screen { position:fixed; inset:0; display:grid; place-items:center; background:#08050f url("/assets/app-background.gif") center/cover no-repeat; }
-.autobe-loading-screen::after { content:""; position:absolute; inset:0; background:rgba(7,4,17,.12); pointer-events:none; }
+/* Shared animated nebula background. Keep it below every interactive layer. */
+.autobe-global-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: #08050f;
+  background-image:
+    linear-gradient(rgba(7, 4, 17, .18), rgba(7, 4, 17, .28)),
+    url("/assets/app-background.gif");
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  transform: translateZ(0);
+}
+.autobe-loading-screen {
+  position: fixed;
+  inset: var(--autobe-host-top-inset) 0 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  background: #08050f;
+}
+.autobe-loading-media {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.autobe-loading-screen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(8, 4, 18, .12), rgba(8, 4, 18, .38));
+}
+.autobe-loading-copy {
+  position: relative;
+  z-index: 2;
+  width: min(90vw, 620px);
+  padding: clamp(1.25rem, 5vw, 3rem);
+  text-align: center;
+  text-shadow: 0 3px 28px rgba(0, 0, 0, .8);
+}
+.autobe-loading-kicker {
+  margin-bottom: .85rem;
+  color: #e3cfff;
+  font-size: clamp(.58rem, 1.8vw, .78rem);
+  font-weight: 800;
+  letter-spacing: .28em;
+}
+.autobe-loading-copy h1 {
+  color: #fff;
+  font-size: clamp(1.45rem, 5vw, 2.65rem);
+  font-weight: 900;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+.autobe-loading-status {
+  margin-top: 1.15rem;
+  color: rgba(248, 240, 255, .88);
+  font-size: clamp(.78rem, 2.4vw, 1rem);
+}
+.autobe-animated-banner {
+  position: relative;
+  display: block;
+  width: min(72vw, 480px);
+  height: clamp(5.5rem, 19vw, 8rem);
+  flex: 0 1 auto;
+  overflow: hidden;
+  border-radius: .9rem;
+  background: rgba(15, 8, 28, .4);
+}
+.autobe-animated-banner img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+@media (min-width: 768px) {
+  .autobe-animated-banner {
+    width: min(42vw, 520px);
+    height: 8.5rem;
+  }
+}
+
+.autobe-access-loading {
+  position: fixed;
+  inset: var(--autobe-host-top-inset) 0 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: #08050f;
+  color: #fff;
+}
+.autobe-access-loading > section {
+  z-index: 2;
+}
+.autobe-global-background ~ div.flex.min-h-0 {
+  position: relative;
+  z-index: 1;
+}

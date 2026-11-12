@@ -347,8 +347,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             >
               <ArrowLeft className="w-4 h-4" />
             </button>
-            <div>
-              <h1 className="text-base sm:text-lg font-bold text-white">Community Modpacks</h1>
+            <div className="min-w-0 flex-1">
+              <div className="autobe-animated-banner"><img src="/assets/modpacks-logo.gif" alt="Modpacks" /></div>
+              <h1 className="sr-only">Community Modpacks</h1>
               <p className="text-xs text-[#AAA3BB] mt-0.5">
                 {modpacks.length} shared modpack{modpacks.length === 1 ? '' : 's'}
               </p>

@@ -180,7 +180,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="rounded-lg border border-[#30263F] p-2 text-[#AAA3BB]" aria-label="Back"><ArrowLeft size={16}/></button>
-          <div className="min-w-0"><img src="/assets/addons-logo.gif" alt="Addons" className="h-auto max-h-16 w-auto max-w-[220px] object-contain object-left" /><p className="mt-1 text-xs text-[#AAA3BB]">{addons.length} individual addons shared by creators</p></div>
+          <div className="min-w-0 flex-1"><div className="autobe-animated-banner"><img src="/assets/addons-logo.gif" alt="Addons" /></div><p className="mt-1 text-xs text-[#AAA3BB]">{addons.length} individual addons shared by creators</p></div>
         </div>
         <button onClick={() => setShowUpload(true)} className="inline-flex items-center gap-2 rounded-lg bg-[#762BFF] px-3 py-2 text-xs font-bold"><Plus size={15}/> Upload addon</button>
       </div>
