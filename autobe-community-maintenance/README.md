@@ -1,16 +1,22 @@
 # AutoBE Community content lifecycle
 
-This is a separate Cloudflare Worker because Pages Functions are request-driven and do not own a Cron Trigger.
+A separate Cloudflare Worker checks verified Community creators against Discord and maintains published uploads in the existing Community D1/R2 storage.
 
-## Safety defaults
+## Discord role revocation
 
-- The Worker runs every five minutes (UTC), so previously verified creators are rechecked promptly.
-- It creates lifecycle columns and audit/settings tables idempotently.
-- Confirmed role loss hides the creator's Community uploads after the next daily scan, even while permanent cleanup is paused. Discord lookup failures, rate limits, and server errors are treated as unknown and never as role loss.
-- Permanent cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). Role-loss hiding and the 30-day restoration window remain active; permanent deletion waits until the owner explicitly enables it. Inactivity candidates are previewed but not warned or deleted while disabled.
-- Before deleting an R2 object, the Worker checks the URL namespace, immutable R2 owner metadata, object kind, declared size, and D1 size. If any check fails, it retains the object and logs an error.
-- The inactivity policy is intentionally conservative: 24 months since update AND 12 months without downloads, followed by a 90-day warning period and up to 180 days from the original warning when it remains unread.
-- Creators can select **Keep published** in My Profile to reset the inactivity clock for an individual upload. Publishing something new does not reset older uploads.
+- The Worker checks up to 200 previously published creator accounts every five minutes (UTC), using a persisted cursor to cover larger Communities across successive runs.
+- If Discord confirms that a creator no longer has the required role, all of that creator's Community uploads are immediately hidden and their exact, ownership-verified R2 files and D1 listings are deleted in that scan.
+- There is **no grace period** for role loss. This is separate from the optional age-based cleanup setting.
+- Community API requests also check the signed-in user's role. A missing role returns `DISCORD_ROLE_REQUIRED` with the required-role verification message; the app exits Community and displays that message. The merger workspace remains available.
+- If a file cannot be safely verified for deletion, its listing remains hidden and the Worker retries on a later scan. It never deletes an R2 object unless its public key, immutable owner metadata, kind, and exact size match.
+- Only Discord's specific `Unknown Member` response or a confirmed member response without the required role counts as role loss. API errors, rate limits, missing configuration, and 5xx responses are unknown and do not trigger deletion.
+
+## Long-term inactivity cleanup
+
+- Inactivity cleanup is disabled by default.
+- An upload is considered only after 24 months without an update AND 12 months without a download.
+- If enabled by the owner, it receives a 90-day warning period, extended to 180 days from the original warning if the notification remains unread.
+- Creators can select **Keep published** in My Profile to reset the inactivity clock for an individual upload. Publishing a new upload does not reset older uploads.
 
 ## Required secrets
 
@@ -31,10 +37,8 @@ npx wrangler secret put MAINTENANCE_KEY
 npx wrangler deploy
 ```
 
-The Worker uses the same production D1 database and R2 bucket as the Community publishing API. Do not deploy it against preview bindings. The scheduled handler is UTC.
+The Worker reuses the production Community D1 database and R2 bucket. Do not deploy it against preview bindings. Cron times are UTC.
 
 ## Rollout
 
-The first deployment performs a read-only inactivity preview and enforces role-based visibility. Permanent deletion stays disabled until you review the preview results in the owner-only Community Cleanup section inside My Profile and explicitly enable permanent cleanup there.
-
-The Worker must be deployed separately from the Cloudflare Pages site. The GitHub pull request does not deploy it automatically.
+The Worker must be deployed separately from Cloudflare Pages. The GitHub pull request does not deploy it automatically. The first deployment applies idempotent schema migrations, begins role checks, and previews inactivity candidates. The owner can enable permanent inactivity cleanup from the owner-only Community Cleanup section inside My Profile.
