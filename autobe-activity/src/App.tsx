@@ -790,7 +790,7 @@ export const App: React.FC = () => {
   if (roleAccessStatus === 'checking') {
     return (
       <div className="autobe-loading-screen autobe-loading-screen--brand" role="status" aria-live="polite">
-        <img src="/assets/AutoBE%20Main%20Icon.gif" alt="AutoBE" className="autobe-loading-logo"/>
+        <img src="/assets/New%20AutoBE%20Main%20Icon.gif" alt="AutoBE" className="autobe-loading-logo"/>
         <p className="autobe-loading-message">Loading into a wonderful place...</p>
       </div>
     );
@@ -810,7 +810,7 @@ export const App: React.FC = () => {
       {screen === 'main' && !showCreatorProfile && !publicCreatorId && <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <header className="flex shrink-0 flex-col gap-3 border-b border-white/10 bg-[#090713]/55 px-4 py-3 backdrop-blur-xl sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3">
-            <img src="/assets/AutoBE%20Main%20Icon.gif" alt="AutoBE" className="h-11 w-11 shrink-0 object-contain"/>
+            <img src="/assets/New%20AutoBE%20Main%20Icon.gif" alt="AutoBE" className="h-11 w-11 shrink-0 object-contain"/>
             <div><div className="text-lg font-black tracking-tight text-white">AutoBE</div><div className="text-[9px] font-semibold uppercase tracking-[.2em] text-violet-100/65">Bedrock creation studio</div></div>
           </div>
           <div className="flex min-w-0 items-center justify-between gap-3 lg:justify-end">
