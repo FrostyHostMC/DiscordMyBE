@@ -121,7 +121,7 @@ async function runLifecycle(env: Env) {
       for (const row of uploads.results || []) {
         await env.DB.prepare("INSERT INTO community_cleanup_preview (item_id,author_id,item_name,reason,detected_at,last_updated_at,last_download_at,status) VALUES (?,?,?,?,?,?,?,'candidate') ON CONFLICT(item_id) DO UPDATE SET reason=excluded.reason,detected_at=excluded.detected_at,last_updated_at=excluded.last_updated_at,last_download_at=excluded.last_download_at,status='candidate'")
           .bind(row.id, userId, row.name, "discord_role_missing", now, row.last_updated_at, row.last_download_at).run();
-        if (!settings?.enabled) continue;
+
         if (!row.role_removed_at) {
           await env.DB.prepare("UPDATE community_modpacks SET is_hidden=1,role_removed_at=?,role_purge_after=?,lifecycle_state='role_grace' WHERE id=?")
             .bind(now, now + Number(settings.role_grace_days || 30) * DAY, row.id).run();
