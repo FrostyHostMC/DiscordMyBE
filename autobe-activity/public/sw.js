@@ -10,7 +10,7 @@
  * Nothing about a user's packs ever touches the network.
  */
 
-const CACHE = 'autobe-v1';
+const CACHE = 'autobe-v2';
 
 const PRECACHE = ['./', './index.html', './manifest.webmanifest'];
 
