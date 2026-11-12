@@ -197,14 +197,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setNotice(e instanceof Error?e.message:'Community action failed.');
     }finally{setSocialBusy(false);}
   };
-  useEffect(()=>{
-    if(!selectedModpack)return;
-    const item=selectedModpack;
-    const sync=()=>{if(document.visibilityState==='visible')void loadSocialDetails(item,false);};
-    const timer=window.setInterval(sync,15000);
-    document.addEventListener('visibilitychange',sync);
-    return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',sync);};
-  },[selectedModpack?.id]);
+
   const handleIconFile = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
