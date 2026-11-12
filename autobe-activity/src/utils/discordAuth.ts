@@ -10,6 +10,7 @@ export interface DiscordUserInfo {
   id: string;
   username: string;
   global_name?: string | null;
+  avatar?: string | null;
 }
 let user: DiscordUserInfo | null = null;
 

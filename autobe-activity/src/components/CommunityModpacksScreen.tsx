@@ -515,7 +515,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
 
                 {/* Author info */}
                 <div className="flex items-center gap-2 text-[10px] text-[#716885]">
-                  <User className="w-3 h-3" />
+                  {modpack.author_id && modpack.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${modpack.author_id}/${modpack.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : <User className="w-3 h-3" />}
                   <span>by {cleanDiscordDisplayName(modpack.author)}</span>
                   <span>•</span>
                   <span className="font-mono">{modpack.version}</span>
