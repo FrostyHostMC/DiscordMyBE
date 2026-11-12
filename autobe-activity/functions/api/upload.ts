@@ -20,6 +20,9 @@ interface Env {
   DB: D1Database;
   DISCORD_CLIENT_ID: string;
   DISCORD_CLIENT_SECRET: string;
+  DISCORD_BOT_TOKEN: string;
+  DISCORD_GUILD_ID: string;
+  DISCORD_REQUIRED_ROLE_ID: string;
   PUBLIC_BASE_URL?: string;
 }
 
@@ -94,6 +97,74 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
   });
+
+async function requiredRoleIsConfigured(env:Env):Promise<boolean>{
+  if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return false;
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_role_config_validation (id INTEGER PRIMARY KEY CHECK(id=1),guild_id TEXT NOT NULL,role_id TEXT NOT NULL,is_valid INTEGER NOT NULL,checked_at INTEGER NOT NULL)").run();
+  const now=Date.now();
+  const cached=await env.DB.prepare("SELECT guild_id,role_id,is_valid,checked_at FROM community_role_config_validation WHERE id=1").first<{guild_id:string;role_id:string;is_valid:number;checked_at:number}>();
+  if(cached&&cached.guild_id===env.DISCORD_GUILD_ID&&cached.role_id===env.DISCORD_REQUIRED_ROLE_ID&&now-Number(cached.checked_at)<10000)return cached.is_valid===1;
+  try{
+    const response=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/roles`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
+    if(!response.ok)return false;
+    const roles=await response.json() as Array<{id?:string}>;
+    const valid=Array.isArray(roles)&&roles.some(role=>role.id===env.DISCORD_REQUIRED_ROLE_ID);
+    await env.DB.prepare("INSERT INTO community_role_config_validation (id,guild_id,role_id,is_valid,checked_at) VALUES (1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=excluded.guild_id,role_id=excluded.role_id,is_valid=excluded.is_valid,checked_at=excluded.checked_at").bind(env.DISCORD_GUILD_ID,env.DISCORD_REQUIRED_ROLE_ID,valid?1:0,now).run();
+    return valid;
+  }catch{return false;}
+}
+
+async function communityRoleStatus(userId: string, env: Env): Promise<'present'|'missing'|'unknown'> {
+  if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_GUILD_ID || !env.DISCORD_REQUIRED_ROLE_ID) return 'unknown';
+  if (!await requiredRoleIsConfigured(env)) return 'unknown';
+  try {
+    const response = await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`, {
+      headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
+    });
+    if (response.status === 404) {
+      const error = await response.json().catch(() => null) as { code?: number } | null;
+      return error?.code === 10007 && await requiredRoleIsConfigured(env) ? 'missing' : 'unknown';
+    }
+    if (response.status === 429 || response.status >= 500 || !response.ok) return 'unknown';
+    const member = await response.json() as { roles?: string[] };
+    const hasRole = Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID);
+    if (!hasRole && !await requiredRoleIsConfigured(env)) return 'unknown';
+    return hasRole ? 'present' : 'missing';
+  } catch { return 'unknown'; }
+}
+
+async function ensureVerifiedCreatorRegistry(env: Env) {
+  await ensureCommunityTable(env);
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)").run();
+  const hasRows = await env.DB.prepare("SELECT 1 yes FROM community_verified_creators LIMIT 1").first();
+  if (!hasRows) {
+    await env.DB.prepare("INSERT OR IGNORE INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) SELECT author_id,MIN(created_at),MAX(created_at),NULL FROM community_modpacks GROUP BY author_id").run();
+  }
+}
+
+async function requireUploadRole(userId: string, env: Env): Promise<Response | null> {
+  await ensureVerifiedCreatorRegistry(env);
+  const status = await communityRoleStatus(userId, env);
+  const now = Date.now();
+  if (status === 'present') {
+    await env.DB.prepare("INSERT INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) VALUES (?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,revoked_at=NULL").bind(userId,now,now).run();
+    return null;
+  }
+  if (status === 'missing') {
+    const previouslyVerified = await env.DB.prepare("SELECT 1 yes FROM community_verified_creators WHERE user_id=?").bind(userId).first();
+    if (previouslyVerified) await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?").bind(now,now,userId).run();
+    return json({ error: 'You no longer have the required AutoBE Discord role. Rejoin the role and reopen AutoBE to verify again.', code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
+  }
+  return json({ error: 'We could not verify your Discord role right now. Please try again shortly.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
+}
+
+async function abortUploadSession(env: Env, key: string, uploadId: string) {
+  await env.BUCKET.resumeMultipartUpload(key, uploadId).abort().catch(() => {});
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM autobe_upload_parts WHERE upload_id = ?').bind(uploadId),
+    env.DB.prepare('DELETE FROM autobe_upload_sessions WHERE upload_id = ?').bind(uploadId),
+  ]);
+}
 
 async function authenticate(request: Request, env: Env): Promise<string | null> {
   const match = (request.headers.get('authorization') || '').match(/^Bearer\s+(.+)$/i);
@@ -188,6 +259,8 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
     if (action === 'create' && request.method === 'POST') {
       const userId = await authenticate(request, env);
       if (!userId) return json({ error: 'Not signed in with Discord. Close and reopen the Activity.' }, 401);
+      const roleFailure = await requireUploadRole(userId, env);
+      if (roleFailure) return roleFailure;
       const body = await readJsonWithinLimit<{ fileName?: string; kind?: string; size?: number }>(request, 8 * 1024);
       if (!body) return json({ error: 'Invalid or oversized upload request.' }, 400);
       if (!env.DB) return json({ error: 'Publishing is temporarily unavailable because the rate-limit database is not configured.' }, 503);
@@ -267,9 +340,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       }
       if (!(await isAuthorized(key, uploadId))) return json({ error: 'Upload token rejected.' }, 401);
       const session = await env.DB.prepare(
-        'SELECT object_key, declared_size FROM autobe_upload_sessions WHERE upload_id = ?'
-      ).bind(uploadId).first<{ object_key: string; declared_size: number }>();
-      if (!session || session.object_key !== key) return json({ error: 'Upload session not found or expired.' }, 401);
+        'SELECT object_key, declared_size, user_id FROM autobe_upload_sessions WHERE upload_id = ?'
+      ).bind(uploadId).first<{ object_key: string; declared_size: number; user_id: string }>();
+      if (!session || session.object_key !== key || !key!.startsWith(`temp/${session.user_id}/`) && !key!.startsWith(`pub/${session.user_id}/`)) return json({ error: 'Upload session not found or expired.' }, 401);
+      const verification = await env.DB.prepare("SELECT revoked_at FROM community_verified_creators WHERE user_id=?").bind(session.user_id).first<{revoked_at:number|null}>();
+      if (!verification || verification.revoked_at) {
+        await abortUploadSession(env,key!,uploadId!);
+        return json({ error: 'Your required AutoBE Discord role is no longer verified. Reopen AutoBE after restoring the role.', code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
+      }
       const totalParts = Math.ceil(session.declared_size / PART_BYTES);
       if (partNumber > totalParts) return json({ error: 'Part number exceeds the declared file size.' }, 400);
       const expectedPartBytes = partNumber < totalParts
@@ -318,6 +396,14 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
           !Number.isSafeInteger(session.declared_size) || session.declared_size <= 0 || session.declared_size > MAX_BYTES) {
         return json({ error: 'Upload session ownership or size validation failed.' }, 401);
       }
+      const roleStatus = await communityRoleStatus(session.user_id, env);
+      if (roleStatus === 'missing') {
+        await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?").bind(Date.now(),Date.now(),session.user_id).run();
+        await abortUploadSession(env,body.key!,body.uploadId!);
+        return json({ error: 'You no longer have the required AutoBE Discord role. Rejoin the role and reopen AutoBE to verify again.', code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
+      }
+      if (roleStatus === 'unknown') return json({ error: 'We could not verify your Discord role right now. Please retry the upload completion.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
+      await env.DB.prepare("UPDATE community_verified_creators SET last_seen_at=? WHERE user_id=?").bind(Date.now(),session.user_id).run();
       const recorded = await env.DB.prepare(
         'SELECT part_number, etag, size FROM autobe_upload_parts WHERE upload_id = ? ORDER BY part_number'
       ).bind(body.uploadId).all<{ part_number: number; etag: string; size: number }>();

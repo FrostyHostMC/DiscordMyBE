@@ -1,0 +1,29 @@
+name: Community maintenance Worker typecheck
+
+on:
+  push:
+    paths:
+      - "autobe-community-maintenance/**"
+      - ".github/workflows/community-maintenance-typecheck.yml"
+  pull_request:
+    paths:
+      - "autobe-community-maintenance/**"
+      - ".github/workflows/community-maintenance-typecheck.yml"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: autobe-community-maintenance
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Worker dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck scheduled Worker
+        run: npm run typecheck

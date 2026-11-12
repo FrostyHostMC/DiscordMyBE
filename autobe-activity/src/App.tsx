@@ -50,6 +50,8 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('workspace');
   const [showCreatorProfile, setShowCreatorProfile] = useState(false);
   const [publicCreatorId,setPublicCreatorId]=useState<string|null>(null);
+  const [roleAccessStatus,setRoleAccessStatus]=useState<'checking'|'verified'|'unverified'|'error'|'unknown'>(()=>getDiscordAuth()?'checking':'unknown');
+  const [roleAccessMessage,setRoleAccessMessage]=useState('');
 
   // Data states
   const [installedPacks, setInstalledPacks] = useState<AddonPack[]>([]);
@@ -93,6 +95,54 @@ export const App: React.FC = () => {
     if (toastTimerRef.current !== undefined) window.clearTimeout(toastTimerRef.current);
     toastTimerRef.current = window.setTimeout(() => setToastMessage(null), durationMs);
   };
+
+  // AutoBE access is tied to the required Discord role. Previously verified
+  // users are revoked immediately when a check confirms role loss; unverified
+  // users see the same verification gate until they regain the role. Every
+  // server-side Community and upload route independently enforces this check.
+  useEffect(() => {
+    const checkAccess = async () => {
+      const auth = getDiscordAuth();
+      if (!auth?.token) {
+        setRoleAccessStatus(current => current === 'checking' ? 'unknown' : current);
+        return;
+      }
+      try {
+        const response = await fetch('/api/community-social?action=me', {
+          headers: { Authorization: `Bearer ${auth.token}` },
+          cache: 'no-store',
+        });
+        const data = await response.json().catch(() => ({})) as { error?: string; code?: string };
+        if (response.ok) {
+          setRoleAccessMessage('');
+          setRoleAccessStatus('verified');
+          return;
+        }
+        if (response.status === 403 && data.code === 'DISCORD_ROLE_REQUIRED') {
+          setRoleAccessMessage(data.error || 'Your Discord account does not currently have the required AutoBE role.');
+          setRoleAccessStatus('unverified');
+          setCurrentTab('workspace');
+          setScreen('main');
+          setShowCreatorProfile(false);
+          setPublicCreatorId(null);
+          return;
+        }
+        if (response.status === 401) {
+          setRoleAccessMessage('Your Discord session could not be verified. Reopen AutoBE through Discord and try again.');
+          setRoleAccessStatus('error');
+        } else if (response.status >= 500) {
+          setRoleAccessMessage(data.error || 'Discord role verification is temporarily unavailable. Your role has not been treated as removed.');
+          setRoleAccessStatus(current => current === 'verified' ? 'verified' : 'error');
+        }
+      } catch {
+        setRoleAccessMessage('We could not reach Discord to verify your role. Please try again.');
+        setRoleAccessStatus(current => current === 'verified' ? 'verified' : 'error');
+      }
+    };
+    void checkAccess();
+    const interval = window.setInterval(() => void checkAccess(), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   const triggerHaptic = (duration = 50) => {
     if (hapticTweak) {
@@ -720,6 +770,24 @@ export const App: React.FC = () => {
     }
   };
 
+
+  if (roleAccessStatus === 'unverified' || roleAccessStatus === 'error') {
+    return (
+      <div className="flex min-h-[100dvh] w-full items-center justify-center bg-[#090713] p-5 text-[#F8F5FF]">
+        <div className="w-full max-w-md rounded-2xl border border-amber-300/20 bg-[#15111F] p-6 text-center shadow-2xl">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-amber-300/20 bg-amber-300/10 text-2xl">!</div>
+          <p className="mt-5 text-[10px] font-extrabold uppercase tracking-[.2em] text-amber-200/70">{roleAccessStatus === 'unverified' ? 'Discord verification required' : 'Discord check unavailable'}</p>
+          <h1 className="mt-2 text-2xl font-black">{roleAccessStatus === 'unverified' ? 'Required role not found' : 'Could not verify access'}</h1>
+          <p className="mt-3 text-sm leading-relaxed text-[#C9BED8]">{roleAccessMessage || (roleAccessStatus === 'unverified' ? 'Your Discord account does not currently have the required AutoBE role.' : 'We could not confirm your Discord role right now.')}</p>
+          <p className="mt-3 text-xs leading-relaxed text-[#9D93AD]">{roleAccessStatus === 'unverified' ? 'Rejoin the required Discord role, then reopen AutoBE to verify your access again.' : 'This is not treated as role removal. Try again when Discord verification is available.'}</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-6 w-full rounded-xl bg-violet-500 px-4 py-3 text-sm font-bold text-white hover:bg-violet-400">Check access again</button>
+        </div>
+      </div>
+    );
+  }
+  if (roleAccessStatus === 'checking') {
+    return <div className="flex min-h-[100dvh] items-center justify-center bg-[#090713] text-sm font-semibold text-[#C9BED8]">Verifying your Discord role…</div>;
+  }
 
   return (
     <div className="relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden bg-[#090713] pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]">
