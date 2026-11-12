@@ -241,7 +241,7 @@ async function runLifecycle(env: Env) {
       .bind(userId, now).run();
   }
   if (!hasMore) await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id='',updated_at=? WHERE id=1").bind(now).run();
-  console.log("[Lifecycle] Daily scan", JSON.stringify(summary));
+  console.log("[Lifecycle] Scheduled scan", JSON.stringify(summary));
   return summary;
 }
 
