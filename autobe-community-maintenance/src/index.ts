@@ -83,7 +83,8 @@ async function validateRoleConfig(env:Env,force=false):Promise<boolean>{
 }
 
 async function discordRole(env: Env, userId: string): Promise<"present" | "missing" | "unknown"> {
-  if(!await validateRoleConfig(env))return 'unknown';\n  try {
+  if(!await validateRoleConfig(env))return 'unknown';
+  try {
     const response = await fetch(`https://discord.com/api/v10/guilds/${env.DISCORD_GUILD_ID}/members/${userId}`, {
       headers: { authorization: `Bot ${env.DISCORD_BOT_TOKEN}` },
     });
