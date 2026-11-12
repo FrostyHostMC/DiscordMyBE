@@ -8,7 +8,7 @@ type Category = typeof CATEGORIES[number];
 interface CommunityAddon {
   id: string; name: string; description: string; author: string; author_id: string; author_avatar?: string | null;
   version: string; size: number; icon_data_url?: string; created_at: number; downloads: number;
-  blob_url: string; file_name: string; category?: Category; content_type?: string;
+  blob_url: string; file_name: string; category?: Category; content_type?: string; license_id?: string;
 }
 interface Props { onBack: () => void; currentUserId?: string; onOpenCreator?: (creatorId:string)=>void; }
 
@@ -201,7 +201,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
         <div className="flex h-36 items-center justify-center bg-[#15111F]">{addon.icon_data_url ? <img src={addon.icon_data_url} alt="" className="h-full w-full object-contain bg-black/20"/> : <ImageIcon className="text-[#716885]" size={34}/>}</div>
         <div className="space-y-2 p-3"><div className="flex items-start justify-between gap-2"><h2 className="text-sm font-bold">{addon.name}</h2><span className="rounded-full border border-[#762BFF]/40 px-2 py-0.5 text-[10px] text-[#C4A7FF]">{addon.category || 'Other'}</span></div>
           <p className="line-clamp-3 min-h-12 text-xs text-[#AAA3BB]">{addon.description}</p>
-          <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)} · {Number(addon.downloads)||0} downloads</span></div>
+          <div className="flex items-center justify-between text-[10px] text-[#716885]"><span className="flex min-w-0 items-center gap-1.5">{addon.author_avatar ? <img src={`https://cdn.discordapp.com/avatars/${addon.author_id}/${addon.author_avatar}.png?size=64`} alt="" className="h-5 w-5 rounded-full object-cover" loading="lazy" referrerPolicy="no-referrer"/> : null}<span className="truncate">by {addon.author}</span></span><span>v{addon.version} · {formatSize(addon.size)} · {Number(addon.downloads)||0} downloads · {addon.license_id||'All Rights Reserved'}</span></div>
           <div className="flex items-center justify-between text-[10px] text-[#AAA3BB]"><span>♥ {addonStats[addon.id]?.likes||0} likes</span><span>{addonStats[addon.id]?.reviewCount||0} reviews · {(addonStats[addon.id]?.averageRating||0).toFixed(1)} ★</span></div>
           <button onClick={()=>void download(addon)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#762BFF] py-2 text-xs font-bold"><Download size={14}/> Download {addon.file_name.toLowerCase().endsWith('.mcpack') ? 'MCPack' : 'MCAddon'}</button>
           <div className="grid grid-cols-2 gap-2">
