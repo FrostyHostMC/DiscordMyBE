@@ -98,7 +98,8 @@ export const App: React.FC = () => {
 
   // AutoBE access is tied to the required Discord role. Previously verified
   // users are revoked immediately when a check confirms role loss; unverified
-  // users see the same verification gate until they regain the role.
+  // users see the same verification gate until they regain the role. Every
+  // server-side Community and upload route independently enforces this check.
   useEffect(() => {
     const checkAccess = async () => {
       const auth = getDiscordAuth();
