@@ -53,7 +53,7 @@ export async function onRequestGet({request,env}:Ctx){
  const q=(u.searchParams.get('q')||'').trim().slice(0,48);
  if(q.length<2)return json({creators:[]});
  const rows=await env.DB.prepare("SELECT m.author_id,MAX(m.author) author,MAX(m.author_avatar) author_avatar,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,COALESCE((SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id),0) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 AND (m.author LIKE ? OR m.author_id=?) GROUP BY m.author_id ORDER BY uploads DESC,downloads DESC LIMIT 20").bind(`%${q}%`,q).all<any>();
- const creators=[];for(const c of rows.results||[])if(await eligibleCreator(String(c.author_id),env))creators.push(c);
+ const checked=await Promise.all((rows.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null));const creators=checked.filter(Boolean);
  return json({creators});
  }
  if(action==='creator'){
@@ -75,14 +75,14 @@ export async function onRequestGet({request,env}:Ctx){
  env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured,is_hidden FROM community_modpacks ORDER BY created_at DESC LIMIT 250').all(),
  env.DB.prepare('SELECT author_id,MAX(author) author,COUNT(*) uploads,COALESCE(SUM(downloads),0) downloads FROM community_modpacks WHERE COALESCE(is_hidden,0)=0 GROUP BY author_id ORDER BY uploads DESC,downloads DESC LIMIT 150').all(),
  env.DB.prepare('SELECT user_id,featured_at FROM community_featured_creators ORDER BY featured_at DESC').all()]);
- const eligible=[];for(const c of creators.results||[])if(await eligibleCreator(String(c.author_id),env))eligible.push(c);return json({uploads:uploads.results||[],creators:eligible,featuredCreators:featured.results||[],categories:CATEGORIES,badges:BADGES});}
+ const checked=await Promise.all((creators.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null));const eligible=checked.filter(Boolean);return json({uploads:uploads.results||[],creators:eligible,featuredCreators:featured.results||[],categories:CATEGORIES,badges:BADGES});}
  if(action==='items'){const r=await env.DB.prepare(`SELECT m.id,COUNT(DISTINCT l.user_id) likes,COUNT(DISTINCT v.id) reviewCount,COALESCE(AVG(v.rating),0) averageRating,EXISTS(SELECT 1 FROM community_likes x WHERE x.user_id=? AND x.item_id=m.id) liked,EXISTS(SELECT 1 FROM community_favorites x WHERE x.user_id=? AND x.item_id=m.id) favorited,EXISTS(SELECT 1 FROM community_follows x WHERE x.follower_id=? AND x.creator_id=m.author_id) followingCreator FROM community_modpacks m LEFT JOIN community_likes l ON l.item_id=m.id LEFT JOIN community_reviews v ON v.item_id=m.id WHERE m.content_type='addon' AND COALESCE(m.is_hidden,0)=0 GROUP BY m.id ORDER BY m.created_at DESC LIMIT 250`).bind(me.id,me.id,me.id).all();return json({items:r.results||[]});}
  if(action==='discovery'){
  const [featuredUploads,featuredCreators,leaders]=await Promise.all([
  env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured FROM community_modpacks WHERE featured=1 AND COALESCE(is_hidden,0)=0 ORDER BY created_at DESC LIMIT 12').all(),
  env.DB.prepare('SELECT f.user_id,MAX(m.author) author,COUNT(m.id) uploads,COALESCE(SUM(m.downloads),0) downloads FROM community_featured_creators f LEFT JOIN community_modpacks m ON m.author_id=f.user_id GROUP BY f.user_id ORDER BY f.featured_at DESC LIMIT 12').all(),
  env.DB.prepare('SELECT m.author_id,MAX(m.author) author,COUNT(DISTINCT m.id) uploads,COALESCE(SUM(m.downloads),0) downloads,(SELECT COUNT(*) FROM community_likes l JOIN community_modpacks lm ON lm.id=l.item_id WHERE lm.author_id=m.author_id) likes,(SELECT COUNT(*) FROM community_follows f WHERE f.creator_id=m.author_id) followers FROM community_modpacks m WHERE COALESCE(m.is_hidden,0)=0 GROUP BY m.author_id ORDER BY likes DESC,followers DESC,downloads DESC LIMIT 10').all()]);
- const eligibleFeatured=[];for(const c of featuredCreators.results||[])if(await eligibleCreator(String(c.user_id),env))eligibleFeatured.push(c);const eligibleLeaders=[];for(const c of leaders.results||[])if(await eligibleCreator(String(c.author_id),env))eligibleLeaders.push(c);return json({featuredUploads:featuredUploads.results||[],featuredCreators:eligibleFeatured,leaders:eligibleLeaders});}
+ const [checkedFeatured,checkedLeaders]=await Promise.all([Promise.all((featuredCreators.results||[]).map(async c=>await eligibleCreator(String(c.user_id),env)?c:null)),Promise.all((leaders.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null))]);return json({featuredUploads:featuredUploads.results||[],featuredCreators:checkedFeatured.filter(Boolean),leaders:checkedLeaders.filter(Boolean)});}
  if(action==='item'){const id=u.searchParams.get('id');if(!id)return json({error:'Missing upload id.'},400);
  const [likes,favorites,ratings,followers,liked,saved,followed,reviews]=await Promise.all([
  env.DB.prepare('SELECT COUNT(*) count FROM community_likes WHERE item_id=?').bind(id).first<any>(),
