@@ -25,7 +25,6 @@ async function auditRevocation(db:D1Database,row:any,userId:string){
  await db.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),row.id,userId,'deleted','discord_role_removed',Date.now()).run();
 }
 async function revokeVerifiedCreator(userId:string,env:Env,baseUrl:string){
- await init(env.DB);
  const rows=await env.DB.prepare("SELECT id,name,author_id,blob_url,size FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
  for(const row of rows.results||[]){
   const now=Date.now();
@@ -109,8 +108,7 @@ async function notify(db:D1Database,to:string,actor:string,kind:string,item:stri
 const owner=(id:string)=>id===OWNER_DISCORD_ID;
 export async function onRequestGet({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
- const roleFailure=await requireRole(me,env,request);if(roleFailure)return roleFailure;
- try{await init(env.DB);const u=new URL(request.url),action=u.searchParams.get('action')||'me';
+ try{const roleFailure=await requireRole(me,env,request);if(roleFailure)return roleFailure;const u=new URL(request.url),action=u.searchParams.get('action')||'me';
  if(action==='creators'){
  const q=(u.searchParams.get('q')||'').trim().slice(0,48);
  if(q.length<2)return json({creators:[]});
@@ -174,8 +172,7 @@ export async function onRequestGet({request,env}:Ctx){
 }
 export async function onRequestPost({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
- const roleFailure=await requireRole(me,env);if(roleFailure)return roleFailure;
- try{await init(env.DB);const d=await request.json() as any,a=String(d.action||''),id=String(d.itemId||''),now=Date.now();
+ try{const roleFailure=await requireRole(me,env,request);if(roleFailure)return roleFailure;const d=await request.json() as any,a=String(d.action||''),id=String(d.itemId||''),now=Date.now();
  if(a.startsWith('admin_')&&!owner(me.id))return json({error:'Owner access only.'},403);
  if(a==='keep_published'){const item=String(d.uploadId||'');const r=await env.DB.prepare("UPDATE community_modpacks SET last_updated_at=?,inactivity_warning_at=NULL,inactivity_purge_after=NULL,lifecycle_state='active' WHERE id=? AND author_id=? AND COALESCE(role_removed_at,0)=0").bind(now,item,me.id).run();if(!r.meta?.changes)return json({error:'Upload not found or currently hidden due to Discord role status.'},404);await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(item).run();await env.DB.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),item,me.id,'kept_published','creator_confirmed_keep',now).run();return json({success:true});}
  if(a==='admin_cleanup_settings'){if(!owner(me.id))return json({error:'Owner access only.'},403);const enabled=d.enabled===true;const inactivityMonths=Math.max(24,Math.min(60,Number(d.inactivityMonths)||24));const noDownloadMonths=Math.max(12,Math.min(36,Number(d.noDownloadMonths)||12));const roleGraceDays=0,inactivityGraceDays=90,unreadExtensionDays=180;await env.DB.prepare('UPDATE community_cleanup_settings SET enabled=?,inactivity_months=?,no_download_months=?,role_grace_days=?,inactivity_grace_days=?,unread_extension_days=?,updated_at=? WHERE id=1').bind(enabled?1:0,inactivityMonths,noDownloadMonths,roleGraceDays,inactivityGraceDays,unreadExtensionDays,now).run();return json({success:true,enabled});}
