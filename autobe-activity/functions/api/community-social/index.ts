@@ -30,10 +30,12 @@ async function communityRoleStatus(userId:string,env:Env):Promise<'present'|'mis
  if(!await requiredRoleIsConfigured(env))return 'unknown';
  try{
   const r=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
-  if(r.status===404){const error=await r.json().catch(()=>null) as {code?:number}|null;return error?.code===10007?'missing':'unknown';}
+  if(r.status===404){const error=await r.json().catch(()=>null) as {code?:number}|null;return error?.code===10007&&await requiredRoleIsConfigured(env,true)?'missing':'unknown';}
   if(r.status===429||r.status>=500||!r.ok)return 'unknown';
   const member=await r.json() as {roles?:string[]};
-  return Array.isArray(member.roles)&&member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID)?'present':'missing';
+  const hasRole=Array.isArray(member.roles)&&member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID);
+  if(!hasRole&&!await requiredRoleIsConfigured(env,true))return 'unknown';
+  return hasRole?'present':'missing';
  }catch{return 'unknown';}
 }
 const ROLE_REQUIRED_MESSAGE='You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
