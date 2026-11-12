@@ -65,12 +65,7 @@ export const AutoBEFeatureArt: React.FC<{ kind: AutoBEArtKind; size?: number; cl
 
 export const AutoBEWordmark: React.FC = () => (
   <div className="flex min-w-0 items-center gap-3">
-    <img
-      src="/assets/autobe-logo.gif"
-      alt="AutoBE moon logo"
-      className="autobe-moon-mark h-12 w-12 shrink-0 object-contain sm:h-14 sm:w-14"
-      decoding="async"
-    />
+    <span className="autobe-moon-mark" role="img" aria-label="AutoBE moon emblem" />
     <div className="min-w-0">
       <div className="text-xl font-black tracking-tight text-white sm:text-2xl">Auto<span className="text-violet-300">BE</span></div>
       <div className="mt-0.5 text-[9px] font-semibold tracking-[.16em] text-violet-100/75 sm:text-[10px]">MERGE · CREATE · SHARE</div>
