@@ -49,6 +49,7 @@ async function init(db:D1Database){
  await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_settings (id INTEGER PRIMARY KEY CHECK(id=1),enabled INTEGER NOT NULL DEFAULT 0,inactivity_months INTEGER NOT NULL DEFAULT 24,no_download_months INTEGER NOT NULL DEFAULT 12,role_grace_days INTEGER NOT NULL DEFAULT 30,inactivity_grace_days INTEGER NOT NULL DEFAULT 90,unread_extension_days INTEGER NOT NULL DEFAULT 180,updated_at INTEGER NOT NULL)`).run();
  await db.prepare('INSERT OR IGNORE INTO community_cleanup_settings (id,enabled,updated_at) VALUES (1,0,?)').bind(Date.now()).run();
  await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_audit (id TEXT PRIMARY KEY,item_id TEXT,author_id TEXT NOT NULL,action TEXT NOT NULL,reason TEXT NOT NULL,created_at INTEGER NOT NULL,details TEXT)`).run();
+ await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (item_id TEXT PRIMARY KEY,author_id TEXT NOT NULL,item_name TEXT NOT NULL,reason TEXT NOT NULL,detected_at INTEGER NOT NULL,last_updated_at INTEGER,last_download_at INTEGER,status TEXT NOT NULL DEFAULT 'candidate')`).run();
 }
 async function notify(db:D1Database,to:string,actor:string,kind:string,item:string|null,message:string){if(!to||to===actor)return;await db.prepare('INSERT INTO community_notifications (id,user_id,actor_id,kind,item_id,message,created_at) VALUES (?,?,?,?,?,?,?)').bind(crypto.randomUUID(),to,actor,kind,item,message.slice(0,240),Date.now()).run();}
 const owner=(id:string)=>id===OWNER_DISCORD_ID;
@@ -77,14 +78,15 @@ export async function onRequestGet({request,env}:Ctx){
  return json({creator:{id,author:creator?.author||'Creator',author_avatar:creator?.author_avatar||null,...(profile||{bio:'',website:'',youtube:'',twitch:''}),uploads:stats?.uploads||0,downloads:stats?.downloads||0,followers:followerCount?.count||0,following:!!following,badges:badges.results||[]},items:uploads.results||[]});
  }
   if(action==='admin'){if(!owner(me.id))return json({error:'Owner access only.'},403);
- const [uploads,creators,featured,cleanupSettings,cleanupPending,cleanupRecent]=await Promise.all([
+ const [uploads,creators,featured,cleanupSettings,cleanupPending,cleanupRecent,cleanupPreview]=await Promise.all([
  env.DB.prepare('SELECT id,name,author,author_id,content_type,category,downloads,featured,is_hidden FROM community_modpacks ORDER BY created_at DESC LIMIT 250').all(),
  env.DB.prepare('SELECT author_id,MAX(author) author,COUNT(*) uploads,COALESCE(SUM(downloads),0) downloads FROM community_modpacks WHERE COALESCE(is_hidden,0)=0 GROUP BY author_id ORDER BY uploads DESC,downloads DESC LIMIT 150').all(),
  env.DB.prepare('SELECT user_id,featured_at FROM community_featured_creators ORDER BY featured_at DESC').all(),
  env.DB.prepare('SELECT * FROM community_cleanup_settings WHERE id=1').first(),
  env.DB.prepare("SELECT id,name,author,author_id,lifecycle_state,role_purge_after,inactivity_purge_after,inactivity_warning_at,last_updated_at,last_download_at FROM community_modpacks WHERE lifecycle_state!='active' OR inactivity_warning_at IS NOT NULL ORDER BY COALESCE(role_purge_after,inactivity_purge_after) ASC LIMIT 100").all(),
- env.DB.prepare("SELECT id,item_id,author_id,action,reason,created_at FROM community_cleanup_audit ORDER BY created_at DESC LIMIT 50").all()]);
- const checked=await Promise.all((creators.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null));const eligible=checked.filter(Boolean);return json({uploads:uploads.results||[],creators:eligible,featuredCreators:featured.results||[],categories:CATEGORIES,badges:BADGES,cleanup:{settings:cleanupSettings,pending:cleanupPending.results||[],recent:cleanupRecent.results||[]}});}
+ env.DB.prepare("SELECT id,item_id,author_id,action,reason,created_at FROM community_cleanup_audit ORDER BY created_at DESC LIMIT 50").all(),
+ env.DB.prepare("SELECT item_id id,author_id,item_name name,reason,detected_at,last_updated_at,last_download_at,status FROM community_cleanup_preview ORDER BY detected_at DESC LIMIT 100").all()]);
+ const checked=await Promise.all((creators.results||[]).map(async c=>await eligibleCreator(String(c.author_id),env)?c:null));const eligible=checked.filter(Boolean);return json({uploads:uploads.results||[],creators:eligible,featuredCreators:featured.results||[],categories:CATEGORIES,badges:BADGES,cleanup:{settings:cleanupSettings,pending:cleanupPending.results||[],recent:cleanupRecent.results||[],preview:cleanupPreview.results||[]}});}
  if(action==='items'){const r=await env.DB.prepare(`SELECT m.id,COUNT(DISTINCT l.user_id) likes,COUNT(DISTINCT v.id) reviewCount,COALESCE(AVG(v.rating),0) averageRating,EXISTS(SELECT 1 FROM community_likes x WHERE x.user_id=? AND x.item_id=m.id) liked,EXISTS(SELECT 1 FROM community_favorites x WHERE x.user_id=? AND x.item_id=m.id) favorited,EXISTS(SELECT 1 FROM community_follows x WHERE x.follower_id=? AND x.creator_id=m.author_id) followingCreator FROM community_modpacks m LEFT JOIN community_likes l ON l.item_id=m.id LEFT JOIN community_reviews v ON v.item_id=m.id WHERE m.content_type='addon' AND COALESCE(m.is_hidden,0)=0 GROUP BY m.id ORDER BY m.created_at DESC LIMIT 250`).bind(me.id,me.id,me.id).all();return json({items:r.results||[]});}
  if(action==='discovery'){
  const [featuredUploads,featuredCreators,leaders]=await Promise.all([
