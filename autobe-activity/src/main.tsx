@@ -189,8 +189,14 @@ function AccessGate() {
   if (state === 'allowed') return <App />;
 
   return (
-    <main className="relative min-h-screen w-full overflow-hidden flex items-center justify-center bg-[#090710] text-white p-5 sm:p-6">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(55% 40% at 50% 0%, rgba(118,43,255,0.18), transparent 75%)' }} />
+    <main className="autobe-access-loading" role="status" aria-live="polite">
+      <img src="/assets/loading-screen.gif" alt="" className="autobe-loading-media" />
+      <div className="autobe-loading-copy">
+        <p className="autobe-loading-kicker">AUTOBE · BEDROCK MERGING STUDIO</p>
+        <h1>Loading a wonderful place</h1>
+        <p className="autobe-loading-status">{message}</p>
+        {state === 'checking' && <p className="mt-5 text-xs font-semibold tracking-wide text-violet-100/90">Verifying Discord access…</p>}
+      </div>
       <section className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#30263F] bg-[#100D18] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
         <div className="h-1 w-full bg-gradient-to-r from-[#762BFF] via-[#A855F7] to-[#4F13C4]" />
         <div className="p-6 sm:p-8 text-center">
