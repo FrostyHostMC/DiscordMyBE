@@ -123,11 +123,13 @@ async function communityRoleStatus(userId: string, env: Env): Promise<'present'|
     });
     if (response.status === 404) {
       const error = await response.json().catch(() => null) as { code?: number } | null;
-      return error?.code === 10007 ? 'missing' : 'unknown';
+      return error?.code === 10007 && await requiredRoleIsConfigured(env) ? 'missing' : 'unknown';
     }
     if (response.status === 429 || response.status >= 500 || !response.ok) return 'unknown';
     const member = await response.json() as { roles?: string[] };
-    return Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID) ? 'present' : 'missing';
+    const hasRole = Array.isArray(member.roles) && member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID);
+    if (!hasRole && !await requiredRoleIsConfigured(env)) return 'unknown';
+    return hasRole ? 'present' : 'missing';
   } catch { return 'unknown'; }
 }
 
