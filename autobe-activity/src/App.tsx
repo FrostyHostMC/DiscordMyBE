@@ -786,7 +786,7 @@ export const App: React.FC = () => {
   if (roleAccessStatus === 'checking') {
     return (
       <div className="autobe-loading-screen" role="status" aria-live="polite">
-        <img src="/assets/loading-screen.gif" alt="" className="autobe-loading-media" />
+        <div className="autobe-cosmic-backdrop" aria-hidden="true"><span className="cosmic-cloud cosmic-cloud--one"/><span className="cosmic-cloud cosmic-cloud--two"/><span className="cosmic-stars"/><span className="cosmic-horizon"/></div>
         <div className="autobe-loading-copy">
           <p className="autobe-loading-kicker">AUTOBE · BEDROCK MERGING STUDIO</p>
           <h1>Loading a wonderful place</h1>
@@ -798,7 +798,7 @@ export const App: React.FC = () => {
   }
   return (
     <div className={"isolate relative flex h-[100dvh] min-h-0 w-full flex-col overflow-hidden " + (showCreatorProfile || publicCreatorId ? "bg-[#090713]" : "bg-transparent") + " pt-[calc(var(--autobe-host-top-inset)+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)] font-sans text-[#F8F5FF]"}>
-{!showCreatorProfile && !publicCreatorId && <div aria-hidden="true" className="autobe-global-background"><img src="/assets/app-background.gif" alt="" /><span className="autobe-global-background__shade" /></div>}
+{!showCreatorProfile && !publicCreatorId && <div aria-hidden="true" className="autobe-cosmic-backdrop autobe-cosmic-backdrop--app"><span className="cosmic-cloud cosmic-cloud--one"/><span className="cosmic-cloud cosmic-cloud--two"/><span className="cosmic-stars"/><span className="cosmic-horizon"/></div>}
       {toastMessage && <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top)+4.25rem)] z-[100] mx-auto flex max-w-xl items-center justify-between gap-3 rounded-xl border border-violet-400/40 bg-[#17102C]/95 p-3 text-xs font-semibold text-white shadow-2xl backdrop-blur-xl sm:left-auto sm:right-5"><div className="flex min-w-0 items-center gap-2"><Info className="h-4 w-4 shrink-0 text-violet-300"/><span className="break-words">{toastMessage}</span></div><button type="button" onClick={() => setToastMessage(null)} aria-label="Dismiss notification" className="rounded-lg p-1 text-violet-200/70 hover:bg-white/10 hover:text-white"><X className="h-4 w-4"/></button></div>}
       {subpackPromptPacks && <SubpackSelectModal packs={subpackPromptPacks} onConfirm={handleSubpackConfirm} onCancel={handleSubpackCancel}/>}
       {screen === 'script_check' && mergePlan && <ScriptCheckScreen plan={mergePlan} selectedPacks={getSelectedPacks()} onContinue={() => { triggerHaptic(50); handleSoundTap(); runMergeProcess(getSelectedPacks(), conflicts, undefined, pendingTargetEngineRef.current, pendingOutputOptionsRef.current); }} onBack={() => setScreen('main')}/>}
