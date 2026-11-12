@@ -3,9 +3,9 @@
 .autobe-cosmic-backdrop--app{z-index:0}
 .autobe-cosmic-backdrop__image{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;object-position:center;user-select:none}
 .autobe-cosmic-backdrop__shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(7,4,16,.18),rgba(7,4,16,.36) 58%,rgba(5,3,12,.54))}
-.autobe-loading-screen{position:relative;isolation:isolate;display:flex;min-height:100dvh;width:100%;flex-direction:column;align-items:center;justify-content:center;gap:clamp(14px,3vh,26px);overflow:hidden;background:#080510;color:#F8F5FF;padding:24px}
-.autobe-loading-logo{position:relative;z-index:1;display:block;width:clamp(180px,38vw,340px);height:auto;max-height:48dvh;object-fit:contain;filter:drop-shadow(0 0 30px rgba(154,103,255,.3))}
-.autobe-loading-message{position:relative;z-index:1;margin:0;text-align:center;font-size:clamp(14px,2.2vw,19px);font-weight:700;letter-spacing:.025em;color:#F3EAFE;text-shadow:0 2px 18px rgba(160,105,255,.35)}
-@media(max-width:767px){.autobe-loading-logo{width:clamp(170px,58vw,280px);max-height:42dvh}}
-@media(orientation:landscape) and (max-height:500px){.autobe-loading-screen{gap:8px}.autobe-loading-logo{width:auto;height:52dvh;max-width:58vw}.autobe-loading-message{font-size:13px}}
+.autobe-loading-screen{position:relative;isolation:isolate;display:flex;min-height:100dvh;min-height:100svh;width:100%;align-items:center;justify-content:center;overflow:hidden;background:#080510;color:#F8F5FF;padding:0}
+.autobe-loading-logo{position:absolute;inset:0;z-index:0;display:block;width:100%;height:100%;max-width:none;max-height:none;object-fit:contain;object-position:center center;padding:clamp(8px,2.5vw,28px) clamp(8px,3vw,32px) clamp(76px,13vh,116px);mix-blend-mode:screen;filter:drop-shadow(0 0 30px rgba(154,103,255,.22))}
+.autobe-loading-message{position:absolute;z-index:1;left:16px;right:16px;bottom:max(22px,env(safe-area-inset-bottom));margin:0;text-align:center;font-size:clamp(14px,2.1vw,19px);font-weight:700;letter-spacing:.025em;color:#F3EAFE;text-shadow:0 2px 18px rgba(160,105,255,.4)}
+@media(orientation:portrait){.autobe-loading-logo{object-position:center 44%;padding:8px 4vw calc(82px + env(safe-area-inset-bottom))}}
+@media(orientation:landscape){.autobe-loading-logo{object-position:center center;padding:8px 5vw calc(54px + env(safe-area-inset-bottom))}.autobe-loading-message{bottom:max(12px,env(safe-area-inset-bottom));font-size:clamp(12px,2.1vh,16px)}}
 @media(prefers-reduced-motion:reduce){.autobe-cosmic-backdrop__image{animation:none}}
