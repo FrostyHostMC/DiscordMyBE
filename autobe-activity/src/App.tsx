@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { vibrate } from '@aippy/runtime/device';
 import { Info, X } from 'lucide-react';
-import { AutoBEWordmark } from '@/components/AutoBEBrandArt';
 import { CosmicBackdrop } from '@/brand-art/CosmicBackdrop';
 import '@/brand-art/cosmic-backdrop.css';
 import tweaksConfig from '@/config/tweaksConfig.json';
@@ -790,10 +789,8 @@ export const App: React.FC = () => {
   }
   if (roleAccessStatus === 'checking') {
     return (
-      <div className="autobe-loading-screen" role="status" aria-live="polite">
-        <img src="/assets/Loading%20Screen.gif" alt="" aria-hidden="true" className="autobe-loading-art"/>
-        <span className="sr-only">Verifying your Discord access…</span>
-        <span className="sr-only">Verifying your Discord role…</span>
+      <div className="autobe-loading-screen" role="status" aria-label="AutoBE loading">
+        <img src="/assets/AutoBE%20Main%20Icon.gif" alt="AutoBE" className="autobe-loading-logo"/>
       </div>
     );
   }
@@ -827,7 +824,7 @@ export const App: React.FC = () => {
         <main className="relative z-10 min-h-0 flex-1 overflow-y-auto overscroll-contain bg-transparent">
           {currentTab==='workspace' ? <>
             <section className="mx-4 mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/10 bg-[#0B0816]/55 px-5 py-4 backdrop-blur-md sm:mx-6 sm:mt-6 sm:px-6">
-              <div className="min-w-0"><div className="text-[10px] font-bold uppercase tracking-[.2em] text-violet-200/65">Workspace</div><h1 className="mt-1 text-xl font-black tracking-tight text-white sm:text-2xl">Merger</h1><p className="mt-1 max-w-xl text-xs leading-relaxed text-[#C4B9D4] sm:text-sm">Import Bedrock packs, organize your selection, resolve conflicts, and export one merged addon.</p></div>
+              <div className="min-w-0"><img src="/assets/Merger.gif" alt="Merger" className="h-12 w-auto max-w-[min(72vw,320px)] object-contain sm:h-14"/><p className="mt-2 max-w-xl text-xs leading-relaxed text-[#C4B9D4] sm:text-sm">Import Bedrock packs, organize your selection, resolve conflicts, and export one merged addon.</p></div>
               <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-[#E3D9F2]"><span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">{installedPacks.length} imported</span><span className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">{selectedPackIds.length} selected</span></div>
             </section>
             <div className="mx-4 mb-6 mt-5 sm:mx-6"><MergeWorkspace installedPacks={installedPacks} selectedPackIds={selectedPackIds} onTogglePack={handleTogglePack} onSelectAll={handleSelectAll} onClearSelection={handleClearSelection} onStartMergeFlow={handleStartMergeFlow} onImportPacks={handleImportPacks}/></div>
