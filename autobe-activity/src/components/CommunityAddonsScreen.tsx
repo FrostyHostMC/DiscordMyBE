@@ -220,7 +220,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           <section>
             <div className="mb-2 text-sm font-semibold text-white">Addon file <span className="text-[#AAA3BB] font-normal">(.mcaddon or .mcpack)</span></div>
-            <input ref={addonFileInput} type="file" disabled={publishing} onChange={e=>{const picked=e.target.files?.[0]||null;if(picked&&!/\.(mcaddon|mcpack)$/i.test(picked.name)){setNotice('Choose the original .mcaddon or .mcpack file. ZIP files must be renamed only if they are actually a Bedrock addon package.');setFile(null);}else{setFile(picked);setNotice('');if(picked&&!name)setName(picked.name.replace(/\.(mcaddon|mcpack)$/i,''));}e.currentTarget.value='';}} className="sr-only"/>
+            <input ref={addonFileInput} type="file" accept="*/*" disabled={publishing} onChange={e=>{const picked=e.target.files?.[0]||null;if(picked&&!/\.(mcaddon|mcpack)$/i.test(picked.name)){setNotice('Choose the original .mcaddon or .mcpack file. ZIP files must be renamed only if they are actually a Bedrock addon package.');setFile(null);}else{setFile(picked);setNotice('');if(picked&&!name)setName(picked.name.replace(/\.(mcaddon|mcpack)$/i,''));}e.currentTarget.value='';}} className="sr-only"/>
             <div className="rounded-xl border border-dashed border-violet-300/40 bg-violet-500/[0.06] p-4 sm:p-5">
               <div className="flex flex-col items-center gap-3 text-center sm:flex-row sm:text-left">
                 <div className="rounded-xl bg-violet-400/10 p-3 text-violet-200"><Upload size={24}/></div>
