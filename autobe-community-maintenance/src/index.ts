@@ -247,11 +247,17 @@ async function runLifecycle(env: Env) {
 
 async function secureSecretEquals(provided: string, expected: string): Promise<boolean> {
   const encoder = new TextEncoder();
-  const [left, right] = await Promise.all([
+  const [leftHash, rightHash] = await Promise.all([
     crypto.subtle.digest("SHA-256", encoder.encode(provided)),
     crypto.subtle.digest("SHA-256", encoder.encode(expected)),
   ]);
-  return crypto.subtle.timingSafeEqual(left, right);
+  const left = new Uint8Array(leftHash);
+  const right = new Uint8Array(rightHash);
+  let mismatch = left.length ^ right.length;
+  for (let index = 0; index < Math.min(left.length, right.length); index++) {
+    mismatch |= left[index] ^ right[index];
+  }
+  return mismatch === 0;
 }
 
 export default {
