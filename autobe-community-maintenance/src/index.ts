@@ -14,6 +14,11 @@ const json = (data: unknown, status = 200) => new Response(JSON.stringify(data),
 });
 
 async function ensureSchema(db: D1Database) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS community_modpacks (
+    id TEXT PRIMARY KEY,name TEXT NOT NULL,description TEXT NOT NULL,author TEXT NOT NULL,author_id TEXT NOT NULL,
+    author_avatar TEXT,version TEXT NOT NULL,total_packs INTEGER NOT NULL,size INTEGER NOT NULL,icon_data_url TEXT,
+    created_at INTEGER NOT NULL,downloads INTEGER DEFAULT 0,blob_url TEXT NOT NULL,file_name TEXT NOT NULL,included_packs TEXT
+  )`).run();
   const columns = await db.prepare("PRAGMA table_info(community_modpacks)").all<{ name: string }>();
   const names = new Set((columns.results || []).map((column) => column.name));
   const additions: Array<[string, string]> = [
