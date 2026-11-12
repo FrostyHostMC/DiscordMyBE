@@ -81,20 +81,38 @@ button, input, select, textarea {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
-/* Shared animated nebula background. Keep it below every interactive layer. */
+/* Shared animated nebula background. Use an actual IMG element so animated GIF frames
+   are decoded consistently by mobile Discord webviews and desktop browsers. */
 .autobe-global-background {
   position: fixed;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
   pointer-events: none;
-  background-color: #08050f;
-  background-image:
-    linear-gradient(rgba(7, 4, 17, .18), rgba(7, 4, 17, .28)),
-    url("/assets/app-background.gif");
-  background-position: center;
-  background-size: cover;
-  background-repeat: no-repeat;
+  background: #08050f;
+  isolation: isolate;
+}
+.autobe-global-background > img {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  image-rendering: auto;
   transform: translateZ(0);
+}
+.autobe-global-background__shade {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(7, 4, 17, .12), rgba(7, 4, 17, .28)),
+    radial-gradient(ellipse at 50% 42%, transparent 10%, rgba(5, 2, 12, .24) 100%);
+}
+.autobe-moon-mark {
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 18px rgba(139, 92, 246, .42));
 }
 .autobe-loading-screen {
   position: fixed;
@@ -150,30 +168,42 @@ button, input, select, textarea {
   color: rgba(248, 240, 255, .88);
   font-size: clamp(.78rem, 2.4vw, 1rem);
 }
+/* Animated category titles float over the page; never put them in a boxed tile. */
 .autobe-animated-banner {
   position: relative;
-  display: block;
-  width: min(72vw, 480px);
-  height: clamp(5.5rem, 19vw, 8rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: min(58vw, 390px);
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
   flex: 0 1 auto;
-  overflow: hidden;
-  border-radius: .9rem;
-  background: rgba(15, 8, 28, .4);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }
 .autobe-animated-banner img {
   display: block;
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: clamp(4.25rem, 17vw, 7rem);
   object-fit: contain;
   object-position: center;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 5px 18px rgba(8, 2, 20, .72));
+}
+.autobe-animated-banner--modpacks { width: min(56vw, 430px); }
+.autobe-animated-banner--addons { width: min(56vw, 430px); }
+@media (max-width: 480px) {
+  .autobe-animated-banner { width: min(55vw, 300px); }
+  .autobe-animated-banner img { max-height: 5.25rem; }
 }
 @media (min-width: 768px) {
-  .autobe-animated-banner {
-    width: min(42vw, 520px);
-    height: 8.5rem;
-  }
+  .autobe-animated-banner { width: min(34vw, 430px); }
+  .autobe-animated-banner img { max-height: 7rem; }
 }
-
 .autobe-access-loading {
   position: fixed;
   inset: var(--autobe-host-top-inset) 0 0;
