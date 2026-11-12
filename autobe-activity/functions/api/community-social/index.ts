@@ -10,8 +10,24 @@ async function who(request:Request,env:Env){
  const token=(request.headers.get('authorization')||'').match(/^Bearer\s+(.+)$/i)?.[1];if(!token)return null;
  try{const r=await fetch('https://discord.com/api/v10/oauth2/@me',{headers:{authorization:`Bearer ${token}`}});if(!r.ok)return null;const d=await r.json() as any;if(d.application?.id!==env.DISCORD_CLIENT_ID||!d.user?.id)return null;return{id:String(d.user.id),name:String(d.user.global_name||d.user.username||'Discord member')};}catch{return null;}
 }
+async function requiredRoleIsConfigured(env:Env,force=false):Promise<boolean>{
+ if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return false;
+ await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_role_config_validation (id INTEGER PRIMARY KEY CHECK(id=1),guild_id TEXT NOT NULL,role_id TEXT NOT NULL,is_valid INTEGER NOT NULL,checked_at INTEGER NOT NULL)").run();
+ const now=Date.now();
+ const cached=await env.DB.prepare("SELECT guild_id,role_id,is_valid,checked_at FROM community_role_config_validation WHERE id=1").first<{guild_id:string;role_id:string;is_valid:number;checked_at:number}>();
+ if(!force&&cached&&cached.guild_id===env.DISCORD_GUILD_ID&&cached.role_id===env.DISCORD_REQUIRED_ROLE_ID&&now-Number(cached.checked_at)<10000)return cached.is_valid===1;
+ try{
+  const response=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/roles`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
+  if(!response.ok)return false;
+  const roles=await response.json() as Array<{id?:string}>;
+  const valid=Array.isArray(roles)&&roles.some(role=>role.id===env.DISCORD_REQUIRED_ROLE_ID);
+  await env.DB.prepare("INSERT INTO community_role_config_validation (id,guild_id,role_id,is_valid,checked_at) VALUES (1,?,?,?,?) ON CONFLICT(id) DO UPDATE SET guild_id=excluded.guild_id,role_id=excluded.role_id,is_valid=excluded.is_valid,checked_at=excluded.checked_at").bind(env.DISCORD_GUILD_ID,env.DISCORD_REQUIRED_ROLE_ID,valid?1:0,now).run();
+  return valid;
+ }catch{return false;}
+}
 async function communityRoleStatus(userId:string,env:Env):Promise<'present'|'missing'|'unknown'>{
  if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return 'unknown';
+ if(!await requiredRoleIsConfigured(env))return 'unknown';
  try{
   const r=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
   if(r.status===404){const error=await r.json().catch(()=>null) as {code?:number}|null;return error?.code===10007?'missing':'unknown';}
