@@ -6,7 +6,7 @@ This is a separate Cloudflare Worker because Pages Functions are request-driven 
 
 - The Worker runs daily at 04:00 UTC.
 - It creates lifecycle columns and audit/settings tables idempotently.
-- Cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). A daily scan still reports candidates in Worker logs, but it does not hide, notify, or delete content while disabled.
+- Permanent cleanup is **disabled by default** (`community_cleanup_settings.enabled = 0`). Daily role checks still hide uploads after a confirmed role loss so ineligible creators are not left discoverable. They receive a 30-day restoration window; permanent deletion is paused until the owner enables it. Inactivity candidates are previewed but not warned or deleted while disabled.
 - Discord lookup failures, rate limits, and server errors are treated as unknown. They never count as role loss.
 - Before deleting an R2 object, the Worker checks the URL namespace, immutable R2 owner metadata, object kind, declared size, and D1 size. If any check fails, it retains the object and logs an error.
 - The first release intentionally uses the conservative fixed policy: 30-day role restoration window; 24 months since update plus 12 months without downloads for inactivity; 90-day warning window and up to 180 days total when the warning remains unread.
