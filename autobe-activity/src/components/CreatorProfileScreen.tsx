@@ -159,7 +159,7 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button disabled={adminBusy} onClick={()=>void adminAction('admin_cleanup_settings',{enabled:!adminData.cleanup?.settings?.enabled,inactivityMonths:24,noDownloadMonths:12})} className={`rounded-xl px-4 py-2.5 text-xs font-bold disabled:opacity-50 ${adminData.cleanup?.settings?.enabled ? 'border border-rose-300/20 bg-rose-500/10 text-rose-100' : 'bg-emerald-500/20 text-emerald-100'}`}>{adminData.cleanup?.settings?.enabled ? 'Pause automatic cleanup' : 'Enable automatic cleanup'}</button>
-            <button disabled={adminBusy} onClick={()=>void loadSocial()} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-bold text-violet-100 disabled:opacity-50">Refresh cleanup preview</button>
+            <button disabled={adminBusy} onClick={()=>void loadSocial()} className="rounded-xl border border-white/10 px-4 py-2.5 text-xs font-bold text-violet-100 disabled:opacity-50">Refresh latest scan results</button>
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <div className="rounded-xl border border-white/10 p-3"><div className="mb-2 flex items-center justify-between"><span className="text-xs font-bold">Pending reviews</span><span className="text-[10px] text-[#A99FBE]">{adminData.cleanup?.preview?.length || adminData.cleanup?.pending?.length || 0}</span></div>
