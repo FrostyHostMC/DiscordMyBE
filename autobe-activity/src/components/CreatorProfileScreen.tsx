@@ -27,6 +27,8 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
   const [adminUploadId, setAdminUploadId] = useState('');
   const [adminCategory, setAdminCategory] = useState('Other');
   const [adminBusy, setAdminBusy] = useState(false);
+  const [ownerUsage,setOwnerUsage]=useState<any>(null);
+  const [usageLoading,setUsageLoading]=useState(false);
   const auth = getDiscordAuth();
   const social = async (action: string, payload: Record<string, unknown> = {}) => {
     if (!auth?.token) throw new Error('Reconnect Discord to manage your creator profile.');
@@ -34,6 +36,16 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || 'Community request failed.');
     return result;
+  };
+  const loadOwnerUsage = async () => {
+    if(!auth?.token)return;
+    setUsageLoading(true);
+    try{
+      const response=await fetch('/api/admin/usage',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
+      const data=await response.json();if(!response.ok)throw new Error(data.error||'Could not load storage usage.');
+      setOwnerUsage(data);
+    }catch(e){setSocialError(e instanceof Error?e.message:'Could not load storage usage.');}
+    finally{setUsageLoading(false);}
   };
   const loadSocial = async () => {
     if (!auth?.token) return;
@@ -52,6 +64,7 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Owner controls could not be loaded.');
       setAdminData(data);
+      await loadOwnerUsage();
     }
   };
 
@@ -125,6 +138,11 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
       {socialError && <p className="mt-3 rounded-xl border border-rose-400/20 bg-rose-500/5 p-3 text-xs text-rose-200">{socialError}</p>}
       {isOwner && <section className="mt-6 rounded-3xl border border-amber-300/20 bg-gradient-to-br from-[#241B12] to-[#120E1E] p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[10px] font-extrabold uppercase tracking-[.18em] text-amber-200/70">Owner access · private</div><h3 className="mt-1 text-xl font-black">Community administration</h3><p className="mt-1 text-xs text-[#B9ADC9]">Only the authorized Discord account can load or use these controls.</p></div><span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-[10px] font-bold text-amber-200">OWNER</span></div>
+        <div className="mt-4 rounded-2xl border border-amber-300/15 bg-black/20 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2"><h4 className="text-sm font-bold">Published storage usage</h4><button disabled={usageLoading} onClick={()=>void loadOwnerUsage()} className="rounded-lg border border-white/10 px-3 py-1.5 text-[10px] font-bold disabled:opacity-50">{usageLoading?'Checking…':'Refresh usage'}</button></div>
+          {ownerUsage?<div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3"><div className="rounded-xl bg-white/5 p-3"><div className="text-lg font-black">{ownerUsage.publishedModpacks}</div><div className="text-[10px] text-[#A99FBE]">Published uploads</div></div><div className="rounded-xl bg-white/5 p-3"><div className="text-lg font-black">{ownerUsage.estimatedPublishedGiB} GiB</div><div className="text-[10px] text-[#A99FBE]">Estimated storage</div></div><div className="rounded-xl bg-white/5 p-3"><div className="text-lg font-black">{ownerUsage.percentOfR2FreeStorage}%</div><div className="text-[10px] text-[#A99FBE]">Of free R2 allowance</div></div></div>:<p className="mt-2 text-xs text-[#A99FBE]">Storage metrics will appear here.</p>}
+          {ownerUsage&&<p className="mt-2 text-[10px] leading-relaxed text-[#8F85A1]">{ownerUsage.warning}</p>}
+        </div>
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h4 className="text-sm font-bold">Feature a creator</h4><select value={adminCreatorId} onChange={e=>setAdminCreatorId(e.target.value)} className="mt-3 w-full rounded-xl border border-white/10 bg-[#0D0A18] p-3 text-xs"><option value="">Choose a creator</option>{adminData.creators.map(c=><option key={c.author_id} value={c.author_id}>{c.author} · {c.uploads} uploads</option>)}</select><div className="mt-2 flex gap-2"><button disabled={!adminCreatorId||adminBusy} onClick={()=>void adminAction('admin_feature_creator',{creatorId:adminCreatorId,featured:true})} className="rounded-lg bg-amber-400/15 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40">Feature</button><button disabled={!adminCreatorId||adminBusy} onClick={()=>void adminAction('admin_feature_creator',{creatorId:adminCreatorId,featured:false})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-40">Unfeature</button></div></div>
           <div className="rounded-2xl border border-white/10 bg-black/20 p-4"><h4 className="text-sm font-bold">Award creator badge</h4><select value={adminCreatorId} onChange={e=>setAdminCreatorId(e.target.value)} className="mt-3 w-full rounded-xl border border-white/10 bg-[#0D0A18] p-3 text-xs"><option value="">Choose a creator</option>{adminData.creators.map(c=><option key={c.author_id} value={c.author_id}>{c.author}</option>)}</select><select value={adminBadge} onChange={e=>setAdminBadge(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-[#0D0A18] p-3 text-xs">{adminData.badges.map(b=><option key={b}>{b}</option>)}</select><button disabled={!adminCreatorId||adminBusy} onClick={()=>void adminAction('admin_badge',{creatorId:adminCreatorId,badge:adminBadge,enabled:true})} className="mt-2 rounded-lg bg-amber-400/15 px-3 py-2 text-xs font-bold text-amber-100 disabled:opacity-40">Award badge</button></div>
