@@ -97,6 +97,7 @@ export interface CommunityModpack {
   detail_images?: string[];
   author: string;
   author_id: string;
+  author_avatar?: string | null;
   version: string;
   total_packs: number;
   size: number;
