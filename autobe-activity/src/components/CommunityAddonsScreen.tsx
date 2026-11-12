@@ -31,6 +31,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
   const [description, setDescription] = useState('');
   const [version, setVersion] = useState('1.0.0');
   const [selectedCategory, setSelectedCategory] = useState<Category>('Other');
+  const [selectedLicense,setSelectedLicense]=useState('LicenseRef-All-Rights-Reserved');
   const [cover, setCover] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [publishing, setPublishing] = useState(false);
@@ -136,7 +137,7 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({
-          content_type: 'addon', category: selectedCategory, name: name.trim(),
+          content_type: 'addon', category: selectedCategory, license_id:selectedLicense, name: name.trim(),
           description: description.trim(), author: user.global_name || user.username,
           author_id: user.id, version: version.trim() || '1.0.0', total_packs: 1,
           size: file.size, blob_url: uploaded.url, file_name: file.name, icon_data_url: cover,
