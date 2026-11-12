@@ -37,7 +37,7 @@ npx wrangler secret put MAINTENANCE_KEY
 npx wrangler deploy
 ```
 
-The Worker reuses the production Community D1 database and R2 bucket. Do not deploy it against preview bindings. Cron times are UTC.
+The default Worker environment reuses the production Community D1 database and R2 bucket. The explicit `preview` environment is wired to the separate `autobe-community-modpacks-preview` D1 database and `autobe-modpacks-preview` R2 bucket. Use `--env preview` for isolated tests; never point preview at production storage. Cron times are UTC.
 
 ## Rollout
 
