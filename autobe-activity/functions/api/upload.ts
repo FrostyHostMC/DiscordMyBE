@@ -413,7 +413,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const partsMatch = recordedParts.length === supplied.length &&
         recordedParts.every((part, index) =>
           part.part_number === supplied[index].partNumber && part.etag === supplied[index].etag &&
-          Number.isSafeInteger(part.size) && part.size > 0 && part.size <= MAX_PART_BYTES);
+          Number.isSafeInteger(part.size) && part.size > 0 && part.size <= PART_BYTES);
       if (!partsMatch || actualBytes !== session.declared_size) {
         return json({ error: 'Uploaded part sizes do not match the declared file size. The upload was not completed.' }, 400);
       }
