@@ -51,6 +51,9 @@ async function requireCommunityRole(userId: string, env: Env): Promise<Response 
   const status = await verifyCommunityRole(userId, env);
   if (status === 'missing') return json({ error: ROLE_REQUIRED_MESSAGE, code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
   if (status === 'unknown') return json({ error: 'We could not verify your Discord role right now. Please try again shortly.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
+  const now = Date.now();
+  await env.DB.prepare("CREATE TABLE IF NOT EXISTS community_verified_creators (user_id TEXT PRIMARY KEY,verified_at INTEGER NOT NULL,last_seen_at INTEGER NOT NULL,revoked_at INTEGER)").run();
+  await env.DB.prepare("INSERT INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) VALUES (?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,revoked_at=NULL").bind(userId,now,now).run();
   return null;
 }
 
