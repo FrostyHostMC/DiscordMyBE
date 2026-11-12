@@ -48,6 +48,7 @@ async function verifyCommunityRole(userId: string, env: Env): Promise<'present'|
 }
 const ROLE_REQUIRED_MESSAGE = 'You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
 async function requireCommunityRole(userId: string, env: Env): Promise<Response | null> {
+  await ensureTable(env);
   const status = await verifyCommunityRole(userId, env);
   if (status === 'missing') return json({ error: ROLE_REQUIRED_MESSAGE, code: 'DISCORD_ROLE_REQUIRED', verified: false }, 403);
   if (status === 'unknown') return json({ error: 'We could not verify your Discord role right now. Please try again shortly.', code: 'DISCORD_ROLE_CHECK_UNAVAILABLE' }, 503);
