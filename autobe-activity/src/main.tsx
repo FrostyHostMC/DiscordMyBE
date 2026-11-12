@@ -56,7 +56,7 @@ function AccessGate() {
                 allowed?: boolean;
                 reason?: string;
                 error?: string;
-                user?: { id: string; username: string; global_name?: string | null };
+                user?: { id: string; username: string; global_name?: string | null; avatar?: string | null };
               };
               if (accessResponse.ok && accessData.allowed === true && accessData.user) {
                 setDiscordAuth(savedAuth.token, savedAuth.applicationId, undefined, accessData.user);
@@ -163,6 +163,7 @@ function AccessGate() {
           allowed?: boolean;
           reason?: string;
           error?: string;
+          user?: { id: string; username: string; global_name?: string | null; avatar?: string | null };
         };
 
         if (!accessResponse.ok || accessData.allowed !== true) {
@@ -171,7 +172,7 @@ function AccessGate() {
         }
 
         // Store credentials for Discord SDK features (file sharing, etc.)
-        setDiscordAuth(tokenData.access_token, clientId, sdk, authResult?.user ?? null);
+        setDiscordAuth(tokenData.access_token, clientId, sdk, accessData.user ?? authResult?.user ?? null);
 
         if (!cancelled) setState('allowed');
       } catch (error) {
