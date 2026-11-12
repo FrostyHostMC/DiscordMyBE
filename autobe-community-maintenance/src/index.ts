@@ -41,6 +41,9 @@ async function ensureSchema(db: D1Database) {
     id TEXT PRIMARY KEY, item_id TEXT, author_id TEXT NOT NULL, action TEXT NOT NULL,
     reason TEXT NOT NULL, created_at INTEGER NOT NULL, details TEXT
   )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS community_verified_creators (
+    user_id TEXT PRIMARY KEY, verified_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, revoked_at INTEGER
+  )`).run();
   await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (
     item_id TEXT PRIMARY KEY, author_id TEXT NOT NULL, item_name TEXT NOT NULL,
     reason TEXT NOT NULL, detected_at INTEGER NOT NULL, last_updated_at INTEGER,
@@ -139,8 +142,19 @@ async function runLifecycle(env: Env) {
       await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
       continue;
     }
+    if (role === "present") {
+      await env.DB.prepare("INSERT INTO community_verified_creators (user_id,verified_at,last_seen_at,revoked_at) VALUES (?,?,?,NULL) ON CONFLICT(user_id) DO UPDATE SET last_seen_at=excluded.last_seen_at,revoked_at=NULL")
+        .bind(userId, now, now).run();
+    }
     const uploads = await env.DB.prepare("SELECT * FROM community_modpacks WHERE author_id=? AND lifecycle_state!='deleted'").bind(userId).all<any>();
     if (role === "missing") {
+      const previouslyVerified = await env.DB.prepare("SELECT 1 yes FROM community_verified_creators WHERE user_id=?").bind(userId).first();
+      if (!previouslyVerified) {
+        await env.DB.prepare("UPDATE community_cleanup_scan_state SET cursor_user_id=?,updated_at=? WHERE id=1").bind(userId, now).run();
+        continue;
+      }
+      await env.DB.prepare("UPDATE community_verified_creators SET revoked_at=COALESCE(revoked_at,?),last_seen_at=? WHERE user_id=?")
+        .bind(now, now, userId).run();
       summary.roleLossCandidates += uploads.results?.length || 0;
       for (const row of uploads.results || []) {
         // Losing the required role is an immediate revocation, not an inactivity
