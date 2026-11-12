@@ -23,6 +23,7 @@ import { CommunityModpack } from '@/types/modpack';
 import { getDiscordAuth } from '@/utils/discordAuth';
 import { cleanDiscordDisplayName } from '@/utils/displayName';
 
+const LICENSE_LABELS:Record<string,string>={"LicenseRef-All-Rights-Reserved":"All Rights Reserved","LicenseRef-Custom":"Custom / Other","MIT":"MIT","Apache-2.0":"Apache 2.0","GPL-2.0-only":"GNU GPL 2.0","GPL-3.0-only":"GNU GPL 3.0","BSD-2-Clause":"BSD 2-Clause","BSD-3-Clause":"BSD 3-Clause","MPL-2.0":"Mozilla Public License 2.0","LGPL-2.1-only":"GNU LGPL 2.1","LGPL-3.0-only":"GNU LGPL 3.0","CC0-1.0":"CC0 1.0","CC-BY-4.0":"Creative Commons Attribution 4.0","CC-BY-SA-4.0":"Creative Commons Attribution-ShareAlike 4.0","Unlicense":"The Unlicense"};
 const authHeaders = (): Record<string, string> => {
   const auth = getDiscordAuth();
   return auth ? { Authorization: `Bearer ${auth.token}` } : {};
@@ -592,6 +593,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                   <span className="rounded-full border border-[#30263F] px-3 py-1">{selectedModpack.total_packs} packs</span>
                   <span className="rounded-full border border-[#30263F] px-3 py-1">{formatSize(selectedModpack.size)}</span>
                   <span className="rounded-full border border-[#30263F] px-3 py-1">{selectedModpack.downloads} downloads</span>
+                  <span className="rounded-full border border-[#30263F] px-3 py-1">License: {LICENSE_LABELS[selectedModpack.license_id||'LicenseRef-All-Rights-Reserved']||selectedModpack.license_id}</span>
                 </div>
                 {currentUserId && selectedModpack.author_id === currentUserId && (
                   <button type="button" onClick={() => handleEdit(selectedModpack)} className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#762BFF] px-4 py-2 text-sm font-bold hover:bg-[#853CFF]">
