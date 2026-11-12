@@ -52,14 +52,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [selectedModpack, setSelectedModpack] = useState<CommunityModpack | null>(null);
-  const [usage, setUsage] = useState<{
-    publishedModpacks: number;
-    estimatedPublishedGiB: number;
-    percentOfR2FreeStorage: number;
-    uploadStartsInLast24Hours: number;
-    warning: string;
-  } | null>(null);
-  const [usageLoading, setUsageLoading] = useState(false);
   const [featuredUploads,setFeaturedUploads]=useState<CommunityModpack[]>([]);
   const [featuredCreators,setFeaturedCreators]=useState<Array<{user_id:string;author:string;uploads:number;downloads:number}>>([]);
   const [leaderboard,setLeaderboard]=useState<Array<{author_id:string;author:string;uploads:number;downloads:number;likes:number;followers:number}>>([]);
@@ -99,21 +91,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
       setError(err instanceof Error ? err.message : 'Failed to load community modpacks');
     } finally {
       if (!silent) setLoading(false);
-    }
-  };
-
-  const loadUsage = async () => {
-    setUsageLoading(true);
-    try {
-      const response = await fetch('/api/admin/usage', { headers: authHeaders(), cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Could not load Cloudflare usage');
-      setUsage(data);
-      setNotice(null);
-    } catch (err) {
-      setNotice(err instanceof Error ? err.message : 'Could not load Cloudflare usage');
-    } finally {
-      setUsageLoading(false);
     }
   };
 
@@ -379,15 +356,6 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             >
               <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadUsage()}
-              disabled={usageLoading}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#15111F] border border-[#30263F] text-xs text-[#AAA3BB] hover:text-white disabled:opacity-50"
-            >
-              <Info className="w-3.5 h-3.5" />
-              {usageLoading ? 'Checking…' : 'Storage usage'}
             </button>
           </div>
         </div>
