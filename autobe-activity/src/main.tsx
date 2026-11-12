@@ -197,7 +197,7 @@ function AccessGate() {
         <p className="autobe-loading-status">{message}</p>
         {state === 'checking' && <p className="mt-5 text-xs font-semibold tracking-wide text-violet-100/90">Verifying Discord access…</p>}
       </div>
-      <section className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#30263F] bg-[#100D18] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+      <section className={`relative w-full max-w-md overflow-hidden rounded-2xl border border-[#30263F] bg-[#100D18] shadow-[0_24px_80px_rgba(0,0,0,0.55)] ${state === "checking" ? "hidden" : ""}`}>
         <div className="h-1 w-full bg-gradient-to-r from-[#762BFF] via-[#A855F7] to-[#4F13C4]" />
         <div className="p-6 sm:p-8 text-center">
           <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#762BFF]/40 bg-[#762BFF]/15 text-[#C4A5FF] shadow-[0_0_28px_rgba(118,43,255,0.16)]">
