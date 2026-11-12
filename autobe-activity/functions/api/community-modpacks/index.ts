@@ -113,6 +113,16 @@ async function ensureTable(env: Env): Promise<void> {
   if (!names.has('featured')) {
     await env.DB.prepare('ALTER TABLE community_modpacks ADD COLUMN featured INTEGER NOT NULL DEFAULT 0').run();
   }
+  const lifecycleColumns: Array<[string, string]> = [
+    ['last_updated_at', 'INTEGER'], ['last_download_at', 'INTEGER'],
+    ['role_removed_at', 'INTEGER'], ['role_purge_after', 'INTEGER'],
+    ['inactivity_warning_at', 'INTEGER'], ['inactivity_purge_after', 'INTEGER'],
+    ['lifecycle_state', "TEXT NOT NULL DEFAULT 'active'"],
+  ];
+  for (const [column, type] of lifecycleColumns) {
+    if (!names.has(column)) await env.DB.prepare(`ALTER TABLE community_modpacks ADD COLUMN ${column} ${type}`).run();
+  }
+  await env.DB.prepare('UPDATE community_modpacks SET last_updated_at=created_at WHERE last_updated_at IS NULL').run();
 }
 
 function fail(label: string, error: unknown) {
@@ -146,7 +156,7 @@ export async function onRequestPost(context: Ctx) {
     if (new URL(request.url).searchParams.get('action') === 'download') {
       const id = new URL(request.url).searchParams.get('id');
       if (!id) return json({ error: 'Missing modpack id' }, 400);
-      const updated = await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1 WHERE id = ?').bind(id).run();
+      const updated = await env.DB.prepare('UPDATE community_modpacks SET downloads = downloads + 1, last_download_at = ? WHERE id = ?').bind(Date.now(), id).run();
       if (!updated.meta?.changes) return json({ error: 'Modpack not found' }, 404);
       const row = await env.DB.prepare('SELECT downloads FROM community_modpacks WHERE id = ?').bind(id).first<{ downloads: number }>();
       return json({ success: true, downloads: Number(row?.downloads) || 0 });
@@ -226,7 +236,7 @@ export async function onRequestPost(context: Ctx) {
 
     const id = crypto.randomUUID();
     const result = await env.DB.prepare(
-      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO community_modpacks (id, name, description, author, author_id, author_avatar, version, total_packs, size, icon_data_url, created_at, downloads, blob_url, file_name, included_packs, content_type, category, last_updated_at, lifecycle_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     )
       .bind(
         id,
@@ -246,7 +256,9 @@ export async function onRequestPost(context: Ctx) {
         safeFileName,
         safeIncludedPacksJson,
         contentType,
-        category
+        category,
+        Date.now(),
+        'active'
       )
       .run();
 
@@ -324,9 +336,9 @@ export async function onRequestDelete(context: Ctx) {
     if (!id) return json({ error: 'Missing id' }, 400);
 
     await ensureTable(env);
-    const row = await env.DB.prepare('SELECT author_id, blob_url FROM community_modpacks WHERE id = ?')
+    const row = await env.DB.prepare('SELECT author_id, blob_url, size FROM community_modpacks WHERE id = ?')
       .bind(id)
-      .first<{ author_id: string; blob_url: string }>();
+      .first<{ author_id: string; blob_url: string; size: number }>();
     if (!row) return json({ error: 'Modpack not found' }, 404);
     if (row.author_id !== userId) return json({ error: 'You can only delete your own modpacks' }, 403);
 
@@ -339,7 +351,7 @@ export async function onRequestDelete(context: Ctx) {
         // Older listings may point to pre-hardening objects without ownership
         // metadata. Let the author remove the listing, but never delete an object
         // unless its immutable R2 metadata proves ownership.
-        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId)) {
+        if (object && isOwnedPublishedObject(object.customMetadata, object.size, userId) && object.size === Number(row.size)) {
           await env.BUCKET.delete(key);
         }
       }
@@ -401,6 +413,8 @@ export async function onRequestPatch(context: Ctx) {
     }
     if (updates.length === 0) return json({ error: 'No fields to update' }, 400);
 
+    updates.push('last_updated_at = ?', 'inactivity_warning_at = NULL', 'inactivity_purge_after = NULL', "lifecycle_state = 'active'");
+    values.push(Date.now());
     values.push(id);
     await env.DB.prepare(`UPDATE community_modpacks SET ${updates.join(', ')} WHERE id = ?`)
       .bind(...values)
