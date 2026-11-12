@@ -93,7 +93,7 @@ button, input, select, textarea {
 @keyframes cosmic-drift-one{from{transform:translate3d(-2%,1%,0) rotate(-7deg) scale(1)}to{transform:translate3d(3%,-2%,0) rotate(8deg) scale(1.08)}}
 @keyframes cosmic-drift-two{from{transform:translate3d(2%,-1%,0) rotate(5deg)}to{transform:translate3d(-3%,2%,0) rotate(-6deg)}}
 @keyframes cosmic-twinkle{from{opacity:.32}to{opacity:.7}}
-.autobe-moon-mark{width:3rem;height:3rem;flex:none;border-radius:50%;background:radial-gradient(circle at 36% 30%,#f1dfff 0 3%,#a45bff 13%,#47118c 42%,#11051e 70%);box-shadow:inset -8px -9px 18px #05020d,0 0 0 2px rgba(193,145,255,.35),0 0 28px rgba(142,65,255,.65);position:relative}
+.autobe-moon-mark{display:block;width:3rem;height:3rem;flex:none;border-radius:50%;background:radial-gradient(circle at 36% 30%,#f1dfff 0 3%,#a45bff 13%,#47118c 42%,#11051e 70%);box-shadow:inset -8px -9px 18px #05020d,0 0 0 2px rgba(193,145,255,.35),0 0 28px rgba(142,65,255,.65);position:relative}
 .autobe-moon-mark:before{content:"";position:absolute;inset:15%;border:2px solid rgba(224,190,255,.85);border-left-color:transparent;border-bottom-color:transparent;border-radius:50%;transform:rotate(-35deg);box-shadow:0 0 12px #a855f7}
 .autobe-moon-mark:after{content:"";position:absolute;width:145%;height:38%;left:-22%;top:31%;border:2px solid #c084fc;border-left-color:transparent;border-right-color:transparent;border-radius:50%;transform:rotate(-25deg);filter:drop-shadow(0 0 5px #a855f7)}
 .autobe-animated-banner{display:flex;align-items:center;justify-content:center;width:min(58vw,390px);max-width:100%;height:auto;overflow:visible;background:transparent}
@@ -102,3 +102,11 @@ button, input, select, textarea {
 .autobe-animated-banner--addons .autobe-animated-banner__word,.autobe-animated-banner--modpacks .autobe-animated-banner__word{font-size:clamp(1.6rem,6.8vw,3.35rem)}
 @keyframes brand-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 @media(prefers-reduced-motion:reduce){.cosmic-cloud,.cosmic-stars,.autobe-animated-banner__word{animation:none!important}}
+
+.autobe-loading-screen{position:fixed;inset:var(--autobe-host-top-inset) 0 0;z-index:200;display:grid;place-items:center;overflow:hidden;isolation:isolate;padding:1rem;background:#08050f;color:#fff}
+.autobe-loading-screen>.autobe-cosmic-backdrop{position:absolute;inset:0;z-index:0}
+.autobe-loading-copy{position:relative;z-index:2;width:min(90vw,620px);padding:clamp(1.25rem,5vw,3rem);text-align:center;text-shadow:0 3px 28px rgba(0,0,0,.8)}
+.autobe-loading-kicker{margin-bottom:.85rem;color:#e3cfff;font-size:clamp(.58rem,1.8vw,.78rem);font-weight:800;letter-spacing:.28em}
+.autobe-loading-copy h1{color:#fff;font-size:clamp(1.45rem,5vw,2.65rem);font-weight:900;line-height:1.08;text-wrap:balance}
+.autobe-loading-status{margin-top:1.15rem;color:rgba(248,240,255,.88);font-size:clamp(.78rem,2.4vw,1rem)}
+.autobe-cosmic-backdrop~.flex.min-h-0{position:relative;z-index:1}
