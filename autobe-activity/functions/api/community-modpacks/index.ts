@@ -123,11 +123,15 @@ export async function onRequestPost(context: Ctx) {
     if (!userId) return json({ error: 'Not authenticated with Discord. Close and reopen the Activity, then try again.' }, 401);
     const bearer = (request.headers.get('authorization') || '').match(/^Bearer\\s+(.+)$/i)?.[1];
     let authorAvatar: string | null = null;
+    let authorDisplayName: string | null = null;
     if (bearer) {
       const profileResponse = await fetch('https://discord.com/api/v10/oauth2/@me', { headers: { authorization: `Bearer ${bearer}` } });
       if (profileResponse.ok) {
-        const profile = await profileResponse.json() as { application?: { id?: string }; user?: { id?: string; avatar?: string | null } };
-        if (profile.application?.id === env.DISCORD_CLIENT_ID && profile.user?.id === userId) authorAvatar = profile.user.avatar ?? null;
+        const profile = await profileResponse.json() as { application?: { id?: string }; user?: { id?: string; username?: string; global_name?: string | null; avatar?: string | null } };
+        if (profile.application?.id === env.DISCORD_CLIENT_ID && profile.user?.id === userId) {
+          authorAvatar = profile.user.avatar ?? null;
+          authorDisplayName = profile.user.global_name || profile.user.username || null;
+        }
       }
     }
 
@@ -197,7 +201,7 @@ export async function onRequestPost(context: Ctx) {
     const safeIncludedPacksJson = JSON.stringify(safeIncludedPacks);
     const safeName = String(data.name).slice(0, 120);
     const safeDescription = String(data.description).slice(0, 2000);
-    const safeAuthor = String(data.author).slice(0, 100);
+    const safeAuthor = String(authorDisplayName || data.author).slice(0, 100);
     const safeVersion = String(data.version || '1.0.0').slice(0, 40);
     const safeFileName = String(data.file_name).split('/').pop()?.split('\\').pop()?.slice(0, 255) || 'modpack.mcaddon';
     const safeIcon = typeof data.icon_data_url === 'string' && data.icon_data_url.length <= 100_000
