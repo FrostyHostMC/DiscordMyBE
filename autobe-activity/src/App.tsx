@@ -786,7 +786,7 @@ export const App: React.FC = () => {
     );
   }
   if (roleAccessStatus === 'checking') {
-    return <div className="autobe-loading-screen" role="status" aria-live="polite"><span className="sr-only">Verifying your Discord role…</span></div>;
+    return <div className="autobe-loading-screen" role="status" aria-live="polite"><img src="/assets/loading-screen.gif" alt="Loading a wonderful place" className="relative z-10 h-full w-full object-cover" /><span className="sr-only">Verifying your Discord role…</span></div>;
   }
 
   return (

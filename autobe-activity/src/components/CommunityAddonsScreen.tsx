@@ -175,12 +175,12 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
     document.body.appendChild(link); link.click(); link.remove();
   };
 
-  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#08070D] text-white">
-    <header className="border-b border-[#30263F] bg-[#100D18] px-4 py-4">
+  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-white">
+    <header className="border-b border-[#30263F] bg-[#100D18]/80 px-4 py-4 backdrop-blur-xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="rounded-lg border border-[#30263F] p-2 text-[#AAA3BB]" aria-label="Back"><ArrowLeft size={16}/></button>
-          <div><h1 className="text-lg font-bold">Community Addons</h1><p className="text-xs text-[#AAA3BB]">{addons.length} individual addons shared by creators</p></div>
+          <div className="min-w-0"><img src="/assets/addons-logo.gif" alt="Addons" className="h-auto max-h-16 w-auto max-w-[220px] object-contain object-left" /><p className="mt-1 text-xs text-[#AAA3BB]">{addons.length} individual addons shared by creators</p></div>
         </div>
         <button onClick={() => setShowUpload(true)} className="inline-flex items-center gap-2 rounded-lg bg-[#762BFF] px-3 py-2 text-xs font-bold"><Plus size={15}/> Upload addon</button>
       </div>
