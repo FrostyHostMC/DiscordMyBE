@@ -201,7 +201,7 @@ export default {
     ctx.waitUntil(runLifecycle(env));
   },
   async fetch(request: Request, env: Env) {
-    if (request.method !== "POST" || request.headers.get("x-autobe-maintenance-key") !== (env as any).MAINTENANCE_KEY) {
+    if (request.method !== "POST" || request.headers.get("x-autobe-maintenance-key") !== env.MAINTENANCE_KEY) {
       return json({ error: "Not found" }, 404);
     }
     try { return json(await runLifecycle(env)); }
