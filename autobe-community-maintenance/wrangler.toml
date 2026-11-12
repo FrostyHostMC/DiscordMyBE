@@ -1,0 +1,15 @@
+name = "autobe-community-maintenance"
+main = "src/index.ts"
+compatibility_date = "2026-11-11"
+
+[triggers]
+crons = ["0 4 * * *"]
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "autobe-community-modpacks"
+database_id = "87c441f7-ef60-4478-a337-57cc02dcabbb"
