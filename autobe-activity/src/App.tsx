@@ -32,6 +32,7 @@ import { SubpackSelectModal } from '@/components/SubpackSelectModal';
 import { CommunityModpacksScreen } from '@/components/CommunityModpacksScreen';
 import { CommunityAddonsScreen } from '@/components/CommunityAddonsScreen';
 import { CreatorProfileScreen } from '@/components/CreatorProfileScreen';
+import { CreatorPublicProfileScreen } from '@/components/CreatorPublicProfileScreen';
 
 const tweaks = aippyTweaks(tweaksConfig);
 
@@ -48,6 +49,7 @@ export const App: React.FC = () => {
   const [screen, setScreen] = useState<ScreenType>('main');
   const [currentTab, setCurrentTab] = useState<TabType>('workspace');
   const [showCreatorProfile, setShowCreatorProfile] = useState(false);
+  const [publicCreatorId,setPublicCreatorId]=useState<string|null>(null);
 
   // Data states
   const [installedPacks, setInstalledPacks] = useState<AddonPack[]>([]);
@@ -727,9 +729,10 @@ export const App: React.FC = () => {
       {screen === 'conflicts' && <ConflictScreen conflicts={conflicts} autoMerge={autoMerge} packs={getSelectedPacks()} onUpdateResolution={(cid,res) => setConflicts(prev => prev.map(c => c.id === cid ? {...c,resolution:res} : c))} onAutoPrefixAll={() => { setConflicts(prev => prev.map(c => ({...c,resolution:c.type === 'vanilla_asset' || c.type === 'loot_table' || c.type === 'spawn_rule' || c.identifier === 'minecraft:player' ? 'keep_a' : 'prefix_all'}))); showToast('Applied safe defaults: namespace custom conflicts and keep the first vanilla override.'); }} onProceedMerge={() => openScriptCheck(getSelectedPacks())} onBack={() => setScreen('main')}/>}
       {screen === 'merging' && <MergingScreen currentStep={mergeStep} progress={mergeProgress} packCount={selectedPackIds.length} onCancel={() => setScreen('main')}/>}
       {screen === 'merge_complete' && justCompletedModpack && <MergeCompleteScreen modpack={justCompletedModpack} onInstallToMinecraft={() => handleInstallToMinecraft()} onSaveToFiles={() => handleInstallToMinecraft()} onShare={handleShareModpack} onDownloadOutput={handleDownloadOutput} onDone={() => {setJustCompletedModpack(null);navigateTab('workspace');}} onRename={newName => setJustCompletedModpack({...justCompletedModpack,name:newName,outputFileName:`${newName.replace(/\\s+/g,'_')}.mcaddon`})} onPublish={handlePublishModpack} isPublishing={isPublishing} activeTransfer={activeTransfer} transferProgress={transferProgress} transferStatus={transferStatus}/>}
-      {screen === 'community' && <CommunityModpacksScreen onBack={() => setScreen('main')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id}/>}
+      {screen === 'community' && !publicCreatorId && <CommunityModpacksScreen onBack={() => setScreen('main')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id} onOpenCreator={setPublicCreatorId}/>} 
       {showCreatorProfile && <CreatorProfileScreen onBack={() => setShowCreatorProfile(false)} user={discordUser}/>}
-      {screen === 'main' && !showCreatorProfile && <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      {publicCreatorId && <CreatorPublicProfileScreen creatorId={publicCreatorId} currentUserId={discordUser?.id} onBack={()=>setPublicCreatorId(null)} onOpenUpload={handleDownloadCommunityModpack}/>} 
+      {screen === 'main' && !showCreatorProfile && !publicCreatorId && <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <aside className="hidden w-[248px] shrink-0 flex-col border-r border-violet-300/10 bg-[#0D0A18] px-4 py-5 lg:flex">
           <AutoBEWordmark/>
           <div className="mt-10 px-3 text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/40">Workspace</div>
@@ -751,7 +754,7 @@ export const App: React.FC = () => {
             {currentTab==='workspace' ? <>
               <section className="relative mx-4 mt-4 overflow-hidden rounded-2xl border border-violet-300/15 bg-gradient-to-r from-[#21113D] via-[#17102C] to-[#100D1B] p-5 sm:mx-6 sm:mt-6 sm:p-7"><div className="pointer-events-none absolute -right-8 -top-10 opacity-30"><AutoBEFeatureArt kind="home" size={230}/></div><div className="relative z-10 max-w-2xl"><div className="mb-2 text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/70">Your Bedrock creation studio</div><h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">Make more room for <span className="text-violet-300">imagination.</span></h1><p className="mt-2 max-w-lg text-xs leading-relaxed text-[#B9ADC9] sm:text-sm">Bring your favorite addons together, resolve conflicts, and build a pack that feels like yours.</p><div className="mt-4 flex flex-wrap gap-2"><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{installedPacks.length} imported packs</span><span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5 text-[10px] font-semibold text-[#D8CDED]">{selectedPackIds.length} selected for merge</span></div></div></section>
               <div className="mx-4 mb-6 mt-5 sm:mx-6"><div className="mb-3 flex items-center justify-between gap-3"><div><div className="text-[10px] font-extrabold uppercase tracking-[.2em] text-violet-200/55">Build workspace</div><h2 className="mt-1 text-lg font-extrabold text-white">Merger</h2></div><div className="text-[10px] text-[#847995]">Import · Organize · Analyze · Export</div></div><MergeWorkspace installedPacks={installedPacks} selectedPackIds={selectedPackIds} onTogglePack={handleTogglePack} onSelectAll={handleSelectAll} onClearSelection={handleClearSelection} onStartMergeFlow={handleStartMergeFlow} onImportPacks={handleImportPacks}/></div>
-            </> : currentTab==='community' ? <CommunityModpacksScreen onBack={() => navigateTab('workspace')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id}/> : <CommunityAddonsScreen onBack={() => navigateTab('workspace')} currentUserId={discordUser?.id}/>}
+            </> : currentTab==='community' ? <CommunityModpacksScreen onBack={() => navigateTab('workspace')} onDownload={handleDownloadCommunityModpack} currentUserId={discordUser?.id} onOpenCreator={setPublicCreatorId}/> : <CommunityAddonsScreen onBack={() => navigateTab('workspace')} currentUserId={discordUser?.id} onOpenCreator={setPublicCreatorId}/>}
           </main>
         </div>
       </div>}
