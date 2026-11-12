@@ -85,7 +85,7 @@ button, input, select, textarea {
 .autobe-global-background {
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
   background-color: #08050f;
   background-image:
@@ -162,7 +162,7 @@ button, input, select, textarea {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   object-position: center;
 }
 @media (min-width: 768px) {
@@ -170,4 +170,24 @@ button, input, select, textarea {
     width: min(42vw, 520px);
     height: 8.5rem;
   }
+}
+
+.autobe-access-loading {
+  position: fixed;
+  inset: var(--autobe-host-top-inset) 0 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
+  padding: clamp(1rem, 4vw, 2rem);
+  background: #08050f;
+  color: #fff;
+}
+.autobe-access-loading > section {
+  z-index: 2;
+}
+.autobe-global-background + * {
+  position: relative;
+  z-index: 1;
 }
