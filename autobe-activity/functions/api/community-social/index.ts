@@ -2,7 +2,7 @@ import type { Context } from '@cloudflare/workers-types';
 import { getOwnedPublishedObjectKey, isOwnedPublishedObject } from '../_shared/uploadOwnership';
 interface Env { DB: D1Database; BUCKET: R2Bucket; DISCORD_CLIENT_ID: string; DISCORD_BOT_TOKEN: string; DISCORD_GUILD_ID: string; DISCORD_REQUIRED_ROLE_ID: string }
 type Ctx = Context & { env: Env };
-const OWNER_DISCORD_ID='1122949730419347487';
+const ADMIN_DISCORD_IDS=new Set(['1122949730419347487','900117843272663040']);
 const CATEGORIES=['Horror','Medieval','Fantasy','Survival','Technology','Magic','PvP','Adventure','Weapons','Mobs','Blocks','Decorations','Utility','Other'];
 const BADGES=['Featured Creator','Community Favorite','Top Creator','Trusted Creator','Early Creator','Addon Specialist','Modpack Builder'];
 const json=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -157,7 +157,7 @@ async function init(db:D1Database){
  await db.prepare(`CREATE TABLE IF NOT EXISTS community_cleanup_preview (item_id TEXT PRIMARY KEY,author_id TEXT NOT NULL,item_name TEXT NOT NULL,reason TEXT NOT NULL,detected_at INTEGER NOT NULL,last_updated_at INTEGER,last_download_at INTEGER,status TEXT NOT NULL DEFAULT 'candidate')`).run();
 }
 async function notify(db:D1Database,to:string,actor:string,kind:string,item:string|null,message:string){if(!to||to===actor)return;await db.prepare('INSERT INTO community_notifications (id,user_id,actor_id,kind,item_id,message,created_at) VALUES (?,?,?,?,?,?,?)').bind(crypto.randomUUID(),to,actor,kind,item,message.slice(0,240),Date.now()).run();}
-const owner=(id:string)=>id===OWNER_DISCORD_ID;
+const owner=(id:string)=>ADMIN_DISCORD_IDS.has(id);
 export async function onRequestGet({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
  try{const roleFailure=await requireRole(me,env,request);if(roleFailure)return roleFailure;const u=new URL(request.url),action=u.searchParams.get('action')||'me';
@@ -220,7 +220,7 @@ export async function onRequestGet({request,env}:Ctx){
  env.DB.prepare('SELECT COUNT(*) count FROM community_follows WHERE follower_id=?').bind(me.id).first<any>(),
  env.DB.prepare('SELECT badge,awarded_at FROM community_badges WHERE user_id=? ORDER BY awarded_at DESC').bind(me.id).all(),
  env.DB.prepare('SELECT COUNT(*) count FROM community_notifications WHERE user_id=? AND read_at IS NULL').bind(me.id).first<any>()]);
- return json({profile:profile||{bio:'',website:'',youtube:'',twitch:''},followers:+(followers?.count||0),following:+(following?.count||0),badges:badges.results||[],unreadNotifications:+(unread?.count||0),isOwner:owner(me.id)});
+ return json({profile:profile||{bio:'',website:'',youtube:'',twitch:''},followers:+(followers?.count||0),following:+(following?.count||0),badges:badges.results||[],unreadNotifications:+(unread?.count||0),isOwner:owner(me.id),isAdmin:owner(me.id),adminRole:me.id==='1122949730419347487'?'Owner':'Admin team'});
  }catch(e){console.error('[CommunitySocial] GET',e);return json({error:'Community data could not be loaded.'},503);}
 }
 export async function onRequestPost({request,env}:Ctx){
