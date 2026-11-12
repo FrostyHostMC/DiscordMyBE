@@ -13,3 +13,14 @@ bucket_name = "autobe-modpacks"
 binding = "DB"
 database_name = "autobe-community-modpacks"
 database_id = "87c441f7-ef60-4478-a337-57cc02dcabbb"
+
+[observability]
+enabled = true
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+
+[observability.traces]
+enabled = true
+head_sampling_rate = 0.01
