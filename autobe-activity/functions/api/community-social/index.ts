@@ -9,19 +9,27 @@ async function who(request:Request,env:Env){
  const token=(request.headers.get('authorization')||'').match(/^Bearer\s+(.+)$/i)?.[1];if(!token)return null;
  try{const r=await fetch('https://discord.com/api/v10/oauth2/@me',{headers:{authorization:`Bearer ${token}`}});if(!r.ok)return null;const d=await r.json() as any;if(d.application?.id!==env.DISCORD_CLIENT_ID||!d.user?.id)return null;return{id:String(d.user.id),name:String(d.user.global_name||d.user.username||'Discord member')};}catch{return null;}
 }
-async function hasCommunityRole(userId:string,env:Env):Promise<boolean>{
- if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return false;
+async function communityRoleStatus(userId:string,env:Env):Promise<'present'|'missing'|'unknown'>{
+ if(!env.DISCORD_BOT_TOKEN||!env.DISCORD_GUILD_ID||!env.DISCORD_REQUIRED_ROLE_ID)return 'unknown';
  try{
   const r=await fetch(`https://discord.com/api/v10/guilds/${encodeURIComponent(env.DISCORD_GUILD_ID)}/members/${encodeURIComponent(userId)}`,{headers:{authorization:`Bot ${env.DISCORD_BOT_TOKEN}`}});
-  if(!r.ok)return false;
+  if(r.status===404){const error=await r.json().catch(()=>null) as {code?:number}|null;return error?.code===10007?'missing':'unknown';}
+  if(r.status===429||r.status>=500||!r.ok)return 'unknown';
   const member=await r.json() as {roles?:string[]};
-  return Array.isArray(member.roles)&&member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID);
- }catch{return false;}
+  return Array.isArray(member.roles)&&member.roles.includes(env.DISCORD_REQUIRED_ROLE_ID)?'present':'missing';
+ }catch{return 'unknown';}
+}
+const ROLE_REQUIRED_MESSAGE='You no longer have the required AutoBE Discord role. Your Community access has been revoked. Rejoin the required role and reopen AutoBE to verify again.';
+async function requireRole(me:{id:string},env:Env){
+ const status=await communityRoleStatus(me.id,env);
+ if(status==='present')return null;
+ if(status==='missing')return json({error:ROLE_REQUIRED_MESSAGE,code:'DISCORD_ROLE_REQUIRED',verified:false},403);
+ return json({error:'We could not verify your Discord role right now. Please try again shortly.',code:'DISCORD_ROLE_CHECK_UNAVAILABLE'},503);
 }
 async function eligibleCreator(userId:string,env:Env):Promise<boolean>{
  if(!/^\d{17,20}$/.test(userId))return false;
  const [role,uploads]=await Promise.all([
-  hasCommunityRole(userId,env),
+  communityRoleStatus(userId,env).then(status=>status==='present'),
   env.DB.prepare("SELECT 1 yes FROM community_modpacks WHERE author_id=? AND COALESCE(is_hidden,0)=0 LIMIT 1").bind(userId).first()
  ]);
  return role&&!!uploads;
@@ -55,6 +63,7 @@ async function notify(db:D1Database,to:string,actor:string,kind:string,item:stri
 const owner=(id:string)=>id===OWNER_DISCORD_ID;
 export async function onRequestGet({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
+ const roleFailure=await requireRole(me,env);if(roleFailure)return roleFailure;
  try{await init(env.DB);const u=new URL(request.url),action=u.searchParams.get('action')||'me';
  if(action==='creators'){
  const q=(u.searchParams.get('q')||'').trim().slice(0,48);
@@ -119,6 +128,7 @@ export async function onRequestGet({request,env}:Ctx){
 }
 export async function onRequestPost({request,env}:Ctx){
  const me=await who(request,env);if(!me)return json({error:'Sign in through Discord to use Community features.'},401);
+ const roleFailure=await requireRole(me,env);if(roleFailure)return roleFailure;
  try{await init(env.DB);const d=await request.json() as any,a=String(d.action||''),id=String(d.itemId||''),now=Date.now();
  if(a.startsWith('admin_')&&!owner(me.id))return json({error:'Owner access only.'},403);
  if(a==='keep_published'){const item=String(d.uploadId||'');const r=await env.DB.prepare("UPDATE community_modpacks SET last_updated_at=?,inactivity_warning_at=NULL,inactivity_purge_after=NULL,lifecycle_state='active' WHERE id=? AND author_id=? AND COALESCE(role_removed_at,0)=0").bind(now,item,me.id).run();if(!r.meta?.changes)return json({error:'Upload not found or currently hidden due to Discord role status.'},404);await env.DB.prepare("DELETE FROM community_cleanup_preview WHERE item_id=?").bind(item).run();await env.DB.prepare("INSERT INTO community_cleanup_audit (id,item_id,author_id,action,reason,created_at) VALUES (?,?,?,?,?,?)").bind(crypto.randomUUID(),item,me.id,'kept_published','creator_confirmed_keep',now).run();return json({success:true});}
