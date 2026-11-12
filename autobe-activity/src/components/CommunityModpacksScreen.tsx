@@ -6,6 +6,7 @@ import {
   Clock,
   Box,
   User,
+  Users,
   Loader2,
   ExternalLink,
   Trash2,
@@ -31,12 +32,14 @@ interface CommunityModpacksScreenProps {
   onBack: () => void;
   onDownload: (modpack: CommunityModpack) => void;
   currentUserId?: string; // Discord user ID of the current user
+  onOpenCreator?: (creatorId:string)=>void;
 }
 
 export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = ({
   onBack,
   onDownload,
-  currentUserId
+  currentUserId,
+  onOpenCreator
 }) => {
   const [modpacks, setModpacks] = useState<CommunityModpack[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +63,9 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
   const [collectionChoices,setCollectionChoices]=useState<any[]>([]);
   const [selectedCollection,setSelectedCollection]=useState('');
   const [socialBusy,setSocialBusy]=useState(false);
+  const [creatorSearch,setCreatorSearch]=useState('');
+  const [creatorResults,setCreatorResults]=useState<Array<{author_id:string;author:string;author_avatar?:string;uploads:number;downloads:number;followers:number}>>([]);
+  const [creatorSearchLoading,setCreatorSearchLoading]=useState(false);
 
   useEffect(() => {
     void fetchCommunityModpacks();
@@ -93,6 +99,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     }
   };
 
+  useEffect(()=>{const q=creatorSearch.trim();if(q.length<2){setCreatorResults([]);return;}const timer=window.setTimeout(async()=>{const auth=getDiscordAuth();if(!auth?.token)return;setCreatorSearchLoading(true);try{const r=await fetch('/api/community-social?action=creators&q='+encodeURIComponent(q),{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});const d=await r.json();if(r.ok)setCreatorResults(d.creators||[]);}catch(e){console.warn('Creator search failed',e);}finally{setCreatorSearchLoading(false);}},250);return()=>window.clearTimeout(timer);},[creatorSearch]);
   const handleDelete = async (modpack: CommunityModpack) => {
     if (!currentUserId) return;
 
@@ -372,6 +379,10 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             />
           </div>
         </div>
+        <div className="mt-3 border-t border-[#30263F]/50 pt-3">
+          <div className="relative max-w-sm"><Users className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[#AAA3BB]"/><input value={creatorSearch} onChange={e=>setCreatorSearch(e.target.value)} placeholder="Find eligible creators…" className="w-full rounded-lg border border-[#30263F] bg-[#15111F] py-2 pl-8 pr-3 text-xs text-white outline-none focus:border-[#762BFF]"/></div>
+          {creatorSearch.trim().length>=2&&<div className="mt-2 max-w-sm overflow-hidden rounded-xl border border-[#30263F] bg-[#100D18]">{creatorSearchLoading?<p className="p-3 text-xs text-[#AAA3BB]">Searching eligible creators…</p>:creatorResults.length===0?<p className="p-3 text-xs text-[#AAA3BB]">No eligible creators found.</p>:creatorResults.map(c=><button key={c.author_id} onClick={()=>onOpenCreator?.(c.author_id)} className="flex w-full items-center gap-3 border-b border-white/5 p-3 text-left last:border-0 hover:bg-white/5">{c.author_avatar?<img src={`https://cdn.discordapp.com/avatars/${c.author_id}/${c.author_avatar}.png?size=64`} alt="" className="h-8 w-8 rounded-full"/>:<span className="grid h-8 w-8 place-items-center rounded-full bg-violet-500/20 text-xs font-bold">{c.author.slice(0,1)}</span>}<span className="min-w-0 flex-1"><span className="block truncate text-xs font-bold">{cleanDiscordDisplayName(c.author)}</span><span className="block text-[10px] text-[#AAA3BB]">{c.uploads} uploads · {c.followers} followers</span></span><ArrowUpRight className="h-4 w-4 text-violet-200"/></button>)}</div>}
+        </div>
       </div>
 
       {/* Content Area */}
@@ -379,7 +390,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
         {!loading && !error && (featuredUploads.length>0||featuredCreators.length>0) && (
           <section className="space-y-3 rounded-xl border border-amber-300/20 bg-gradient-to-br from-[#211A12] to-[#100D18] p-4">
             <div><h2 className="text-sm font-bold text-amber-100">Featured in the Community</h2><p className="text-[10px] text-[#AAA3BB]">Selected uploads and creators</p></div>
-            {featuredCreators.length>0&&<div className="flex flex-wrap gap-2">{featuredCreators.map(c=><span key={c.user_id} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-[10px] font-semibold text-amber-100">{cleanDiscordDisplayName(c.author||'Creator')} · {c.uploads} uploads</span>)}</div>}
+            {featuredCreators.length>0&&<div className="flex flex-wrap gap-2">{featuredCreators.map(c=><button key={c.user_id} onClick={()=>onOpenCreator?.(c.user_id)} className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-300/20">{cleanDiscordDisplayName(c.author||'Creator')} · {c.uploads} uploads</button>)}</div>}
             {featuredUploads.length>0&&<div className="grid gap-2 sm:grid-cols-2">{featuredUploads.map(item=><button type="button" key={item.id} onClick={()=>setSelectedModpack(item)} className="flex min-w-0 items-center gap-3 rounded-lg border border-white/10 bg-black/20 p-3 text-left hover:border-amber-300/30"><div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-white/5">{item.icon_data_url?<img src={item.icon_data_url} alt="" className="h-full w-full object-cover"/>:<Box className="m-3 h-5 w-5 text-amber-200"/>}</div><div className="min-w-0"><div className="truncate text-xs font-bold text-white">{item.name}</div><div className="truncate text-[10px] text-[#AAA3BB]">by {cleanDiscordDisplayName(item.author)} · {item.downloads} downloads</div></div><Trophy className="ml-auto h-4 w-4 shrink-0 text-amber-200"/></button>)}</div>}
           </section>
         )}
@@ -394,7 +405,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
             </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
               {(leaderboard.length ? leaderboard.map(c=>({id:c.author_id,name:cleanDiscordDisplayName(c.author)||'Creator',modpackCount:c.uploads,downloads:c.downloads,likes:c.likes,followers:c.followers})) : topCreators).slice(0,3).map((creator, index) => (
-                <div key={creator.id} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#30263F] bg-[#0D0B19]/80 p-3">
+                <button type="button" key={creator.id} onClick={()=>onOpenCreator?.(creator.id)} className="flex min-w-0 items-center gap-3 rounded-lg border border-[#30263F] bg-[#0D0B19]/80 p-3 text-left hover:border-violet-300/30">
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-black ${index === 0 ? 'bg-[#762BFF]/25 text-[#D9C5FF]' : 'bg-[#201A2E] text-[#AAA3BB]'}`}>
                     #{index + 1}
                   </div>
@@ -404,7 +415,7 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                       {creator.modpackCount} modpack{creator.modpackCount === 1 ? '' : 's'} · {creator.downloads} downloads
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </section>
