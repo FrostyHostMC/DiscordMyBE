@@ -81,3 +81,7 @@ button, input, select, textarea {
 *::-webkit-scrollbar-track {
   background: transparent;
 }
+/* Shared animated nebula background: behind app chrome, never intercepts taps. */
+.autobe-global-background { position:fixed; inset:0; z-index:0; pointer-events:none; background-image:linear-gradient(rgba(7,4,17,.48),rgba(7,4,17,.58)),url("/assets/app-background.gif"); background-position:center; background-size:cover; background-repeat:no-repeat; transform:translateZ(0); }
+.autobe-loading-screen { position:fixed; inset:0; display:grid; place-items:center; background:#08050f url("/assets/app-background.gif") center/cover no-repeat; }
+.autobe-loading-screen::after { content:""; position:absolute; inset:0; background:rgba(7,4,17,.12); pointer-events:none; }

@@ -65,9 +65,7 @@ export const AutoBEFeatureArt: React.FC<{ kind: AutoBEArtKind; size?: number; cl
 
 export const AutoBEWordmark: React.FC = () => (
   <div className="flex items-center gap-3">
-    <div className="grid h-11 w-11 place-items-center rounded-xl border border-violet-300/25 bg-violet-500/10 shadow-[0_8px_24px_rgba(124,58,237,.22)]">
-      <AutoBEFeatureArt kind="merge" size={38}/>
-    </div>
-    <div><div className="text-lg font-black tracking-tight text-white">Auto<span className="text-violet-300">BE</span></div><div className="text-[10px] font-semibold tracking-[.16em] text-violet-200/60">MERGE · CREATE · SHARE</div></div>
+    <div className="grid h-11 w-11 place-items-center rounded-xl border border-violet-300/25 bg-violet-500/10 shadow-[0_8px_24px_rgba(124,58,237,.22)]"><span className="text-sm font-black tracking-tight text-white">AUTO<span className="text-violet-300">BE</span></span></div>
+    <div className="text-[10px] font-semibold tracking-[.16em] text-violet-100/75">MERGE · CREATE · SHARE</div>
   </div>
 );
