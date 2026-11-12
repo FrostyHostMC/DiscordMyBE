@@ -49,22 +49,27 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
     finally{setUsageLoading(false);}
   };
   const loadSocial = async () => {
-    if (!auth?.token) return;
-    const headers = { Authorization: `Bearer ${auth.token}` };
+    const currentAuth = getDiscordAuth();
+    if (!currentAuth?.token) throw new Error('Your Discord session is missing. Reopen AutoBE through Discord to refresh your sign-in.');
+    const headers = { Authorization: `Bearer ${currentAuth.token}` };
+    const read = async (url: string) => {
+      const response = await fetch(url, { headers, cache: 'no-store' });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || (response.status === 401 ? 'Your Discord session expired. Reopen AutoBE through Discord.' : 'Community profile data could not be loaded.'));
+      return data;
+    };
     const [me, notes, lists, saved] = await Promise.all([
-      fetch('/api/community-social', { headers, cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/community-social?action=notifications', { headers, cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/community-social?action=collections', { headers, cache: 'no-store' }).then(r => r.json()),
-      fetch('/api/community-social?action=favorites', { headers, cache: 'no-store' }).then(r => r.json()),
+      read('/api/community-social'),
+      read('/api/community-social?action=notifications'),
+      read('/api/community-social?action=collections'),
+      read('/api/community-social?action=favorites'),
     ]);
     setProfile(me.profile || { bio: '', website: '', youtube: '', twitch: '' });
     setFollowers(me.followers || 0); setFollowing(me.following || 0); setBadges(me.badges || []);
     setNotifications(notes.notifications || []); setCollections(lists.collections || []); setFavorites(saved.favorites || []);
     setIsOwner(!!me.isOwner);
     if (me.isOwner) {
-      const response = await fetch('/api/community-social?action=admin', { headers, cache: 'no-store' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Owner controls could not be loaded.');
+      const data = await read('/api/community-social?action=admin');
       setAdminData(data);
       await loadOwnerUsage();
     }
@@ -74,7 +79,12 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
     if (!user?.id) { setError('Your Discord profile is not available. Reopen AutoBE through Discord.'); setLoading(false); return; }
     setLoading(true); setError('');
     try {
-      const response = await fetch('/api/community-modpacks', { cache: 'no-store' });
+      const currentAuth = getDiscordAuth();
+      if (!currentAuth?.token) throw new Error('Your Discord session is not available. Reopen AutoBE through Discord and try again.');
+      const response = await fetch('/api/community-modpacks', {
+        headers: { Authorization: `Bearer ${currentAuth.token}` },
+        cache: 'no-store',
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Could not load your published content.');
       setItems((data.modpacks || []).filter((item: CommunityModpack) => item.author_id === user.id));
@@ -82,7 +92,16 @@ export const CreatorProfileScreen: React.FC<Props> = ({ onBack, user }) => {
     finally { setLoading(false); }
     try { await loadSocial(); } catch (err) { setSocialError(err instanceof Error ? err.message : 'Could not load creator tools.'); }
   };
-  useEffect(() => { void load(); }, [user?.id]);
+  useEffect(() => {
+    void load();
+    const refreshWhenVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [user?.id]);
 
   const adminAction = async (action:string, payload:Record<string,unknown>) => {
     setAdminBusy(true); setSocialError('');
