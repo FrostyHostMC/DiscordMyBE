@@ -60,6 +60,12 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     warning: string;
   } | null>(null);
   const [usageLoading, setUsageLoading] = useState(false);
+  const [socialStats,setSocialStats]=useState<any>(null);
+  const [reviewRating,setReviewRating]=useState(5);
+  const [reviewBody,setReviewBody]=useState('');
+  const [collectionChoices,setCollectionChoices]=useState<any[]>([]);
+  const [selectedCollection,setSelectedCollection]=useState('');
+  const [socialBusy,setSocialBusy]=useState(false);
 
   useEffect(() => {
     void fetchCommunityModpacks();
@@ -136,6 +142,8 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     setEditGalleryImages(Array.isArray(modpack.detail_images) ? modpack.detail_images.slice(0, 3) : []);
   };
 
+  useEffect(()=>{if(selectedModpack)void loadSocialDetails(selectedModpack);else setSocialStats(null);},[selectedModpack?.id]);
+
   const refreshDetails = async () => {
     if (!selectedModpack) return;
     setDetailsLoading(true);
@@ -158,6 +166,26 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
     }
   };
 
+  const postSocial = async (payload:Record<string,unknown>) => {
+    const auth=getDiscordAuth(); if(!auth?.token)throw new Error('Reconnect Discord to use Community features.');
+    const response=await fetch('/api/community-social',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${auth.token}`},body:JSON.stringify(payload)});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'Community action failed.');return data;
+  };
+  const loadSocialDetails = async (item:CommunityModpack) => {
+    const auth=getDiscordAuth();if(!auth?.token)return;
+    const headers={Authorization:`Bearer ${auth.token}`};
+    const [stats,lists]=await Promise.all([
+      fetch('/api/community-social?action=item&id='+encodeURIComponent(item.id),{headers,cache:'no-store'}).then(r=>r.json()),
+      fetch('/api/community-social?action=collections',{headers,cache:'no-store'}).then(r=>r.json())
+    ]);
+    setSocialStats(stats);setCollectionChoices(lists.collections||[]);
+  };
+  const runSocial = async (payload:Record<string,unknown>) => {
+    if(!selectedModpack)return;setSocialBusy(true);setNotice(null);
+    try{await postSocial(payload);await loadSocialDetails(selectedModpack);}
+    catch(e){setNotice(e instanceof Error?e.message:'Community action failed.');}
+    finally{setSocialBusy(false);}
+  };
   const handleIconFile = (file?: File) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
@@ -587,6 +615,21 @@ export const CommunityModpacksScreen: React.FC<CommunityModpacksScreenProps> = (
                 )}
               </div>
             </div>
+            <section className="rounded-xl border border-violet-400/20 bg-gradient-to-br from-[#171027] to-[#100D18] p-4 sm:p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="text-sm font-bold">Community activity</h2><p className="mt-1 text-[10px] text-[#AAA3BB]">{socialStats?.reviewCount||0} reviews · {Number(socialStats?.averageRating||0).toFixed(1)} / 5 average · {socialStats?.followers||0} creator followers</p></div><span className="text-xs text-violet-200">♥ {socialStats?.likes||0} likes</span></div>
+              <div className="flex flex-wrap gap-2">
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'like',itemId:selectedModpack.id})} className="rounded-lg border border-violet-300/20 bg-violet-500/15 px-3 py-2 text-xs font-bold text-violet-100 disabled:opacity-50">{socialStats?.liked?'♥ Liked':'♡ Like'}</button>
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'favorite',itemId:selectedModpack.id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-50">{socialStats?.favorited?'★ Saved':'☆ Save'}</button>
+                {selectedModpack.author_id && selectedModpack.author_id!==currentUserId && <button disabled={socialBusy} onClick={()=>void runSocial({action:'follow',creatorId:selectedModpack.author_id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-50">{socialStats?.followingCreator?'Following creator':'Follow creator'}</button>}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-[100px_1fr_auto]">
+                <select value={reviewRating} onChange={e=>setReviewRating(Number(e.target.value))} className="rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs">{[5,4,3,2,1].map(n=><option key={n} value={n}>{n} / 5 stars</option>)}</select>
+                <input value={reviewBody} onChange={e=>setReviewBody(e.target.value)} maxLength={1000} placeholder="Write a review (optional)" className="min-w-0 rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs"/>
+                <button disabled={socialBusy} onClick={()=>void runSocial({action:'review',itemId:selectedModpack.id,rating:reviewRating,body:reviewBody})} className="rounded-lg bg-violet-500 px-3 py-2 text-xs font-bold disabled:opacity-50">Post review</button>
+              </div>
+              {collectionChoices.length>0&&<div className="flex flex-wrap gap-2"><select value={selectedCollection} onChange={e=>setSelectedCollection(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#0D0A18] px-3 py-2 text-xs"><option value="">Add to your collection…</option>{collectionChoices.map(c=><option key={c.id} value={c.id}>{c.title}</option>)}</select><button disabled={!selectedCollection||socialBusy} onClick={()=>void runSocial({action:'collection_add',collectionId:selectedCollection,itemId:selectedModpack.id})} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold disabled:opacity-40">Add</button></div>}
+              <div className="space-y-2">{(socialStats?.reviews||[]).slice(0,5).map((r:any)=><div key={r.user_id} className="rounded-lg bg-black/20 p-3"><div className="text-xs font-bold text-amber-200">{'★'.repeat(r.rating)}{'☆'.repeat(5-r.rating)}</div>{r.body&&<p className="mt-1 text-xs text-[#D5CEE3]">{r.body}</p>}</div>)}</div>
+            </section>
             <section className="rounded-xl border border-[#30263F] bg-[#100D18] p-4 sm:p-5 space-y-2">
               <h2 className="text-sm font-bold">About this modpack</h2>
               <p className="text-sm text-[#D5CEE3] whitespace-pre-wrap break-words">{selectedModpack.description || 'No description provided.'}</p>
