@@ -69,22 +69,6 @@ export const CommunityAddonsScreen: React.FC<Props> = ({ onBack, currentUserId, 
     } finally { if(!silent)setLoading(false); }
   };
   useEffect(() => { void load(); }, []);
-  useEffect(() => {
-    const refreshSocial = async () => {
-      const auth=getDiscordAuth();if(!auth?.token||document.visibilityState!=='visible')return;
-      try{
-        const response=await fetch('/api/community-social?action=items',{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});
-        if(!response.ok)return;
-        const data=await response.json();
-        const rows=data.items||[];
-        setAddonStats(Object.fromEntries(rows.map((x:any)=>[x.id,{likes:Number(x.likes)||0,reviewCount:Number(x.reviewCount)||0,averageRating:Number(x.averageRating)||0}])));
-        setSocialFlags(current=>{const next={...current};for(const x of rows)next[x.id]={...next[x.id],liked:!!x.liked,favorited:!!x.favorited,following:!!x.followingCreator};return next;});
-      }catch(e){console.warn('Community social sync failed',e);}
-    };
-    const timer=window.setInterval(()=>void refreshSocial(),15000);
-    document.addEventListener('visibilitychange',refreshSocial);
-    return()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',refreshSocial);};
-  },[]);
 
   useEffect(()=>{const q=creatorSearch.trim();if(q.length<2){setCreatorResults([]);return;}const timer=window.setTimeout(async()=>{const auth=getDiscordAuth();if(!auth?.token)return;setCreatorSearchLoading(true);try{const r=await fetch('/api/community-social?action=creators&q='+encodeURIComponent(q),{headers:{Authorization:`Bearer ${auth.token}`},cache:'no-store'});const d=await r.json();if(r.ok)setCreatorResults(d.creators||[]);}catch(e){console.warn('Creator search failed',e);}finally{setCreatorSearchLoading(false);}},250);return()=>window.clearTimeout(timer);},[creatorSearch]);
   const filtered = useMemo(() => addons.filter(item =>
