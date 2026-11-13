@@ -6,6 +6,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — First PS4 target profile recorded**
+- Recorded the user-confirmed target label `CUSA00411` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
+- The target profile is included in exported conversion manifests and shown in the workbench.
+- Added regression tests to ensure the supplied target label remains stable and explicitly unverified.
+- This records the intended target only; it does not independently verify the console build or establish YFT/YTD compatibility.
+
+
 **2026-11-13 — Native inspection reports connected to the workbench**
 - Added a dedicated **Load native reports** folder import to the dashboard.
 - Added Windows launchers: `START-AUTOPORT.bat` starts the local workbench; `RUN-NATIVE-INSPECTOR.bat` opens file pickers and inspects multiple YFT LOD files plus the matching YTD in one report set.
