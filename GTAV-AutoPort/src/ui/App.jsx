@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownToLine, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
-import { inspectVehicleMetadata } from "../core/metadata.js";
+import { inspectVehicleMetadata, listVehicleModels } from "../core/metadata.js";
+import { buildVehicleDependencyGraph } from "../core/dependencyGraph.js";
 import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
 import { inspectNativeReports } from "../core/nativeReports.js";
@@ -37,7 +38,8 @@ export default function App() {
   const zipInput = useRef(null);
   const folderInput = useRef(null);
   const [archive, setArchive] = useState(null);
-  const [modelName, setModelName] = useState("glendale");
+  const [modelName, setModelName] = useState("");
+  const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -71,6 +73,14 @@ export default function App() {
       const result = await work();
       setArchive(result);
       setFilter("all");
+      const vehiclesMeta = result.files.find((file) => file.path.split("/").at(-1).toLowerCase() === "vehicles.meta");
+      if (vehiclesMeta) {
+        try {
+          const models = listVehicleModels(new TextDecoder("utf-8").decode(vehiclesMeta.bytes));
+          setAvailableModels(models);
+          setModelName(models.length === 1 ? models[0] : "");
+        } catch { setAvailableModels([]); setModelName(""); }
+      } else { setAvailableModels([]); setModelName(""); }
       const nativeFiles = result.files.filter((file) => /\.(yft|ytd)$/i.test(file.path));
       if (nativeFiles.length) {
         setNativeStatus("Automatically inspecting YFT/YTD resources locally. First run may compile the inspector.");
@@ -119,7 +129,8 @@ export default function App() {
           resource,
         };
       });
-      const result = { metadata, assetChecks };
+      const dependencyGraph = buildVehicleDependencyGraph({ files: archive.files, metadata });
+      const result = { metadata, assetChecks, dependencyGraph };
       setAnalysis(result);
       const built = await buildConversionManifest({
         sourceName: archive.sourceName,
@@ -174,7 +185,7 @@ export default function App() {
         <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
         <div className="file-toolbar"><span>FILE INVENTORY</span><select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All file types</option>{[...new Set(archive.inventory.map((f) => f.extension).filter(Boolean))].sort().map((ext) => <option key={ext} value={ext}>{ext}</option>)}</select></div>
         <div className="file-list">{visibleFiles.map((file) => <div className="file-row" key={file.path}><FileText size={15}/><span className="file-name">{file.path}</span><span className="file-ext">{file.extension || "FILE"}</span><span className="file-size">{formatBytes(file.size)}</span></div>)}</div>
-        <div className="analyzer"><label htmlFor="model-name">Vehicle model name</label><div className="analyzer-controls"><input id="model-name" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. glendale"/><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle</button></div><p>For the Crown Victoria test fixture, use <b>glendale</b>. Ambiguous duplicate metadata files are rejected instead of choosing one silently.</p></div>
+        <div className="analyzer"><label htmlFor="model-name">Vehicle model name</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
       {nativeReports && <section className="panel results-panel">
@@ -205,7 +216,7 @@ export default function App() {
 
       {analysis && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">ANALYSIS RESULT</div><h3>{analysis.metadata.modelName} · Vehicle replacement</h3><p>Handling reference: {analysis.metadata.handlingId} · Texture dictionary: {analysis.metadata.txdName}</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT CONVERTED</span></div>
-        <div className="asset-grid">{analysis.assetChecks.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-top"><span>{asset.name}</span>{asset.present && !asset.ambiguous ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}</div><b>{asset.ambiguous ? "Ambiguous" : asset.present ? "Found" : "Missing"}</b><small>{asset.path || "No unique matching path"}</small><small>{asset.present ? formatBytes(asset.size) : "Required asset not found"}</small><small>{asset.resource?.valid ? `RSC7 v${asset.resource.version} · ${asset.resource.fixtureVersionMatch ? "matches Glendale sample" : "not a sample match"}` : asset.resource?.reason || asset.resource?.status || "Not inspected"}</small></div>)}</div>
+        <div className="notice"><FileText size={19}/><div><b>Dependency inventory</b><p>{analysis.dependencyGraph.summary.resolved} resolved · {analysis.dependencyGraph.summary.missing} missing · {analysis.dependencyGraph.summary.ambiguous} ambiguous references across {analysis.dependencyGraph.summary.fileCount} imported files. This is an initial metadata-linked graph; full DLC and resource dependency resolution remains future work.</p></div></div><div className="asset-grid">{analysis.assetChecks.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-top"><span>{asset.name}</span>{asset.present && !asset.ambiguous ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}</div><b>{asset.ambiguous ? "Ambiguous" : asset.present ? "Found" : "Missing"}</b><small>{asset.path || "No unique matching path"}</small><small>{asset.present ? formatBytes(asset.size) : "Required asset not found"}</small><small>{asset.resource?.valid ? `RSC7 v${asset.resource.version} · ${asset.resource.fixtureVersionMatch ? "matches Glendale sample" : "not a sample match"}` : asset.resource?.reason || asset.resource?.status || "Not inspected"}</small></div>)}</div>
         <div className="notice"><ShieldCheck size={19}/><div><b>Metadata and header inspection only. PS4 conversion has not passed.</b><p>RSC7 identifies a resource container, not its target platform. No decompression, geometry or texture decoding, rewriting, or deployment is performed. No installable package is generated.</p></div></div>
         {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-autoport-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
       </section>}
