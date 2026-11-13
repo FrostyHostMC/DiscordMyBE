@@ -50,7 +50,7 @@ Requirements: Rust stable toolchain.
     cargo run --release -- path/to/glendale.yft
     cargo run --release -- path/to/glendale.ytd
 
-The native adapter currently parses resources and exports YTD textures to DDS for inspection. It does not rewrite YFT or create a PS4 package.
+The native adapter parses resources and exports YTD textures to DDS/PNG for inspection. Optional fixture tests accept `GTAV_AUTOPORT_YFT` and `GTAV_AUTOPORT_YTD` paths so the supplied mod can be tested locally without committing its binaries. It does not rewrite YFT or create a PS4 package.
 
 ## Safety
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
