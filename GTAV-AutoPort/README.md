@@ -16,6 +16,12 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — GoldHEN target recorded**
+- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00411` update `1.73` Story Mode.
+- GoldHEN suffix is stored as user-confirmed; official release metadata independently confirms the `2.4b18` release family, not the `.13` suffix.
+- Resource compatibility and deployment remain unverified.
+
+
 **2026-11-13 — PS4 firmware target recorded**
 - Recorded the user-confirmed PS4 system firmware 14.00 separately from the GTA V title update 1.73; GoldHEN version remains unknown and resource compatibility remains unverified.
 
