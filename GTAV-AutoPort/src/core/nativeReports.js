@@ -1,5 +1,3 @@
-const REPORT_NAMES = new Set(["yft-inspection.json", "ytd-inspection.json"]);
-
 function basename(path) {
   return path.split("/").at(-1).toLowerCase();
 }
@@ -47,8 +45,8 @@ export function inspectNativeReports(files) {
     reports.ytd = {
       ...report,
       textures: report.textures.map((texture) => {
-        const previewPath = typeof texture.preview_png === "string" ? texture.preview_png.replace(/\\\\/g, "/") : null;
-        const safePreviewPath = previewPath && !previewPath.startsWith("/") && !previewPath.split("/").some((part) => part === "." || part === "..") && previewPath.toLowerCase().endsWith(".png");
+        const previewPath = typeof texture.preview_png === "string" ? texture.preview_png : null;
+        const safePreviewPath = previewPath && !previewPath.includes("\\") && !previewPath.startsWith("/") && !previewPath.split("/").some((part) => part === "." || part === "..") && previewPath.toLowerCase().endsWith(".png");
         const preview = safePreviewPath
           ? files.find((file) => file.path.toLowerCase() === previewPath.toLowerCase() && file.bytes?.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => file.bytes[index] === value))
           : null;
