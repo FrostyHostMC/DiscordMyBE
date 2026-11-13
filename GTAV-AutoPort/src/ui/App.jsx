@@ -1,9 +1,9 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownToLine, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
 import { inspectVehicleMetadata } from "../core/metadata.js";
 import { inspectRsc7 } from "../core/rsc7.js";
-import { buildConversionManifest } from "../core/manifest.js";
+import { buildConversionManifest } from "../core/manifest.js";\nimport { inspectNativeReports } from "../core/nativeReports.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -31,16 +31,16 @@ function formatBytes(bytes) {
 
 export default function App() {
   const zipInput = useRef(null);
-  const folderInput = useRef(null);
+  const folderInput = useRef(null);\n  const nativeOutputInput = useRef(null);
   const [archive, setArchive] = useState(null);
   const [modelName, setModelName] = useState("glendale");
   const [analysis, setAnalysis] = useState(null);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState("all");\n  const [nativeReports, setNativeReports] = useState(null);\n  const [previewUrls, setPreviewUrls] = useState({});
 
-  const visibleFiles = useMemo(() => {
+  useEffect(() => {\n    if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }\n    const urls = {};\n    for (const texture of nativeReports.ytd.textures) {\n      if (texture.previewBytes) urls[texture.nameHash || texture.name + Math.random()] = URL.createObjectURL(new Blob([texture.previewBytes], { type: "image/png" }));\n    }\n    setPreviewUrls(urls);\n    return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));\n  }, [nativeReports]);\n\n  const visibleFiles = useMemo(() => {
     if (!archive) return [];
     return filter === "all" ? archive.inventory : archive.inventory.filter((item) => item.extension === filter);
   }, [archive, filter]);
@@ -122,10 +122,10 @@ export default function App() {
       <section className="hero">
         <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p>Import a ZIP or extracted folder. AutoPort inventories files, checks vehicle metadata and inspects the RSC7 resource header without claiming unsupported console compatibility.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
-          <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
+          <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>\n          <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
           <div className="import-actions">
             <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP mod"}</button>
-            <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
+            <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>\n            <button className="secondary-button" onClick={() => nativeOutputInput.current?.click()} disabled={busy}><FileText size={16}/> Load native reports</button>
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
@@ -140,6 +140,32 @@ export default function App() {
         <div className="file-toolbar"><span>FILE INVENTORY</span><select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All file types</option>{[...new Set(archive.inventory.map((f) => f.extension).filter(Boolean))].sort().map((ext) => <option key={ext} value={ext}>{ext}</option>)}</select></div>
         <div className="file-list">{visibleFiles.map((file) => <div className="file-row" key={file.path}><FileText size={15}/><span className="file-name">{file.path}</span><span className="file-ext">{file.extension || "FILE"}</span><span className="file-size">{formatBytes(file.size)}</span></div>)}</div>
         <div className="analyzer"><label htmlFor="model-name">Vehicle model name</label><div className="analyzer-controls"><input id="model-name" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder="e.g. glendale"/><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle</button></div><p>For the Crown Victoria test fixture, use <b>glendale</b>. Ambiguous duplicate metadata files are rejected instead of choosing one silently.</p></div>
+      </section>}
+
+      {nativeReports && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Inspector reports loaded</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yft ? "YFT parsed" : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> REPORTS IMPORTED</span></div>
+        {nativeReports.yft && <div className="native-summary">
+          <div className="eyebrow">YFT FRAGMENT · {nativeReports.yft.fragment.name || nativeReports.yft.source_file}</div>
+          <div className="native-metrics">
+            <div><b>{nativeReports.yft.fragment.main_drawable?.model_count ?? 0}</b><span>Models</span></div>
+            <div><b>{nativeReports.yft.fragment.main_drawable?.geometry_count ?? 0}</b><span>Geometries</span></div>
+            <div><b>{nativeReports.yft.fragment.main_drawable?.triangle_count_sum_across_lods ?? 0}</b><span>Triangles</span></div>
+            <div><b>{nativeReports.yft.fragment.bone_transform_count ?? 0}</b><span>Bone transforms</span></div>
+            <div><b>{nativeReports.yft.fragment.physics_child_count ?? 0}</b><span>Physics children</span></div>
+          </div>
+          <p className="native-disclaimer">Structural parsing succeeded. This does not establish PS4 compatibility or convert the YFT.</p>
+        </div>}
+        {nativeReports.ytd && <div className="native-textures">
+          <div className="eyebrow">YTD TEXTURE DICTIONARY · {nativeReports.ytd.texture_count} TEXTURES</div>
+          <div className="texture-grid">{nativeReports.ytd.textures.map((texture, index) => {
+            const key = texture.nameHash || texture.name + index;
+            return <article className="texture-card" key={key}>
+              {previewUrls[key] ? <img src={previewUrls[key]} alt={`${texture.name} texture preview`} loading="lazy"/> : <div className="texture-placeholder"><FileText size={22}/><span>Preview unavailable</span></div>}
+              <div><b>{texture.name}</b><small>{texture.width} × {texture.height} · {texture.format}</small><small>{texture.mip_levels} mip levels · {texture.depth}-D</small></div>
+            </article>;
+          })}</div>
+        </div>}
+        <div className="notice"><ShieldCheck size={19}/><div><b>Inspection reports only — not a PS4 conversion.</b><p>These reports describe the source resource. DDS and PNG exports are inspection artifacts. No source asset is rewritten and no deployment package is produced.</p></div></div>
       </section>}
 
       {analysis && <section className="panel results-panel">
