@@ -6,6 +6,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Automatic native inspection on import**
+- Added a local Vite development-server endpoint that invokes the Rust read-only inspector for every imported YFT/YTD asset.
+- The workbench now automatically loads generated YFT structural reports, YTD metadata, and PNG texture previews after ZIP/folder import; manual report-folder import is no longer part of the normal workflow.
+- Source resources are processed in a temporary local directory and removed after report data is returned. This requires the Rust stable toolchain and Cargo; no mod data is uploaded.
+- Automatic native inspection is a local development workflow; a packaged desktop runtime is still needed for a production-grade end-user installer.
+
+
 **2026-11-13 — Evidence-based PS4 compatibility gates**
 - Added an explicit seven-gate compatibility assessment covering console identity, GoldHEN, PS4 YFT/YTD reference resources, conversion adapters, and deployment/rollback validation.
 - Added a dashboard checklist showing pending evidence and keeping conversion/deployment disabled even if evidence flags are supplied until real writer and validation workflows exist.
