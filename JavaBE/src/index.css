@@ -2,66 +2,147 @@
 
 :root {
   color-scheme: dark;
-  --app-bg: #09090d;
-  --app-accent: #b69cff;
-  background: var(--app-bg);
+  --app-bg: #08070d;
+  --app-accent: #a855f7;
+  --app-accent-soft: #d0b4ff;
+  --javabe-host-top-inset: 4.25rem;
+  background: #08070d;
 }
 
-html,
-body,
-#root {
+html, body, #root {
+  width: 100%;
   min-height: 100%;
-  background: var(--app-bg);
+  margin: 0;
+  background: #08070d;
+  color: #f7f5fc;
   overscroll-behavior: none;
 }
 
-@layer base {
-  body {
-    margin: 0;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    user-select: none;
-  }
+html { min-height: 100dvh; }
+body {
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+#root { min-height: 100dvh; }
+#root > * { box-sizing: border-box; }
 
-  input,
-  textarea,
-  select {
-    -webkit-user-select: text;
-    user-select: text;
-  }
+input, textarea, select { -webkit-user-select: text; user-select: text; }
+button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
 
-  button,
-  summary,
-  select,
-  input[type="checkbox"] {
-    touch-action: manipulation;
-  }
+.javabe-app-shell {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  overflow: clip;
+  background: #08070d;
+}
+.javabe-cosmic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  isolation: isolate;
+  background:
+    radial-gradient(ellipse at 50% 110%, rgba(75, 25, 130, .68) 0%, rgba(24, 10, 42, .9) 42%, #08070d 82%);
+  contain: paint;
+}
+.javabe-cosmic-cloud {
+  position: absolute;
+  display: block;
+  inset: -28%;
+  filter: blur(clamp(34px, 7vw, 100px));
+  opacity: .7;
+  will-change: transform;
+}
+.javabe-cosmic-cloud--one {
+  background: conic-gradient(from 30deg at 48% 50%, transparent 0 12%, rgba(80,20,180,.05) 18%, rgba(119,28,255,.52) 27%, rgba(35,8,85,.12) 36%, transparent 44%, rgba(108,30,210,.38) 58%, transparent 72%);
+  animation: javabe-drift-one 42s ease-in-out infinite alternate;
+}
+.javabe-cosmic-cloud--two {
+  inset: -38%;
+  opacity: .45;
+  background: radial-gradient(ellipse at 24% 35%,rgba(89,25,180,.75),transparent 36%),radial-gradient(ellipse at 77% 68%,rgba(72,18,155,.7),transparent 34%),radial-gradient(ellipse at 62% 12%,rgba(134,35,255,.42),transparent 28%);
+  animation: javabe-drift-two 54s ease-in-out infinite alternate;
+}
+.javabe-cosmic-stars {
+  position: absolute;
+  inset: 0;
+  opacity: .45;
+  background-image:
+    radial-gradient(1px 1px at 12% 21%,#fff 99%,transparent),
+    radial-gradient(1px 1px at 31% 74%,#d9baff 99%,transparent),
+    radial-gradient(2px 2px at 73% 28%,#fff 99%,transparent),
+    radial-gradient(1px 1px at 84% 83%,#c89aff 99%,transparent),
+    radial-gradient(1px 1px at 57% 58%,#fff 99%,transparent),
+    radial-gradient(1px 1px at 9% 88%,#c89aff 99%,transparent);
+  background-size: 230px 210px,280px 260px,360px 300px,310px 280px,190px 230px,250px 270px;
+  animation: javabe-twinkle 9s ease-in-out infinite alternate;
+}
+.javabe-cosmic-horizon {
+  position: absolute;
+  inset: auto -10% -38% -10%;
+  height: 68%;
+  background: radial-gradient(ellipse at 50% 0%,rgba(125,32,255,.24),transparent 58%);
+  filter: blur(34px);
+}
+.javabe-app-content {
+  position: relative;
+  z-index: 1;
+  padding-top: calc(var(--javabe-host-top-inset) + .75rem);
+}
+.javabe-app-content > header {
+  border-color: rgba(168, 85, 247, .25);
+  background: rgba(12, 9, 22, .78);
+  box-shadow: 0 12px 42px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035);
+  backdrop-filter: blur(18px);
+}
+.javabe-app-content > nav,
+.javabe-app-content > section,
+.javabe-app-content > details,
+.javabe-app-content > label {
+  backdrop-filter: blur(14px);
+}
+.javabe-app-content button:focus-visible,
+.javabe-app-content input:focus-visible,
+.javabe-app-content select:focus-visible,
+.javabe-app-content summary:focus-visible {
+  outline: 2px solid var(--app-accent-soft);
+  outline-offset: 3px;
+}
+@keyframes javabe-drift-one {
+  from { transform: translate3d(-2%,1%,0) rotate(-7deg) scale(1); }
+  to { transform: translate3d(3%,-2%,0) rotate(8deg) scale(1.08); }
+}
+@keyframes javabe-drift-two {
+  from { transform: translate3d(2%,-1%,0) rotate(5deg); }
+  to { transform: translate3d(-3%,2%,0) rotate(-6deg); }
+}
+@keyframes javabe-twinkle {
+  from { opacity: .28; }
+  to { opacity: .62; }
 }
 
 @layer utilities {
-  [class*="text-sky-"],
-  [class*="text-cyan-"] {
-    color: var(--app-accent) !important;
-  }
-
-  [class*="border-sky-"],
-  [class*="border-cyan-"] {
-    border-color: color-mix(in srgb, var(--app-accent) 42%, #25212f) !important;
-  }
-
-  [class*="bg-sky-"],
-  [class*="bg-cyan-"] {
-    background-color: color-mix(in srgb, var(--app-accent) 13%, #101014) !important;
-  }
+  [class*="text-sky-"], [class*="text-cyan-"] { color: var(--app-accent) !important; }
+  [class*="border-sky-"], [class*="border-cyan-"] { border-color: color-mix(in srgb, var(--app-accent) 42%, #25212f) !important; }
+  [class*="bg-sky-"], [class*="bg-cyan-"] { background-color: color-mix(in srgb, var(--app-accent) 13%, #101014) !important; }
 }
 
-@keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 6px rgba(182, 156, 255, 0.2); }
-  50% { box-shadow: 0 0 18px rgba(182, 156, 255, 0.4); }
-}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-thumb { background: rgba(118, 43, 255, .4); border-radius: 999px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, .6); }
+*::-webkit-scrollbar-track { background: transparent; }
 
-@keyframes slideAcross {
-  from { left: -30%; }
-  to { left: 130%; }
+@media (max-width: 767px) {
+  :root { --javabe-host-top-inset: 5.25rem; }
+}
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --javabe-host-top-inset: 3.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .javabe-cosmic-cloud, .javabe-cosmic-stars { animation: none; }
 }
