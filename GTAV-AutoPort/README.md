@@ -9,7 +9,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 **2026-11-13 — Native YFT/YTD inspection foundation**
 - Added a Rust CLI adapter using the public-domain `rage-formats` crate.
 - YFT reports can include fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries.
-- YTD inspection exports textures as DDS review files and records dimensions, pixel format, mip levels, and names.
+- YTD inspection exports DDS files plus PNG previews where decoding succeeds, and records dimensions, pixel format, mip levels, and names.
 - Added extracted-folder import to the browser workbench.
 - Added RSC7 header fields and sample-version comparison based only on the supplied Glendale PC fixture.
 - Added GitHub Actions checks for JavaScript tests/build and Rust tests/build.
