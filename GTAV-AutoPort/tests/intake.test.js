@@ -5,7 +5,7 @@ import { inspectZipArchive, classifyVehicleAssets } from "../src/core/intake.js"
 
 async function asUpload(zip, name = "fixture.zip") {
   const bytes = await zip.generateAsync({ type: "uint8array" });
-  return { name, async: undefined, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+  const blob = new Blob([bytes]);\n  Object.defineProperty(blob, "name", { value: name });\n  return blob;
 }
 
 test("imports a ZIP and inventories files", async () => {
