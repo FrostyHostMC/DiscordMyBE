@@ -16,13 +16,13 @@ test("reads the RSC7 header without claiming platform compatibility", () => {
   const result = resource(".yft", 162);
   assert.equal(result.valid, true);
   assert.equal(result.version, 162);
-  assert.equal(result.generation, "legacy");
+  assert.equal(result.fixtureVersionMatch, true);
   assert.equal(result.platform, "undetermined");
   assert.equal(result.systemFlags, 0x1234);
 });
 
 test("recognizes the known legacy YTD version", () => {
-  assert.equal(resource(".ytd", 13).generation, "legacy");
+  assert.equal(resource(".ytd", 13).fixtureVersionMatch, true);
 });
 
 test("rejects a non-RSC7 file", () => {
@@ -35,6 +35,6 @@ test("rejects truncated headers", () => {
 
 test("does not assume a platform for unknown versions", () => {
   const result = resource(".yft", 999);
-  assert.equal(result.generation, "unknown");
+  assert.equal(result.fixtureVersionMatch, false);
   assert.equal(result.platform, "undetermined");
 });
