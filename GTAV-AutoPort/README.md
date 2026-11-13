@@ -18,7 +18,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 **2026-11-13 — Native ragekit resource-engine integration**
 - Added a pinned CMake FetchContent build for MIT-licensed ragekit v0.3.1 and a Windows native-engine build helper.
-- Added a local Vite endpoint that runs rk info and rk roundtrip for supported imported RAGE resources, hashes source/output bytes, and reports parse and round-trip outcomes.
+- Added a local Vite endpoint that runs rk info and rk roundtrip for supported imported RAGE resources, hashes source/output bytes, and reports parse errors, byte-exact round trips, and successful rewrites whose output bytes differ.
 - Added automatic workbench invocation and downloadable native validation reports when the native engine is configured.
 - Added explicit fail-closed behavior when the engine executable is not configured; no source resources are labeled converted and PS4 compatibility remains unestablished.
 - This is PC resource parsing/rewrite validation, not a PS4 writer or install package.
