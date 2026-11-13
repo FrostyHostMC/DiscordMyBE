@@ -2,6 +2,14 @@
 
 All notable GTAV AutoPort changes are recorded here. Every development update must also refresh the latest-update summary in README.md.
 
+## 2026-11-13 — Native inspector dashboard integration
+- Added a separate native output folder import control.
+- Added versioned JSON report validation and safe preview-file matching.
+- Connected YFT structural report metrics to the dashboard.
+- Connected YTD texture metadata and PNG previews to a responsive texture gallery.
+- Added native report parser tests for successful reports, missing reports, invalid schema, duplicate reports, and preview linking.
+- Kept all PS4 conversion and deployment gates closed.
+
 ## 2026-11-13 — Native YFT/YTD inspection foundation
 - Added a Rust native inspector using the Unlicense-licensed `VIRUXE/rage-formats` crate.
 - Added read-only YFT fragment parsing with drawable LOD, model, geometry, triangle, bone-transform, and physics-child summaries.
