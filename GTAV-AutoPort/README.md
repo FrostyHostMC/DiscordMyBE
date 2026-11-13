@@ -13,6 +13,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
 - Preview object URLs are released when reports are replaced or the UI unmounts.
 - Added report schema validation, safe relative preview matching, PNG signature checks, and tests for malformed or unsafe report content.
+- Added a manual `workflow_dispatch` trigger for the isolated GitHub Actions checks.
 
 **2026-11-13 — Native YFT/YTD inspection foundation**
 - Added a Rust CLI adapter using the public-domain `rage-formats` crate.
