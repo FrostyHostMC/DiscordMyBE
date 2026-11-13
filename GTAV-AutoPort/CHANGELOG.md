@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — RPF archive validation added
+- Added `.rpf` to the native RAGE engine validation intake so archives are parsed and round-tripped in temporary local storage when the backend is configured.
+- Updated automatic workbench selection to include RPF archives instead of skipping them.
+- Kept encryption-key requirements, PS4 resource compatibility, and deployment as explicit unresolved gates; archive round-trip is not a PS4 conversion.
+
+
 ## 2026-11-13 — GoldHEN target recorded
 - Recorded the user-confirmed GoldHEN version `2.4b18.13` and PS4 firmware `14.00` separately from GTA V update `1.73`.
 - Kept the supplied `.13` suffix as user-confirmed; official release metadata found for this check confirms the `2.4b18` release family.
