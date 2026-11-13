@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
 import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench, Sparkles } from 'lucide-react';
-import tweaksConfig from '@/config/tweaksConfig.json';
-import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { useRemakerAudio } from '@/hooks/useRemakerAudio';
 import { type ExtractedZipEntry } from '@/utils/zip';
 import { decompileAndInspectJarAsync } from '@/utils/javaDecompiler';
@@ -29,7 +27,6 @@ import { ModelPortPanel } from '@/components/ModelPortPanel';
 import { exportAddonFile } from '@/utils/iosFileExport';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
-const tweaks = aippyTweaks(tweaksConfig);
 type Workspace = 'convert' | 'audit' | 'tools' | 'more';
 type AppTab = 'deterministic' | 'auditor' | 'self_healing' | 'smoother' | 'parity' | 'behavior' | 'geyser' | 'validation' | 'models' | 'ai';
 const workspaceTabs: Record<Workspace, { tab: AppTab; label: string }[]> = {
@@ -44,14 +41,14 @@ const tabWorkspace: Record<AppTab, Workspace> = {
 };
 
 export default function App() {
-  const appName = tweaks.appName.useState();
-  const accent = tweaks.accentColor.useState();
-  const accent2 = tweaks.accentColor2.useState();
-  const bgColor = tweaks.bgColor.useState();
-  const hapticsEnabled = tweaks.hapticsEnabled.useState();
-  const configuredUpscaling = tweaks.enableLegacyUpscaling.useState();
-  const configuredGeyser = tweaks.enableGeyserIntegration.useState();
-  const configuredGeyserVersion = tweaks.geyserVersion.useState();
+  const appName = 'JavaBE';
+  const accent = '#B69CFF';
+  const accent2 = '#D0C2FF';
+  const bgColor = '#09090D';
+  const hapticsEnabled = false;
+  const configuredUpscaling = true;
+  const configuredGeyser = false;
+  const configuredGeyserVersion = '2.6.0';
   const [upscalingEnabled, setUpscalingEnabled] = useState(() => configuredUpscaling && getAutoUpscaleLegacyTextures());
   const [enableGeyser, setEnableGeyser] = useState(configuredGeyser);
   const [geyserVersion, setGeyserVersion] = useState(configuredGeyserVersion || GEYSER_VERSION_OPTIONS[0]);
