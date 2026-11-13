@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — PS4 firmware target recorded
+- Added user-confirmed PS4 system firmware 14.00 as a separate target field; kept GTA V title update 1.73 distinct.
+- Added regression coverage and left GoldHEN version unset until the user confirms the installed release.
+- No PS4 resource compatibility or installability is inferred from firmware identification.
+
+
 ## 2026-11-13 — AutoPort JSX build repair
 - Corrected malformed JSX expression delimiters around the busy and idle native-inspection status messages, resolving the Vite transform error.
 - Fixed an extra closing JSX brace in the native-inspection status area that prevented the Vite production build from compiling.
