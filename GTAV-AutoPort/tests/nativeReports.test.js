@@ -35,7 +35,7 @@ test("rejects unsupported report schema", () => {
 
 test("rejects multiple reports of the same type", () => {
   const report = { ...base, resource_type: "YFT" };
-  assert.throws(() => inspectNativeReports([file("a/yft-inspection.json", report), file("b/yft-inspection.json", report)]), /Multiple reports/);
+  assert.throws(() => inspectNativeReports([file("a/yft-inspection.json", report), file("b/yft-inspection.json", report)]), /Duplicate generic reports/);
 });
 
 test("rejects a YFT report without its fragment summary", () => {
