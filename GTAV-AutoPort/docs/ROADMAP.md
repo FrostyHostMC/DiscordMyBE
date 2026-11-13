@@ -24,7 +24,9 @@
 - [x] Native Rust YFT fragment parser adapter.
 - [x] Native Rust YTD texture dictionary parser and DDS inspection export.
 - [x] YFT drawable/LOD/geometry/triangle and physics-child report.
-- [x] Connect native YFT/YTD JSON reports to the workbench UI.\n- [x] Display YFT structure metrics and YTD texture previews.\n- [ ] Add a one-click desktop launcher that runs the native inspector and opens the report folder.
+- [x] Connect native YFT/YTD JSON reports to the workbench UI.
+- [x] Display YFT structure metrics and YTD texture previews.
+- [ ] Add a one-click desktop launcher that runs the native inspector and opens the report folder.
 - [ ] Inspect and validate RSC7 page flags and resource boundaries independently.
 - [ ] Add real fixture integration tests (fixture binaries remain outside the repository).
 - [ ] Inspect material/shader references and external texture dictionary dependencies.
