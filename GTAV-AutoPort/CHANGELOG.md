@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — GoldHEN target recorded
+- Recorded the user-confirmed GoldHEN version `2.4b18.13` and PS4 firmware `14.00` separately from GTA V update `1.73`.
+- Kept the supplied `.13` suffix as user-confirmed; official release metadata found for this check confirms the `2.4b18` release family.
+- Added target-profile regression coverage; no compatibility or installability is inferred.
+
+
 ## 2026-11-13 — PS4 firmware target recorded
 - Added user-confirmed PS4 system firmware 14.00 as a separate target field; kept GTA V title update 1.73 distinct.
 - Added regression coverage and left GoldHEN version unset until the user confirms the installed release.
