@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — Evidence-based PS4 compatibility gates
+- Added a compatibility assessment model for exact console confirmation, GoldHEN version, PS4 YFT/YTD reference resources, format adapters, and deployment/rollback validation.
+- Added a dashboard checklist that explains why conversion remains blocked and what evidence is needed next.
+- Added regression tests proving that PC-side inspection and a completed checklist cannot silently enable conversion or deployment.
+
+
 ## 2026-11-13 — Native report test assertion aligned
 - Corrected the duplicate-report test expectation to match the loader's explicit duplicate generic report error message. No runtime behavior changed.
 
