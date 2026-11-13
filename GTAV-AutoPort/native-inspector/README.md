@@ -19,7 +19,16 @@ cargo run --release -- path/to/glendale.ytd
 cargo run --release -- path/to/asset.ytd path/to/output-folder
 ```
 
-For the supplied Glendale pair, run both commands with the same basename and parent directory so both reports land in the same `glendale-autoport-inspection` folder:\n\n```bash\ncargo run --release -- /path/to/glendale.yft\ncargo run --release -- /path/to/glendale.ytd\n```\n\nThen open AutoPort and choose **Load native reports**, selecting that output folder. The dashboard imports the JSON reports and any PNG previews.\n\nFor YFT, the tool reports fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries. For YTD, it exports individual textures as DDS inspection files and records dimensions, pixel formats, mip levels, and hashes in JSON.
+For the supplied Glendale pair, run both commands with the same basename and parent directory so both reports land in the same `glendale-autoport-inspection` folder:
+
+```bash
+cargo run --release -- /path/to/glendale.yft
+cargo run --release -- /path/to/glendale.ytd
+```
+
+Then open AutoPort and choose **Load native reports**, selecting that output folder. The dashboard imports the JSON reports and any PNG previews.
+
+For YFT, the tool reports fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries. For YTD, it exports individual textures as DDS inspection files and records dimensions, pixel formats, mip levels, and hashes in JSON.
 
 ## Boundaries
 
