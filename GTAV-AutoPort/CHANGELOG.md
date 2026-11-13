@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-13 — Product scope expanded to universal GTA V mod porting
+- Reframed AutoPort from a vehicle-only converter to a general PC-to-PS4 Story Mode mod-porting platform.
+- Defined coverage for vehicles, peds/player models, weapons, props, maps/world assets, textures, audio, animations, UI/HUD, scripts, plugins and unknown resources.
+- Added compatibility classes for directly portable, convertible, adaptation-required, runtime-dependent and unsupported content.
+- Specified a typed resource-graph IR, family-specific adapters, dependency resolution, independent validation and reversible packaging.
+- Documented that PC native plugins and Windows runtime-dependent mods cannot be copied to PS4 as-is.
+
+
 ## 2026-11-13 — Generic model discovery and dependency inventory
 - Removed the Glendale model-name default; model choices are discovered from each imported `vehicles.meta` file.
 - Added a generic inventory classifier and explicit dependency graph for model resources, texture dictionaries and handling metadata.
