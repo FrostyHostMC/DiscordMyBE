@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — Native backend CI coverage
+- Added a dedicated CI job to configure and compile the pinned ragekit CLI backend, so native integration build failures are caught rather than assumed away.
+
+
 ## 2026-11-13 — Dependency graph regression alignment
 - Corrected a stale dependency-graph test expectation to include the explicit handling.meta edge and resolved count.
 
