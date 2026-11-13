@@ -365,7 +365,7 @@ export interface ReadZipOptions {
 }
 
 /** Default ceiling for one inflated entry (a single texture or model never needs more). */
-const MAX_ENTRY_BYTES = 24 * 1024 * 1024;
+const MAX_ENTRY_BYTES = 128 * 1024 * 1024;
 
 interface CentralDirectoryEntry {
   index: number;
@@ -437,7 +437,7 @@ export async function readZipArchive(
   let currentOffset = cdOffset;
   // Do NOT trust the declared entry count — many writers report 0 or 0xFFFF.
   // Scan the central directory chain by signature instead, with a hard safety cap.
-  const max = options?.maxEntries ?? 5000;
+  const max = options?.maxEntries ?? 50000;
 
   for (let i = 0; i < max && currentOffset + 46 <= eocdOffset; i++) {
     if (view.getUint32(currentOffset, true) !== 0x02014b50) break;
@@ -499,7 +499,7 @@ export async function readZipArchive(
   // files a conversion reads (metadata, animations, models, blocks, classes, textures) are the
   // ones that survive. Sounds and oversized binaries are dropped instead of the pack content.
   const maxEntryBytes = options?.maxEntryBytes ?? MAX_ENTRY_BYTES;
-  const maxTotalBytes = options?.maxTotalBytes ?? 160 * 1024 * 1024;
+  const maxTotalBytes = options?.maxTotalBytes ?? 768 * 1024 * 1024;
   const files = descriptors.filter((descriptor) => !descriptor.isDirectory);
   const declaredSize = (descriptor: CentralDirectoryEntry) =>
     descriptor.uncompressedSize > 0 ? descriptor.uncompressedSize : descriptor.compressedSize;
