@@ -6,6 +6,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Native inspection reports connected to the workbench**
+- Added a dedicated **Load native reports** folder import to the dashboard.
+- Dashboard now reads YFT JSON structural summaries and displays model, geometry, triangle, bone-transform, and physics-child counts.
+- Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
+- Preview object URLs are released when reports are replaced or the UI unmounts.
+- Added report schema validation and preview-file linking tests.
+
 **2026-11-13 — Native YFT/YTD inspection foundation**
 - Added a Rust CLI adapter using the public-domain `rage-formats` crate.
 - YFT reports can include fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries.
