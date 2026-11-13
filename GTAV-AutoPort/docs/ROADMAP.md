@@ -1,6 +1,10 @@
 # Roadmap
 
 ## Product-wide scope — universal mod intake and porting
+- [x] Add automatic mod-family inventory audit with conservative signatures, unknown-file retention and PC plugin/script warnings.
+- [x] Research broad read/write engines and document candidate backend strategy.
+- [ ] Prototype ragekit behind a versioned native-engine adapter; compare FiveFury as supplemental coverage.
+- [ ] Add independent fixture tests for every backend and format before enabling write paths.
 - [x] Set product direction to general GTA V PC-to-PS4 Story Mode mod porting, not vehicle-only conversion.
 - [x] Define mod-family taxonomy and compatibility outcome classes.
 - [ ] Build extensible signature/content classifier for known and unknown mod resources.
