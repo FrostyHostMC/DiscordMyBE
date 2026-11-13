@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-13 — Dependency graph regression alignment
+- Corrected a stale dependency-graph test expectation to include the explicit handling.meta edge and resolved count.
+
+
 ## 2026-11-13 — Native ragekit resource-engine integration
 - Pinned MIT-licensed ragekit v0.3.1 as a native CMake dependency and added a Windows build helper.
 - Added a local-only Vite middleware endpoint that invokes the real rk info parser and rk roundtrip writer for supported RAGE resources.
