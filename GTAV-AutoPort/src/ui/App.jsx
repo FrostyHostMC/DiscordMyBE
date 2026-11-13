@@ -9,7 +9,7 @@ import { inspectNativeReports } from "../core/nativeReports.js";
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
   ["02", "Analyze vehicle", "Metadata and asset dependencies"],
-  ["03", "Inspect resources", "RSC7 header and resource versions"],
+  ["03", "Inspect resources", "Native YFT structure and YTD textures"],
   ["04", "Convert assets", "PS4-specific conversion adapter"],
   ["05", "Validate & package", "Exact title/build validation"],
 ];
@@ -48,7 +48,7 @@ export default function App() {
     if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }
     const urls = {};
     for (const [index, texture] of nativeReports.ytd.textures.entries()) {
-      const key = texture.name_hash || `${texture.name}-${index}`;
+      const key = `${texture.name_hash || texture.name}-${index}`;
       if (texture.previewBytes) urls[key] = URL.createObjectURL(new Blob([texture.previewBytes], { type: "image/png" }));
     }
     setPreviewUrls(urls);
@@ -146,10 +146,10 @@ export default function App() {
       <div className="rail-foot">LOCAL WORKSPACE<br/><b>PS4 · STORY MODE</b></div>
     </aside>
     <section className="content">
-      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod and inspect its metadata and resource headers.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
+      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod, inspect its metadata, and load native YFT/YTD resource reports.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero">
-        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p>Import a ZIP or extracted folder. AutoPort inventories files, checks vehicle metadata and inspects the RSC7 resource header without claiming unsupported console compatibility.</p>
+        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p>Import a ZIP or extracted folder, then load the native inspector output to review YFT structure and YTD texture previews. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
@@ -189,7 +189,7 @@ export default function App() {
         {nativeReports.ytd && <div className="native-textures">
           <div className="eyebrow">YTD TEXTURE DICTIONARY · {nativeReports.ytd.texture_count} TEXTURES</div>
           <div className="texture-grid">{nativeReports.ytd.textures.map((texture, index) => {
-            const key = texture.name_hash || `${texture.name}-${index}`;
+            const key = `${texture.name_hash || texture.name}-${index}`;
             return <article className="texture-card" key={key}>
               {previewUrls[key] ? <img src={previewUrls[key]} alt={`${texture.name} texture preview`} loading="lazy"/> : <div className="texture-placeholder"><FileText size={22}/><span>Preview unavailable</span></div>}
               <div><b>{texture.name}</b><small>{texture.width} × {texture.height} · {texture.format}</small><small>{texture.mip_levels} mip levels · {texture.depth}-D</small></div>
@@ -207,7 +207,7 @@ export default function App() {
       </section>}
 
       <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Conversion pipeline</h3></div><span className="muted">5 stages</span></div>
-      <div className="stages">{stages.map(([n,title,desc])=><article className="stage" key={n}><div className="stage-number">{n}</div><h4>{title}</h4><p>{desc}</p><span className="stage-state">{n==="01"?"AVAILABLE":n==="02"?"METADATA ANALYSIS":n==="03"?"HEADER INSPECTION":"PLANNED"}</span></article>)}</div>
+      <div className="stages">{stages.map(([n,title,desc])=><article className="stage" key={n}><div className="stage-number">{n}</div><h4>{title}</h4><p>{desc}</p><span className="stage-state">{n==="01"?"AVAILABLE":n==="02"?"METADATA ANALYSIS":n==="03"?"NATIVE REPORTS":"PLANNED"}</span></article>)}</div>
       <footer>GTAV AUTOPORT <span>·</span> LOCAL-FIRST <span>·</span> NO GTA ONLINE SUPPORT</footer>
     </section>
   </main>;
