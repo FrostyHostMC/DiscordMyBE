@@ -1,5 +1,8 @@
 export const PS4_TARGET = Object.freeze({
   platform: "PlayStation 4",
+  systemFirmware: "14.00",
+  systemFirmwareSource: "user-confirmed",
+  goldhenVersion: null,
   titleId: "CUSA00411",
   game: "Grand Theft Auto V",
   updateVersion: "1.73",
