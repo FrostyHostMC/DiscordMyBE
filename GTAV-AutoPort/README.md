@@ -1,10 +1,86 @@
 # GTAV AutoPort
 
+**RPF archive validation added:** imported `.rpf` files now enter the native RAGE parser and isolated round-trip check alongside loose resources when the backend is configured. Encrypted archives may still require keys from the user's own game installation; this is validation only, not PS4 conversion.
+
+**Universal intake audit added:** every imported ZIP/folder is now automatically classified by mod/resource family, with conservative binary-signature probes, PC-native plugin warnings, unknown-file preservation and family counts. This is an intake audit—not a claim that every identified file has a PS4 writer.
+
+See [format research and backend selection](docs/FORMAT-RESEARCH.md) for evaluated open-source engines and PS4 compatibility gaps.
+
+
+**Product direction: universal GTA V PC-to-PS4 Story Mode mod porting.** This is not a vehicle-only converter. Vehicles are the first inspected asset family; the long-term architecture covers peds, weapons, props, maps/world resources, textures, audio, animations, UI assets, configuration, scripts and native plugins, each with its own compatibility and adapter status. See [Universal mod-port architecture](docs/UNIVERSAL-MOD-PORT-ARCHITECTURE.md).
+
+Universal intake does not mean every PC mod is automatically portable: Windows/ASI/DLL/ScriptHookV/.NET-dependent mods require a separate PS4-native implementation where feasible and must never be mislabeled as converted.
+
+
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 header inspection, and a native read-only YFT/YTD parser adapter are now in the project. None of these steps converts a PC vehicle to PS4. Review reports and extracted DDS textures are not installable packages.
+> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
 
 ## Latest update
+
+**2026-11-13 — RPF archive validation added**
+- Added `.rpf` archives to the native RAGE inspection queue, using the same isolated `rk info` and `rk roundtrip` workflow as supported loose resources.
+- Extended the workbench's automatic native-resource selection so archive files are not silently skipped.
+- Reports remain source-side parser/round-trip evidence only; encrypted archives may require user-owned game keys, and no PS4 output or install package is produced.
+
+**2026-11-13 — GoldHEN target recorded**
+- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00411` update `1.73` Story Mode.
+- GoldHEN suffix is stored as user-confirmed; official release metadata independently confirms the `2.4b18` release family, not the `.13` suffix.
+- Resource compatibility and deployment remain unverified.
+
+
+**2026-11-13 — PS4 firmware target recorded**
+- Recorded the user-confirmed PS4 system firmware 14.00 separately from the GTA V title update 1.73; GoldHEN version remains unknown and resource compatibility remains unverified.
+
+**2026-11-13 — AutoPort JSX build repair**
+- Corrected both missing/extra expression delimiters in the import-status JSX that blocked the Vite production build.
+- Fixed an extra closing JSX brace in the native-inspection status area that prevented the Vite production build from compiling.
+- Kept the native-engine and PS4 compatibility gates unchanged.
+
+**2026-11-13 — Native backend CI coverage**
+- Added a dedicated CI job to configure and compile the pinned ragekit CLI backend, so native integration build failures are caught rather than assumed away.
+
+
+**2026-11-13 — Dependency graph regression alignment**
+- Corrected a stale dependency-graph regression expectation: the graph also includes the explicitly resolved handling.meta dependency.
+
+
+**2026-11-13 — Native ragekit resource-engine integration**
+- Added a pinned CMake FetchContent build for MIT-licensed ragekit v0.3.1 and a Windows native-engine build helper.
+- Added a local Vite endpoint that runs rk info and rk roundtrip for supported imported RAGE resources, hashes source/output bytes, and reports parse errors, byte-exact round trips, and successful rewrites whose output bytes differ.
+- Added automatic workbench invocation and downloadable native validation reports when the native engine is configured.
+- Added explicit fail-closed behavior when the engine executable is not configured; no source resources are labeled converted and PS4 compatibility remains unestablished.
+- This is PC resource parsing/rewrite validation, not a PS4 writer or install package.
+
+
+**2026-11-13 — Universal resource-family port planning**
+- Added a per-file conversion work plan for archives, fragments, drawables, textures, collision, maps, archetypes, animation, particles, audio, metadata, scripts, plugins and source assets.
+- Each route exposes source-side capability, target-side adapter gap, work stage and a concrete blocker; PC plugins/scripts are routed to native behavior reimplementation rather than payload copying.
+- Added cautious same-basename candidate relationships, clearly marked as unverified, and per-stage pipeline queues.
+- The workbench now creates and displays this plan automatically on import and allows it to be exported as JSON. This remains planning only; no resource writer or PS4 package is claimed.
+
+
+**2026-11-13 — Automatic native inspection on import**
+- Added a local Vite development-server endpoint that invokes the Rust read-only inspector for every imported YFT/YTD asset.
+- The workbench now automatically loads generated YFT structural reports, YTD metadata, and PNG texture previews after ZIP/folder import; manual report-folder import is no longer part of the normal workflow.
+- Source resources are processed in a temporary local directory and removed after report data is returned. This requires the Rust stable toolchain and Cargo; no mod data is uploaded.
+- Automatic native inspection is a local development workflow; a packaged desktop runtime is still needed for a production-grade end-user installer.
+
+
+**2026-11-13 — Evidence-based PS4 compatibility gates**
+- Added an explicit seven-gate compatibility assessment covering console identity, GoldHEN, PS4 YFT/YTD reference resources, conversion adapters, and deployment/rollback validation.
+- Added a dashboard checklist showing pending evidence and keeping conversion/deployment disabled even if evidence flags are supplied until real writer and validation workflows exist.
+- Added regression tests for blocked defaults, incomplete evidence, and fail-closed behavior.
+
+**2026-11-13 — Native report test assertion aligned**
+- Updated the duplicate-report regression test to assert the specific duplicate-generic-report error emitted by the report loader; runtime behavior is unchanged.
+
+**2026-11-13 — First PS4 target profile recorded**
+- Recorded the user-confirmed target label `CUSA00411` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
+- The target profile is included in exported conversion manifests and shown in the workbench.
+- Added regression tests to ensure the supplied target label remains stable and explicitly unverified.
+- This records the intended target only; it does not independently verify the console build or establish YFT/YTD compatibility.
+
 
 **2026-11-13 — Native inspection reports connected to the workbench**
 - Added a dedicated **Load native reports** folder import to the dashboard.
@@ -25,6 +101,12 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - PS4 conversion and deployment remain blocked pending a verified PS4-target writer and exact-build console tests.
 
 See [CHANGELOG](CHANGELOG.md) for every update.
+
+## Universal conversion architecture
+
+The workspace now discovers vehicle model names from imported `vehicles.meta` rather than defaulting to the Glendale fixture, and builds an initial generic inventory/dependency graph for resource types and explicit model/texture/handling references. This graph clearly marks missing and ambiguous matches; full DLC/archive relationship resolution remains unfinished.
+
+The converter is being designed around a vehicle-agnostic intermediate representation and target-specific adapters. The first Glendale vehicle is a regression fixture only; no model name, handling ID, texture name, or fixed asset count is a conversion assumption. See [Universal vehicle port architecture](docs/UNIVERSAL-PORT-ARCHITECTURE.md) for the dependency graph, geometry/fragment/material/texture/collision IR, adapter contract, round-trip validation and exact-target evidence requirements. The current PC YFT/YTD inspector is read-only; PS4 writers and a verified PS4 fixture set are not yet implemented.
 
 ## Scope
 - Input: PC GTA V mods.
@@ -51,6 +133,10 @@ On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs depen
     npm run dev
     npm test
     npm run build
+
+## Build the native RAGE resource engine
+
+Requirements: Git, CMake 3.20+, and Visual Studio 2022 C++ Build Tools (C++20). Run BUILD-NATIVE-ENGINE.bat or use the commands in [native-engine/README.md](native-engine/README.md). Set GTAV_AUTOPORT_RK to the built rk.exe path before starting Vite. The workbench automatically runs the native parser and round-trip writer on supported imported RAGE resource types and offers a JSON validation report. This tests the PC-side parser/writer only; it does not make PS4 output.
 
 ## Run the native inspector
 Requirements: Rust stable toolchain.

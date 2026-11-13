@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { inspectVehicleMetadata } from "../src/core/metadata.js";
+import { inspectVehicleMetadata, listVehicleModels } from "../src/core/metadata.js";
 
 const vehiclesXml = `<?xml version="1.0"?><CVehicleModelInfo__InitDataList><InitDatas><Item><modelName>glendale</modelName><txdName>glendale</txdName><handlingId>GLENDALE</handlingId></Item><Item><modelName>other</modelName><txdName>other</txdName><handlingId>OTHER</handlingId></Item></InitDatas></CVehicleModelInfo__InitDataList>`;
 const handlingXml = `<?xml version="1.0"?><CHandlingDataMgr><HandlingData><Item><handlingName>GLENDALE</handlingName><fMass>1500.0</fMass></Item><Item><handlingName>OTHER</handlingName></Item></HandlingData></CHandlingDataMgr>`;
@@ -26,4 +26,8 @@ test("rejects duplicate vehicle entries", () => {
 test("rejects missing handling reference", () => {
   const broken = vehiclesXml.replace("<handlingId>GLENDALE</handlingId>", "<handlingId>UNKNOWN</handlingId>");
   assert.throws(() => inspectVehicleMetadata({ vehiclesXml: broken, handlingXml, modelName: "glendale" }), /UNKNOWN/);
+});
+
+test("discovers model names from arbitrary vehicles.meta entries", () => {
+  assert.deepEqual(listVehicleModels(vehiclesXml), ["glendale", "other"]);
 });

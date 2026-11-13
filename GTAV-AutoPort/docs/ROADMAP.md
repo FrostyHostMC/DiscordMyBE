@@ -1,5 +1,22 @@
 # Roadmap
 
+## Product-wide scope — universal mod intake and porting
+- [x] Add automatic mod-family inventory audit with conservative signatures, unknown-file retention and PC plugin/script warnings.
+- [x] Research broad read/write engines and document candidate backend strategy.
+- [ ] Prototype ragekit behind a versioned native-engine adapter; compare FiveFury as supplemental coverage.
+- [ ] Add independent fixture tests for every backend and format before enabling write paths.
+- [x] Set product direction to general GTA V PC-to-PS4 Story Mode mod porting, not vehicle-only conversion.
+- [x] Define mod-family taxonomy and compatibility outcome classes.
+- [ ] Build extensible signature/content classifier for known and unknown mod resources.
+- [ ] Add universal project resource graph and provenance/hash model. Filename-based candidate relationships are now exposed separately and marked unverified.
+- [ ] Add typed, versioned platform-neutral resource IR.
+- [ ] Implement per-family decoder/adapter/validator plugins. The initial routing/work-plan registry exists; actual format writers remain pending.
+- [ ] Implement exact-target PS4 adapters for each supported resource family.
+- [ ] Classify PC runtime plugins/scripts and provide PS4-native reimplementation path only where technically feasible.
+- [x] Generate per-mod support matrix, family-specific adaptation plan and blocker report (planning only; no conversion output).
+- [ ] Produce reversible PS4 Story Mode package with backups and rollback only after exact-target validation.
+
+
 ## Phase 0 — workspace
 - [x] Isolated folder and development branch created.
 - [x] React/Vite workbench UI.
@@ -25,6 +42,7 @@
 - [x] Native Rust YTD texture dictionary parser and DDS inspection export.
 - [x] YFT drawable/LOD/geometry/triangle and physics-child report.
 - [x] Connect native YFT/YTD JSON reports to the workbench UI.
+- [x] Automatically invoke native inspection for imported YFT/YTD assets during local development and load reports/previews without a separate report import.
 - [x] Display YFT structure metrics for multiple LOD resources and YTD texture previews.
 - [x] Add a Windows file-picker launcher that runs the native inspector on a selected YFT/YTD pair and opens the report folder.
 - [x] Add a one-click local web workbench launcher.
@@ -33,8 +51,18 @@
 - [ ] Add real fixture integration tests (fixture binaries remain outside the repository).
 - [ ] Inspect material/shader references and external texture dictionary dependencies.
 
+## Phase 3 — universal vehicle conversion foundation
+- [x] Define a vehicle-agnostic conversion architecture and versioned intermediate-representation requirements.
+- [x] Implement initial generic inventory and explicit model/texture/handling dependency graph with missing/ambiguous reporting.
+- [ ] Expand dependency graph across variations, carcols, mod kits, audio, layout, collision, LOD and damage assets.
+- [ ] Implement source decoders that populate the intermediate representation without dropping unsupported constructs.
+- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.73.
+- [ ] Implement PS4 YFT/YTD encoders and validate round-trip against independent readers and game runtime.
+
 ## Phase 3 — first PS4 vehicle conversion
-- [ ] Establish exact PS4 GTA V title ID, region, update/build and GoldHEN target profile.
+- [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
+- [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
+- [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
 - [ ] Determine PS4 YFT/YTD resource differences from verified retail PS4 files.
 - [ ] Implement a real PS4-compatible YFT writer or conversion adapter.
 - [ ] Implement/verify a PS4-compatible YTD writer and texture encoding path.
