@@ -29,7 +29,7 @@ function parseReport(file, expectedType) {
  * same imported output folder. Original bytes are retained in memory only.
  */
 export function inspectNativeReports(files) {
-  const yftFiles = files.filter((file) => basename(file.path) === "yft-inspection.json");
+  const yftFiles = files.filter((file) => {\n    const name = basename(file.path);\n    return name === "yft-inspection.json" || name.endsWith("-yft-inspection.json");\n  });
   const ytdFiles = files.filter((file) => basename(file.path) === "ytd-inspection.json");
   if (yftFiles.length + ytdFiles.length === 0) {
     throw new Error("No yft-inspection.json or ytd-inspection.json was found. Import the native inspector output folder.");
@@ -39,7 +39,7 @@ export function inspectNativeReports(files) {
   }
 
   const reports = {};
-  if (yftFiles[0]) reports.yft = parseReport(yftFiles[0], "YFT");
+  reports.yftReports = yftFiles.map((file) => parseReport(file, "YFT"));\n  reports.yft = reports.yftReports[0] ?? null;
   if (ytdFiles[0]) {
     const report = parseReport(ytdFiles[0], "YTD");
     reports.ytd = {
@@ -60,7 +60,7 @@ export function inspectNativeReports(files) {
   }
   return {
     sourceFiles: files.length,
-    yft: reports.yft ?? null,
+    yft: reports.yft ?? null,\n    yftReports: reports.yftReports,
     ytd: reports.ytd ?? null,
     loadedAt: new Date().toISOString(),
   };
