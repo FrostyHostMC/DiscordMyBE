@@ -304,3 +304,45 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
 @keyframes javabe-launch-float { to { transform:translate3d(8%,12%,0) scale(1.12); } }
 @keyframes javabe-launch-glint { 0%,65% { transform:translateX(-120%) rotate(35deg); } 100% { transform:translateX(180%) rotate(35deg); } }
 @media (prefers-reduced-motion:reduce) { .javabe-launch-spinner,.javabe-launch-progress span,.javabe-launch-orb,.javabe-launch-logo-glint { animation:none; } }
+
+
+/* JavaBE paid-role lock screen, following AutoBE's clear access-gate pattern. */
+.javabe-lock-icon {
+  display: grid;
+  width: 3.4rem;
+  height: 3.4rem;
+  margin: 1.15rem auto .85rem;
+  place-items: center;
+  border: 1px solid rgba(251,191,36,.25);
+  border-radius: 1.1rem;
+  background: rgba(251,191,36,.09);
+  font-size: 1.45rem;
+}
+.javabe-price-panel {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+  margin: 1.35rem 0 .9rem;
+  padding: 1.1rem;
+  border: 1px solid rgba(192,132,252,.25);
+  border-radius: 1rem;
+  background: linear-gradient(145deg,rgba(124,58,237,.16),rgba(24,16,39,.7));
+}
+.javabe-price-label {
+  color: #c4a5fd;
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .17em;
+}
+.javabe-price-panel strong {
+  color: #fff;
+  font-size: 2.4rem;
+  font-weight: 950;
+  letter-spacing: -.06em;
+}
+.javabe-price-caption {
+  color: #b9b1c8;
+  font-size: .76rem;
+  line-height: 1.5;
+}
+.javabe-access-instructions { min-height: 0; }
