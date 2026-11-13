@@ -19,10 +19,10 @@ test("loads YFT report and its structural summary", () => {
 
 test("links YTD PNG preview files to their texture records", () => {
   const report = { ...base, resource_type: "YTD", textures: [{ name: "body", preview_png: "previews/body_0.png" }] };
-  const png = { path: "previews/body_0.png", bytes: new Uint8Array([137, 80, 78, 71]), size: 4 };
+  const png = { path: "previews/body_0.png", bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), size: 4 };
   const result = inspectNativeReports([file("ytd-inspection.json", report), png]);
   assert.equal(result.ytd.textures[0].previewAvailable, true);
-  assert.deepEqual([...result.ytd.textures[0].previewBytes], [137, 80, 78, 71]);
+  assert.deepEqual([...result.ytd.textures[0].previewBytes], [137, 80, 78, 71, 13, 10, 26, 10]);
 });
 
 test("rejects missing report files", () => {
@@ -36,4 +36,22 @@ test("rejects unsupported report schema", () => {
 test("rejects multiple reports of the same type", () => {
   const report = { ...base, resource_type: "YFT" };
   assert.throws(() => inspectNativeReports([file("a/yft-inspection.json", report), file("b/yft-inspection.json", report)]), /Multiple reports/);
+});
+
+test("rejects a YFT report without its fragment summary", () => {
+  assert.throws(() => inspectNativeReports([file("yft-inspection.json", { ...base, resource_type: "YFT" })]), /fragment summary/);
+});
+
+test("does not follow unsafe preview paths", () => {
+  const report = { ...base, resource_type: "YTD", textures: [{ name: "body", preview_png: "../outside.png" }] };
+  const png = { path: "outside.png", bytes: new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), size: 8 };
+  const result = inspectNativeReports([file("ytd-inspection.json", report), png]);
+  assert.equal(result.ytd.textures[0].previewAvailable, false);
+});
+
+test("rejects a matching file without a PNG signature", () => {
+  const report = { ...base, resource_type: "YTD", textures: [{ name: "body", preview_png: "previews/body.png" }] };
+  const fake = { path: "previews/body.png", bytes: new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]), size: 8 };
+  const result = inspectNativeReports([file("ytd-inspection.json", report), fake]);
+  assert.equal(result.ytd.textures[0].previewAvailable, false);
 });
