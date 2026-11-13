@@ -1,6 +1,7 @@
 name: GTAV AutoPort CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [project/gtav-autoport]
     paths:
