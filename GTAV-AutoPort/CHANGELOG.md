@@ -3,7 +3,8 @@
 All notable GTAV AutoPort changes are recorded here. Every development update must also refresh the latest-update summary in README.md.
 
 ## 2026-11-13 — Native inspector dashboard integration
-- Hardened report loading with required YFT fragment/YTD texture structures, relative-only PNG preview paths, and PNG signature validation.\n- Added a separate native output folder import control.
+- Hardened report loading with required YFT fragment/YTD texture structures, relative-only PNG preview paths, and PNG signature validation.
+- Added a separate native output folder import control.
 - Added versioned JSON report validation and safe preview-file matching.
 - Connected YFT structural report metrics to the dashboard.
 - Connected YTD texture metadata and PNG previews to a responsive texture gallery.
