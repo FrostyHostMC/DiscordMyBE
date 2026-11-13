@@ -5,6 +5,7 @@ import { inspectVehicleMetadata } from "../core/metadata.js";
 import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
 import { inspectNativeReports } from "../core/nativeReports.js";
+import { PS4_TARGET, describeTarget } from "../core/target.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -149,7 +150,7 @@ export default function App() {
       <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod, inspect its metadata, and load native YFT/YTD resource reports.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero">
-        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p>Import a ZIP or extracted folder, then load the native inspector output to review YFT structure and YTD texture previews. Console compatibility is never assumed.</p>
+        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder, then load the native inspector output to review YFT structure and YTD texture previews. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
