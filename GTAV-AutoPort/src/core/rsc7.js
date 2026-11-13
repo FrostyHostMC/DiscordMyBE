@@ -5,7 +5,7 @@ const FIXTURE_VERSIONS = {
 };
 
 export function inspectRsc7(bytes, path = "") {
-  const extension = path.toLowerCase().slice(path.lastIndexOf("."));
+  const dot = path.lastIndexOf(".");\n  const extension = dot >= 0 ? path.toLowerCase().slice(dot) : "";
   if (!(bytes instanceof Uint8Array) || bytes.byteLength < 16) {
     return { valid: false, status: "invalid", reason: "File is shorter than the 16-byte RSC7 header." };
   }
