@@ -35,6 +35,7 @@
 
 ## Phase 3 — first PS4 vehicle conversion
 - [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
+- [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
 - [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
 - [ ] Determine PS4 YFT/YTD resource differences from verified retail PS4 files.
 - [ ] Implement a real PS4-compatible YFT writer or conversion adapter.
