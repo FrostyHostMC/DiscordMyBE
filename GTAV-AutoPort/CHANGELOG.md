@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-13 — Universal resource-family port planning
+- Added `buildUniversalPortPlan()` to route 30+ common GTA V resource/source extensions into family-specific work stages with explicit source capability, target gap, status and blocker fields.
+- Added cautious filename-co-location candidates for related model/texture/collision files; all such relationships are marked unverified rather than asserted as dependencies.
+- Added workbench integration so every import produces a visible per-family port worklist and downloadable JSON plan.
+- Added regression tests for mixed-family plans, uncertain relationships, target identity, empty input and non-installable status.
+- Documented the next native adapter and PS4 writer validation sequence.
+
+
 ## 2026-11-13 — Format-engine research and universal automatic mod audit
 - Researched ragekit, FiveFury, rage-formats, RPF archive tooling, Sollumz, OpenIV PS4 support history and GoldHEN's native PRX SDK.
 - Added backend research and selected ragekit as the first broad native-engine evaluation candidate, with FiveFury as supplemental coverage; neither is treated as PS4-compatible without exact-build proof.
