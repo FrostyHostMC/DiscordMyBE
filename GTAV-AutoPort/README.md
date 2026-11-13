@@ -6,6 +6,11 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Evidence-based PS4 compatibility gates**
+- Added an explicit seven-gate compatibility assessment covering console identity, GoldHEN, PS4 YFT/YTD reference resources, conversion adapters, and deployment/rollback validation.
+- Added a dashboard checklist showing pending evidence and keeping conversion/deployment disabled even if evidence flags are supplied until real writer and validation workflows exist.
+- Added regression tests for blocked defaults, incomplete evidence, and fail-closed behavior.
+
 **2026-11-13 — Native report test assertion aligned**
 - Updated the duplicate-report regression test to assert the specific duplicate-generic-report error emitted by the report loader; runtime behavior is unchanged.
 
