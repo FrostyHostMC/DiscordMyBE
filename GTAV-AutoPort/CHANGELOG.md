@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-13 — Format-engine research and universal automatic mod audit
+- Researched ragekit, FiveFury, rage-formats, RPF archive tooling, Sollumz, OpenIV PS4 support history and GoldHEN's native PRX SDK.
+- Added backend research and selected ragekit as the first broad native-engine evaluation candidate, with FiveFury as supplemental coverage; neither is treated as PS4-compatible without exact-build proof.
+- Added automatic mod-family classification, conservative file-signature detection, unknown-file preservation and explicit PC-native plugin/script warnings.
+- Reframed the workspace UI around universal mod intake rather than vehicle-only conversion.
+
+
 ## 2026-11-13 — Product scope expanded to universal GTA V mod porting
 - Reframed AutoPort from a vehicle-only converter to a general PC-to-PS4 Story Mode mod-porting platform.
 - Defined coverage for vehicles, peds/player models, weapons, props, maps/world assets, textures, audio, animations, UI/HUD, scripts, plugins and unknown resources.
