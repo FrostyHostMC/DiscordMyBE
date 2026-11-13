@@ -71,7 +71,7 @@ export default function App() {
       const result = await work();
       setArchive(result);
       setFilter("all");
-      const nativeFiles = result.files.filter((file) => /\\.(yft|ytd)$/i.test(file.path));
+      const nativeFiles = result.files.filter((file) => /\.(yft|ytd)$/i.test(file.path));
       if (nativeFiles.length) {
         setNativeStatus("Automatically inspecting YFT/YTD resources locally. First run may compile the inspector.");
         const generated = await inspectNativeAssetsAutomatically(result.files);
@@ -145,7 +145,7 @@ export default function App() {
       <div className="rail-foot">LOCAL WORKSPACE<br/><b>PS4 · STORY MODE</b></div>
     </aside>
     <section className="content">
-      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod, inspect its metadata, and load native YFT/YTD resource reports.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
+      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod and automatically inspect its metadata, YFT structure, and YTD textures.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero">
         <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. YFT structure reports and YTD texture previews are generated automatically on your computer. Console compatibility is never assumed.</p>
