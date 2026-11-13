@@ -1,0 +1,96 @@
+{
+  "accentColor": {
+    "type": "color",
+    "value": "#B69CFF",
+    "index": 0,
+    "name": "Accent",
+    "description": "Primary soft electric-purple accent for key actions and highlights",
+    "group": "theme"
+  },
+  "accentColor2": {
+    "type": "color",
+    "value": "#D0C2FF",
+    "index": 1,
+    "name": "Accent 2",
+    "description": "Light lavender accent for secondary highlights",
+    "group": "theme"
+  },
+  "bgColor": {
+    "type": "color",
+    "value": "#09090D",
+    "index": 2,
+    "name": "Background",
+    "description": "Near-black background for the JavaBE workspace",
+    "group": "theme"
+  },
+  "appName": {
+    "type": "text",
+    "value": "JavaBE",
+    "index": 3,
+    "name": "App name",
+    "description": "Name shown in the application header",
+    "group": "theme"
+  },
+  "analysisSpeed": {
+    "type": "number",
+    "value": 1,
+    "min": 0.5,
+    "max": 3,
+    "step": 0.25,
+    "index": 4,
+    "name": "AI speed",
+    "description": "Multiplier for how fast the AI analysis pipeline runs",
+    "group": "engine"
+  },
+  "simSpeed": {
+    "type": "number",
+    "value": 1,
+    "min": 0.5,
+    "max": 2.5,
+    "step": 0.25,
+    "index": 5,
+    "name": "Sim speed",
+    "description": "Speed multiplier for the live combat preview simulation",
+    "group": "engine"
+  },
+  "soundEnabled": {
+    "type": "boolean",
+    "value": true,
+    "index": 6,
+    "name": "Sound FX",
+    "description": "Play synthesized process pulses and success chimes",
+    "group": "engine"
+  },
+  "hapticsEnabled": {
+    "type": "boolean",
+    "value": true,
+    "index": 7,
+    "name": "Haptics",
+    "description": "Vibrate on generation complete and export",
+    "group": "engine"
+  },
+  "enableLegacyUpscaling": {
+    "type": "boolean",
+    "value": true,
+    "index": 8,
+    "name": "Upscaling",
+    "description": "Automatically upscale legacy textures to 64x64",
+    "group": "engine"
+  },
+  "enableGeyserIntegration": {
+    "type": "boolean",
+    "value": false,
+    "index": 9,
+    "name": "Geyser output",
+    "description": "Also generate optional Geyser custom mappings and a Geyser resource pack (native Bedrock stays primary)",
+    "group": "engine"
+  },
+  "geyserVersion": {
+    "type": "text",
+    "value": "2.6.0",
+    "index": 10,
+    "name": "Geyser version",
+    "description": "Geyser build that the bundled compatibility snapshot is resolved against",
+    "group": "engine"
+  }
+}

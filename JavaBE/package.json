@@ -1,0 +1,44 @@
+{
+  "name": "aippy-2d-game-canvas-template",
+  "private": true,
+  "version": "0.3.3",
+  "type": "module",
+  "packageManager": "pnpm@10.10.0",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:dev": "vite build --mode development",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "^3.0.269",
+    "@aippy/runtime": "^0.4.1",
+    "ai": "^6.0.266",
+    "lucide-react": "^1.34.0",
+    "matter-js": "^0.20.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tone": "^15.1.22"
+  },
+  "devDependencies": {
+    "@aippy/vite-plugins": "0.4.0",
+    "@eslint/js": "^10.0.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react-swc": "^4.3.3",
+    "eslint": "^10.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^16.5.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.68.0",
+    "vite": "^8.2.2",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

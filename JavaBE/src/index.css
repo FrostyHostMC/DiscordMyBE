@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  --app-bg: #09090d;
+  --app-accent: #b69cff;
+  background: var(--app-bg);
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  background: var(--app-bg);
+  overscroll-behavior: none;
+}
+
+@layer base {
+  body {
+    margin: 0;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  input,
+  textarea,
+  select {
+    -webkit-user-select: text;
+    user-select: text;
+  }
+
+  button,
+  summary,
+  select,
+  input[type="checkbox"] {
+    touch-action: manipulation;
+  }
+}
+
+@layer utilities {
+  [class*="text-sky-"],
+  [class*="text-cyan-"] {
+    color: var(--app-accent) !important;
+  }
+
+  [class*="border-sky-"],
+  [class*="border-cyan-"] {
+    border-color: color-mix(in srgb, var(--app-accent) 42%, #25212f) !important;
+  }
+
+  [class*="bg-sky-"],
+  [class*="bg-cyan-"] {
+    background-color: color-mix(in srgb, var(--app-accent) 13%, #101014) !important;
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 6px rgba(182, 156, 255, 0.2); }
+  50% { box-shadow: 0 0 18px rgba(182, 156, 255, 0.4); }
+}
+
+@keyframes slideAcross {
+  from { left: -30%; }
+  to { left: 130%; }
+}
