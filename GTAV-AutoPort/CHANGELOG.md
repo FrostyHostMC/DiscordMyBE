@@ -1,6 +1,7 @@
 # Changelog
 
-## 2026-11-13 — AutoPort web build repair
+## 2026-11-13 — AutoPort JSX build repair
+- Corrected malformed JSX expression delimiters around the busy and idle native-inspection status messages, resolving the Vite transform error.
 - Fixed an extra closing JSX brace in the native-inspection status area that prevented the Vite production build from compiling.
 - Kept the native-engine and PS4 compatibility gates unchanged.
 
