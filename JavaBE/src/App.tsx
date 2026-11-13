@@ -9,7 +9,7 @@ import { convertJavaToBedrockAddon, type RemakeResult } from '@/utils/bedrockGen
 import { type BedrockVersionTarget, type BedrockExperimentConfig, autoConfigureExperimentsForMod } from '@/utils/bedrockCapabilityQuery';
 import { GEYSER_VERSION_OPTIONS } from '@/utils/geyserVersionTable';
 import { runRegressionSuite } from '@/utils/regressionSuite';
-import { pauseForUi, prioritizeArchiveEntries } from '@/utils/archiveScale';
+import { getArchiveBudget, pauseForUi, prioritizeArchiveEntries } from '@/utils/archiveScale';
 import type { DecompileStats, RegressionSuiteReport } from '@/types/remaker';
 import { InputPanel } from '@/components/InputPanel';
 import { AnalysisPanel } from '@/components/AnalysisPanel';
@@ -118,7 +118,8 @@ export default function App() {
     appendLog(`[SETTINGS] Texture resolution: ${upscalingEnabled ? 'legacy upscaling enabled' : 'original resolution preserved'}; Geyser output: ${enableGeyser ? `on (${geyserVersion})` : 'off'}.`);
     try {
       // Keep a very large archive inside the mobile budget before any scanning starts.
-      const budgeted = prioritizeArchiveEntries(sourceEntries);
+      const archiveBudget = getArchiveBudget();
+      const budgeted = prioritizeArchiveEntries(sourceEntries, { maxEntries: archiveBudget.maxEntries, maxTotalBytes: archiveBudget.maxTotalBytes });
       if (budgeted.report.limited) appendLog(budgeted.report.summary);
       const workingEntries = budgeted.entries;
       let inspection;
