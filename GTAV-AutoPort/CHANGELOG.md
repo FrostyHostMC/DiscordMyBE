@@ -5,6 +5,7 @@ All notable GTAV AutoPort changes are recorded here. Every development update mu
 ## 2026-11-13 — Native inspector dashboard integration
 - Added `START-AUTOPORT.bat` for local workbench startup and first-run dependency installation.
 - Added `RUN-NATIVE-INSPECTOR.bat` plus a PowerShell file-picker workflow to inspect a selected YFT/YTD pair into one output folder.
+- Added a manual GitHub Actions workflow trigger for maintainers.
 - Hardened report loading with required YFT fragment/YTD texture structures, relative-only PNG preview paths, and PNG signature validation.
 - Added a separate native output folder import control.
 - Added versioned JSON report validation and safe preview-file matching.
