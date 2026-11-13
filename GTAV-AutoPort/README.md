@@ -16,7 +16,8 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
-**2026-11-13 — AutoPort web build repair**
+**2026-11-13 — AutoPort JSX build repair**
+- Corrected both missing/extra expression delimiters in the import-status JSX that blocked the Vite production build.
 - Fixed an extra closing JSX brace in the native-inspection status area that prevented the Vite production build from compiling.
 - Kept the native-engine and PS4 compatibility gates unchanged.
 
