@@ -25,6 +25,7 @@
 - [x] Native Rust YTD texture dictionary parser and DDS inspection export.
 - [x] YFT drawable/LOD/geometry/triangle and physics-child report.
 - [x] Connect native YFT/YTD JSON reports to the workbench UI.
+- [x] Automatically invoke native inspection for imported YFT/YTD assets during local development and load reports/previews without a separate report import.
 - [x] Display YFT structure metrics for multiple LOD resources and YTD texture previews.
 - [x] Add a Windows file-picker launcher that runs the native inspector on a selected YFT/YTD pair and opens the report folder.
 - [x] Add a one-click local web workbench launcher.
