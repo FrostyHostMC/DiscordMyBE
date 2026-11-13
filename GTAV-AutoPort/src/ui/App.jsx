@@ -10,6 +10,7 @@ import { inspectNativeAssetsAutomatically } from "../core/autoNative.js";
 import { PS4_TARGET, describeTarget } from "../core/target.js";
 import { assessPs4Compatibility } from "../core/compatibility.js";
 import { auditModFiles } from "../core/modClassifier.js";
+import { buildUniversalPortPlan } from "../core/portPlan.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -40,6 +41,7 @@ export default function App() {
   const folderInput = useRef(null);
   const [archive, setArchive] = useState(null);
   const [modAudit, setModAudit] = useState(null);
+  const [portPlan, setPortPlan] = useState(null);
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
@@ -70,11 +72,12 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setModAudit(auditModFiles(result.files));
+      setPortPlan(buildUniversalPortPlan({ files: result.files }));
       setFilter("all");
       const vehiclesMeta = result.files.find((file) => file.path.split("/").at(-1).toLowerCase() === "vehicles.meta");
       if (vehiclesMeta) {
@@ -198,6 +201,17 @@ export default function App() {
         {modAudit.summary.unknownFiles > 0 && <div className="notice"><FileText size={19}/><div><b>{modAudit.summary.unknownFiles} unrecognized file(s) preserved in the inventory</b><p>Unknown files are not discarded. Their formats must be identified before conversion or packaging.</p></div></div>}
         {modAudit.warnings.slice(0,12).map((warning,index)=><div className="audit-warning" key={warning.path+index}><AlertTriangle size={14}/><span><b>{warning.path}</b> — {warning.message}</span></div>)}
         <p className="native-disclaimer">{modAudit.note}</p>
+      </section>}
+
+      {portPlan && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">AUTOMATIC PORT PLAN</div><h3>Family-specific conversion worklist</h3><p>{portPlan.summary.fileCount} resources routed across {portPlan.summary.familyCount} families · {portPlan.summary.blockedCount} require an adapter or manual review</p></div><span className="tag warning"><AlertTriangle size={13}/> PLAN ONLY</span></div>
+        <div className="audit-grid">
+          {Object.entries(portPlan.summary.statusCounts).map(([status,count])=><div className="audit-card" key={status}><b>{count}</b><span>{status.replaceAll("-"," ")}</span></div>)}
+        </div>
+        <div className="file-list">{portPlan.pipeline.map((stage)=><div className="file-row" key={stage.stage}><FileText size={15}/><span className="file-name"><b>{stage.stage.replaceAll("-"," ")}</b><small>{stage.files.length} resource(s) · {stage.files.slice(0,3).join(", ")}{stage.files.length>3?" …":""}</small></span><span className="file-ext">PLANNED</span></div>)}</div>
+        {portPlan.resources.filter((item)=>item.status!=="analysis-or-authoring-only").slice(0,16).map((item)=><div className="audit-warning" key={item.path}><AlertTriangle size={14}/><span><b>{item.path}</b> — {item.status.replaceAll("-"," ")} · {item.blocker}</span></div>)}
+        <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
+        <button className="secondary-button" onClick={()=>downloadJson(portPlan,"gtav-autoport-port-plan.json")}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
       {nativeReports && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Automatic inspector reports</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-INSPECTED</span></div>
