@@ -1,5 +1,8 @@
 # Changelog
 
+## 2026-11-13 — Native report test assertion aligned
+- Corrected the duplicate-report test expectation to match the loader's explicit duplicate generic report error message. No runtime behavior changed.
+
 All notable GTAV AutoPort changes are recorded here. Every development update must also refresh the latest-update summary in README.md.
 
 ## 2026-11-13 — First PS4 target profile recorded
