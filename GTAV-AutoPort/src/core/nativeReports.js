@@ -37,7 +37,7 @@ export function inspectNativeReports(files) {
   if (yftFiles.length + ytdFiles.length === 0) {
     throw new Error("No yft-inspection.json or ytd-inspection.json was found. Import the native inspector output folder.");
   }
-  if (yftFiles.filter((file) => basename(file.path) === "yft-inspection.json").length > 1 || ytdFiles.length > 1) {
+  if (yftFiles.filter((file) => basename(file.path) === "yft-inspection.json").length > 1 || ytdFiles.filter((file) => basename(file.path) === "ytd-inspection.json").length > 1) {
     throw new Error("Duplicate generic reports were found. Import one inspection output set at a time.");
   }
 
