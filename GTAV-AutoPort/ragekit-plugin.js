@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 
 const LIMIT = 160 * 1024 * 1024;
-const EXTENSIONS = new Set([".yft",".ydr",".ydd",".ytd",".ybn",".ypt",".ynv",".ynd",".ymap",".ytyp",".ycd",".ysc",".rel",".awc",".gxt2",".ymf",".ymt",".yed",".yfd",".ybd",".yvr",".ywr",".gfx"]);
+const EXTENSIONS = new Set([".rpf",".yft",".ydr",".ydd",".ytd",".ybn",".ypt",".ynv",".ynd",".ymap",".ytyp",".ycd",".ysc",".rel",".awc",".gxt2",".ymf",".ymt",".yed",".yfd",".ybd",".yvr",".ywr",".gfx"]);
 function sha(bytes){return createHash("sha256").update(bytes).digest("hex");}
 function run(executable,args){return new Promise((resolve,reject)=>{const child=spawn(executable,args,{windowsHide:true,stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";child.stdout.setEncoding("utf8").on("data",x=>stdout+=x);child.stderr.setEncoding("utf8").on("data",x=>stderr+=x);child.on("error",reject);child.on("close",code=>code===0?resolve({stdout,stderr}):reject(new Error(stderr.trim()||stdout.trim()||`rk exited with code ${code}`)));});}
 function findRk(){const configured=process.env.GTAV_AUTOPORT_RK;if(configured)return configured;return null;}
