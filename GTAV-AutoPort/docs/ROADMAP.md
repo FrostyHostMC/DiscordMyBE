@@ -26,7 +26,9 @@
 - [x] YFT drawable/LOD/geometry/triangle and physics-child report.
 - [x] Connect native YFT/YTD JSON reports to the workbench UI.
 - [x] Display YFT structure metrics and YTD texture previews.
-- [ ] Add a one-click desktop launcher that runs the native inspector and opens the report folder.
+- [x] Add a Windows file-picker launcher that runs the native inspector on a selected YFT/YTD pair and opens the report folder.
+- [x] Add a one-click local web workbench launcher.
+- [ ] Replace the browser workbench launchers with a signed Tauri desktop installer and bundled native inspector.
 - [ ] Inspect and validate RSC7 page flags and resource boundaries independently.
 - [ ] Add real fixture integration tests (fixture binaries remain outside the repository).
 - [ ] Inspect material/shader references and external texture dictionary dependencies.
