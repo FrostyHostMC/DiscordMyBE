@@ -1,5 +1,4 @@
 import { useState, type PointerEvent } from 'react';
-import { vibrate } from '@aippy/runtime/device';
 import { AlertTriangle, Braces, CheckCircle2, Play, X } from 'lucide-react';
 import { useRemakerAudio } from '@/hooks/useRemakerAudio';
 import { evaluateMolangExpression, type MockEntityState } from '@/utils/molangExpressionSandbox';
@@ -51,7 +50,6 @@ export function MolangSandbox({ initialExpression, onClose }: Props) {
       setResult({ value, passed });
       if (passed) {
         void playSuccess().catch(() => undefined);
-        void vibrate(120).catch(() => undefined);
       } else {
         void playWarning().catch(() => undefined);
       }
