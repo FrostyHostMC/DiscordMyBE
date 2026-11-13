@@ -44,6 +44,8 @@ A PC replacement for the existing `glendale` vehicle containing `glendale.yft`, 
 ## Run the workbench
 Requirements: Node.js 20 or newer.
 
+On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs dependencies on first launch, and starts the local workbench. Keep the terminal window open while using the app.
+
     npm install
     npm run dev
     npm test
