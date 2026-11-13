@@ -4,6 +4,10 @@ The target is PS4 Story Mode. Every deployment must be matched to the user's exa
 
 GoldHEN plugins are native PS4-side modules. Windows PC `.asi` and `.dll` plugins are not interchangeable with PS4 `.prx` plugins. File redirection may be useful for resource replacements, but GTA V paths and compatibility must be verified on the target build.
 
+## Current first target profile
+
+The user has specified **CUSA00411 · GTA V 1.73 · PS4 Story Mode** as the first test target. This is recorded as a user-confirmed target label, not an independently verified compatibility result. The region/build mapping, exact executable/build fingerprint, resource formats, and GoldHEN redirection paths still require confirmation against the console and trusted retail files. Do not infer PS4 compatibility from the title ID or version label alone.
+
 ## Target profile required before deployment
 - GTA V title ID (never assume a sample CUSA identifier is correct).
 - Installed game update/build and region.
