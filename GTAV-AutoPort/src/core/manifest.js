@@ -1,26 +1,28 @@
-import { createHash } from "node:crypto";
-
-export function sha256(buffer) {
-  return createHash("sha256").update(buffer).digest("hex");
+async function sha256(buffer) {
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function buildConversionManifest({ sourceName, files, metadata, target }) {
+export async function buildConversionManifest({ sourceName, files, metadata, target = null, assetChecks = [] }) {
+  const sourceFiles = [];
+  for (const file of files) {
+    sourceFiles.push({
+      path: file.path,
+      size: file.bytes.byteLength,
+      sha256: await sha256(file.bytes),
+    });
+  }
   return {
     schemaVersion: 1,
     product: "GTAV AutoPort",
     status: "analysis-only",
-    source: {
-      name: sourceName,
-      files: files.map((file) => ({
-        path: file.path,
-        size: file.bytes.byteLength,
-        sha256: sha256(file.bytes),
-      })),
-    },
+    source: { name: sourceName, files: sourceFiles },
     conversion: metadata,
-    target: target ?? null,
+    assetChecks,
+    target,
     gates: {
-      metadataParsed: true,
+      archiveInspected: true,
+      metadataParsed: Boolean(metadata),
       assetConversionImplemented: false,
       targetBuildValidated: false,
       deploymentReady: false,

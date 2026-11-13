@@ -2,7 +2,29 @@
 
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Early development:** This folder is isolated from AutoBE. It does not modify, import, or depend on AutoBE source code. The first milestone is a metadata-aware importer for a Glendale replacement vehicle. PC YFT/YTD assets are not yet converted to PS4 format, so generated review outputs must not be installed.
+> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 header inspection, and a native read-only YFT/YTD parser adapter are now in the project. None of these steps converts a PC vehicle to PS4. Review reports and extracted DDS textures are not installable packages.
+
+## Latest update
+
+**2026-11-13 — Native inspection reports connected to the workbench**
+- Added a dedicated **Load native reports** folder import to the dashboard.
+- Added Windows launchers: `START-AUTOPORT.bat` starts the local workbench; `RUN-NATIVE-INSPECTOR.bat` opens file pickers and inspects multiple YFT LOD files plus the matching YTD in one report set.
+- Dashboard now reads YFT JSON structural summaries and displays model, geometry, triangle, bone-transform, and physics-child counts.
+- Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
+- Preview object URLs are released when reports are replaced or the UI unmounts.
+- Added report schema validation, safe relative preview matching, PNG signature checks, and tests for malformed or unsafe report content.
+- Added a manual `workflow_dispatch` trigger for the isolated GitHub Actions checks.
+
+**2026-11-13 — Native YFT/YTD inspection foundation**
+- Added a Rust CLI adapter using the public-domain `rage-formats` crate.
+- YFT reports can include fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries.
+- YTD inspection exports DDS files plus PNG previews where decoding succeeds, and records dimensions, pixel format, mip levels, and names.
+- Added extracted-folder import to the browser workbench.
+- Added RSC7 header fields and sample-version comparison based only on the supplied Glendale PC fixture.
+- Added a repository-root GitHub Actions workflow with independent JavaScript test/build and Rust test/build jobs.
+- PS4 conversion and deployment remain blocked pending a verified PS4-target writer and exact-build console tests.
+
+See [CHANGELOG](CHANGELOG.md) for every update.
 
 ## Scope
 - Input: PC GTA V mods.
@@ -14,10 +36,46 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 A PC replacement for the existing `glendale` vehicle containing `glendale.yft`, `glendale_hi.yft`, `glendale.ytd`, `vehicles.meta`, and `handling.meta`.
 
 ## Project structure
-- `src/` — application and conversion pipeline.
+- `src/` — browser workbench and JavaScript conversion pipeline.
+- `native-inspector/` — Rust read-only YFT/YTD inspection adapter.
 - `docs/` — architecture, format research, target compatibility, and roadmap.
-- `tests/` — safe metadata parsing and manifest tests.
+- `tests/` — metadata, archive intake, and RSC7 header tests.
+- `.github/workflows/gtav-autoport.yml` — isolated CI checks for this project folder.
 
-See [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), and [PS4/GoldHEN notes](docs/PS4-GOLDHEN.md).
+## Run the workbench
+Requirements: Node.js 20 or newer.
 
-**Safety:** never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
+On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs dependencies on first launch, and starts the local workbench. Keep the terminal window open while using the app.
+
+    npm install
+    npm run dev
+    npm test
+    npm run build
+
+## Run the native inspector
+Requirements: Rust stable toolchain.
+
+    cd native-inspector
+    cargo test
+    cargo build --release
+    cargo run --release -- path/to/glendale.yft
+    cargo run --release -- path/to/glendale.ytd
+
+The native adapter parses resources and exports YTD textures to DDS/PNG for inspection. Optional fixture tests accept `GTAV_AUTOPORT_YFT` and `GTAV_AUTOPORT_YTD` paths so the supplied mod can be tested locally without committing its binaries. It does not rewrite YFT or create a PS4 package.
+
+## Run the native inspector and load its reports
+
+Build the native adapter once:
+
+    cd native-inspector
+    cargo build --release
+
+For the supplied Glendale vehicle pair, run both commands from the same parent directory. Because the files share the `glendale` basename, both reports are written into the same `glendale-autoport-inspection` output folder:
+
+    cargo run --release -- /path/to/glendale.yft
+    cargo run --release -- /path/to/glendale.ytd
+
+Then open the AutoPort workbench and choose **Load native reports**. Select the `glendale-autoport-inspection` folder. The dashboard validates the JSON report schema, displays separate metrics for each selected YFT (including `glendale_hi.yft`), and shows YTD PNG previews when the native decoder generated them.
+
+## Safety
+Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
