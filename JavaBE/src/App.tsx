@@ -1,6 +1,6 @@
 import assetsData from "@/config/assets";
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
-import { Cpu, RotateCcw, Download, Activity, Code2, Sliders, Wrench, FolderDown } from 'lucide-react';
+import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench } from 'lucide-react';
 import tweaksConfig from '@/config/tweaksConfig.json';
 import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { useRemakerAudio } from '@/hooks/useRemakerAudio';
@@ -28,7 +28,6 @@ import { GeyserConfigPanel } from '@/components/GeyserConfigPanel';
 import { ValidationDashboard } from '@/components/ValidationDashboard';
 import { ModelPortPanel } from '@/components/ModelPortPanel';
 import { exportAddonFile } from '@/utils/iosFileExport';
-import { exportProjectSourceZip } from '@/utils/projectSourceExport';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
 const tweaks = aippyTweaks(tweaksConfig);
@@ -73,8 +72,6 @@ export default function App() {
   const [remake, setRemake] = useState<RemakeResult | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
-  const [projectExporting, setProjectExporting] = useState(false);
-  const [projectExportStatus, setProjectExportStatus] = useState<string | null>(null);
   const [showMolangSandbox, setShowMolangSandbox] = useState(false);
   const [isAutoHealing, setIsAutoHealing] = useState(false);
   const [geyserExporting, setGeyserExporting] = useState(false);
@@ -171,26 +168,6 @@ export default function App() {
       setExportStatus(`Export failed: ${message}`); appendLog(`[EXPORT ERROR] ${message}`); playError();
     } finally { setExporting(false); }
   };
-  const handleExportProject = async () => {
-    setProjectExporting(true);
-    setProjectExportStatus('Gathering app files…');
-    try {
-      const fileCount = await exportProjectSourceZip((stageName, completed, total) => {
-        const step = stageName === 'reading' ? 'Gathering app files' : 'Building ZIP archive';
-        setProjectExportStatus(`${step} · ${completed.toLocaleString()} / ${total.toLocaleString()}`);
-      });
-      setProjectExportStatus(`Downloaded ZIP with ${fileCount.toLocaleString()} files.`);
-      appendLog(`[PROJECT:EXPORT] Project source ZIP downloaded with ${fileCount} files.`);
-      playSuccess();
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setProjectExportStatus(`Download failed: ${message}`);
-      appendLog(`[PROJECT:EXPORT:ERROR] ${message}`);
-      playError();
-    } finally {
-      setProjectExporting(false);
-    }
-  };
   const handleExportGeyser = async () => {
     if (!remake?.geyserBundle) return;
     setGeyserExporting(true);
@@ -225,7 +202,7 @@ export default function App() {
       <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-3 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
         <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/30 bg-violet-400/10"><Cpu className="h-5 w-5" style={{ color: accent }} /></div><div className="min-w-0"><h1 className="truncate text-base font-bold tracking-tight text-white">{appName}</h1><p className="text-xs text-slate-400">Drop a mod archive; JavaBE scans, configures and builds it automatically.</p></div></div>
-          <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={() => setShowMolangSandbox(true)} className="flex min-h-[48px] items-center gap-2 rounded-xl border border-slate-700 px-3 text-xs font-semibold text-violet-200 active:bg-slate-800" aria-label="Open expression lab"><Code2 className="h-4 w-4" /><span className="hidden sm:inline">Expression lab</span></button><button type="button" onClick={handleReset} className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border border-slate-700 text-slate-300 active:bg-slate-800" aria-label="Start over"><RotateCcw className="h-4 w-4" /></button></div>
+          <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={handleReset} className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border border-slate-700 text-slate-300 active:bg-slate-800" aria-label="Start over"><RotateCcw className="h-4 w-4" /></button></div>
         </header>
 
         <nav className="grid grid-cols-4 gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5" aria-label="Work areas">
@@ -243,7 +220,8 @@ export default function App() {
           <label className="flex min-h-[56px] items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 text-xs text-slate-300"><span>Upscale legacy textures</span><input type="checkbox" checked={upscalingEnabled} onChange={event => updateUpscaling(event.target.checked)} className="h-5 w-5 accent-violet-400" /></label>
         </>}
 
-        {activeWorkspace === 'more' && <section className="flex flex-col gap-3 rounded-2xl border border-violet-400/25 bg-violet-400/[0.06] p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-300/20 bg-violet-300/10"><FolderDown className="h-5 w-5 text-violet-200" /></div><div><h2 className="text-sm font-bold text-white">JavaBE project source</h2><p className="mt-1 text-xs leading-relaxed text-slate-400">Download the app's source and build files as one ZIP to continue working on it locally.</p></div></div><button type="button" onClick={() => void handleExportProject()} disabled={projectExporting} className="flex min-h-[60px] shrink-0 items-center justify-center gap-2 rounded-xl bg-violet-300 px-4 text-sm font-bold text-slate-950 active:scale-[0.99] disabled:opacity-60"><FolderDown className="h-5 w-5" />{projectExporting ? 'Preparing ZIP…' : 'Download project ZIP'}</button>{projectExportStatus && <p aria-live="polite" className="text-xs text-violet-100 sm:basis-full">{projectExportStatus}</p>}</section>}
+
+        {activeWorkspace === 'tools' && <button type="button" onClick={() => setShowMolangSandbox(true)} className="flex min-h-[54px] items-center justify-center gap-2 rounded-xl border border-violet-400/25 bg-violet-400/[0.07] px-4 text-sm font-semibold text-violet-100 active:bg-violet-400/15"><Activity className="h-4 w-4" />Open expression lab</button>}
         {activeTab === 'auditor' && <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><TextureAuditPanel remake={remake} accent={accent} onReport={lines => lines.forEach(appendLog)} playSuccess={playSuccess} playWarning={playWarning} /></div>}
         {activeTab === 'models' && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4">
