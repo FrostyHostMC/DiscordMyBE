@@ -5,7 +5,7 @@ All notable GTAV AutoPort changes are recorded here. Every development update mu
 ## 2026-11-13 — Native YFT/YTD inspection foundation
 - Added a Rust native inspector using the Unlicense-licensed `VIRUXE/rage-formats` crate.
 - Added read-only YFT fragment parsing with drawable LOD, model, geometry, triangle, bone-transform, and physics-child summaries.
-- Added YTD texture dictionary parsing and per-texture DDS extraction with metadata reports.
+- Added YTD texture dictionary parsing, per-texture DDS extraction, PNG previews where decoding succeeds, and metadata reports.
 - Added extracted-folder intake alongside ZIP import in the browser workbench.
 - Added duplicate-basename rejection and ambiguous vehicle asset reporting.
 - Added RSC7 header inspection for magic, version, system flags, graphics flags, and payload size. Version comparison is explicitly limited to values observed in the supplied Glendale fixture; it is not a platform detector.
