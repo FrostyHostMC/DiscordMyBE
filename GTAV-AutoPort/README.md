@@ -11,7 +11,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Dashboard now reads YFT JSON structural summaries and displays model, geometry, triangle, bone-transform, and physics-child counts.
 - Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
 - Preview object URLs are released when reports are replaced or the UI unmounts.
-- Added report schema validation and preview-file linking tests.
+- Added report schema validation, safe relative preview matching, PNG signature checks, and tests for malformed or unsafe report content.
 
 **2026-11-13 — Native YFT/YTD inspection foundation**
 - Added a Rust CLI adapter using the public-domain `rage-formats` crate.
@@ -58,6 +58,20 @@ Requirements: Rust stable toolchain.
     cargo run --release -- path/to/glendale.ytd
 
 The native adapter parses resources and exports YTD textures to DDS/PNG for inspection. Optional fixture tests accept `GTAV_AUTOPORT_YFT` and `GTAV_AUTOPORT_YTD` paths so the supplied mod can be tested locally without committing its binaries. It does not rewrite YFT or create a PS4 package.
+
+## Run the native inspector and load its reports
+
+Build the native adapter once:
+
+    cd native-inspector
+    cargo build --release
+
+For the supplied Glendale vehicle pair, run both commands from the same parent directory. Because the files share the `glendale` basename, both reports are written into the same `glendale-autoport-inspection` output folder:
+
+    cargo run --release -- /path/to/glendale.yft
+    cargo run --release -- /path/to/glendale.ytd
+
+Then open the AutoPort workbench and choose **Load native reports**. Select the `glendale-autoport-inspection` folder. The dashboard validates the JSON report schema, displays YFT structure metrics, and shows YTD PNG previews when the native decoder generated them.
 
 ## Safety
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
