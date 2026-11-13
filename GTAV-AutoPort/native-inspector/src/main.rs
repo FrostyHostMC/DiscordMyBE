@@ -107,7 +107,9 @@ fn inspect_yft(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
         ]
     });
 
-    write_report(output, "yft-inspection.json", &report)?;
+    let stem = input.file_stem().and_then(|value| value.to_str()).unwrap_or("resource");
+    let report_name = format!("{}-yft-inspection.json", safe_texture_filename(stem, 0));
+    write_report(output, &report_name, &report)?;
     Ok(report)
 }
 
