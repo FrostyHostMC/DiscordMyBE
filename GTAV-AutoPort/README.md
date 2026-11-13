@@ -16,6 +16,9 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — PS4 firmware target recorded**
+- Recorded the user-confirmed PS4 system firmware 14.00 separately from the GTA V title update 1.73; GoldHEN version remains unknown and resource compatibility remains unverified.
+
 **2026-11-13 — AutoPort JSX build repair**
 - Corrected both missing/extra expression delimiters in the import-status JSX that blocked the Vite production build.
 - Fixed an extra closing JSX brace in the native-inspection status area that prevented the Vite production build from compiling.
