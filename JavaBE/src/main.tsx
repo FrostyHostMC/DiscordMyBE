@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 import App from '@/App.tsx';
 import './index.css';
-import aiConfigJson from '@/config/aiConfig.json';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 
@@ -11,18 +10,6 @@ type GateState =
   | { status: 'loading'; message: string }
   | { status: 'allowed' }
   | { status: 'denied'; message: string };
-
-void import('@aippy/runtime/ai')
-  .then((mod) => {
-    if (typeof mod.sendAIConfigToContainer === 'function') {
-      try {
-        void Promise.resolve(mod.sendAIConfigToContainer(aiConfigJson)).catch(() => {});
-      } catch {
-        /* The host bridge may not be ready yet. */
-      }
-    }
-  })
-  .catch(() => {});
 
 function GateScreen({ message, retry }: { message: string; retry: () => void }) {
   return (
@@ -111,12 +98,7 @@ function JavaBEActivity() {
   }, [attempt]);
 
   if (gate.status === 'allowed') return <App />;
-  return (
-    <GateScreen
-      message={gate.message}
-      retry={() => setAttempt((value) => value + 1)}
-    />
-  );
+  return <GateScreen message={gate.message} retry={() => setAttempt((value) => value + 1)} />;
 }
 
 createRoot(document.getElementById('root')!).render(<JavaBEActivity />);
