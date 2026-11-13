@@ -1,13 +1,15 @@
 {
   "name": "gtav-autoport",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Local-first PC GTA V to PS4 Story Mode conversion workbench",
   "scripts": {
     "test": "node --test",
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "native:test": "cargo test --manifest-path native-inspector/Cargo.toml",
+    "native:build": "cargo build --release --manifest-path native-inspector/Cargo.toml"
   },
   "dependencies": {
     "fast-xml-parser": "^5.2.5",
