@@ -1,0 +1,7 @@
+name = "javabe-activity"
+compatibility_date = "2026-11-13"
+pages_build_output_dir = "dist"
+
+[vars]
+VITE_DISCORD_CLIENT_ID = "1374571021889310821"
+DISCORD_CLIENT_ID = "1374571021889310821"
