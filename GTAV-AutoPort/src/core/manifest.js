@@ -3,7 +3,9 @@ async function sha256(buffer) {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function buildConversionManifest({ sourceName, files, metadata, target = null, assetChecks = [] }) {
+import { PS4_TARGET } from "./target.js";
+
+export async function buildConversionManifest({ sourceName, files, metadata, target = PS4_TARGET, assetChecks = [] }) {
   const sourceFiles = [];
   for (const file of files) {
     sourceFiles.push({
@@ -16,6 +18,7 @@ export async function buildConversionManifest({ sourceName, files, metadata, tar
     schemaVersion: 1,
     product: "GTAV AutoPort",
     status: "analysis-only",
+    targetProfile: target,
     source: { name: sourceName, files: sourceFiles },
     conversion: metadata,
     assetChecks,
