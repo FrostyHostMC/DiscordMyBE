@@ -7,10 +7,8 @@ import { isPlayableModeEnabled, setPlayableMode } from '@/utils/provenance';
 import { learnFromContentLog, getLearnedDenyQueries } from '@/utils/bedrockPostProcess';
 import { expandNestedArchives } from '@/utils/nestedArchives';
 import {
-  ARCHIVE_BYTE_LIMIT,
-  ARCHIVE_ENTRY_BYTE_LIMIT,
-  ARCHIVE_ENTRY_LIMIT,
   formatArchiveBytes,
+  getArchiveBudget,
   prioritizeArchiveEntries,
 } from '@/utils/archiveScale';
 
@@ -45,10 +43,11 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
     try {
       const oversized: string[] = [];
       let skippedBytes = 0;
+      const budget = getArchiveBudget();
       const extracted = await readZipArchive(await selectedFile.arrayBuffer(), {
-        maxEntries: ARCHIVE_ENTRY_LIMIT,
-        maxEntryBytes: ARCHIVE_ENTRY_BYTE_LIMIT,
-        maxTotalBytes: ARCHIVE_BYTE_LIMIT,
+        maxEntries: budget.maxEntries,
+        maxEntryBytes: budget.maxEntryBytes,
+        maxTotalBytes: budget.maxTotalBytes,
         onSkip: (path, bytes, reason) => {
           skippedBytes += bytes;
           if (reason === 'entry-too-large' && oversized.length < 5) oversized.push(path);
@@ -59,7 +58,7 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       const nested = await expandNestedArchives(extracted);
       // A modpack-sized archive is trimmed to the mobile budget before it is scanned: audio and
       // oversized binaries are left unread instead of inflating hundreds of megabytes at once.
-      const budgeted = prioritizeArchiveEntries(nested.entries);
+      const budgeted = prioritizeArchiveEntries(nested.entries, { maxEntries: budget.maxEntries, maxTotalBytes: budget.maxTotalBytes });
       const notes: string[] = [];
       if (nested.expanded.length > 0) notes.push(`Expanded ${nested.expanded.length} nested archive(s) so their content is analysed.`);
       if (skippedBytes > 0) {
@@ -67,7 +66,7 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       }
       if (budgeted.report.limited) notes.push(budgeted.report.summary.replace('[MEMORY] ', ''));
       if (selectedFile.size > 300 * 1024 * 1024) {
-        notes.push(`This archive is ${formatArchiveBytes(selectedFile.size)}; it is read within the mobile memory budget so the app stays responsive while it works.`);
+        notes.push(`Large archive detected (${formatArchiveBytes(selectedFile.size)}). JavaBE is using its ${budget.profile} processing profile with up to ${formatArchiveBytes(budget.maxTotalBytes)} of expanded source data. Any skipped content is listed above rather than silently treated as converted.`);
       }
       if (notes.length > 0) setNestedNote(notes.join(' '));
       onFileLoaded(selectedFile, budgeted.entries);

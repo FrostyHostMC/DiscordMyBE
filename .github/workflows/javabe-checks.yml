@@ -1,0 +1,41 @@
+name: JavaBE Activity CI
+
+on:
+  pull_request:
+    paths:
+      - "JavaBE/**"
+      - ".github/workflows/javabe-checks.yml"
+  push:
+    branches:
+      - main
+      - "feature/javabe-discord-activity"
+    paths:
+      - "JavaBE/**"
+      - ".github/workflows/javabe-checks.yml"
+
+concurrency:
+  group: javabe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build JavaBE Activity
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JavaBE
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Build Activity
+        run: pnpm build

@@ -86,12 +86,12 @@ const { images, loaded } = useGameImages({
 
 ### Drawing Helpers (`@/utils/drawHelpers`)
 
-| Helper                                           | Purpose                                                                               |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Helper | Purpose |
+|---|---|
 | `drawImageContain(ctx, img, cx, cy, boxW, boxH)` | Draw centered, aspect-ratio preserved (object-contain). **Use for all game elements** |
-| `drawBackground(ctx, img, w, h)`                 | Full-canvas object-cover. Prefer `useGameLoop` 4th arg instead of calling directly    |
-| `drawImageSafe(ctx, img, dx, dy, dw, dh)`        | 9-param drawImage wrapper, exact rectangle fill — does NOT preserve aspect ratio      |
-| `drawImageCentered(ctx, img, cx, cy, size)`      | Draw centered in a square box — distorts non-square images                            |
+| `drawBackground(ctx, img, w, h)` | Full-canvas object-cover. Prefer `useGameLoop` 4th arg instead of calling directly |
+| `drawImageSafe(ctx, img, dx, dy, dw, dh)` | 9-param drawImage wrapper, exact rectangle fill — does NOT preserve aspect ratio |
+| `drawImageCentered(ctx, img, cx, cy, size)` | Draw centered in a square box — distorts non-square images |
 
 ## Development
 
@@ -109,3 +109,42 @@ pnpm run build
 ## License
 
 Private
+
+---
+
+# JavaBE Discord Activity deployment
+
+JavaBE is deployed as a separate Discord Activity, independent from AutoBE.
+
+- Discord Application ID: `1374571021889310821`
+- Embedded SDK: `@discord/embedded-app-sdk`
+- OAuth scope requested: `identify`
+
+## Cloudflare Pages
+
+Create/use the separate Pages project `javabe-activity`.
+
+| Setting | Value |
+|---|---|
+| Repository | `FrostyHostMC/DiscordMyBE` |
+| Root directory | `JavaBE` |
+| Production branch | `main` |
+| Build command | `pnpm build` |
+| Output directory | `dist` |
+| Node version | `22` |
+
+Configure:
+- Build variable: `VITE_DISCORD_CLIENT_ID=1374571021889310821`
+- Runtime variable: `DISCORD_CLIENT_ID=1374571021889310821`
+- Runtime secret: `DISCORD_CLIENT_SECRET` — enter a newly rotated client secret.
+
+Never put the bot token or client secret in Vite variables, source code, or GitHub. The current embedded Activity sign-in flow does not need a bot token.
+
+## Discord Developer Portal
+
+1. Enable Activities for the JavaBE application.
+2. Add `https://javabe-activity.pages.dev` as an Activity URL Mapping.
+3. Configure the OAuth redirect URI `https://127.0.0.1/` for the SDK authorization-code exchange if the portal requests it.
+4. Save and launch JavaBE from a Discord voice channel's Activity launcher.
+
+The separate bot user is optional. Create/invite one only if JavaBE later needs bot-driven server actions.
