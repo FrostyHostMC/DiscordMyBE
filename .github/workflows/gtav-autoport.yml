@@ -11,13 +11,12 @@ on:
       - "GTAV-AutoPort/**"
       - ".github/workflows/gtav-autoport.yml"
 
-defaults:
-  run:
-    working-directory: GTAV-AutoPort
-
 jobs:
-  verify:
+  verify-web:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: GTAV-AutoPort
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +26,21 @@ jobs:
           node-version: 22
       - name: Install dependencies
         run: npm install
-      - name: Run tests
+      - name: Run JavaScript tests
         run: npm test
-      - name: Build application
+      - name: Build web application
         run: npm run build
+
+  verify-native:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Test native resource inspector
+        working-directory: GTAV-AutoPort/native-inspector
+        run: cargo test
+      - name: Build native resource inspector
+        working-directory: GTAV-AutoPort/native-inspector
+        run: cargo build --release
