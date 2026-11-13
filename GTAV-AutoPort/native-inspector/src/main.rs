@@ -114,7 +114,9 @@ fn inspect_yft(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
 fn inspect_ytd(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
     let textures = parse_ytd(bytes).context("rage-formats could not parse this YTD texture dictionary")?;
     let texture_dir = output.join("textures");
+    let preview_dir = output.join("previews");
     fs::create_dir_all(&texture_dir).context("could not create texture output directory")?;
+    fs::create_dir_all(&preview_dir).context("could not create texture preview directory")?;
     let mut entries = Vec::new();
 
     for (index, texture) in textures.iter().enumerate() {
@@ -123,6 +125,20 @@ fn inspect_ytd(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
         let destination = texture_dir.join(&filename);
         fs::write(&destination, texture.to_dds())
             .with_context(|| format!("could not write extracted texture {filename}"))?;
+
+        let preview_name = format!("{base}_{index}.png");
+        let preview_path = preview_dir.join(&preview_name);
+        let preview_result = to_rgba_image(texture)
+            .and_then(|image| encode_image(&image, ImageFormat::Png, 100));
+        let (preview_file, preview_error) = match preview_result {
+            Ok(png) => {
+                fs::write(&preview_path, png)
+                    .with_context(|| format!("could not write texture preview {preview_name}"))?;
+                (Some(format!("previews/{preview_name}")), None)
+            }
+            Err(error) => (None, Some(format!("{error:#}"))),
+        };
+
         entries.push(json!({
             "name": texture.name,
             "name_hash": format!("0x{:08X}", texture.name_hash),
@@ -132,7 +148,9 @@ fn inspect_ytd(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
             "format": texture.format.to_string(),
             "mip_levels": texture.levels,
             "stride": texture.stride,
-            "dds_file": format!("textures/{filename}")
+            "dds_file": format!("textures/{filename}"),
+            "preview_png": preview_file,
+            "preview_error": preview_error
         }));
     }
 
@@ -148,9 +166,9 @@ fn inspect_ytd(input: &Path, output: &Path, bytes: &[u8]) -> Result<Value> {
         "texture_count": entries.len(),
         "textures": entries,
         "limitations": [
-            "Textures are exported as DDS for inspection; the source YTD is not rewritten.",
+            "Textures are exported as DDS and PNG inspection files; the source YTD is not rewritten.",
             "A successful PC resource parse does not establish PS4 compatibility.",
-            "Extracted DDS files are inspection artifacts, not a converted PS4 texture dictionary."
+            "Extracted texture files are inspection artifacts, not a converted PS4 texture dictionary."
         ]
     });
 
