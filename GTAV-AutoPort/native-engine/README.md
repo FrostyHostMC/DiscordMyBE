@@ -28,7 +28,7 @@ RPF files may require keys from the user's own game installation. PC Legacy/Enha
 
 ## Supported round-trip candidates
 
-The integration attempts resource files for which ragekit advertises read/write coverage: YFT, YDR, YDD, YTD, YBN, YPT, YNV, YND, YMAP, YTYP, YCD, YSC, YAW, REL, AWC, GXT2, YMF, YMT, YED, YFD, YBD, YVR, YWR and GFX. Actual support depends on the individual file and required keys/edition. Unsupported or malformed inputs return an error report and are never marked converted.
+The integration attempts RPF archives plus resource files for which ragekit advertises read/write coverage: RPF, YFT, YDR, YDD, YTD, YBN, YPT, YNV, YND, YMAP, YTYP, YCD, YSC, YAW, REL, AWC, GXT2, YMF, YMT, YED, YFD, YBD, YVR, YWR and GFX. Actual support depends on the individual file and required keys/edition. Unsupported or malformed inputs return an error report and are never marked converted.
 
 ## License
 
