@@ -34,6 +34,13 @@
 - [ ] Add real fixture integration tests (fixture binaries remain outside the repository).
 - [ ] Inspect material/shader references and external texture dictionary dependencies.
 
+## Phase 3 — universal vehicle conversion foundation
+- [x] Define a vehicle-agnostic conversion architecture and versioned intermediate-representation requirements.
+- [ ] Implement generic dependency graph across vehicle, handling, variations, carcols, mod kits, audio, layout, collision, LOD and damage assets.
+- [ ] Implement source decoders that populate the intermediate representation without dropping unsupported constructs.
+- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.73.
+- [ ] Implement PS4 YFT/YTD encoders and validate round-trip against independent readers and game runtime.
+
 ## Phase 3 — first PS4 vehicle conversion
 - [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
 - [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
