@@ -5,6 +5,7 @@ import { inspectVehicleMetadata } from "../core/metadata.js";
 import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
 import { inspectNativeReports } from "../core/nativeReports.js";
+import { inspectNativeAssetsAutomatically } from "../core/autoNative.js";
 import { PS4_TARGET, describeTarget } from "../core/target.js";
 import { assessPs4Compatibility } from "../core/compatibility.js";
 
@@ -35,7 +36,6 @@ function formatBytes(bytes) {
 export default function App() {
   const zipInput = useRef(null);
   const folderInput = useRef(null);
-  const nativeOutputInput = useRef(null);
   const [archive, setArchive] = useState(null);
   const [modelName, setModelName] = useState("glendale");
   const [analysis, setAnalysis] = useState(null);
@@ -44,6 +44,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
   const [nativeReports, setNativeReports] = useState(null);
+  const [nativeStatus, setNativeStatus] = useState("Native reports are generated automatically after import.");
   const [previewUrls, setPreviewUrls] = useState({});
 
   useEffect(() => {
@@ -65,11 +66,18 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null);
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setFilter("all");
+      const nativeFiles = result.files.filter((file) => /\\.(yft|ytd)$/i.test(file.path));
+      if (nativeFiles.length) {
+        setNativeStatus("Automatically inspecting YFT/YTD resources locally. First run may compile the inspector.");
+        const generated = await inspectNativeAssetsAutomatically(result.files);
+        setNativeReports(inspectNativeReports(generated));
+        setNativeStatus(`Automatically inspected ${nativeFiles.length} YFT/YTD resource(s); texture previews appear when decoding succeeds.`);
+      } else setNativeStatus("No YFT/YTD resources found in this import.");
     } catch (err) {
       setError(err?.message || "Could not inspect this import.");
     } finally {
@@ -85,19 +93,6 @@ export default function App() {
     if (files?.length) loadImport(() => inspectFolderFiles(files));
   }
 
-  async function importNativeOutput(files) {
-    if (!files?.length) return;
-    setBusy(true); setError("");
-    try {
-      const folder = await inspectFolderFiles(files);
-      const reports = inspectNativeReports(folder.files);
-      setNativeReports(reports);
-    } catch (err) {
-      setError(err?.message || "Could not load native inspection reports.");
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function analyzeVehicle() {
     if (!archive) return;
@@ -153,14 +148,12 @@ export default function App() {
       <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod, inspect its metadata, and load native YFT/YTD resource reports.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero">
-        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder, then load the native inspector output to review YFT structure and YTD texture previews. Console compatibility is never assumed.</p>
+        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. YFT structure reports and YTD texture previews are generated automatically on your computer. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
-          <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
           <div className="import-actions">
             <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP mod"}</button>
             <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
-            <button className="secondary-button" onClick={() => nativeOutputInput.current?.click()} disabled={busy}><FileText size={16}/> Load native reports</button>
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
@@ -174,7 +167,8 @@ export default function App() {
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
-      {busy && <div className="working"><LoaderCircle size={17}/> Inspecting locally…</div>}
+      {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>
+      {!busy && <div className="privacy-note">{nativeStatus}</div>}}
 
       {archive && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
@@ -184,7 +178,7 @@ export default function App() {
       </section>}
 
       {nativeReports && <section className="panel results-panel">
-        <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Inspector reports loaded</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> REPORTS IMPORTED</span></div>
+        <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Automatic inspector reports</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-INSPECTED</span></div>
         {nativeReports.yftReports.map((report) => <div className="native-summary" key={report.source_file}>
           <div className="eyebrow">YFT FRAGMENT · {report.fragment.name || report.source_file}</div>
           <div className="native-metrics">
