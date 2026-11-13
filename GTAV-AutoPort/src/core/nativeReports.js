@@ -17,6 +17,12 @@ function parseReport(file, expectedType) {
   if (report.resource_type !== expectedType || report.parse_result !== "success") {
     throw new Error(`The ${file.path} report is not a successful ${expectedType} inspection.`);
   }
+  if (expectedType === "YFT" && (!report.fragment || typeof report.fragment !== "object")) {
+    throw new Error(`The ${file.path} report is missing its YFT fragment summary.`);
+  }
+  if (expectedType === "YTD" && !Array.isArray(report.textures)) {
+    throw new Error(`The ${file.path} report is missing its texture list.`);
+  }
   return report;
 }
 
@@ -38,13 +44,13 @@ export function inspectNativeReports(files) {
   if (yftFiles[0]) reports.yft = parseReport(yftFiles[0], "YFT");
   if (ytdFiles[0]) {
     const report = parseReport(ytdFiles[0], "YTD");
-    if (!Array.isArray(report.textures)) throw new Error("The YTD report is missing its texture list.");
     reports.ytd = {
       ...report,
       textures: report.textures.map((texture) => {
-        const previewPath = typeof texture.preview_png === "string" ? texture.preview_png : null;
-        const preview = previewPath
-          ? files.find((file) => file.path.toLowerCase() === previewPath.toLowerCase())
+        const previewPath = typeof texture.preview_png === "string" ? texture.preview_png.replace(/\\\\/g, "/") : null;
+        const safePreviewPath = previewPath && !previewPath.startsWith("/") && !previewPath.split("/").some((part) => part === "." || part === "..") && previewPath.toLowerCase().endsWith(".png");
+        const preview = safePreviewPath
+          ? files.find((file) => file.path.toLowerCase() === previewPath.toLowerCase() && file.bytes?.length >= 8 && [137, 80, 78, 71, 13, 10, 26, 10].every((value, index) => file.bytes[index] === value))
           : null;
         return {
           ...texture,
