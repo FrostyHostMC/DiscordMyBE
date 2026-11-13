@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-13 — Automatic native inspection on import
+- Added a local Vite middleware endpoint that runs the Rust read-only inspector for imported YFT/YTD files.
+- ZIP and folder imports now automatically populate native YFT summaries and YTD texture previews without a separate report-folder import.
+- Temporary source and output files are cleaned up after inspection; Rust/Cargo is required locally.
+- Documented that a packaged desktop runtime remains future work.
+
 ## 2026-11-13 — Evidence-based PS4 compatibility gates
 - Added a compatibility assessment model for exact console confirmation, GoldHEN version, PS4 YFT/YTD reference resources, format adapters, and deployment/rollback validation.
 - Added a dashboard checklist that explains why conversion remains blocked and what evidence is needed next.
