@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-13 — Universal vehicle-port architecture defined
+- Added a vehicle-agnostic architecture covering source intake, dependency graph, platform-neutral vehicle IR, target-specific resource adapters, round-trip validation, package/rollback and replacement versus add-on separation.
+- Prohibited Glendale/model-name/handling-ID-specific conversion assumptions.
+- Recorded that the current rage-formats YFT/YTD path is read-only and cannot be treated as a target writer.
+- Documented exact-build PS4 reference-resource evidence required before a PS4 encoder can be implemented and validated.
+
+
 ## 2026-11-13 — Automatic native inspection on import
 - Added a local Vite middleware endpoint that runs the Rust read-only inspector for imported YFT/YTD files.
 - ZIP and folder imports now automatically populate native YFT summaries and YTD texture previews without a separate report-folder import.
