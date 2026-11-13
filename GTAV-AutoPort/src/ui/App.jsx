@@ -6,6 +6,7 @@ import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
 import { inspectNativeReports } from "../core/nativeReports.js";
 import { PS4_TARGET, describeTarget } from "../core/target.js";
+import { assessPs4Compatibility } from "../core/compatibility.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -55,6 +56,8 @@ export default function App() {
     setPreviewUrls(urls);
     return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
   }, [nativeReports]);
+
+  const compatibility = useMemo(() => assessPs4Compatibility({ target: PS4_TARGET }), []);
 
   const visibleFiles = useMemo(() => {
     if (!archive) return [];
@@ -162,6 +165,12 @@ export default function App() {
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
         <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>VEHICLE PIPELINE</span></div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">PS4 COMPATIBILITY GATES</div><h3>Target validation checklist</h3><p>{compatibility.passed} of {compatibility.total} evidence gates satisfied · conversion remains locked</p></div><span className="tag warning"><AlertTriangle size={13}/> BLOCKED</span></div>
+        <div className="file-list">{compatibility.gates.map((gate) => <div className="file-row" key={gate.id}><AlertTriangle size={15}/><span className="file-name"><b>{gate.label}</b><small>{gate.nextStep}</small></span><span className="file-ext">PENDING</span></div>)}</div>
+        <div className="notice"><ShieldCheck size={19}/><div><b>Why this is locked</b><p>{compatibility.note} The next step is collecting exact-build PS4 reference evidence before implementing any resource writer.</p></div></div>
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
