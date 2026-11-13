@@ -97,7 +97,7 @@ export default function App() {
         setNativeReports(inspectNativeReports(generated));
         setNativeStatus(`Automatically inspected ${nativeFiles.length} YFT/YTD resource(s); texture previews appear when decoding succeeds.`);
       } else setNativeStatus("No YFT/YTD resources found in this import.");
-      const ragekitFiles = result.files.filter((file) => /\.(yft|ydr|ydd|ytd|ybn|ypt|ynv|ynd|ymap|ytyp|ycd|ysc|rel|awc|gxt2|ymf|ymt|yed|yfd|ybd|yvr|ywr|gfx)$/i.test(file.path));
+      const ragekitFiles = result.files.filter((file) => /\.(rpf|yft|ydr|ydd|ytd|ybn|ypt|ynv|ynd|ymap|ytyp|ycd|ysc|rel|awc|gxt2|ymf|ymt|yed|yfd|ybd|yvr|ywr|gfx)$/i.test(file.path));
       if (ragekitFiles.length) {
         setRagekitStatus("Running native RAGE read/round-trip validation…");
         try { const nativeResult = await inspectRagekitAutomatically(result.files); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
