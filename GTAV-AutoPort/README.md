@@ -1,5 +1,10 @@
 # GTAV AutoPort
 
+**Product direction: universal GTA V PC-to-PS4 Story Mode mod porting.** This is not a vehicle-only converter. Vehicles are the first inspected asset family; the long-term architecture covers peds, weapons, props, maps/world resources, textures, audio, animations, UI assets, configuration, scripts and native plugins, each with its own compatibility and adapter status. See [Universal mod-port architecture](docs/UNIVERSAL-MOD-PORT-ARCHITECTURE.md).
+
+Universal intake does not mean every PC mod is automatically portable: Windows/ASI/DLL/ScriptHookV/.NET-dependent mods require a separate PS4-native implementation where feasible and must never be mislabeled as converted.
+
+
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
 > **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 header inspection, and a native read-only YFT/YTD parser adapter are now in the project. None of these steps converts a PC vehicle to PS4. Review reports and extracted DDS textures are not installable packages.
