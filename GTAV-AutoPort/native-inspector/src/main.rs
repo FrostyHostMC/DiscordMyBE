@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use rage_formats::{parse_yft, parse_ytd, Drawable};
+use rage_formats::{encode_image, parse_yft, parse_ytd, to_rgba_image, Drawable, ImageFormat};
 use serde_json::{json, Value};
 use std::env;
 use std::fs;
