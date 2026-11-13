@@ -12,7 +12,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - YTD inspection exports DDS files plus PNG previews where decoding succeeds, and records dimensions, pixel format, mip levels, and names.
 - Added extracted-folder import to the browser workbench.
 - Added RSC7 header fields and sample-version comparison based only on the supplied Glendale PC fixture.
-- Added GitHub Actions checks for JavaScript tests/build and Rust tests/build.
+- Added a repository-root GitHub Actions workflow with independent JavaScript test/build and Rust test/build jobs.
 - PS4 conversion and deployment remain blocked pending a verified PS4-target writer and exact-build console tests.
 
 See [CHANGELOG](CHANGELOG.md) for every update.
