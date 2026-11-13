@@ -81,6 +81,20 @@ export default function App() {
     if (files?.length) loadImport(() => inspectFolderFiles(files));
   }
 
+  async function importNativeOutput(files) {
+    if (!files?.length) return;
+    setBusy(true); setError("");
+    try {
+      const folder = await inspectFolderFiles(files);
+      const reports = inspectNativeReports(folder.files);
+      setNativeReports(reports);
+    } catch (err) {
+      setError(err?.message || "Could not load native inspection reports.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function analyzeVehicle() {
     if (!archive) return;
     setBusy(true); setError(""); setAnalysis(null); setManifest(null);
