@@ -66,3 +66,7 @@ Current project capabilities: intake, metadata inspection, read-only PC YFT/YTD 
 - No destructive game-file overwrites; package with backup and rollback.
 - No GTA Online features or online cheating support.
 - PC-side parsing alone never enables deployment.
+
+
+## Research-driven backend strategy (2026-11-13)
+See [FORMAT-RESEARCH.md](FORMAT-RESEARCH.md) for detailed tool comparison. Evaluate ragekit first as the broad native read/write engine, FiveFury as supplemental format research, and keep rage-formats as the current read-only YFT/YTD inspector. Keep RPF archive operations separate from payload conversion. No candidate currently establishes PS4 CUSA00411 / 1.73 write compatibility.
