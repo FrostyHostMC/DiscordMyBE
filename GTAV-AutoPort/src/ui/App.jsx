@@ -123,7 +123,7 @@ export default function App() {
         <div className="panel-head"><div><div className="eyebrow">ANALYSIS RESULT</div><h3>{analysis.metadata.modelName} · Vehicle replacement</h3><p>Handling reference: {analysis.metadata.handlingId} · Texture dictionary: {analysis.metadata.txdName}</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT CONVERTED</span></div>
         <div className="asset-grid">{analysis.assetChecks.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-top"><span>{asset.name}</span>{asset.present ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}</div><b>{asset.present ? "Found" : "Missing"}</b><small>{asset.present ? formatBytes(asset.size) : "Required asset not found"}</small><small>{asset.signature}</small></div>)}</div>
         <div className="notice"><ShieldCheck size={19}/><div><b>Metadata checks passed. PS4 conversion has not.</b><p>AutoPort found the selected vehicle and its matching handling entry. PC RSC7 assets still require a PS4-specific conversion and target-build validation. No installable package is generated.</p></div></div>
-        {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-autport-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
+        {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-autoport-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
       </section>}
 
       <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Conversion pipeline</h3></div><span className="muted">5 stages</span></div>
