@@ -9,12 +9,13 @@ import { inspectNativeReports } from "../core/nativeReports.js";
 import { inspectNativeAssetsAutomatically } from "../core/autoNative.js";
 import { PS4_TARGET, describeTarget } from "../core/target.js";
 import { assessPs4Compatibility } from "../core/compatibility.js";
+import { auditModFiles } from "../core/modClassifier.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
-  ["02", "Analyze vehicle", "Metadata and asset dependencies"],
-  ["03", "Inspect resources", "Native YFT structure and YTD textures"],
-  ["04", "Convert assets", "PS4-specific conversion adapter"],
+  ["02", "Classify mod", "Assets, scripts, plugins and dependencies"],
+  ["03", "Inspect resources", "Automatic format-specific reports"],
+  ["04", "Adapt resources", "Target-specific conversion adapters"],
   ["05", "Validate & package", "Exact title/build validation"],
 ];
 
@@ -38,6 +39,7 @@ export default function App() {
   const zipInput = useRef(null);
   const folderInput = useRef(null);
   const [archive, setArchive] = useState(null);
+  const [modAudit, setModAudit] = useState(null);
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
@@ -68,10 +70,11 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
+      setModAudit(auditModFiles(result.files));
       setFilter("all");
       const vehiclesMeta = result.files.find((file) => file.path.split("/").at(-1).toLowerCase() === "vehicles.meta");
       if (vehiclesMeta) {
@@ -156,10 +159,10 @@ export default function App() {
       <div className="rail-foot">LOCAL WORKSPACE<br/><b>PS4 · STORY MODE</b></div>
     </aside>
     <section className="content">
-      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Vehicle conversion</h1><p>Import a PC replacement mod and automatically inspect its metadata, YFT structure, and YTD textures.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
+      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Universal mod conversion</h1><p>Import a PC GTA V mod. AutoPort inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero">
-        <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. YFT structure reports and YTD texture previews are generated automatically on your computer. Console compatibility is never assumed.</p>
+        <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <div className="import-actions">
@@ -168,7 +171,7 @@ export default function App() {
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
-        <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>VEHICLE PIPELINE</span></div>
+        <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>UNIVERSAL MOD PIPELINE</span></div>
       </section>
 
       <section className="panel">
@@ -182,12 +185,20 @@ export default function App() {
       {!busy && <div className="privacy-note">{nativeStatus}</div>}}
 
       {archive && <section className="panel">
-        <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
+        <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total · automatic mod audit complete</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
         <div className="file-toolbar"><span>FILE INVENTORY</span><select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All file types</option>{[...new Set(archive.inventory.map((f) => f.extension).filter(Boolean))].sort().map((ext) => <option key={ext} value={ext}>{ext}</option>)}</select></div>
         <div className="file-list">{visibleFiles.map((file) => <div className="file-row" key={file.path}><FileText size={15}/><span className="file-name">{file.path}</span><span className="file-ext">{file.extension || "FILE"}</span><span className="file-size">{formatBytes(file.size)}</span></div>)}</div>
-        <div className="analyzer"><label htmlFor="model-name">Vehicle model name</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
+        <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
+      {modAudit && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">AUTOMATIC MOD AUDIT</div><h3>Detected mod contents</h3><p>{modAudit.summary.fileCount} files classified · {Object.keys(modAudit.summary.familyCounts).length} content families · {modAudit.summary.attentionCount} items need review</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-ANALYZED</span></div>
+        <div className="audit-grid">{Object.entries(modAudit.summary.familyCounts).sort((a,b)=>b[1]-a[1]).map(([family,count])=><div className="audit-card" key={family}><b>{count}</b><span>{family.replaceAll("-"," ")}</span></div>)}</div>
+        {modAudit.summary.pcNativePlugins > 0 && <div className="notice"><AlertTriangle size={19}/><div><b>{modAudit.summary.pcNativePlugins} PC-native plugin(s) detected</b><p>ASI, Windows DLL and EXE files cannot be copied to PS4 as working plugins. They require a separate PS4-native implementation, if the behavior and runtime APIs make that feasible.</p></div></div>}
+        {modAudit.summary.unknownFiles > 0 && <div className="notice"><FileText size={19}/><div><b>{modAudit.summary.unknownFiles} unrecognized file(s) preserved in the inventory</b><p>Unknown files are not discarded. Their formats must be identified before conversion or packaging.</p></div></div>}
+        {modAudit.warnings.slice(0,12).map((warning,index)=><div className="audit-warning" key={warning.path+index}><AlertTriangle size={14}/><span><b>{warning.path}</b> — {warning.message}</span></div>)}
+        <p className="native-disclaimer">{modAudit.note}</p>
+      </section>}
       {nativeReports && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Automatic inspector reports</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-INSPECTED</span></div>
         {nativeReports.yftReports.map((report) => <div className="native-summary" key={report.source_file}>
@@ -221,7 +232,7 @@ export default function App() {
         {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-autoport-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
       </section>}
 
-      <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Conversion pipeline</h3></div><span className="muted">5 stages</span></div>
+      <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Universal conversion pipeline</h3></div><span className="muted">5 stages</span></div>
       <div className="stages">{stages.map(([n,title,desc])=><article className="stage" key={n}><div className="stage-number">{n}</div><h4>{title}</h4><p>{desc}</p><span className="stage-state">{n==="01"?"AVAILABLE":n==="02"?"METADATA ANALYSIS":n==="03"?"NATIVE REPORTS":"PLANNED"}</span></article>)}</div>
       <footer>GTAV AUTOPORT <span>·</span> LOCAL-FIRST <span>·</span> NO GTA ONLINE SUPPORT</footer>
     </section>
