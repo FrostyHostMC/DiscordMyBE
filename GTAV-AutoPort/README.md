@@ -1,5 +1,7 @@
 # GTAV AutoPort
 
+**RPF archive validation added:** imported `.rpf` files now enter the native RAGE parser and isolated round-trip check alongside loose resources when the backend is configured. Encrypted archives may still require keys from the user's own game installation; this is validation only, not PS4 conversion.
+
 **Universal intake audit added:** every imported ZIP/folder is now automatically classified by mod/resource family, with conservative binary-signature probes, PC-native plugin warnings, unknown-file preservation and family counts. This is an intake audit—not a claim that every identified file has a PS4 writer.
 
 See [format research and backend selection](docs/FORMAT-RESEARCH.md) for evaluated open-source engines and PS4 compatibility gaps.
@@ -15,6 +17,11 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 > **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
 
 ## Latest update
+
+**2026-11-13 — RPF archive validation added**
+- Added `.rpf` archives to the native RAGE inspection queue, using the same isolated `rk info` and `rk roundtrip` workflow as supported loose resources.
+- Extended the workbench's automatic native-resource selection so archive files are not silently skipped.
+- Reports remain source-side parser/round-trip evidence only; encrypted archives may require user-owned game keys, and no PS4 output or install package is produced.
 
 **2026-11-13 — GoldHEN target recorded**
 - Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00411` update `1.73` Story Mode.
