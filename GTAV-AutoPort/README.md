@@ -12,9 +12,17 @@ Universal intake does not mean every PC mod is automatically portable: Windows/A
 
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 header inspection, and a native read-only YFT/YTD parser adapter are now in the project. None of these steps converts a PC vehicle to PS4. Review reports and extracted DDS textures are not installable packages.
+> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
 
 ## Latest update
+
+**2026-11-13 — Native ragekit resource-engine integration**
+- Added a pinned CMake FetchContent build for MIT-licensed ragekit v0.3.1 and a Windows native-engine build helper.
+- Added a local Vite endpoint that runs rk info and rk roundtrip for supported imported RAGE resources, hashes source/output bytes, and reports parse and round-trip outcomes.
+- Added automatic workbench invocation and downloadable native validation reports when the native engine is configured.
+- Added explicit fail-closed behavior when the engine executable is not configured; no source resources are labeled converted and PS4 compatibility remains unestablished.
+- This is PC resource parsing/rewrite validation, not a PS4 writer or install package.
+
 
 **2026-11-13 — Universal resource-family port planning**
 - Added a per-file conversion work plan for archives, fragments, drawables, textures, collision, maps, archetypes, animation, particles, audio, metadata, scripts, plugins and source assets.
@@ -96,6 +104,10 @@ On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs depen
     npm run dev
     npm test
     npm run build
+
+## Build the native RAGE resource engine
+
+Requirements: Git, CMake 3.20+, and Visual Studio 2022 C++ Build Tools (C++20). Run BUILD-NATIVE-ENGINE.bat or use the commands in [native-engine/README.md](native-engine/README.md). Set GTAV_AUTOPORT_RK to the built rk.exe path before starting Vite. The workbench automatically runs the native parser and round-trip writer on supported imported RAGE resource types and offers a JSON validation report. This tests the PC-side parser/writer only; it does not make PS4 output.
 
 ## Run the native inspector
 Requirements: Rust stable toolchain.
