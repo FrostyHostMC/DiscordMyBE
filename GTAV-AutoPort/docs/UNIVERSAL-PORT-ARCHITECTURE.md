@@ -55,3 +55,6 @@ Before implementation can be validated, obtain legally accessible, unmodified PS
 Implemented: ZIP/folder intake, vehicle metadata analysis, read-only PC YFT/YTD inspection, automatic local inspection during Vite development, target-profile record and fail-closed compatibility gates.
 
 Not implemented: platform-neutral geometry/fragment IR, PS4 YFT/YTD encoders, complete dependency graph, exact-build PS4 round-trip validation, add-on vehicle packaging, bundled desktop installer, or PS4 deployment. The project must not present these as completed.
+
+
+> Product scope note (2026-11-13): this vehicle-focused architecture is now a first-family implementation plan under the broader [Universal GTA V PC-to-PS4 mod-port architecture](UNIVERSAL-MOD-PORT-ARCHITECTURE.md). Shared IR, dependency and adapter principles must be generalized across resource families.
