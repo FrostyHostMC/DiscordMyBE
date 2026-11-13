@@ -16,6 +16,10 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Dependency graph regression alignment**
+- Corrected a stale dependency-graph regression expectation: the graph also includes the explicitly resolved handling.meta dependency.
+
+
 **2026-11-13 — Native ragekit resource-engine integration**
 - Added a pinned CMake FetchContent build for MIT-licensed ragekit v0.3.1 and a Windows native-engine build helper.
 - Added a local Vite endpoint that runs rk info and rk roundtrip for supported imported RAGE resources, hashes source/output bytes, and reports parse errors, byte-exact round trips, and successful rewrites whose output bytes differ.
