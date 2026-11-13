@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-13 — Native ragekit resource-engine integration
+- Pinned MIT-licensed ragekit v0.3.1 as a native CMake dependency and added a Windows build helper.
+- Added a local-only Vite middleware endpoint that invokes the real rk info parser and rk roundtrip writer for supported RAGE resources.
+- Added SHA-256 source/output comparison and per-file reports for parsed state, byte-exact round-trip state, failures and parser details.
+- Added automatic workbench invocation and downloadable native validation reports; unconfigured engine state is surfaced without claiming conversion.
+- Explicitly retained PS4 writer, CUSA00411/1.73 compatibility and deployment gates as blocked.
+
+
 ## 2026-11-13 — Universal resource-family port planning
 - Added `buildUniversalPortPlan()` to route 30+ common GTA V resource/source extensions into family-specific work stages with explicit source capability, target gap, status and blocker fields.
 - Added cautious filename-co-location candidates for related model/texture/collision files; all such relationships are marked unverified rather than asserted as dependencies.
