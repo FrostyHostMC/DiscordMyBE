@@ -16,6 +16,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Universal resource-family port planning**
+- Added a per-file conversion work plan for archives, fragments, drawables, textures, collision, maps, archetypes, animation, particles, audio, metadata, scripts, plugins and source assets.
+- Each route exposes source-side capability, target-side adapter gap, work stage and a concrete blocker; PC plugins/scripts are routed to native behavior reimplementation rather than payload copying.
+- Added cautious same-basename candidate relationships, clearly marked as unverified, and per-stage pipeline queues.
+- The workbench now creates and displays this plan automatically on import and allows it to be exported as JSON. This remains planning only; no resource writer or PS4 package is claimed.
+
+
 **2026-11-13 — Automatic native inspection on import**
 - Added a local Vite development-server endpoint that invokes the Rust read-only inspector for every imported YFT/YTD asset.
 - The workbench now automatically loads generated YFT structural reports, YTD metadata, and PNG texture previews after ZIP/folder import; manual report-folder import is no longer part of the normal workflow.
