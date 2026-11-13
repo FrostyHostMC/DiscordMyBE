@@ -11,7 +11,8 @@ All notable GTAV AutoPort changes are recorded here. Every development update mu
 - Added RSC7 header inspection for magic, version, system flags, graphics flags, and payload size. Version comparison is explicitly limited to values observed in the supplied Glendale fixture; it is not a platform detector.
 - Added tests for folder/ZIP intake and RSC7 header handling.
 - Added GitHub Actions workflow at the repository root to run JavaScript tests/build and Rust tests/build for AutoPort changes.
-- Added opt-in integration tests for local real YFT/YTD files, keeping mod binaries out of GitHub.\n- No PS4 conversion, YFT writing, console deployment, or installable package is claimed.
+- Added opt-in integration tests for local real YFT/YTD files, keeping mod binaries out of GitHub.
+- No PS4 conversion, YFT writing, console deployment, or installable package is claimed.
 
 ## 2026-11-13 — ZIP intake and metadata analysis
 - Added local ZIP archive intake with CRC verification and a visible file inventory.
