@@ -15,10 +15,11 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 }
 
 $yftDialog = New-Object System.Windows.Forms.OpenFileDialog
-$yftDialog.Title = "Select the main vehicle YFT (for example glendale.yft)"
+$yftDialog.Title = "Select the vehicle YFT files (select glendale.yft and glendale_hi.yft together)"
 $yftDialog.Filter = "GTA V YFT resource (*.yft)|*.yft"
+$yftDialog.Multiselect = $true
 if ($yftDialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { exit 0 }
-$yftPath = $yftDialog.FileName
+$yftPaths = $yftDialog.FileNames
 
 $ytdDialog = New-Object System.Windows.Forms.OpenFileDialog
 $ytdDialog.Title = "Select the matching vehicle YTD (for example glendale.ytd)"
@@ -34,9 +35,17 @@ New-Item -ItemType Directory -Force -Path $outputPath | Out-Null
 
 Push-Location $projectRoot
 try {
-    Write-Host "Inspecting YFT: $yftPath"
-    & cargo run --release --manifest-path $manifestPath -- $yftPath $outputPath
-    if ($LASTEXITCODE -ne 0) { throw "YFT inspection failed with exit code $LASTEXITCODE." }
+    foreach ($yftPath in $yftPaths) {
+        Write-Host "Inspecting YFT: $yftPath"
+        & cargo run --release --manifest-path $manifestPath -- $yftPath $outputPath
+        if ($LASTEXITCODE -ne 0) { throw "YFT inspection failed for $yftPath with exit code $LASTEXITCODE." }
+
+        $reportPath = Join-Path $outputPath "yft-inspection.json"
+        $reportName = [System.IO.Path]::GetFileNameWithoutExtension($yftPath) + "-yft-inspection.json"
+        $reportDestination = Join-Path $outputPath $reportName
+        if (Test-Path -LiteralPath $reportDestination) { throw "A report already exists for $yftPath. Choose an empty output folder." }
+        Move-Item -LiteralPath $reportPath -Destination $reportDestination
+    }
 
     Write-Host "Inspecting YTD: $ytdPath"
     & cargo run --release --manifest-path $manifestPath -- $ytdPath $outputPath
