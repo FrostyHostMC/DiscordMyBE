@@ -50,6 +50,8 @@ See [CHANGELOG](CHANGELOG.md) for every update.
 
 ## Universal conversion architecture
 
+The workspace now discovers vehicle model names from imported `vehicles.meta` rather than defaulting to the Glendale fixture, and builds an initial generic inventory/dependency graph for resource types and explicit model/texture/handling references. This graph clearly marks missing and ambiguous matches; full DLC/archive relationship resolution remains unfinished.
+
 The converter is being designed around a vehicle-agnostic intermediate representation and target-specific adapters. The first Glendale vehicle is a regression fixture only; no model name, handling ID, texture name, or fixed asset count is a conversion assumption. See [Universal vehicle port architecture](docs/UNIVERSAL-PORT-ARCHITECTURE.md) for the dependency graph, geometry/fragment/material/texture/collision IR, adapter contract, round-trip validation and exact-target evidence requirements. The current PC YFT/YTD inspector is read-only; PS4 writers and a verified PS4 fixture set are not yet implemented.
 
 ## Scope
