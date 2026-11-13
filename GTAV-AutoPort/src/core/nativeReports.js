@@ -66,7 +66,6 @@ export function inspectNativeReports(files) {
     sourceFiles: files.length,
     yft: reports.yft ?? null,
     yftReports: reports.yftReports,
-    yftReports: reports.yftReports,
     ytd: reports.ytd ?? null,
     loadedAt: new Date().toISOString(),
   };
