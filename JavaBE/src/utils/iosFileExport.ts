@@ -80,12 +80,12 @@ export async function exportToIosFiles(remake: BedrockRemake): Promise<ExportRes
   document.body.appendChild(link);
   link.click();
   link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 5000);
+  window.setTimeout(() => URL.revokeObjectURL(url), 120000);
   return { success: true, message: 'Addon downloaded. Open the .mcaddon in Files to import to Minecraft!' };
 }
 
 export async function exportAddonFile(zipBytes: Uint8Array, fileName: string): Promise<ExportResult> {
-  const blob = new Blob([asArrayBuffer(zipBytes)], { type: 'application/octet-stream' });
+  const blob = new Blob([zipBytes], { type: 'application/octet-stream' });
   const share = navigator as Navigator & {
     canShare?: (data: { files?: File[] }) => boolean;
     share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
