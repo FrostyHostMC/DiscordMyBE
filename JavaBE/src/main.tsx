@@ -10,7 +10,8 @@ const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 type GateState =
   | { status: 'loading'; message: string }
   | { status: 'allowed' }
-  | { status: 'denied'; message: string };
+  | { status: 'denied'; message: string }
+  | { status: 'locked'; message: string };
 
 function GateScreen({ state, message, retry }: {
   state: 'loading' | 'denied';
@@ -127,8 +128,12 @@ function JavaBEActivity() {
           reason?: string;
           error?: string;
         };
+        if (accessResponse.status === 403 && !accessData.allowed) {
+          if (!cancelled) setGate({ status: 'locked', message: accessData.reason || 'The JavaBE access role is required.' });
+          return;
+        }
         if (!accessResponse.ok || !accessData.allowed) {
-          throw new Error(accessData.reason || accessData.error || 'You do not have access to JavaBE.');
+          throw new Error(accessData.reason || accessData.error || 'We could not verify your JavaBE access.');
         }
         if (!cancelled) setGate({ status: 'allowed' });
       } catch (error) {
