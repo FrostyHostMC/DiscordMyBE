@@ -11,6 +11,7 @@ import { PS4_TARGET, describeTarget } from "../core/target.js";
 import { assessPs4Compatibility } from "../core/compatibility.js";
 import { auditModFiles } from "../core/modClassifier.js";
 import { buildUniversalPortPlan } from "../core/portPlan.js";
+import { inspectRagekitAutomatically } from "../core/ragekit.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -42,6 +43,8 @@ export default function App() {
   const [archive, setArchive] = useState(null);
   const [modAudit, setModAudit] = useState(null);
   const [portPlan, setPortPlan] = useState(null);
+  const [ragekitResult, setRagekitResult] = useState(null);
+  const [ragekitStatus, setRagekitStatus] = useState("Native RAGE engine validation is not configured.");
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
@@ -72,7 +75,7 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
@@ -94,6 +97,12 @@ export default function App() {
         setNativeReports(inspectNativeReports(generated));
         setNativeStatus(`Automatically inspected ${nativeFiles.length} YFT/YTD resource(s); texture previews appear when decoding succeeds.`);
       } else setNativeStatus("No YFT/YTD resources found in this import.");
+      const ragekitFiles = result.files.filter((file) => /\.(yft|ydr|ydd|ytd|ybn|ypt|ynv|ynd|ymap|ytyp|ycd|ysc|rel|awc|gxt2|ymf|ymt|yed|yfd|ybd|yvr|ywr|gfx)$/i.test(file.path));
+      if (ragekitFiles.length) {
+        setRagekitStatus("Running native RAGE read/round-trip validation…");
+        try { const nativeResult = await inspectRagekitAutomatically(result.files); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
+        catch (nativeError) { setRagekitStatus(nativeError?.message || "Native RAGE engine is not configured."); }
+      } else setRagekitStatus("No ragekit-supported RAGE resources found in this import.");
     } catch (err) {
       setError(err?.message || "Could not inspect this import.");
     } finally {
@@ -213,6 +222,14 @@ export default function App() {
         <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
         <button className="secondary-button" onClick={()=>downloadJson(portPlan,"gtav-autoport-port-plan.json")}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
+      {ragekitResult && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">NATIVE RAGE RESOURCE ENGINE</div><h3>Read and round-trip validation</h3><p>{ragekitResult.summary.parsed} parsed · {ragekitResult.summary.byteExact} byte-exact · {ragekitResult.summary.failed} failed</p></div><span className="tag success"><CheckCircle2 size={13}/> ENGINE RAN</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{ragekitResult.summary.files}</b><span>resource candidates</span></div><div className="audit-card"><b>{ragekitResult.summary.parsed}</b><span>parsed</span></div><div className="audit-card"><b>{ragekitResult.summary.byteExact}</b><span>byte-exact</span></div><div className="audit-card"><b>{ragekitResult.summary.failed}</b><span>failed</span></div></div>
+        {ragekitResult.reports.map((report)=><div className="native-summary" key={report.path}><div className="file-row"><FileText size={15}/><span className="file-name"><b>{report.path}</b><small>{report.roundtripStatus || "not processed"}</small></span><span className="file-ext">{report.roundtripByteExact?"BYTE-EXACT":report.parsed?"PARSED":"FAILED"}</span></div>{report.error && <div className="audit-warning"><AlertTriangle size={14}/><span>{report.error}</span></div>}{report.info && <details><summary>Native parser details</summary><pre className="native-output">{report.info}</pre></details>}</div>)}
+        <p className="native-disclaimer">A byte-exact PC round trip does not establish PS4 compatibility or make an installable mod.</p>
+        <button className="secondary-button" onClick={()=>downloadJson(ragekitResult,"gtav-autoport-ragekit-validation.json")}><ArrowDownToLine size={15}/> Export native validation report</button>
+      </section>}
+      {ragekitStatus && <p className="native-disclaimer">{ragekitStatus}</p>}
       {nativeReports && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Automatic inspector reports</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-INSPECTED</span></div>
         {nativeReports.yftReports.map((report) => <div className="native-summary" key={report.source_file}>
