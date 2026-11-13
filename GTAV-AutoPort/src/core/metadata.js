@@ -43,6 +43,11 @@ function parseXml(xml, label) {
  * Extracts only the matching vehicle Item and matching handling Item.
  * Does not rewrite or mutate either original XML document.
  */
+export function listVehicleModels(vehiclesXml) {
+  const document = parseXml(vehiclesXml, "vehicles.meta");
+  return [...new Set(findItems(document).map((item) => text(item.modelName).toLowerCase()).filter(Boolean))].sort();
+}
+
 export function inspectVehicleMetadata({ vehiclesXml, handlingXml, modelName }) {
   if (!modelName?.trim()) throw new Error("A target model name is required.");
   const target = modelName.trim().toLowerCase();
