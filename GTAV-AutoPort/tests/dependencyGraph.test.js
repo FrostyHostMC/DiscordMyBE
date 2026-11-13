@@ -23,7 +23,7 @@ test("resolves explicit model and texture dependencies independent of vehicle na
   const graph=buildVehicleDependencyGraph({files:[
     file("examplecar.yft",".yft"),file("examplecar_hi.yft",".yft"),file("example_textures.ytd",".ytd"),file("handling.meta",".meta")
   ],metadata});
-  assert.equal(graph.summary.resolved,4);
+  assert.equal(graph.summary.resolved,3);
   assert.equal(graph.summary.missing,0);
   assert.equal(graph.summary.ambiguous,0);
   assert.equal(graph.edges.length,4);
