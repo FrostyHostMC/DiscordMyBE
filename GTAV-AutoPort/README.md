@@ -8,7 +8,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 **2026-11-13 — Native inspection reports connected to the workbench**
 - Added a dedicated **Load native reports** folder import to the dashboard.
-- Added Windows launchers: `START-AUTOPORT.bat` starts the local workbench; `RUN-NATIVE-INSPECTOR.bat` opens file pickers and inspects a selected YFT/YTD pair.
+- Added Windows launchers: `START-AUTOPORT.bat` starts the local workbench; `RUN-NATIVE-INSPECTOR.bat` opens file pickers and inspects multiple YFT LOD files plus the matching YTD in one report set.
 - Dashboard now reads YFT JSON structural summaries and displays model, geometry, triangle, bone-transform, and physics-child counts.
 - Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
 - Preview object URLs are released when reports are replaced or the UI unmounts.
@@ -75,7 +75,7 @@ For the supplied Glendale vehicle pair, run both commands from the same parent d
     cargo run --release -- /path/to/glendale.yft
     cargo run --release -- /path/to/glendale.ytd
 
-Then open the AutoPort workbench and choose **Load native reports**. Select the `glendale-autoport-inspection` folder. The dashboard validates the JSON report schema, displays YFT structure metrics, and shows YTD PNG previews when the native decoder generated them.
+Then open the AutoPort workbench and choose **Load native reports**. Select the `glendale-autoport-inspection` folder. The dashboard validates the JSON report schema, displays separate metrics for each selected YFT (including `glendale_hi.yft`), and shows YTD PNG previews when the native decoder generated them.
 
 ## Safety
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
