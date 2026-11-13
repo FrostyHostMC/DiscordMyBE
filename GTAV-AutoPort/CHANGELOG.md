@@ -2,6 +2,12 @@
 
 All notable GTAV AutoPort changes are recorded here. Every development update must also refresh the latest-update summary in README.md.
 
+## 2026-11-13 — First PS4 target profile recorded
+- Added a dedicated profile for the user-specified CUSA00411 / GTA V 1.73 / PS4 Story Mode target.
+- Included the target profile in exported analysis manifests and displayed it in the workbench.
+- Added target profile regression tests and explicit unverified-compatibility flags.
+- Updated GoldHEN deployment notes and roadmap; exact console build and resource compatibility remain to be verified.
+
 ## 2026-11-13 — Native inspector dashboard integration
 - Added `START-AUTOPORT.bat` for local workbench startup and first-run dependency installation.
 - Added `RUN-NATIVE-INSPECTOR.bat` plus a PowerShell file-picker workflow to inspect multiple YFT LOD files and the matching YTD into one output folder.
