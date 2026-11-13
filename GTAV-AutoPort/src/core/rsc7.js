@@ -1,9 +1,7 @@
 const MAGIC = [0x52, 0x53, 0x43, 0x37];
-const KNOWN_VERSIONS = {
-  ".yft": { legacy: [162], enhanced: [171] },
-  ".ytd": { legacy: [13], enhanced: [5] },
-  ".ydr": { legacy: [165], enhanced: [159] },
-  ".ydd": { legacy: [165], enhanced: [159] },
+const FIXTURE_VERSIONS = {
+  ".yft": [162],
+  ".ytd": [13],
 };
 
 export function inspectRsc7(bytes, path = "") {
@@ -19,10 +17,7 @@ export function inspectRsc7(bytes, path = "") {
   const version = view.getUint32(4, true);
   const systemFlags = view.getUint32(8, true);
   const graphicsFlags = view.getUint32(12, true);
-  const versionInfo = KNOWN_VERSIONS[extension];
-  let generation = "unknown";
-  if (versionInfo?.legacy.includes(version)) generation = "legacy";
-  if (versionInfo?.enhanced.includes(version)) generation = "enhanced";
+  const fixtureVersionMatch = FIXTURE_VERSIONS[extension]?.includes(version) ?? false;
 
   return {
     valid: true,
@@ -32,13 +27,14 @@ export function inspectRsc7(bytes, path = "") {
     version,
     systemFlags,
     graphicsFlags,
-    generation,
+    fixtureVersionMatch,
     extension,
     platform: "undetermined",
     payloadBytes: bytes.byteLength - 16,
     notes: [
       "The RSC7 signature and version identify a resource container, not its target console.",
-      "System and graphics page flags are recorded but not yet decoded or validated.",
+      "Fixture-version matching only compares the header version with the supplied Glendale PC sample.",
+      "Page flags are recorded but not yet decoded or validated.",
       "No decompression, pointer traversal, model parsing, or platform conversion is performed.",
     ],
   };
