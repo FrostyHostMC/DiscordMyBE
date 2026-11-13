@@ -18,12 +18,38 @@ export interface ArchiveEntryLike {
   data: { length: number };
 }
 
-/** Hard entry cap for a single archive on a mobile device. */
-export const ARCHIVE_ENTRY_LIMIT = 18000;
-/** Total inflated-byte budget for a single archive. */
-export const ARCHIVE_BYTE_LIMIT = 160 * 1024 * 1024;
-/** Largest single entry that will be inflated or scanned. */
-export const ARCHIVE_ENTRY_BYTE_LIMIT = 24 * 1024 * 1024;
+export interface ArchiveBudget {
+  maxEntries: number;
+  maxTotalBytes: number;
+  maxEntryBytes: number;
+  profile: 'mobile' | 'desktop';
+}
+
+/**
+ * Give desktop Discord Activities a larger working set while preserving a safer
+ * ceiling on phones/tablets. The source File remains browser-local; no archive
+ * is uploaded to a shared server.
+ */
+export function getArchiveBudget(): ArchiveBudget {
+  const nav = typeof navigator === 'undefined' ? null : navigator;
+  const userAgent = nav?.userAgent || '';
+  const touchDevice = Boolean(nav && nav.maxTouchPoints > 1);
+  const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(userAgent) ||
+    (touchDevice && typeof window !== 'undefined' && window.innerWidth < 900);
+  const deviceMemory = Number((nav as Navigator & { deviceMemory?: number } | null)?.deviceMemory || 0);
+  if (mobile) {
+    return { maxEntries: 18000, maxTotalBytes: 160 * 1024 * 1024, maxEntryBytes: 24 * 1024 * 1024, profile: 'mobile' };
+  }
+  const maxTotalBytes = deviceMemory > 0 && deviceMemory <= 4
+    ? 384 * 1024 * 1024
+    : 768 * 1024 * 1024;
+  return { maxEntries: 50000, maxTotalBytes, maxEntryBytes: 128 * 1024 * 1024, profile: 'desktop' };
+}
+
+/** Conservative defaults for callers that do not supply a device-specific budget. */
+export const ARCHIVE_ENTRY_LIMIT = 50000;
+export const ARCHIVE_BYTE_LIMIT = 768 * 1024 * 1024;
+export const ARCHIVE_ENTRY_BYTE_LIMIT = 128 * 1024 * 1024;
 
 interface EntryClass {
   key: string;
