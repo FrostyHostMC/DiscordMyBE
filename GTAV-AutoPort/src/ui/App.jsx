@@ -193,7 +193,7 @@ export default function App() {
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
-      {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>
+      {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>}
       {!busy && <div className="privacy-note">{nativeStatus}</div>}
 
       {archive && <section className="panel">
