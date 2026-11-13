@@ -4,6 +4,7 @@ import { DiscordSDK } from '@discord/embedded-app-sdk';
 import { LoaderCircle, ShieldAlert } from 'lucide-react';
 import App from '@/App.tsx';
 import './index.css';
+import aiConfigJson from '@/config/aiConfig.json';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
 
@@ -12,6 +13,20 @@ declare global {
     __JAVABE_DISCORD__?: { sdk: DiscordSDK; accessToken: string; user: unknown };
   }
 }
+
+// Preserve JavaBE's existing Aippy AI bridge initialization. It must never
+// prevent the main app from rendering if the host bridge is unavailable.
+void import('@aippy/runtime/ai')
+  .then((mod) => {
+    if (typeof mod.sendAIConfigToContainer === 'function') {
+      try {
+        void Promise.resolve(mod.sendAIConfigToContainer(aiConfigJson)).catch(() => {});
+      } catch {
+        /* Host bridge may not be ready yet. */
+      }
+    }
+  })
+  .catch(() => {});
 
 function ActivityGate() {
   const [status, setStatus] = useState<'connecting' | 'ready' | 'error'>('connecting');
@@ -61,4 +76,4 @@ function ActivityGate() {
   </section></main>;
 }
 
-createRoot(document.getElementById('root')!).render(<React.StrictMode><ActivityGate /></React.StrictMode>);
+createRoot(document.getElementById('root')!).render(<ActivityGate />);
