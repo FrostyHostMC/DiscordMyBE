@@ -8,6 +8,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 **2026-11-13 — Native inspection reports connected to the workbench**
 - Added a dedicated **Load native reports** folder import to the dashboard.
+- Added Windows launchers: `START-AUTOPORT.bat` starts the local workbench; `RUN-NATIVE-INSPECTOR.bat` opens file pickers and inspects a selected YFT/YTD pair.
 - Dashboard now reads YFT JSON structural summaries and displays model, geometry, triangle, bone-transform, and physics-child counts.
 - Dashboard now loads YTD JSON and shows PNG texture previews with dimensions, formats, and mip levels.
 - Preview object URLs are released when reports are replaced or the UI unmounts.
