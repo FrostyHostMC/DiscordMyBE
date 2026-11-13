@@ -55,3 +55,15 @@ test("rejects a matching file without a PNG signature", () => {
   const result = inspectNativeReports([file("ytd-inspection.json", report), fake]);
   assert.equal(result.ytd.textures[0].previewAvailable, false);
 });
+
+test("loads multiple named YFT reports for main and high-detail models", () => {
+  const main = { ...base, resource_type: "YFT", source_file: "glendale.yft", fragment: { name: "glendale" } };
+  const high = { ...base, resource_type: "YFT", source_file: "glendale_hi.yft", fragment: { name: "glendale_hi" } };
+  const result = inspectNativeReports([
+    file("glendale-yft-inspection.json", main),
+    file("glendale_hi-yft-inspection.json", high),
+  ]);
+  assert.equal(result.yftReports.length, 2);
+  assert.equal(result.yftReports[0].fragment.name, "glendale");
+  assert.equal(result.yftReports[1].fragment.name, "glendale_hi");
+});
