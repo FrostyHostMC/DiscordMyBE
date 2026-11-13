@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-13 — Generic model discovery and dependency inventory
+- Removed the Glendale model-name default; model choices are discovered from each imported `vehicles.meta` file.
+- Added a generic inventory classifier and explicit dependency graph for model resources, texture dictionaries and handling metadata.
+- Missing and ambiguous dependencies are reported rather than guessed; graph scope explicitly states that full DLC/archive resolution is not yet implemented.
+- Added model discovery and generic dependency graph regression tests.
+
+
 ## 2026-11-13 — Universal vehicle-port architecture defined
 - Added a vehicle-agnostic architecture covering source intake, dependency graph, platform-neutral vehicle IR, target-specific resource adapters, round-trip validation, package/rollback and replacement versus add-on separation.
 - Prohibited Glendale/model-name/handling-ID-specific conversion assumptions.
