@@ -146,3 +146,118 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
 @media (prefers-reduced-motion: reduce) {
   .javabe-cosmic-cloud, .javabe-cosmic-stars { animation: none; }
 }
+
+
+/* Discord role gate — shown before any JavaBE workspace UI is mounted. */
+.javabe-access-screen {
+  position: relative;
+  display: grid;
+  min-height: 100dvh;
+  place-items: center;
+  overflow: hidden;
+  padding: 1.5rem;
+  isolation: isolate;
+  background: #08070d;
+  color: #f7f5fc;
+}
+.javabe-access-glow {
+  position: absolute;
+  inset: -30%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(111, 35, 204, .35), transparent 38%),
+    radial-gradient(ellipse at 50% 100%, rgba(58, 20, 110, .5), transparent 55%);
+  filter: blur(30px);
+}
+.javabe-access-card {
+  width: min(100%, 27rem);
+  padding: clamp(1.75rem, 5vw, 2.5rem);
+  text-align: center;
+  border: 1px solid rgba(168, 85, 247, .27);
+  border-radius: 1.5rem;
+  background: rgba(13, 10, 22, .88);
+  box-shadow: 0 24px 90px rgba(0,0,0,.52), inset 0 1px rgba(255,255,255,.045);
+  backdrop-filter: blur(20px);
+}
+.javabe-access-mark {
+  display: grid;
+  width: 3.75rem;
+  height: 3.75rem;
+  margin: 0 auto 1.25rem;
+  place-items: center;
+  color: #d8baff;
+  border: 1px solid rgba(192, 132, 252, .35);
+  border-radius: 1.15rem;
+  background: rgba(168, 85, 247, .13);
+  box-shadow: 0 0 34px rgba(147, 51, 234, .14);
+}
+.javabe-access-eyebrow {
+  margin: 0 0 .6rem;
+  color: #b99ae8;
+  font-size: .65rem;
+  font-weight: 800;
+  letter-spacing: .23em;
+}
+.javabe-access-card h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2.4rem, 8vw, 3.1rem);
+  font-weight: 950;
+  letter-spacing: -.06em;
+}
+.javabe-access-card h1 span { color: #b879ff; }
+.javabe-access-rule {
+  width: 4rem;
+  height: 1px;
+  margin: 1.35rem auto;
+  background: linear-gradient(90deg, transparent, #a855f7, transparent);
+}
+.javabe-access-card h2 {
+  margin: 0 0 .6rem;
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.javabe-access-message {
+  min-height: 3.25rem;
+  margin: 0;
+  color: #b9b1c8;
+  font-size: .9rem;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.javabe-access-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  margin-top: 1.5rem;
+  color: #c8a9f6;
+  font-size: .78rem;
+  font-weight: 650;
+}
+.javabe-access-retry {
+  display: inline-flex;
+  min-height: 2.9rem;
+  align-items: center;
+  justify-content: center;
+  gap: .55rem;
+  width: 100%;
+  margin-top: 1.5rem;
+  border: 1px solid rgba(216, 180, 254, .25);
+  border-radius: .9rem;
+  background: linear-gradient(110deg, #782bd5, #5420a2);
+  color: #fff;
+  font-size: .88rem;
+  font-weight: 800;
+  transition: filter .15s ease, transform .15s ease;
+}
+.javabe-access-retry:hover { filter: brightness(1.13); }
+.javabe-access-retry:active { transform: scale(.985); }
+.javabe-access-footnote {
+  margin: 1.4rem 0 0;
+  color: #756b86;
+  font-size: .68rem;
+  line-height: 1.5;
+}
