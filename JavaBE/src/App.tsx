@@ -1,6 +1,5 @@
-import assetsData from "@/config/assets";
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
-import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench } from 'lucide-react';
+import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench, Sparkles } from 'lucide-react';
 import tweaksConfig from '@/config/tweaksConfig.json';
 import { aippyTweaks } from '@aippy/runtime/tweaks';
 import { useRemakerAudio } from '@/hooks/useRemakerAudio';
@@ -31,9 +30,6 @@ import { exportAddonFile } from '@/utils/iosFileExport';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
 const tweaks = aippyTweaks(tweaksConfig);
-const PARITY_CHECK_ICON = assetsData.IMAGE_BSBQ;
-const DIAGNOSTIC_ICON = assetsData.IMAGE_CZVT;
-const AI_TAB_ICON = assetsData.IMAGE_IVKT;
 type Workspace = 'convert' | 'audit' | 'tools' | 'more';
 type AppTab = 'deterministic' | 'auditor' | 'self_healing' | 'smoother' | 'parity' | 'behavior' | 'geyser' | 'validation' | 'models' | 'ai';
 const workspaceTabs: Record<Workspace, { tab: AppTab; label: string }[]> = {
@@ -206,7 +202,7 @@ export default function App() {
         </header>
 
         <nav className="grid grid-cols-4 gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5" aria-label="Work areas">
-          {([['convert', 'Convert', PARITY_CHECK_ICON], ['audit', 'Review', DIAGNOSTIC_ICON], ['tools', 'Tools', null], ['more', 'More', AI_TAB_ICON]] as const).map(([workspace, label, icon]) => <button key={workspace} type="button" onClick={() => switchWorkspace(workspace)} aria-pressed={activeWorkspace === workspace} className={`flex min-h-[60px] items-center justify-center gap-1.5 rounded-xl px-1.5 text-[11px] font-semibold transition active:scale-[0.98] sm:text-sm ${activeWorkspace === workspace ? 'bg-violet-400/15 text-violet-100 ring-1 ring-violet-300/30' : 'text-slate-400 active:bg-slate-800'}`}>{icon ? <img src={icon} alt="" className="h-4 w-4 object-contain" /> : <Activity className="h-4 w-4 text-violet-300" />}{label}</button>)}
+          {([['convert', 'Convert'], ['audit', 'Review'], ['tools', 'Tools'], ['more', 'More']] as const).map(([workspace, label]) => <button key={workspace} type="button" onClick={() => switchWorkspace(workspace)} aria-pressed={activeWorkspace === workspace} className={`flex min-h-[60px] items-center justify-center gap-1.5 rounded-xl px-1.5 text-[11px] font-semibold transition active:scale-[0.98] sm:text-sm ${activeWorkspace === workspace ? 'bg-violet-400/15 text-violet-100 ring-1 ring-violet-300/30' : 'text-slate-400 active:bg-slate-800'}`}>{workspace === 'convert' ? <Cpu className="h-4 w-4 text-violet-300" /> : workspace === 'audit' ? <Activity className="h-4 w-4 text-violet-300" /> : workspace === 'tools' ? <Wrench className="h-4 w-4 text-violet-300" /> : <Sparkles className="h-4 w-4 text-violet-300" />}{label}</button>)}
         </nav>
 
         {tabs.length > 1 && <label className="flex min-h-[60px] items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3"><span className="shrink-0 text-xs font-medium text-slate-400">{activeWorkspace === 'audit' ? 'Review' : activeWorkspace === 'tools' ? 'Tools' : 'More'}</span><select value={activeTab} onChange={event => switchTab(event.target.value as AppTab)} className="min-h-[48px] w-full bg-transparent text-sm font-semibold text-slate-100 outline-none">{tabs.map(item => <option key={item.tab} value={item.tab} className="bg-slate-900">{item.label}</option>)}</select></label>}
