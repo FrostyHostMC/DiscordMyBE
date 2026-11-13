@@ -1,5 +1,10 @@
 # GTAV AutoPort
 
+**Universal intake audit added:** every imported ZIP/folder is now automatically classified by mod/resource family, with conservative binary-signature probes, PC-native plugin warnings, unknown-file preservation and family counts. This is an intake audit—not a claim that every identified file has a PS4 writer.
+
+See [format research and backend selection](docs/FORMAT-RESEARCH.md) for evaluated open-source engines and PS4 compatibility gaps.
+
+
 **Product direction: universal GTA V PC-to-PS4 Story Mode mod porting.** This is not a vehicle-only converter. Vehicles are the first inspected asset family; the long-term architecture covers peds, weapons, props, maps/world resources, textures, audio, animations, UI assets, configuration, scripts and native plugins, each with its own compatibility and adapter status. See [Universal mod-port architecture](docs/UNIVERSAL-MOD-PORT-ARCHITECTURE.md).
 
 Universal intake does not mean every PC mod is automatically portable: Windows/ASI/DLL/ScriptHookV/.NET-dependent mods require a separate PS4-native implementation where feasible and must never be mislabeled as converted.
