@@ -9,6 +9,12 @@ test("first PS4 target is the user-confirmed CUSA00411 1.73 profile", () => {
   assert.equal(PS4_TARGET.mode, "Story Mode");
 });
 
+test("user-confirmed console firmware is recorded separately from GTA V version", () => {
+  assert.equal(PS4_TARGET.systemFirmware, "14.00");
+  assert.equal(PS4_TARGET.systemFirmwareSource, "user-confirmed");
+  assert.equal(PS4_TARGET.goldhenVersion, null);
+});
+
 test("target profile remains explicitly unverified for resource compatibility", () => {
   assert.equal(PS4_TARGET.source, "user-confirmed");
   assert.equal(PS4_TARGET.verifiedAgainstConsole, false);
