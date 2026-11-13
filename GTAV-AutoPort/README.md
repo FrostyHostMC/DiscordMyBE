@@ -6,6 +6,9 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-13 — Native report test assertion aligned**
+- Updated the duplicate-report regression test to assert the specific duplicate-generic-report error emitted by the report loader; runtime behavior is unchanged.
+
 **2026-11-13 — First PS4 target profile recorded**
 - Recorded the user-confirmed target label `CUSA00411` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
 - The target profile is included in exported conversion manifests and shown in the workbench.
