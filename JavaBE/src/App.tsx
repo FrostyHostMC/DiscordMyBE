@@ -14,7 +14,6 @@ import { AnalysisPanel } from '@/components/AnalysisPanel';
 import { TextureAuditPanel } from '@/components/TextureAuditPanel';
 import { ParityGapPanel } from '@/components/ParityGapPanel';
 import { MolangSandbox } from '@/components/MolangSandbox';
-import { AiAssistPanel } from '@/components/AiAssistPanel';
 import { HudCustomizerPanel } from '@/components/HudCustomizerPanel';
 import { BedrockHudPreviewOverlay } from '@/components/BedrockHudPreviewOverlay';
 import { TexturePreviewComparison } from '@/components/TexturePreviewComparison';
@@ -33,7 +32,7 @@ const workspaceTabs: Record<Workspace, { tab: AppTab; label: string }[]> = {
   convert: [{ tab: 'deterministic', label: 'Convert a mod' }],
   audit: [{ tab: 'auditor', label: 'Texture audit' }, { tab: 'models', label: 'Models & bones' }, { tab: 'parity', label: 'Parity gaps' }, { tab: 'behavior', label: 'Behavior report' }, { tab: 'validation', label: 'Validation' }],
   tools: [{ tab: 'self_healing', label: 'Repair overview' }, { tab: 'smoother', label: 'Motion smoothing' }],
-  more: [{ tab: 'ai', label: 'AI assist' }, { tab: 'geyser', label: 'Geyser output' }],
+  more: [{ tab: 'geyser', label: 'Geyser output' }],
 };
 const tabWorkspace: Record<AppTab, Workspace> = {
   deterministic: 'convert', auditor: 'audit', models: 'audit', parity: 'audit', behavior: 'audit', validation: 'audit',
@@ -232,7 +231,6 @@ export default function App() {
         {activeTab === 'validation' && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4"><ValidationDashboard validation={validationReport} regression={regressionReport} accent={accent} runningRegression={regressionRunning} onRunRegression={handleRunRegression} /></div>}
         {activeTab === 'smoother' && <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><MotionSmoothingPanel motionSmoothing={remake?.motionSmoothing} accent={accent} /></div>}
         {activeTab === 'self_healing' && <div className="flex flex-col gap-3"><section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><div className="flex items-center gap-2"><Wrench className="h-4 w-4 text-violet-300" /><h2 className="text-sm font-bold">Automatic repair report</h2></div><p className="mt-2 text-xs leading-relaxed text-slate-400">Repairs and unresolved issues found during conversion appear in the conversion report. Content is not treated as verified until tested in-game.</p></section><BedrockHudPreviewOverlay accent={accent} /><HudCustomizerPanel accent={accent} hapticsEnabled={hapticsEnabled} onApplied={appendLog} /><section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4"><AnalysisPanel stage={stage} error={error} accent={accent2} decompileStats={currentStats || remake?.decompileStats} translationStatus={remake?.translationStatus} logs={logs} parityHealth={remake?.parityHealth} isAutoHealing={isAutoHealing} /></section></div>}
-        {activeTab === 'ai' && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"><AiAssistPanel accent={accent} modContext={modContext} onPortPlan={plan => { setBrief(plan); switchWorkspace('convert'); appendLog('[AI] Port notes added to the conversion form.'); }} /></div>}
         {activeTab === 'geyser' && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"><GeyserConfigPanel enabled={enableGeyser} geyserVersion={geyserVersion} versionOptions={GEYSER_VERSION_OPTIONS} targetVersion={targetVersion} report={remake?.geyser} exporting={geyserExporting} hasBundle={Boolean(remake?.geyserBundle)} accent={accent} onToggle={enabled => { setEnableGeyser(enabled); appendLog(enabled ? '[GEYSER] Optional output enabled.' : '[GEYSER] Optional output disabled.'); }} onVersionChange={setGeyserVersion} onExport={() => void handleExportGeyser()} /></div>}
         {showMolangSandbox && <MolangSandbox initialExpression="query.is_moving ? 1.0 : 0.0" onClose={() => setShowMolangSandbox(false)} />}
       </main>
