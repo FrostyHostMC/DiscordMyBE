@@ -2,17 +2,18 @@
 
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Development status:** ZIP intake and first-pass vehicle metadata analysis are implemented. PC YFT/YTD assets are not yet converted to PS4 format. Review reports and manifests are not installable packages.
+> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 header inspection, and a native read-only YFT/YTD parser adapter are now in the project. None of these steps converts a PC vehicle to PS4. Review reports and extracted DDS textures are not installable packages.
 
 ## Latest update
 
-**2026-11-13 — ZIP intake + Glendale metadata analysis**
-- Import a ZIP mod locally and inspect its file inventory.
-- Reject unsafe archive paths, duplicate paths, symlinks, and oversized archives.
-- Parse vehicles.meta and handling.meta, select one vehicle, and resolve its handling reference.
-- Check expected YFT/YTD filenames and report RSC7 signatures.
-- Export a SHA-256 conversion manifest.
-- Deployment remains locked until real PS4 asset conversion and exact-build validation exist.
+**2026-11-13 — Native YFT/YTD inspection foundation**
+- Added a Rust CLI adapter using the public-domain `rage-formats` crate.
+- YFT reports can include fragment, drawable, LOD, geometry, triangle, bone-pose, and physics-child summaries.
+- YTD inspection exports textures as DDS review files and records dimensions, pixel format, mip levels, and names.
+- Added extracted-folder import to the browser workbench.
+- Added RSC7 header fields and sample-version comparison based only on the supplied Glendale PC fixture.
+- Added GitHub Actions checks for JavaScript tests/build and Rust tests/build.
+- PS4 conversion and deployment remain blocked pending a verified PS4-target writer and exact-build console tests.
 
 See [CHANGELOG](CHANGELOG.md) for every update.
 
@@ -23,20 +24,33 @@ See [CHANGELOG](CHANGELOG.md) for every update.
 - Local-first processing; no cloud workspace or user mod storage.
 
 ## First test target
-A PC replacement for the existing glendale vehicle containing glendale.yft, glendale_hi.yft, glendale.ytd, vehicles.meta, and handling.meta.
+A PC replacement for the existing `glendale` vehicle containing `glendale.yft`, `glendale_hi.yft`, `glendale.ytd`, `vehicles.meta`, and `handling.meta`.
 
 ## Project structure
-- src/ — application and conversion pipeline.
-- docs/ — architecture, format research, target compatibility, and roadmap.
-- tests/ — metadata and archive intake tests.
+- `src/` — browser workbench and JavaScript conversion pipeline.
+- `native-inspector/` — Rust read-only YFT/YTD inspection adapter.
+- `docs/` — architecture, format research, target compatibility, and roadmap.
+- `tests/` — metadata, archive intake, and RSC7 header tests.
+- `.github/workflows/gtav-autoport.yml` — isolated CI checks for this project folder.
 
-## Run locally
+## Run the workbench
 Requirements: Node.js 20 or newer.
 
     npm install
     npm run dev
     npm test
     npm run build
+
+## Run the native inspector
+Requirements: Rust stable toolchain.
+
+    cd native-inspector
+    cargo test
+    cargo build --release
+    cargo run --release -- path/to/glendale.yft
+    cargo run --release -- path/to/glendale.ytd
+
+The native adapter currently parses resources and exports YTD textures to DDS for inspection. It does not rewrite YFT or create a PS4 package.
 
 ## Safety
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
