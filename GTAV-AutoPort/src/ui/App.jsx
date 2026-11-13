@@ -3,7 +3,8 @@ import { ArrowDownToLine, CarFront, CheckCircle2, FileArchive, FileText, ShieldC
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
 import { inspectVehicleMetadata } from "../core/metadata.js";
 import { inspectRsc7 } from "../core/rsc7.js";
-import { buildConversionManifest } from "../core/manifest.js";\nimport { inspectNativeReports } from "../core/nativeReports.js";
+import { buildConversionManifest } from "../core/manifest.js";
+import { inspectNativeReports } from "../core/nativeReports.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP archive or extracted folder"],
@@ -31,16 +32,30 @@ function formatBytes(bytes) {
 
 export default function App() {
   const zipInput = useRef(null);
-  const folderInput = useRef(null);\n  const nativeOutputInput = useRef(null);
+  const folderInput = useRef(null);
+  const nativeOutputInput = useRef(null);
   const [archive, setArchive] = useState(null);
   const [modelName, setModelName] = useState("glendale");
   const [analysis, setAnalysis] = useState(null);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [filter, setFilter] = useState("all");\n  const [nativeReports, setNativeReports] = useState(null);\n  const [previewUrls, setPreviewUrls] = useState({});
+  const [filter, setFilter] = useState("all");
+  const [nativeReports, setNativeReports] = useState(null);
+  const [previewUrls, setPreviewUrls] = useState({});
 
-  useEffect(() => {\n    if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }\n    const urls = {};\n    for (const texture of nativeReports.ytd.textures) {\n      if (texture.previewBytes) urls[texture.nameHash || texture.name + Math.random()] = URL.createObjectURL(new Blob([texture.previewBytes], { type: "image/png" }));\n    }\n    setPreviewUrls(urls);\n    return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));\n  }, [nativeReports]);\n\n  const visibleFiles = useMemo(() => {
+  useEffect(() => {
+    if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }
+    const urls = {};
+    for (const [index, texture] of nativeReports.ytd.textures.entries()) {
+      const key = texture.name_hash || `${texture.name}-${index}`;
+      if (texture.previewBytes) urls[key] = URL.createObjectURL(new Blob([texture.previewBytes], { type: "image/png" }));
+    }
+    setPreviewUrls(urls);
+    return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
+  }, [nativeReports]);
+
+  const visibleFiles = useMemo(() => {
     if (!archive) return [];
     return filter === "all" ? archive.inventory : archive.inventory.filter((item) => item.extension === filter);
   }, [archive, filter]);
@@ -122,10 +137,12 @@ export default function App() {
       <section className="hero">
         <div className="hero-copy"><div className="eyebrow">FIRST TARGET · GLENDALE</div><h2>PC vehicle → PS4 Story Mode</h2><p>Import a ZIP or extracted folder. AutoPort inventories files, checks vehicle metadata and inspects the RSC7 resource header without claiming unsupported console compatibility.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
-          <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>\n          <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
+          <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
+          <input ref={nativeOutputInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importNativeOutput(event.target.files)}/>
           <div className="import-actions">
             <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP mod"}</button>
-            <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>\n            <button className="secondary-button" onClick={() => nativeOutputInput.current?.click()} disabled={busy}><FileText size={16}/> Load native reports</button>
+            <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
+            <button className="secondary-button" onClick={() => nativeOutputInput.current?.click()} disabled={busy}><FileText size={16}/> Load native reports</button>
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
@@ -158,7 +175,7 @@ export default function App() {
         {nativeReports.ytd && <div className="native-textures">
           <div className="eyebrow">YTD TEXTURE DICTIONARY · {nativeReports.ytd.texture_count} TEXTURES</div>
           <div className="texture-grid">{nativeReports.ytd.textures.map((texture, index) => {
-            const key = texture.nameHash || texture.name + index;
+            const key = texture.name_hash || `${texture.name}-${index}`;
             return <article className="texture-card" key={key}>
               {previewUrls[key] ? <img src={previewUrls[key]} alt={`${texture.name} texture preview`} loading="lazy"/> : <div className="texture-placeholder"><FileText size={22}/><span>Preview unavailable</span></div>}
               <div><b>{texture.name}</b><small>{texture.width} × {texture.height} · {texture.format}</small><small>{texture.mip_levels} mip levels · {texture.depth}-D</small></div>
