@@ -2,7 +2,19 @@
 
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Early development:** This folder is isolated from AutoBE. It does not modify, import, or depend on AutoBE source code. The first milestone is a metadata-aware importer for a Glendale replacement vehicle. PC YFT/YTD assets are not yet converted to PS4 format, so generated review outputs must not be installed.
+> **Development status:** ZIP intake and first-pass vehicle metadata analysis are implemented. PC YFT/YTD assets are not yet converted to PS4 format. Review reports and manifests are not installable packages.
+
+## Latest update
+
+**2026-11-13 — ZIP intake + Glendale metadata analysis**
+- Import a ZIP mod locally and inspect its file inventory.
+- Reject unsafe archive paths, duplicate paths, symlinks, and oversized archives.
+- Parse vehicles.meta and handling.meta, select one vehicle, and resolve its handling reference.
+- Check expected YFT/YTD filenames and report RSC7 signatures.
+- Export a SHA-256 conversion manifest.
+- Deployment remains locked until real PS4 asset conversion and exact-build validation exist.
+
+See [CHANGELOG](CHANGELOG.md) for every update.
 
 ## Scope
 - Input: PC GTA V mods.
@@ -11,13 +23,20 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Local-first processing; no cloud workspace or user mod storage.
 
 ## First test target
-A PC replacement for the existing `glendale` vehicle containing `glendale.yft`, `glendale_hi.yft`, `glendale.ytd`, `vehicles.meta`, and `handling.meta`.
+A PC replacement for the existing glendale vehicle containing glendale.yft, glendale_hi.yft, glendale.ytd, vehicles.meta, and handling.meta.
 
 ## Project structure
-- `src/` — application and conversion pipeline.
-- `docs/` — architecture, format research, target compatibility, and roadmap.
-- `tests/` — safe metadata parsing and manifest tests.
+- src/ — application and conversion pipeline.
+- docs/ — architecture, format research, target compatibility, and roadmap.
+- tests/ — metadata and archive intake tests.
 
-See [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), and [PS4/GoldHEN notes](docs/PS4-GOLDHEN.md).
+## Run locally
+Requirements: Node.js 20 or newer.
 
-**Safety:** never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
+    npm install
+    npm run dev
+    npm test
+    npm run build
+
+## Safety
+Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
