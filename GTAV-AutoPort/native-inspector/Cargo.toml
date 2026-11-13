@@ -1,0 +1,11 @@
+[package]
+name = "gtav-autoport-inspector"
+version = "0.1.0"
+edition = "2021"
+description = "Read-only GTA V YFT and YTD inspection adapter for GTAV AutoPort"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+rage-formats = "0.5.1"
+serde_json = "1.0"
