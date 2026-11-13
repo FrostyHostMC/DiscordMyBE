@@ -194,7 +194,7 @@ export default function App() {
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
       {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>
-      {!busy && <div className="privacy-note">{nativeStatus}</div>}}
+      {!busy && <div className="privacy-note">{nativeStatus}</div>}
 
       {archive && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total · automatic mod audit complete</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
