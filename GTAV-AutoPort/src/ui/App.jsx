@@ -174,18 +174,18 @@ export default function App() {
       </section>}
 
       {nativeReports && <section className="panel results-panel">
-        <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Inspector reports loaded</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yft ? "YFT parsed" : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> REPORTS IMPORTED</span></div>
-        {nativeReports.yft && <div className="native-summary">
-          <div className="eyebrow">YFT FRAGMENT · {nativeReports.yft.fragment.name || nativeReports.yft.source_file}</div>
+        <div className="panel-head"><div><div className="eyebrow">NATIVE RESOURCE INSPECTION</div><h3>Inspector reports loaded</h3><p>{nativeReports.sourceFiles} files · {nativeReports.yftReports.length ? `${nativeReports.yftReports.length} YFT parsed` : "No YFT report"} · {nativeReports.ytd ? `${nativeReports.ytd.texture_count} YTD textures` : "No YTD report"}</p></div><span className="tag success"><CheckCircle2 size={13}/> REPORTS IMPORTED</span></div>
+        {nativeReports.yftReports.map((report) => <div className="native-summary" key={report.source_file}>
+          <div className="eyebrow">YFT FRAGMENT · {report.fragment.name || report.source_file}</div>
           <div className="native-metrics">
-            <div><b>{nativeReports.yft.fragment.main_drawable?.model_count ?? 0}</b><span>Models</span></div>
-            <div><b>{nativeReports.yft.fragment.main_drawable?.geometry_count ?? 0}</b><span>Geometries</span></div>
-            <div><b>{nativeReports.yft.fragment.main_drawable?.triangle_count_sum_across_lods ?? 0}</b><span>Triangles</span></div>
-            <div><b>{nativeReports.yft.fragment.bone_transform_count ?? 0}</b><span>Bone transforms</span></div>
-            <div><b>{nativeReports.yft.fragment.physics_child_count ?? 0}</b><span>Physics children</span></div>
+            <div><b>{report.fragment.main_drawable?.model_count ?? 0}</b><span>Models</span></div>
+            <div><b>{report.fragment.main_drawable?.geometry_count ?? 0}</b><span>Geometries</span></div>
+            <div><b>{report.fragment.main_drawable?.triangle_count_sum_across_lods ?? 0}</b><span>Triangles</span></div>
+            <div><b>{report.fragment.bone_transform_count ?? 0}</b><span>Bone transforms</span></div>
+            <div><b>{report.fragment.physics_child_count ?? 0}</b><span>Physics children</span></div>
           </div>
-          <p className="native-disclaimer">Structural parsing succeeded. This does not establish PS4 compatibility or convert the YFT.</p>
-        </div>}
+          <p className="native-disclaimer">Structural parsing succeeded for {report.source_file}. This does not establish PS4 compatibility or convert the YFT.</p>
+        </div>)}
         {nativeReports.ytd && <div className="native-textures">
           <div className="eyebrow">YTD TEXTURE DICTIONARY · {nativeReports.ytd.texture_count} TEXTURES</div>
           <div className="texture-grid">{nativeReports.ytd.textures.map((texture, index) => {
