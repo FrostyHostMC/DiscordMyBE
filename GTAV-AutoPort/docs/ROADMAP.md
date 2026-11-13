@@ -1,5 +1,18 @@
 # Roadmap
 
+## Product-wide scope — universal mod intake and porting
+- [x] Set product direction to general GTA V PC-to-PS4 Story Mode mod porting, not vehicle-only conversion.
+- [x] Define mod-family taxonomy and compatibility outcome classes.
+- [ ] Build extensible signature/content classifier for known and unknown mod resources.
+- [ ] Add universal project resource graph and provenance/hash model.
+- [ ] Add typed, versioned platform-neutral resource IR.
+- [ ] Implement per-family decoder/adapter/validator plugins.
+- [ ] Implement exact-target PS4 adapters for each supported resource family.
+- [ ] Classify PC runtime plugins/scripts and provide PS4-native reimplementation path only where technically feasible.
+- [ ] Generate per-mod support matrix, adaptation plan and complete blocker report.
+- [ ] Produce reversible PS4 Story Mode package with backups and rollback only after exact-target validation.
+
+
 ## Phase 0 — workspace
 - [x] Isolated folder and development branch created.
 - [x] React/Vite workbench UI.
