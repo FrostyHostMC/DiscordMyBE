@@ -2,6 +2,7 @@ import {
   PLAYER_BASELINE_ENTRIES,
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
+  VANILLA_PLAYER_ANIMATE,
 } from '@/utils/vanillaPlayerBaseline';
 
 /**
@@ -14,10 +15,9 @@ import {
  * first_person_base_pose" on every load, even though the pack's own clips are registered.
  *
  * This pass is not a repair of a named defect; it is the invariant. Every player definition that
- * ships is made to declare the full engine-provided alias map and to activate each of those aliases,
- * so whichever document the engine selects can resolve its own wiring. Nothing is invented: each
- * entry names an identifier the base game ships, and a reference that cannot be satisfied is
- * reported instead of being replaced by a placeholder animation.
+ * ships declares the full engine-provided alias map, but only the vanilla root controller is started
+ * directly. That controller owns the first-/third-person state graph and layers the other aliases;
+ * starting every alias independently would double-play poses and bypass the vanilla state gates.
  */
 
 export interface PlayerBaselineGuardReport {
@@ -100,11 +100,14 @@ export function guaranteePlayerBaselineWiring(input: {
         report.aliasesRestored += 1;
         changed = true;
       }
+      const shouldAnimateDirectly = VANILLA_PLAYER_ANIMATE.some((item) =>
+        typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
+      );
       const bound = animate.some((item) =>
         typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
       );
-      if (!bound) {
-        animate.push(entry.gate ? { [entry.alias]: entry.gate } : entry.alias);
+      if (shouldAnimateDirectly && !bound) {
+        animate.push(entry.alias);
         report.animateEntriesRestored += 1;
         changed = true;
       }
