@@ -38,11 +38,27 @@ export function documentedSlotId(raw: string): string {
 /** "Is this slot occupied?", expressed in a signature the destination accepts. */
 export function slotOccupancyExpression(slot: string): { expression: string; reason: string } {
   const id = documentedSlotId(slot);
+  const handSlot = id === 'slot.weapon.mainhand'
+    ? 'main_hand'
+    : id === 'slot.weapon.offhand'
+      ? 'off_hand'
+      : null;
+
+  // get_equipped_item_name does NOT accept Bedrock inventory slot identifiers or an
+  // (inventory slot, index) pair. Its hand argument is exactly 0/'main_hand' or
+  // 1/'off_hand'. Passing slot.weapon.mainhand, 0 is rejected by the Molang runtime.
+  if (handSlot) {
+    return {
+      expression: `(query.get_equipped_item_name('${handSlot}') != '')`,
+      reason: `the ${id} occupancy check is expressed with the documented get_equipped_item_name('${handSlot}') hand argument`,
+    };
+  }
+
+  // No generic occupancy query exists for armour slots. Do not fabricate an
+  // item-name test or invert an air test; callers must report this as unresolved.
   return {
-    expression: `(query.get_equipped_item_name('${id}', 0) != '')`,
-    reason:
-      `the presence form of query.is_item_name_any needs at least one item name, so "the ${id} slot is occupied" ` +
-      'is evaluated with query.get_equipped_item_name(slot, index), which accepts the same documented slot and returns the same boolean',
+    expression: `query.get_equipped_item_name('${id}', 0)`,
+    reason: `the ${id} slot is not a supported hand argument and cannot be safely translated`,
   };
 }
 
@@ -125,10 +141,19 @@ export function repairItemNameQueryArity(expression: string): {
     const args = splitArguments(expression.slice(open + 1, close));
     const needsRepair = args.length > 0 && itemNameArguments(args).length === 0;
     if (needsRepair) {
-      const occupancy = slotOccupancyExpression(args[0]);
-      out += expression.slice(cursor, match.index) + occupancy.expression;
-      cursor = close + 1;
-      repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+      const slot = documentedSlotId(args[0]);
+      const isHand = slot === 'slot.weapon.mainhand' || slot === 'slot.weapon.offhand';
+      if (!isHand) {
+        rejected.push({
+          call,
+          reason: `the ${slot} occupancy test has no equivalent without a concrete item name; it is preserved rather than guessed`,
+        });
+      } else {
+        const occupancy = slotOccupancyExpression(slot);
+        out += expression.slice(cursor, match.index) + occupancy.expression;
+        cursor = close + 1;
+        repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+      }
     }
     pattern.lastIndex = close + 1;
     match = pattern.exec(expression);
