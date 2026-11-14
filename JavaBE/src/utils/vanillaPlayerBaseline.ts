@@ -27,19 +27,40 @@ export interface PlayerBaselineEntry {
 export const FIRST_PERSON_GATE = 'query.is_first_person';
 
 /**
+ * Player-scope variables required by the vanilla player animation contract.
+ *
+ * These expressions are based on Mojang's published Bedrock player resources. They are
+ * restored into the player entity because a custom player.entity.json replaces the vanilla
+ * script scope along with its animation map.
+ */
+export const VANILLA_PLAYER_VARIABLE_EXPRESSIONS: Record<string, { expression: string; evidence: string }> = {
+  tcos0: {
+    expression: '(math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3',
+    evidence: 'Mojang bedrock-samples resource_pack/entity/player.entity.json pre_animation expression',
+  },
+  melee_spear_equipped: {
+    expression: "query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')",
+    evidence: 'reconstructed from the vanilla player controller gate and the Bedrock item-name query; keeps spear-equipped state live instead of forcing false',
+  },
+};
+
+/**
  * Baseline wiring of `minecraft:player`. `base_pose` builds the rest pose, `look_at_target`
  * rotates the head, the first-person entries only exist in first person, and `root` is the
  * controller every other pose is layered under.
  */
 export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
-  { alias: 'base_pose', identifier: 'animation.player.base_pose', kind: 'animation', gate: null },
+  // `base_pose` is retained as a compatibility alias for older/generated player
+  // controllers, but it resolves to the real vanilla humanoid base-pose animation.
+  { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
-  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
+  // The vanilla player maps look_at_target to a controller, not an animation clip.
+  { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
     alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person_base_pose',
+    identifier: 'animation.player.first_person.base_pose',
     kind: 'animation',
     gate: FIRST_PERSON_GATE,
   },
