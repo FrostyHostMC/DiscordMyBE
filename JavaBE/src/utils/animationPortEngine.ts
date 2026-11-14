@@ -565,10 +565,10 @@ export function portMobAndPlayerAnimations(
     playerTriggers = triggerReport;
     // Activation mechanism. Registering a clip is not activating it: several ported clips whose
     // conditions all evaluate true at once average into one pose over the vanilla locomotion, which
-    // reads in game as "the mod is installed but the player still moves like vanilla". The clips that
-    // carry a translated trigger therefore become mutually exclusive states of ONE generated
-    // controller, declared after the vanilla root controller so an active ported state answers last
-    // and wins while vanilla keeps driving whenever no ported state is true.
+    // reads in game as "the mod is installed but the player still moves like vanilla". Base clips
+    // therefore become mutually exclusive states of the generated locomotion controller. Source
+    // clips explicitly marked as overlays receive a separate concurrent controller so shield poses
+    // can blend over locomotion without competing for its state.
     const playerControllers = synthesizePlayerAnimationController({
       modId,
       clips: playerRigBridge.clips,
@@ -624,7 +624,7 @@ export function portMobAndPlayerAnimations(
       `[WIRE] Player client entity generated: ${playerWiring.report.clipsRegistered} ported clip(s) and ${playerWiring.report.controllersRegistered} controller(s) registered, ${playerWiring.report.animateEntries} scripts.animate entry/entries (${playerWiring.report.firstPersonClips.length} first-person / ${playerWiring.report.thirdPersonClips.length} third-person track(s)).`,
     );
     log(
-      `[WIRE] Activation: ${playerWiring.report.clipsActivated} clip(s) have an activation path — ${playerWiring.report.controllerDrivenClips.length} through the generated player animation controller (declared after the vanilla root controller, so an active ported state answers last and wins), ${playerWiring.report.scriptedClips.length} from the shipped behaviour script, ${playerWiring.report.unconditionalClips.length} with no recoverable condition and therefore animated continuously for their own perspective (registered AND reachable, never silently dropped).`,
+      `[WIRE] Activation: ${playerWiring.report.clipsActivated} clip(s) have an activation path — ${playerWiring.report.controllerDrivenClips.length} through the generated player animation controller(s) (declared after the vanilla root controller, so active ported states answer last and win), ${playerWiring.report.scriptedClips.length} from the shipped behaviour script, ${playerWiring.report.unconditionalClips.length} with no recoverable condition and therefore animated continuously for their own perspective (registered AND reachable, never silently dropped).`,
     );
     if (playerWiring.report.unresolvedClips.length > 0) {
       log(
