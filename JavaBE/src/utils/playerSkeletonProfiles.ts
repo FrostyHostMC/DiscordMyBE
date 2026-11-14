@@ -90,6 +90,7 @@ export interface PlayerRigBoneAudit {
   bedrockClassic: string | null;
   bedrockSlim: string | null;
   sourceParent?: string | null;
+  resolvedTarget: string | null;
   targetParents: Partial<Record<'javaClassic' | 'javaSlim' | 'bedrockClassic' | 'bedrockSlim', string | null>>;
   attachment: boolean;
   status: 'exact' | 'variant-compatible' | 'unmapped';
@@ -102,6 +103,7 @@ export interface PlayerRigBoneAudit {
 export function auditPlayerRigBones(
   bones: string[],
   sourceParents: Record<string, string> = {},
+  mappedTargets: Record<string, string> = {},
 ): PlayerRigBoneAudit[] {
   const profiles = {
     javaClassic: getPlayerSkeletonProfile('java', 'classic'),
@@ -111,7 +113,8 @@ export function auditPlayerRigBones(
   } as const;
   const normalized = (value: string) => normaliseBoneName(value);
   return [...new Set(bones)].map((sourceBone) => {
-    const key = normalized(sourceBone);
+    const resolvedTarget = mappedTargets[sourceBone] ?? sourceBone;
+    const key = normalized(resolvedTarget);
     const matches = Object.fromEntries(
       Object.entries(profiles).map(([profileKey, profile]) => {
         const hit = profile.bones.find((bone) => normalized(bone.name) === key);
@@ -129,6 +132,7 @@ export function auditPlayerRigBones(
       bedrockClassic: matches.bedrockClassic?.name ?? null,
       bedrockSlim: matches.bedrockSlim?.name ?? null,
       sourceParent: sourceParents[sourceBone] ?? null,
+      resolvedTarget: mappedTargets[sourceBone] ?? null,
       targetParents: {
         javaClassic: matches.javaClassic?.parent ?? null,
         javaSlim: matches.javaSlim?.parent ?? null,
