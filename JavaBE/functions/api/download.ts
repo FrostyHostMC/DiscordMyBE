@@ -51,7 +51,7 @@ async function cleanupExpired(env: Env): Promise<void> {
   const now = Date.now();
   let cursor: string | undefined;
   for (let page = 0; page < 3; page++) {
-    const listed = await env.BUCKET.list({ prefix: 'javabe-temp/', cursor, limit: 1000 });
+    const listed = await env.BUCKET.list({ prefix: 'javabe-temp/', cursor, limit: 1000, include: ['customMetadata'] });
     const expired = listed.objects.filter(object => Number(object.customMetadata?.expiresAt || 0) <= now).map(object => object.key);
     if (expired.length) await env.BUCKET.delete(expired);
     if (!listed.truncated || !listed.cursor) break;
@@ -98,7 +98,7 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const key = `javabe-temp/${userId}/${id}/${fileName}`;
       const upload = await env.BUCKET.createMultipartUpload(key, {
         customMetadata: { ownerId: userId, expiresAt: String(expiresAt), fileName },
-        httpMetadata: { contentType: 'application/vnd.minecraft.mcaddon', contentDisposition: `attachment; filename="${fileName}"` },
+        httpMetadata: { contentType: 'application/octet-stream', contentDisposition: `attachment; filename="${fileName}"` },
       });
       const uploadToken = await signature(env, `${key}|${upload.uploadId}|${size}`);
       return json({ key, uploadId: upload.uploadId, uploadToken, size, expiresAt });
