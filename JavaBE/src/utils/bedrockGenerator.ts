@@ -2108,6 +2108,9 @@ export async function convertJavaToBedrockAddon(
         .map((conflict) => conflict.lower),
       ...scriptDrivenClips,
       ...(remake.playerEntityWiring?.scriptedClips ?? []),
+      ...(remake.playerTriggers?.triggers ?? [])
+        .filter((trigger) => trigger.status === 'unresolved' && trigger.concept === 'unreferenced-source-definition')
+        .map((trigger) => trigger.clipId),
     ]),
   ];
   // ── SCOPE-AWARE MOLANG VARIABLE BINDING ───────────────────────────────────────────────────────
@@ -2305,15 +2308,26 @@ export async function convertJavaToBedrockAddon(
   for (const scope of describeRegistryScopes(exportedRegistry.metrics)) {
     integrityLog(`[ANIM:SCOPE] ${scope}`);
   }
+  const sourceClipIdByExportedClipId = Object.fromEntries(
+    (remake.playerTriggers?.triggers ?? []).map((trigger) => [trigger.clipId, trigger.sourceClipId]),
+  );
+  const playerTriggerExportedIdBySourceId = new Map(
+    (remake.playerTriggers?.triggers ?? []).map((trigger) => [trigger.sourceClipId, trigger.clipId]),
+  );
+  const deliberatelyDeactivatedSet = new Set(deliberatelyDeactivated);
+  const expectedExportedClipIds = [...new Set([
+    ...(remake.animationExpectedClips ?? []),
+    ...universalAnimationExport.emittedClips,
+  ])]
+    .map((clipId) => playerTriggerExportedIdBySourceId.get(clipId) ?? clipId)
+    .filter((clipId) => !deliberatelyDeactivatedSet.has(clipId));
   const animationFidelity = validateAnimationFidelity({
     ir: remake.universalAnimationIR,
     discovery: remake.universalAnimationDiscovery,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
-    expectedClips: [
-      ...(remake.animationExpectedClips ?? []),
-      ...universalAnimationExport.emittedClips,
-    ],
+    expectedClips: Object.keys(remake.universalAnimationIR?.clips ?? {}),
+    sourceClipIdByExportedClipId,
     registry: exportedRegistry,
     skeleton: skeletonReconciliation,
     onLog: integrityLog,
@@ -2342,10 +2356,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
-    expectedClips: [
-      ...(remake.animationExpectedClips ?? []),
-      ...universalAnimationExport.emittedClips,
-    ],
+    expectedClips: expectedExportedClipIds,
     extractedClipCount: Math.max(discoveredByLayout, interpretedClipCount),
     scriptDrivenClips: [...new Set([...scriptDrivenClips, ...(remake.playerEntityWiring?.scriptedClips ?? [])])],
     registry: exportedRegistry,
