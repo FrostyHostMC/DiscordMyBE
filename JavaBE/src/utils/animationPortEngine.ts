@@ -553,11 +553,6 @@ export function portMobAndPlayerAnimations(
       triggers: triggerReport.triggers,
       decisions: rigClassification.decisions,
       evidence: playerEvidence,
-      geometryCandidates: [...(entityGeometries?.entries() ?? [])].map(([key, geometry]) => ({
-        key,
-        json: geometry.json,
-        source: String(geometry.source ?? ''),
-      })),
       onLog: log,
     });
     playerAnimationPort = playerPort.report;
