@@ -2129,8 +2129,17 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     loop: true,
     bones: {},
   }])) as any;
-  const archiveEntries = [
+  const assetOnlyEntries = [
     fixtureText('assets/seriousplayeranimations/player_animation/idle_standing.json', '{}'),
+  ];
+  const assetOnlyReport = translatePlayerTriggers({ clips, archiveEntries: assetOnlyEntries });
+  const archiveEntries = [
+    ...assetOnlyEntries,
+    fixtureText('fabric.mod.json', JSON.stringify({ id: 'seriousplayeranimations', version: '1.1.0' })),
+    fixtureText(
+      'net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.class',
+      'reloadAnimationVariables moveSpeed isMovingBackwards prevbyaw ShieldItem walking_sneak',
+    ),
   ];
   const triggerReport = translatePlayerTriggers({ clips, archiveEntries });
   const triggerFor = (name: string) => triggerReport.triggers.find(
@@ -2203,9 +2212,14 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   ];
   const checks: RegressionAssertion[] = [{
     label: 'the Serious Player Animations resource namespace selects its known source profile',
-    expected: 'Serious Player Animations 1.1.1',
+    expected: 'Serious Player Animations 1.1.0',
     actual: triggerReport.sourceProfile ?? 'no source profile',
-    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.1'
+    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.0'
+  }, {
+    label: 'an animation resource pack alone cannot activate a Java source adapter',
+    expected: 'no source profile and all clips unresolved',
+    actual: assetOnlyReport.sourceProfile ?? `${assetOnlyReport.unresolved} unresolved clip(s)`,
+    passed: !assetOnlyReport.sourceProfile && assetOnlyReport.unresolved === assetOnlyReport.clipsInspected
   }, {
     label: 'all six supplied locomotion clips receive source-derived conditions',
     expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
