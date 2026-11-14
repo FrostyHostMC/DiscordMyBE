@@ -48,7 +48,7 @@ try {
     }
   }
 
-  const expectedPlayerClipIds = sourceClipIds.filter((id) => id !== 'animation.running');
+  const expectedPlayerClipIds = sourceClipIds;
   const logs = [];
   const result = portMobAndPlayerAnimations(
     'pierced_fixture',
