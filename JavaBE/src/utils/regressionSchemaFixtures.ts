@@ -2010,7 +2010,10 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   );
   const playerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
   const playerScripts = playerEntity?.scripts ?? {};
+  const playerAnimate = Array.isArray(playerScripts.animate) ? playerScripts.animate as Array<string | Record<string, string>> : [];
   const playerPreAnimation = Array.isArray(playerScripts.pre_animation) ? playerScripts.pre_animation as string[] : [];
+  const vanillaRootOnly = playerAnimate.some(entry => entry === 'root') &&
+    !playerAnimate.some(entry => typeof entry === 'string' && ['base_pose', 'humanoid_base_pose', 'look_at_target', 'cape', 'first_person_base_pose', 'first_person_attack_controller'].includes(entry));
   const vanillaTcos = playerPreAnimation.find(statement => /^variable\.tcos0\s*=/.test(statement));
   const vanillaSpear = playerPreAnimation.find(statement => /^variable\.melee_spear_equipped\s*=/.test(statement));
   const baselineByAlias = new Map(PLAYER_BASELINE_ENTRIES.map(entry => [entry.alias, entry]));
@@ -2055,6 +2058,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     expected: 'base pose animation, look-at controller, first-person base pose animation',
     actual: correctVanillaAliases ? 'all three mappings correct' : 'one or more mappings incorrect',
     passed: correctVanillaAliases
+  }, {
+    label: 'the vanilla player starts its root controller instead of independently replaying each baseline animation',
+    expected: 'root is directly animated; child aliases remain controller-owned',
+    actual: vanillaRootOnly ? 'root-only baseline wiring' : JSON.stringify(playerAnimate),
+    passed: vanillaRootOnly
   }, {
     label: 'baseline dependency restoration reports no unresolved player variables',
     expected: 'zero unresolved vanilla player variables',
