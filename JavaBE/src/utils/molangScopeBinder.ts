@@ -387,7 +387,7 @@ export const ARMOR_LAYER_VISIBILITY_MAP: Record<string, { query: string; default
   const map: Record<string, { query: string; defaultVal: number }> = {};
   for (const name of VANILLA_ARMOR_LAYER_VARIABLES) {
     const resolution = equipmentVisibilityExpression(name);
-    if (resolution) map[name] = { query: resolution.expression, defaultVal: 0 };
+    if (resolution) map[name] = { query: resolution.expression, defaultVal: resolution.expression === '1.0' ? 1 : 0 };
   }
   return map;
 })();
