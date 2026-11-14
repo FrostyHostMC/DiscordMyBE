@@ -53,8 +53,6 @@ export interface PlayerControllerSynthesis {
   report: PlayerControllerReport;
 }
 
-/** A controller with hundreds of states is unreadable and slow; the rest stays on animate. */
-const STATE_LIMIT = 24;
 
 /**
  * State priority, derived from the concept the trigger was recovered from. A hurt pose must not be
@@ -134,11 +132,10 @@ export function synthesizePlayerAnimationController(options: {
   const conditionRepairs: string[] = [];
   const unresolved: string[] = [];
   const sharedConditions: string[] = [];
-  const seenConditions = new Map<string, string>();
+  const conditionGroups = new Map<string, PlannedState[]>();
   const planned: PlannedState[] = [];
 
   for (const trigger of ordered) {
-    if (planned.length >= STATE_LIMIT) break;
     const gate = trigger.perspective === 'first' ? 'query.is_first_person' : '!query.is_first_person';
     // The state condition runs inside the player client entity, so it is validated in that exact
     // context before it is written: an expression the context cannot evaluate would make the whole
@@ -156,23 +153,22 @@ export function synthesizePlayerAnimationController(options: {
       continue;
     }
     const condition = `(${translation.expression}) && (${gate})`;
-    const existing = seenConditions.get(condition);
-    if (existing) {
-      sharedConditions.push(
-        `${trigger.clipId} shares its activation condition with ${existing}; a single-state machine cannot play both at once, so ${trigger.clipId} stays registered and is reported as a state conflict to review.`,
-      );
-      continue;
-    }
-    seenConditions.set(condition, trigger.clipId);
     const clip = options.clips[trigger.clipId];
     const declared = Number(clip?.animation_length ?? 0);
-    planned.push({
+    const state: PlannedState = {
       key: `ported_${planned.length + 1}`,
       clipId: trigger.clipId,
       condition,
       duration: Number.isFinite(declared) && declared > 0 ? declared : null,
-      loopOnce: options.clips[trigger.clipId]?.loop === false,
-    });
+      loopOnce: options.clips[trigger.clipId]?.loop === false || options.clips[trigger.clipId]?.loop === 'hold_on_last_frame',
+    };
+    planned.push(state);
+    const group = conditionGroups.get(condition) ?? [];
+    if (group.length > 0) {
+      sharedConditions.push(`${trigger.clipId} shares a source activation condition with ${group[0].clipId}; the controller retains both clips and rotates through the group instead of dropping either.`);
+    }
+    group.push(state);
+    conditionGroups.set(condition, group);
   }
 
   if (planned.length === 0) {
@@ -191,22 +187,39 @@ export function synthesizePlayerAnimationController(options: {
   const states: Record<string, unknown> = {};
   // The base state plays nothing, which is what keeps vanilla locomotion alive: whenever no ported
   // condition is true the ported controller is silent and the vanilla root controller drives the rig.
+  const orderedGroups = [...conditionGroups.values()].sort((left, right) => {
+    const leftIndex = planned.indexOf(left[0]);
+    const rightIndex = planned.indexOf(right[0]);
+    return leftIndex - rightIndex;
+  });
+  // A base-state transition enters the first clip in each condition group. Groups are ordered
+  // by semantic priority, so a hurt/attack state wins over locomotion when both conditions hold.
   states.base = {
-    transitions: planned.map((state) => ({ [state.key]: state.condition })),
+    transitions: orderedGroups.map((group) => ({ [group[0].key]: group[0].condition })),
   };
-  for (const state of planned) {
-    const transitions: Array<Record<string, string>> = [{ base: `!(${state.condition})` }];
-    // Only a one-shot clip gets a bounded exit, so a pose that must not latch cannot freeze the
-    // machine. A looping clip has to keep looping: cutting it at its own length and re-entering the
-    // same state restarts it from frame zero, which reads as a twitch rather than an animation.
-    if (state.loopOnce && state.duration !== null) {
-      transitions.push({ base: `query.anim_time > ${state.duration}` });
-    }
-    states[state.key] = {
-      animations: [state.clipId],
-      blend_transition: 0.2,
-      transitions,
-    };
+  for (const group of orderedGroups) {
+    group.forEach((state, index) => {
+      const transitions: Array<Record<string, string>> = [{ base: `!(${state.condition})` }];
+      const next = group[(index + 1) % group.length];
+      if (group.length > 1) {
+        // Multiple source clips can legitimately share a coarse Bedrock query (e.g. several
+        // attack variants). Keep every clip in the controller and cycle only after the current
+        // clip has completed; no clip is silently discarded at an arbitrary state-count limit.
+        const completion = state.loopOnce
+          ? 'query.any_animation_finished'
+          : state.duration !== null
+            ? `query.anim_time >= ${state.duration.toFixed(3)}`
+            : 'query.any_animation_finished';
+        transitions.push({ [next.key]: completion });
+      } else if (state.loopOnce && state.duration !== null) {
+        transitions.push({ base: 'query.any_animation_finished' });
+      }
+      states[state.key] = {
+        animations: [state.clipId],
+        blend_transition: 0.2,
+        transitions,
+      };
+    });
   }
 
   const namespace = safeFileId(options.modId) || 'aippy';
@@ -228,7 +241,7 @@ export function synthesizePlayerAnimationController(options: {
 
   const drivenClips = planned.map((state) => state.clipId);
   const note =
-    `${controllerId} generated with ${planned.length} mutually exclusive state(s) and a silent base state, ` +
+    `${controllerId} generated with ${planned.length} state(s) across ${orderedGroups.length} activation group(s), retaining every translated clip and rotating through same-condition variants, ` +
     `declared after the vanilla root controller so an active ported state answers last and wins while vanilla keeps driving otherwise. ` +
     `${drivenClips.length} clip(s) are activated through the controller, ${clipsLeftInAnimate.length} stay on the plain animate path, ` +
     `${conditionRepairs.length} condition(s) were translated for the player context, ${unresolved.length} could not be expressed, ` +
