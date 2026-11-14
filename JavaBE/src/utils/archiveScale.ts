@@ -96,7 +96,7 @@ const ENTRY_CLASSES: EntryClass[] = [
     key: 'class',
     label: 'java class',
     priority: 84,
-    cap: 3000,
+    cap: Number.MAX_SAFE_INTEGER,
     test: /\.class$/,
   },
   {
