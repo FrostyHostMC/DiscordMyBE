@@ -165,6 +165,8 @@ try {
     { id: 'spear-equipment-variable-uses-vanilla-item-tag', expected: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')", actual: spear ?? 'missing', passed: Boolean(spear && spear.includes("query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')")) },
     { id: 'no-invalid-armor-slot-hand-query-emitted', expected: 0, actual: invalidArmorQueries.length, passed: invalidArmorQueries.length === 0 },
     { id: 'vanilla-player-root-controller-wired', expected: 'root', actual: playerDescription?.scripts?.animate ?? [], passed: Array.isArray(playerDescription?.scripts?.animate) && playerDescription.scripts.animate.includes('root') },
+    { id: 'player-variable-dependency-audit-has-no-unresolved-variables', expected: 0, actual: playerDependencies?.variables?.unresolved?.length ?? -1, passed: Boolean(playerDependencies && playerDependencies.variables.unresolved.length === 0) },
+    { id: 'player-static-dependency-validation-passes', expected: true, actual: playerDependencies?.staticValidationPassed ?? false, passed: playerDependencies?.staticValidationPassed === true },
   ];
 
   const report = {
