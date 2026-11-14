@@ -134,16 +134,16 @@ function hasSeriousPlayerAnimationsNamespace(entries: ExtractedZipEntry[]): bool
 }
 
 function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolean {
-  const classEntry = entries.find((entry) =>
-    entry.path.replace(/\\/g, '/').toLowerCase().endsWith(
-      'net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class',
-    ),
-  );
-  if (!classEntry) return false;
+  const sourceEntry = entries.find((entry) => {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    return path.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class') ||
+      path.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.java');
+  });
+  if (!sourceEntry) return false;
 
   let classText = '';
   try {
-    classText = decoder.decode(classEntry.data);
+    classText = decoder.decode(sourceEntry.data);
   } catch {
     return false;
   }

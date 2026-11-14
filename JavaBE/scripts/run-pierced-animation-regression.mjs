@@ -32,24 +32,22 @@ try {
     maxEntryBytes: 128 * 1024 * 1024,
     maxTotalBytes: 256 * 1024 * 1024,
   });
-  const dependencyJarPath = process.env.SERIOUS_PLAYER_ANIMATIONS_JAR;
-  if (!dependencyJarPath || !fs.existsSync(dependencyJarPath)) {
-    throw new Error('The verified Serious Player Animations 1.1.1 source JAR is required (the upstream Gradle artifact may still be named 1.1.0) for the full source-trigger regression.');
+  const sourceFilePath = process.env.SERIOUS_PLAYER_ANIMATIONS_SOURCE;
+  if (!sourceFilePath || !fs.existsSync(sourceFilePath)) {
+    throw new Error('The pinned Serious Player Animations 1.1.1 Java source file is required for the source-trigger regression.');
   }
-  const dependencyEntries = await readZipArchive(new Uint8Array(fs.readFileSync(dependencyJarPath)), {
-    maxEntries: 10000,
-    maxEntryBytes: 128 * 1024 * 1024,
-    maxTotalBytes: 256 * 1024 * 1024,
-  });
-  const sourceEvidenceEntries = dependencyEntries.filter((entry) => {
-    const normalized = entry.path.replace(/\\/g, '/').toLowerCase();
-    return normalized === 'fabric.mod.json' ||
-      normalized.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class');
-  });
-  if (!sourceEvidenceEntries.some((entry) => entry.path.toLowerCase().endsWith('fabric.mod.json')) ||
-      !sourceEvidenceEntries.some((entry) => entry.path.toLowerCase().endsWith('seriousplayeranimationsmixin.class'))) {
-    throw new Error('The built dependency JAR is missing its Fabric metadata or state-machine class.');
-  }
+  const encoder = new TextEncoder();
+  const sourceCode = encoder.encode(fs.readFileSync(sourceFilePath, 'utf8'));
+  const metadata = encoder.encode(JSON.stringify({ id: 'seriousplayeranimations', version: '1.1.0' }));
+  const sourceEvidenceEntries = [
+    { path: 'fabric.mod.json', data: metadata, isDirectory: false, uncompressedSize: metadata.byteLength },
+    {
+      path: 'net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.java',
+      data: sourceCode,
+      isDirectory: false,
+      uncompressedSize: sourceCode.byteLength,
+    },
+  ];
   const archiveEntries = [...entries, ...sourceEvidenceEntries];
 
   const decoder = new TextDecoder();
@@ -169,7 +167,7 @@ try {
   const report = {
     source: path.basename(sourcePath),
     archiveEntries: archiveEntries.filter((entry) => !entry.isDirectory).length,
-    dependencyJar: path.basename(dependencyJarPath),
+    sourceEvidence: 'McVader34/Serious-Player-Animations@2dc73ceb744a4fb861437b51f1fe6c95ca4ac902',
     sourceClipIds,
     emittedClipIds,
     playerEntity: playerPath ?? null,

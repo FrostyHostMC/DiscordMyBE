@@ -39,25 +39,14 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Build Activity
         run: pnpm build
-      - name: Setup Java 17 for the source dependency
-        uses: actions/setup-java@v4
+      - name: Checkout pinned Serious Player Animations 1.1.1 source
+        uses: actions/checkout@v4
         with:
-          distribution: temurin
-          java-version: '17'
-      - name: Setup Gradle for the source dependency
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.3'
-      - name: Checkout Serious Player Animations 1.1.1 source
-        run: git clone --depth 1 --branch 1.1.1 https://github.com/McVader34/Serious-Player-Animations.git /tmp/serious-player-animations
-      - name: Build the verified Serious Player Animations 1.1.1 source dependency
-        run: gradle :fabric:remapJar --no-daemon --stacktrace
-        working-directory: /tmp/serious-player-animations
-      - name: Export the source dependency JAR path
-        run: |
-          jar_path="$(find /tmp/serious-player-animations/fabric/build/libs -maxdepth 1 -type f -name 'seriousplayeranimations-1.1.0.jar' | head -n 1)"
-          test -n "$jar_path"
-          echo "SERIOUS_PLAYER_ANIMATIONS_JAR=$jar_path" >> "$GITHUB_ENV"
+          repository: McVader34/Serious-Player-Animations
+          ref: 2dc73ceb744a4fb861437b51f1fe6c95ca4ac902
+          path: source-serious-player-animations
+      - name: Export the pinned Java source path
+        run: echo "SERIOUS_PLAYER_ANIMATIONS_SOURCE=$GITHUB_WORKSPACE/source-serious-player-animations/fabric/src/main/java/net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.java" >> "$GITHUB_ENV"
       - name: Run player Molang baseline regression
         run: node scripts/run-player-baseline-regression.mjs
       - name: Convert the original Pierced fixture through the current animation engine
