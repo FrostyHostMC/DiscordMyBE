@@ -110,12 +110,17 @@ function scanJavaSignals(entries: ExtractedZipEntry[]): { classesScanned: number
   return { classesScanned, hits };
 }
 
-/** Perspective a clip can affect: arm/head-only tracks are visible in first person. */
-function perspectiveOf(clip: BedrockAnimationClip): 'first' | 'third' {
-  const bones = Object.keys((clip as { bones?: Record<string, unknown> }).bones ?? {});
-  if (bones.length === 0) return 'third';
-  const upperBodyOnly = bones.every((bone) => /arm|hand|head|hat|sleeve|item/i.test(bone));
-  return upperBodyOnly ? 'first' : 'third';
+/**
+ * Perspective must come from explicit source identity, not from the bones a clip moves.
+ * Third-person sword swings, punches and emotes commonly animate only arms/hands; gating every
+ * upper-body-only clip behind query.is_first_person makes those animations invisible to everyone
+ * watching the player in third person, with no content-log error. The view-model mapper already
+ * uses these explicit identity tags, so keep trigger activation consistent with that contract.
+ */
+function perspectiveOf(clipId: string): 'first' | 'third' {
+  return /first[_-]?person|firstperson|view[_-]?model|item[_-]?in[_-]?hand|hand[_-]?pose|arm[_-]?pose/i.test(clipId)
+    ? 'first'
+    : 'third';
 }
 
 /**
@@ -151,7 +156,7 @@ export function translatePlayerTriggers(options: {
       if (!rule.clip.test(tail) && !rule.clip.test(clipId)) return false;
       return [...identityTokens(tail)].some((token) => rule.clip.test(token)) || rule.clip.test(tail);
     });
-    const perspective = perspectiveOf(clip);
+    const perspective = perspectiveOf(clipId);
 
     if (!concept) {
       triggers.push({
