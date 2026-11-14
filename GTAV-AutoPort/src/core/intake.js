@@ -37,9 +37,10 @@ function validateInventoryPaths(paths) {
   }
 }
 
-function summarize(sourceName, files) {
+function summarize(sourceName, files, packageInfo = {}) {
   return {
     sourceName,
+    ...packageInfo,
     files,
     inventory: files.map(({ path, size, extension }) => ({ path, size, extension })),
     totalBytes: files.reduce((sum, item) => sum + item.size, 0),
@@ -47,8 +48,8 @@ function summarize(sourceName, files) {
 }
 
 export async function inspectZipArchive(file) {
-  if (!file || !file.name?.toLowerCase().endsWith(".zip")) {
-    throw new Error("Choose a ZIP archive. RAR and 7z support is not available in this build.");
+  if (!file || !/\.(zip|oiv)$/i.test(file.name || "")) {
+    throw new Error("Choose a ZIP or OpenIV OIV package. RAR and 7z support is not available in this build.");
   }
   const zip = await JSZip.loadAsync(file, { checkCRC32: true, createFolders: false });
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);
@@ -81,7 +82,21 @@ export async function inspectZipArchive(file) {
     }
     files.push({ path, bytes, size: bytes.byteLength, extension: extensionOf(path) });
   }
-  return summarize(file.name, files);
+  const isOpenIv = file.name.toLowerCase().endsWith(".oiv");
+  const assemblyFiles = files.filter((item) => item.path.split("/").at(-1).toLowerCase() === "assembly.xml");
+  const packageInfo = {
+    containerFormat: isOpenIv ? "openiv-oiv" : "zip",
+    packageMetadata: isOpenIv ? {
+      type: "OpenIV OIV",
+      assemblyFiles: assemblyFiles.map((item) => item.path),
+      assemblyDetected: assemblyFiles.length > 0,
+      status: assemblyFiles.length > 0 ? "manifest-found" : "manifest-missing",
+      note: assemblyFiles.length > 0
+        ? "OpenIV package manifest found. Install instructions and target paths still require interpretation and PS4-specific mapping."
+        : "OIV container opened, but no assembly.xml manifest was found. Treat contents as an ordinary archive until verified.",
+    } : null,
+  };
+  return summarize(file.name, files, packageInfo);
 }
 
 export async function inspectFolderFiles(fileList) {
