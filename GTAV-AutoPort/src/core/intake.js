@@ -89,7 +89,7 @@ function summarize(sourceName, files, packageInfo = {}) {
 
 export async function inspectZipArchive(file) {
   if (!file || !/\.(zip|oiv)$/i.test(file.name || "")) {
-    throw new Error("Choose a ZIP or OpenIV OIV package. RAR and 7z support is not available in this build.");
+    throw new Error("Choose a ZIP or OpenIV OIV package. Use the local 7z extractor for .7z archives.");
   }
   const zip = await JSZip.loadAsync(file, { checkCRC32: true, createFolders: false });
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);
