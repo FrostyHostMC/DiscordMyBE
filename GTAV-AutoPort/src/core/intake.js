@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 const MAX_ENTRIES = 5000;
 const MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
@@ -35,6 +36,45 @@ function validateInventoryPaths(paths) {
     if (seen.has(key)) throw new Error(`Duplicate path (case-insensitive): ${path}`);
     seen.add(key);
   }
+}
+
+
+function inspectOpenIvAssembly(file) {
+  const xml = new TextDecoder("utf-8").decode(file.bytes);
+  const validation = XMLValidator.validate(xml);
+  if (validation !== true) {
+    return { path: file.path, validXml: false, error: validation.err?.msg || "Invalid XML", operations: [] };
+  }
+  const document = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", parseTagValue: false, trimValues: true }).parse(xml);
+  const metadata = document?.package?.metadata || document?.metadata || {};
+  const operations = [];
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      const tag = key.toLowerCase();
+      if (["add", "replace", "delete", "copy", "move"].includes(tag)) {
+        const entries = Array.isArray(child) ? child : [child];
+        for (const entry of entries) {
+          if (entry && typeof entry === "object") {
+            operations.push({ action: tag, attributes: Object.fromEntries(Object.entries(entry).filter(([name]) => name.startsWith("@_"))) });
+          } else operations.push({ action: tag, value: String(entry) });
+        }
+      }
+      if (child && typeof child === "object") visit(child);
+    }
+  };
+  visit(document);
+  const value = (entry) => typeof entry === "string" || typeof entry === "number" ? String(entry) : "";
+  return {
+    path: file.path,
+    validXml: true,
+    name: value(metadata.name),
+    version: value(metadata.version),
+    author: value(metadata.author),
+    description: value(metadata.description),
+    operations,
+    operationCount: operations.length,
+  };
 }
 
 function summarize(sourceName, files, packageInfo = {}) {
@@ -84,11 +124,13 @@ export async function inspectZipArchive(file) {
   }
   const isOpenIv = file.name.toLowerCase().endsWith(".oiv");
   const assemblyFiles = files.filter((item) => item.path.split("/").at(-1).toLowerCase() === "assembly.xml");
+  const assemblies = assemblyFiles.map(inspectOpenIvAssembly);
   const packageInfo = {
     containerFormat: isOpenIv ? "openiv-oiv" : "zip",
     packageMetadata: isOpenIv ? {
       type: "OpenIV OIV",
       assemblyFiles: assemblyFiles.map((item) => item.path),
+      assemblies,
       assemblyDetected: assemblyFiles.length > 0,
       status: assemblyFiles.length > 0 ? "manifest-found" : "manifest-missing",
       note: assemblyFiles.length > 0
