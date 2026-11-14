@@ -854,6 +854,8 @@ export interface BedrockRemake {
   playerWiringFiles?: Record<string, string>;
   /** Behaviour-pack activation script for clips whose Java trigger is one-shot logic. */
   playerScriptCode?: string;
+  /** Original player source clips already represented by retargeted bridge clips. */
+  playerSourceClipIds?: string[];
   /** Clip ids the animation stage intended to make playable (checked by the integration audit). */
   animationExpectedClips?: string[];
   /** Mandatory animation integration audit performed on the exported pack. */

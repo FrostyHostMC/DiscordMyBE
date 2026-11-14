@@ -169,6 +169,8 @@ function bridgePlayerRigClips(
 ): {
   clips: Record<string, BedrockAnimationClip>;
   clipIds: string[];
+  /** Original source identifiers represented by the retargeted player clips. */
+  sourceClipIds: string[];
   mappingCount: number;
   unmappedBones: string[];
   learnedAliases: number;
@@ -176,7 +178,7 @@ function bridgePlayerRigClips(
   const merged: Record<string, BedrockAnimationClip> = {};
   for (const ownerClips of Object.values(clipsByOwner)) Object.assign(merged, clipsWithMotion(ownerClips));
   if (Object.keys(merged).length === 0) {
-    return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -193,7 +195,7 @@ function bridgePlayerRigClips(
   const fit = mapClipsToPlayerSkeleton(merged, 'player-animation-bridge', 1, sourceParents);
   if (!fit) {
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
-    return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const auditExact = fit.rigAudit.filter((bone) => bone.status === 'exact').length;
   const auditVariant = fit.rigAudit.filter((bone) => bone.status === 'variant-compatible').length;
@@ -210,20 +212,24 @@ function bridgePlayerRigClips(
   if (hierarchy.transformed > 0) log(`[PLAYER-HIERARCHY] Parent-relative transforms recalculated for ${hierarchy.transformed} clip(s) across the Bedrock root → waist → body → limb hierarchy.`);
   for (const warning of hierarchy.warnings.slice(0, 8)) log(`[PLAYER-HIERARCHY] ${warning}`);
   const renamed: Record<string, BedrockAnimationClip> = {};
-  for (const [owner, ownerClips] of Object.entries(clipsByOwner)) {
-    for (const clipId of Object.keys(ownerClips)) {
-      const mapped = hierarchy.clips[clipId];
-      if (!mapped?.bones || Object.keys(mapped.bones).length === 0) continue;
-      const tail = safeFileId(clipId.split(/[.:/]+/).pop() ?? clipId) || 'clip';
-      const ownerSlug = safeFileId(owner) || 'source';
-      let id = `animation.player.${ownerSlug}.${tail}`;
-      let index = 2;
-      while (renamed[id]) {
-        id = `animation.player.${ownerSlug}.${tail}_${index}`;
-        index += 1;
-      }
-      renamed[id] = mapped;
+  const sourceClipIds: string[] = [];
+  // The bridge receives only owners already classified as player-owned. A source clip can
+  // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
+  // importer and once from universal discovery). Map each source identifier exactly once and
+  // give it one canonical player owner; iterating owner buckets here created duplicate copies.
+  for (const clipId of Object.keys(merged)) {
+    const mapped = hierarchy.clips[clipId];
+    if (!mapped?.bones || Object.keys(mapped.bones).length === 0) continue;
+    const tail = safeFileId(clipId.split(/[.:/]+/).pop() ?? clipId) || 'clip';
+    const ownerSlug = 'player';
+    let id = `animation.player.${ownerSlug}.${tail}`;
+    let index = 2;
+    while (renamed[id]) {
+      id = `animation.player.${ownerSlug}.${tail}_${index}`;
+      index += 1;
     }
+    renamed[id] = mapped;
+    sourceClipIds.push(clipId);
   }
   for (const mapping of fit.mappings.slice(0, 10)) {
     log(
@@ -271,6 +277,7 @@ function bridgePlayerRigClips(
   return {
     clips: renamed,
     clipIds: Object.keys(renamed),
+    sourceClipIds,
     mappingCount: fit.mappings.length,
     unmappedBones: fit.unmapped,
     learnedAliases: fit.learnedAliases,
@@ -343,6 +350,8 @@ export interface AnimationPortResult {
   geckolibBoundOwners?: string[];
   /** Clips mapped bone-for-bone onto the Bedrock player skeleton by the animation bridge. */
   playerRigClipsBridged?: number;
+  /** Source clip identifiers already represented by retargeted player-bridge clips. */
+  playerSourceClipIds?: string[];
   /** Number of source-to-Bedrock bone mappings applied by the player animation bridge. */
   playerRigBoneMappings?: number;
   /** Player bone names the bridge could not resolve (reported, never silently dropped). */
@@ -1352,6 +1361,7 @@ export function portMobAndPlayerAnimations(
     sourceClipIdsByMob,
     geckolibBoundOwners,
     playerRigClipsBridged: playerRigBridge.clipIds.length,
+    playerSourceClipIds: playerRigBridge.sourceClipIds,
     playerRigBoneMappings: playerRigBridge.mappingCount,
     playerRigUnmappedBones: playerRigBridge.unmappedBones,
     playerRigLearnedBoneAliases: playerRigBridge.learnedAliases,
