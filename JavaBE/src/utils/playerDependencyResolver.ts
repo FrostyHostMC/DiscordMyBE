@@ -3,6 +3,7 @@ import { translateMolangExpression } from '@/utils/molangCompatibility';
 import {
   FIRST_PERSON_GATE,
   PLAYER_BASELINE_ENTRIES,
+  PLAYER_BASELINE_PRE_ANIMATION,
   VANILLA_PLAYER_ANIMATE,
   VANILLA_PLAYER_ANIMATIONS,
   VANILLA_PLAYER_ANIMATION_IDS,
@@ -559,6 +560,23 @@ export function resolvePlayerDependencies(input: {
     : typeof scripts.pre_animation === 'string'
       ? [scripts.pre_animation]
       : [];
+
+  // Restore the live vanilla player values required by the baseline clips/controllers.
+  // These are source-derived formulas from the Mojang Bedrock player resource sample, not
+  // zero-valued placeholders: tcos0 drives locomotion and melee_spear_equipped selects
+  // the vanilla spear-specific animation branch.
+  for (const statement of PLAYER_BASELINE_PRE_ANIMATION) {
+    const variable = statement.match(/^variable\\.([a-zA-Z0-9_]+)\\s*=/)?.[1];
+    if (!variable) continue;
+    const alreadyDeclared = preAnimation.some((entry) =>
+      new RegExp(`\\\\bvariable\\\\.${variable}\\\\s*=`).test(entry),
+    );
+    if (!alreadyDeclared) {
+      preAnimation.push(statement);
+      report.variables.injected.push(statement);
+      report.variables.reconstructed += 1;
+    }
+  }
 
   // A Molang variable exists only inside the script scope that declares it. An assignment shipped
   // somewhere else in the archive — another entity, an attachable, a clip document — leaves the
