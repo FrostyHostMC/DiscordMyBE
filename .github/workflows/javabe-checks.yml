@@ -56,5 +56,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: javabe-pierced-current-engine
-          path: fixture-analysis/pierced-current-engine.json
+          path: fixture-analysis/
           if-no-files-found: warn
