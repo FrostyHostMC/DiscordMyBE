@@ -2,7 +2,7 @@ import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import { resolvePlayerBone } from '@/utils/playerBoneAliases';
 import { isControlBone } from '@/utils/boneAnatomy';
 import { composeTracks } from '@/utils/animationTrackMath';
-import { isBedrockPlayerBone } from '@/utils/playerSkeletonProfiles';
+import { auditPlayerRigBones, isBedrockPlayerBone, type PlayerRigBoneAudit } from '@/utils/playerSkeletonProfiles';
 import {
   recordUnmappedPlayerBones,
   type UnmappedBoneSuggestion,
@@ -38,6 +38,7 @@ export interface PlayerRigMappingResult {
   aliasSuggestions: UnmappedBoneSuggestion[];
   /** Conventions this clip set contributed to the shared alias table. */
   learnedAliases: number;
+  rigAudit: PlayerRigBoneAudit[];
 }
 
 /**
@@ -153,6 +154,7 @@ export function mapClipsToPlayerSkeleton(
   clips: Record<string, BedrockAnimationClip>,
   scope = 'player-animation-bridge',
   minimumMappedBones = 2,
+  sourceParents: Record<string, string> = {},
 ): PlayerRigMappingResult | null {
   let pass = applyMapping(clips);
   let aliasSuggestions: UnmappedBoneSuggestion[] = [];
@@ -174,5 +176,6 @@ export function mapClipsToPlayerSkeleton(
     auxiliaryBones: pass.auxiliary,
     aliasSuggestions,
     learnedAliases,
+    rigAudit: auditPlayerRigBones(Object.keys(clips).flatMap((clipId) => Object.keys(clips[clipId].bones ?? {})), sourceParents, Object.fromEntries([...pass.mappings].map(([source, mapping]) => [source, mapping.bone]))),
   };
 }

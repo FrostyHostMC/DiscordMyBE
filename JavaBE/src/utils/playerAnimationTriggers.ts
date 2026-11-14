@@ -2,7 +2,6 @@ import type { ExtractedZipEntry } from '@/utils/zip';
 import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import { identityTokens } from '@/utils/geckolibImporter';
 import { safeFileId } from '@/utils/bedrockIds';
-import { inferClipTrigger } from '@/utils/animationTriggerInference';
 
 /**
  * Java trigger → Bedrock condition bridge for player animation mods.
@@ -222,20 +221,8 @@ export function translatePlayerTriggers(options: {
     });
   }
 
-  // Structural recovery pass. A clip whose Java call site the archive never exposes is still a
-  // real animation, and its own bone channels/timing/identity are evidence for the state it
-  // belongs to. Binding it there is reported as an approximation — leaving it registered but
-  // unreachable is exactly the "no errors, nothing plays" defect this pass removes.
-  for (const trigger of triggers) {
-    if (trigger.status !== 'unresolved' || trigger.scriptDriven) continue;
-    const inferred = inferClipTrigger(trigger.clipId, options.clips[trigger.clipId]);
-    if (!inferred) continue;
-    trigger.concept = inferred.concept;
-    trigger.condition = inferred.condition || undefined;
-    trigger.status = 'approximated';
-    trigger.javaEvidence = `no Java call site recovered; ${inferred.evidence}`;
-    trigger.note = `Condition inferred from the clip's own structure (${inferred.confidence}); activation is an approximation to verify in game.`;
-  }
+  // No trigger is inferred from a clip name, duration, loop flag, or bone layout.
+  // If source code/data does not establish the activation condition, keep it unresolved.
 
   const report: PlayerTriggerReport = {
     clipsInspected: triggers.length,
