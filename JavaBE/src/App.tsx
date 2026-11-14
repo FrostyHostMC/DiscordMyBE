@@ -193,7 +193,7 @@ export default function App() {
 
   return (
     <div className={`javabe-app-shell min-h-screen w-full font-sans text-slate-100 ${stage === 'analyzing' || stage === 'generating' ? 'is-processing' : ''}`} style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
-      <div className="javabe-cosmic-backdrop" aria-hidden="true"><span className="javabe-cosmic-cloud javabe-cosmic-cloud--one" /><span className="javabe-cosmic-cloud javabe-cosmic-cloud--two" /><span className="javabe-cosmic-stars" /><span className="javabe-cosmic-horizon" /></div>
+      
       <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
         <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/30 bg-violet-400/10"><Cpu className="h-5 w-5" style={{ color: accent }} /></div><div className="min-w-0"><h1 className="truncate text-base font-bold tracking-tight text-white">{appName}</h1><p className="text-xs text-slate-400">Drop a mod archive; JavaBE scans, configures and builds it automatically.</p></div></div>
