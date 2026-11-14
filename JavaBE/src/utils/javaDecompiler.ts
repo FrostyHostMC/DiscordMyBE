@@ -1098,7 +1098,8 @@ export async function decompileAndInspectJarAsync(
   if (cached && cached.key === key) return cached.result;
   const allClassEntries = entries.filter((entry) => !entry.isDirectory && entry.path.toLowerCase().endsWith('.class'));
   const classEntries = classEntriesForScan(allClassEntries);
-  const omittedClasses = allClassEntries.filter(entry => !classEntries.includes(entry));
+  const selectedClassSet = new Set(classEntries);
+  const omittedClasses = allClassEntries.filter(entry => !selectedClassSet.has(entry));
   if (omittedClasses.length > 0) {
     options?.onProgress?.(classEntries.length, allClassEntries.length);
   }
