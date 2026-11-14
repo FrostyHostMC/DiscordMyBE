@@ -22,6 +22,8 @@ const EXTENSIONS = {
   ".xml": ["metadata", "XML configuration/metadata", "metadata-adapter-required"],
   ".ini": ["configuration", "INI configuration", "configuration-review"],
   ".cfg": ["configuration", "Configuration", "configuration-review"],
+  ".txt": ["documentation", "Mod documentation / instructions", "manual-review"],
+  ".md": ["documentation", "Markdown documentation", "manual-review"],
   ".json": ["configuration", "JSON configuration/manifest", "configuration-review"],
   ".toml": ["configuration", "TOML configuration", "configuration-review"],
   ".lua": ["script-source", "Lua script", "behavior-reimplementation-required"],
