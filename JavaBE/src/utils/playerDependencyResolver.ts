@@ -566,11 +566,9 @@ export function resolvePlayerDependencies(input: {
   // zero-valued placeholders: tcos0 drives locomotion and melee_spear_equipped selects
   // the vanilla spear-specific animation branch.
   for (const statement of PLAYER_BASELINE_PRE_ANIMATION) {
-    const variable = statement.match(/^variable\\.([a-zA-Z0-9_]+)\\s*=/)?.[1];
+    const variable = statement.slice('variable.'.length).split('=')[0]?.trim();
     if (!variable) continue;
-    const alreadyDeclared = preAnimation.some((entry) =>
-      new RegExp(`\\\\bvariable\\\\.${variable}\\\\s*=`).test(entry),
-    );
+    const alreadyDeclared = preAnimation.some((entry) => entry.includes(`variable.${variable} =`));
     if (!alreadyDeclared) {
       preAnimation.push(statement);
       report.variables.injected.push(statement);
