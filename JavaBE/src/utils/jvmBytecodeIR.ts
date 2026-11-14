@@ -9,6 +9,15 @@ export interface JvmConstantReference {
   name?: string;
   descriptor?: string;
   value?: string | number | bigint;
+  referenceKind?: number;
+  reference?: JvmConstantReference;
+  bootstrapIndex?: number;
+  bootstrapMethod?: JvmBootstrapMethod;
+}
+
+export interface JvmBootstrapMethod {
+  methodReference: JvmConstantReference | undefined;
+  arguments: JvmConstantReference[];
 }
 
 export interface JvmInstruction {
@@ -63,6 +72,7 @@ export interface JvmClassIR {
   fields: JvmFieldIR[];
   methods: JvmMethodIR[];
   references: JvmConstantReference[];
+  bootstrapMethods: JvmBootstrapMethod[];
   decodeWarnings: string[];
 }
 
@@ -80,6 +90,7 @@ export interface JvmArchiveAnalysisReport {
     fieldAccesses: number;
     exceptionHandlers: number;
     dynamicCallSites: number;
+    bootstrapMethods: number;
   };
   unresolvedClassFiles: string[];
   warnings: string[];
@@ -188,7 +199,10 @@ function cpRef(cp: Cp[], index: number): JvmConstantReference | undefined {
   } else if (item.tag === 1 || item.tag === 3 || item.tag === 4 || item.tag === 5 || item.tag === 6) {
     result.value = item.value;
   } else if (item.tag === 15) {
-    result.value = item.a ?? 0;
+    result.referenceKind = item.a ?? 0;
+    result.reference = cpRef(cp, item.b ?? 0);
+  } else if (item.tag === 17 || item.tag === 18) {
+    result.bootstrapIndex = item.a;
   } else if (item.tag === 16) {
     result.descriptor = cpUtf8(cp, item.a ?? 0);
   }
@@ -379,15 +393,35 @@ function parseClass(entry: ExtractedZipEntry): JvmClassIR {
       decodeWarnings: decoded.warnings,
     });
   }
-  // Class attributes (annotations, nest metadata, bootstrap methods, records, modules, etc.)
-  // are deliberately skipped by declared length; method bodies and linkage are preserved above.
+  // Resolve BootstrapMethods so invokedynamic sites (lambdas, method references and
+  // string-concat factories) retain the linkage handles and static bootstrap arguments.
+  const bootstrapMethods: JvmBootstrapMethod[] = [];
   for (let i = 0, count = r.u2(); i < count; i++) {
-    r.u2(); const length = r.u4(); r.skip(length);
+    const attributeName = cpUtf8(cp, r.u2()), length = r.u4(), end = r.offset + length;
+    if (attributeName === 'BootstrapMethods') {
+      const bootstrapCount = r.u2();
+      for (let index = 0; index < bootstrapCount; index++) {
+        const methodReference = cpRef(cp, r.u2());
+        const argumentCount = r.u2();
+        const args = Array.from({ length: argumentCount }, () => cpRef(cp, r.u2())).filter((value): value is JvmConstantReference => Boolean(value));
+        bootstrapMethods.push({ methodReference, arguments: args });
+      }
+    }
+    if (r.offset > end) throw new Error('Class attribute exceeded its declared length');
+    r.offset = end;
   }
   const references = cp.map((_, index) => cpRef(cp, index)).filter((value): value is JvmConstantReference => Boolean(value));
+  const attachBootstrap = (reference: JvmConstantReference | undefined) => {
+    if (reference?.bootstrapIndex !== undefined) reference.bootstrapMethod = bootstrapMethods[reference.bootstrapIndex];
+  };
+  for (const reference of references) attachBootstrap(reference);
+  for (const method of methods) {
+    for (const call of method.calls) attachBootstrap(call);
+    for (const instruction of method.instructions) attachBootstrap(instruction.constant);
+  }
   return {
     path: entry.path, name, superName, interfaces, access, majorVersion, minorVersion,
-    fields, methods, references,
+    fields, methods, references, bootstrapMethods,
     decodeWarnings: methods.flatMap((method) => method.decodeWarnings),
   };
 }
@@ -402,7 +436,7 @@ export async function analyzeJvmArchive(
   const totals = {
     classFiles: classEntries.length, parsedClasses: 0, malformedClasses: 0, methods: 0,
     methodsWithCode: 0, instructions: 0, basicBlocks: 0, methodCalls: 0,
-    fieldAccesses: 0, exceptionHandlers: 0, dynamicCallSites: 0,
+    fieldAccesses: 0, exceptionHandlers: 0, dynamicCallSites: 0, bootstrapMethods: 0,
   };
   const chunkSize = Math.max(1, options?.chunkSize ?? 16);
   for (let start = 0; start < classEntries.length; start += chunkSize) {
@@ -413,6 +447,7 @@ export async function analyzeJvmArchive(
         const parsed = parseClass(entry);
         classes.push(parsed);
         totals.parsedClasses++;
+        totals.bootstrapMethods += parsed.bootstrapMethods.length;
         for (const method of parsed.methods) {
           totals.methods++;
           if (method.codeLength > 0) totals.methodsWithCode++;
