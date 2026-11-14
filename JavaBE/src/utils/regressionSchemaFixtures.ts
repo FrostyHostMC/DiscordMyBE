@@ -2256,12 +2256,12 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     label: 'the source movement and direction calculations are restored in player Molang scope',
     expected: 'move speed, backward direction and turn delta expressions injected',
     actual: ['spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
-    passed: ['spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+    passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
   }, {
     label: 'the previous body yaw variable starts from the source initial value',
     expected: 'variable.spa_previous_body_yaw = 0.0 in initialize',
     actual: initialize.find((statement) => statement.startsWith('variable.spa_previous_body_yaw =')) ?? 'missing',
-    passed: initialize.some((statement) => statement.startsWith('variable.spa_previous_body_yaw = 0.0'))
+    passed: ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((statement) => statement.startsWith('variable.' + name + ' = 0.0')))
   }, {
     label: 'all reconstructed source variables pass the player dependency audit',
     expected: 'zero unresolved player variables',
