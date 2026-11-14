@@ -187,7 +187,7 @@ export default function App() {
             <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP / OIV / 7Z mod"}</button>
             <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
           </div>
-          <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
+          <span className="privacy-note">Files stay on this computer and are processed by the local AutoPort helper; nothing is uploaded to a remote service.</span>
         </div>
         <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>UNIVERSAL MOD PIPELINE</span></div>
       </section>
