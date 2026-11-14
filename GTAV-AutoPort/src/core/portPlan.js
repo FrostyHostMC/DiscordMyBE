@@ -21,6 +21,8 @@ const ROUTES = Object.freeze({
   ".gxt2": { family: "localized-text", stage: "metadata-analysis", source: "backend-required", target: "ps4-writer-missing", risk: "target-string-table-unverified" },
   ".meta": { family: "metadata", stage: "metadata-analysis", source: "xml-parser-available", target: "target-schema-unverified", risk: "metadata-reference-resolution" },
   ".xml": { family: "configuration", stage: "metadata-analysis", source: "xml-parser-available", target: "manual-schema-mapping", risk: "mod-specific-semantics" },
+  ".txt": { family: "documentation", stage: "documentation-review", source: "text-readable", target: "manual-install-instruction-review", risk: "PC-install-paths-may-not-match-PS4" },
+  ".md": { family: "documentation", stage: "documentation-review", source: "text-readable", target: "manual-install-instruction-review", risk: "PC-install-paths-may-not-match-PS4" },
   ".ini": { family: "configuration", stage: "configuration-analysis", source: "text-parser-required", target: "manual-mapping", risk: "mod-specific-semantics" },
   ".json": { family: "configuration", stage: "configuration-analysis", source: "json-parser-available", target: "manual-mapping", risk: "mod-specific-semantics" },
   ".lua": { family: "script-source", stage: "runtime-analysis", source: "source-review", target: "native-reimplementation-required", risk: "runtime-api-differences" },
