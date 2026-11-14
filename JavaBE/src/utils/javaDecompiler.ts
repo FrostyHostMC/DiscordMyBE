@@ -27,7 +27,7 @@ export function bytesToDataUrl(bytes: Uint8Array, mimeType = 'image/png'): strin
  * are state variants of an existing mob/item (e.g. kamikazeidle.png, gilbertambient.png,
  * sintaunt.png) — NOT standalone entities. Filtered everywhere registration happens.
  */
-const STATE_SUFFIX_RE = /(idle|walk|attack|ambient|taunt|scream|execute|reload|audio|sound|clank|death|die|dead|hurt|stun|enraged|enrage|block|phase\d*|shoot|aim|charge\d*|swing|crawl|sit|sleep|open|close|chainsaw|spawner|notinfected|infected|kill|roar|howl|growl)$/i;
+const STATE_SUFFIX_RE = /(idle|walk|run|attack|ambient|taunt|scream|execute|reload|death|die|dead|hurt|stun|enraged|enrage|block|phase\\d*|shoot|aim|charge\\d*|swing|crawl|sit|sleep|open|close|kill|roar|howl|growl)$/i;
 
 export interface ParsedClass {
   className: string;
@@ -700,7 +700,7 @@ export function decompileJavaMod(
   const seenLangIds = new Set<string>();
   const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|jade|waila|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
   // Reject UI/format strings that are not real item display names
-  const BAD_DISPLAY = /%[sdf0-9]|§|\u00a7|<-|->|:\s*%|\n|\r|%s|%d|_s\b|_d\b|\+|\bcommands?\b|\bargument\b|^name:|^type:|^registry name:|^release\b|^consume\b|^press\b|^hold\b|^sneak\b|^no\b|^to\b|^for\b|^requires\b|^when\b|^if\b|\bhealth\b|\binventory\b|\bspawned\b|\bmaze\b|\bcell\b|\bstinger back\b|\bgrow baby\b|\bpollinate\b|\bsubtitle\b|\btooltip\b|\b6honey\b|\bput stinger\b|\bheal 2\b|\bbaby to adult\b/i;
+  const BAD_DISPLAY = /%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|\\n|\\r|%s|%d|_s\\b|_d\\b|\\+|\\bcommands?\\b|\\bargument\\b|^name:|^type:|^registry name:|^release\\b|^consume\\b|^press\\b|^hold\\b|^sneak\\b|^no\\b|^to\\b|^for\\b|^requires\\b|^when\\b|^if\\b|\\bsubtitle\\b|\\btooltip\\b/i;
   const pushLang = (key: string, val: string, target: string[]) => {
     if (GENERIC_KEY.test(key)) return;
     const cleanKey = key.endsWith('.name') ? key.slice(0, -5) : key;
@@ -758,8 +758,8 @@ export function decompileJavaMod(
       if (!itemName || itemName.length < 3 || itemName.length > 32) continue;
       if (/recipe|screen|menu|container|gui|creative|_tab|advancement|_particle|sound|block_entity|tooltip|desc|info|message|hint|debug|stat|event|action|mode|state|subtitle/i.test(itemName)) continue;
       if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$|^[a-z]{1,2}$/i.test(itemName)) continue;
-      if (/^(to_|no_|consume_|press_|hold_|when_|if_|heal_|grow_|pollinate_|release_|name_|type_|registry_name_)/i.test(itemName)) continue;
-      if (/\b(health|inventory|stinger_back|grow_baby|pollinate|maze|cell_maze|new_compass|spawned|6honey_bottle|heal_2|put_stinger|baby_to_adult)\b/i.test(itemName)) continue;
+      // Keep unusual source identifiers; registration structure, not identifier wording, determines type.
+      // Source identifiers are preserved regardless of their names.
       if (itemName.split('_').length > 4) continue;
       if (STATE_SUFFIX_RE.test(itemName)) continue;
       const readable = itemName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -802,7 +802,7 @@ export function decompileJavaMod(
     const itemTexMatch = lower.match(/(?:^|\/)textures\/items?\/([^/]+)\.png$/);
     if (itemTexMatch) {
       const raw = itemTexMatch[1];
-      if (!/particle|overlay|layer|gui|slot|base|blank|empty|template|cell_maze|new_compass|6honey_bottle/i.test(raw) && !/^(to_|no_|consume_|release_|type_|registry_name_)/i.test(raw) && !STATE_SUFFIX_RE.test(raw)) {
+      // Source identifiers are preserved regardless of their names.
         const readable = raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         if (!registeredItems.some(i => i.toLowerCase() === readable.toLowerCase())) {
           registeredItems.push(readable);
