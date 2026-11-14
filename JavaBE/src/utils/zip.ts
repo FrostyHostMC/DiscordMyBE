@@ -562,7 +562,10 @@ export async function readZipArchive(
     let decompressed: Uint8Array;
 
     if (descriptor.compressionMethod === 0) {
-      decompressed = rawData.slice(0, descriptor.uncompressedSize || rawData.length);
+      // Stored ZIP entries already live inside the original archive buffer. Keep a
+      // view instead of copying every payload into a second allocation; this matters
+      // on iOS where a 150 MB JAR plus copied entries can exceed the WebView heap.
+      decompressed = rawData.subarray(0, descriptor.uncompressedSize || rawData.length);
     } else if (descriptor.compressionMethod === 8) {
       decompressed = await decompressDeflateRaw(rawData);
     } else {
