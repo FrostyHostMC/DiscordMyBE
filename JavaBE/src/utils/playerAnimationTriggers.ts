@@ -118,7 +118,7 @@ function scanJavaSignals(entries: ExtractedZipEntry[]): { classesScanned: number
  * uses these explicit identity tags, so keep trigger activation consistent with that contract.
  */
 function perspectiveOf(clipId: string): 'first' | 'third' {
-  return /first[_-]?person|firstperson|\\bfp\\b|view[_-]?model|item[_-]?in[_-]?hand|hand[_-]?pose|arm[_-]?pose/i.test(clipId)
+  return /first[_-]?person|firstperson|view[_-]?model|item[_-]?in[_-]?hand|hand[_-]?pose|arm[_-]?pose/i.test(clipId)
     ? 'first'
     : 'third';
 }
