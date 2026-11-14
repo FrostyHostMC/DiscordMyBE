@@ -12,6 +12,7 @@ import {
   CircleDollarSign,
 } from 'lucide-react';
 import App from '@/App.tsx';
+import { setJavaBEDownloadSession } from '@/utils/downloadDelivery';
 import './index.css';
 
 const clientId = import.meta.env.VITE_DISCORD_CLIENT_ID?.trim();
@@ -162,6 +163,7 @@ function JavaBEActivity() {
         }
 
         await sdk.commands.authenticate({ access_token: tokenData.access_token });
+        setJavaBEDownloadSession(tokenData.access_token, sdk);
 
         if (cancelled) return;
         setGate({ status: 'loading', message: 'Checking your Byte server access…' });
