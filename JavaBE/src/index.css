@@ -249,7 +249,12 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
   max-height: min(48svh, 24rem);
   object-fit: contain;
   object-position: center;
-  filter: drop-shadow(0 14px 38px rgba(0,0,0,.38));
+  /* Blend the existing GitHub artwork into the animated cloud backdrop instead of
+     presenting its square canvas as a separate tile. */
+  mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(ellipse 58% 54% at 50% 50%, #000 58%, transparent 100%);
+  mask-image: radial-gradient(ellipse 58% 54% at 50% 50%, #000 58%, transparent 100%);
+  filter: drop-shadow(0 14px 38px rgba(0,0,0,.28));
 }
 .javabe-launch-progress-card {
   position: relative;
