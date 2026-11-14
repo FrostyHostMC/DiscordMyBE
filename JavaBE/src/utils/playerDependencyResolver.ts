@@ -675,7 +675,7 @@ export function resolvePlayerDependencies(input: {
 
   // 5. First-person verification: functional only when the pose resolves AND is gated.
   const firstPersonBasePoseAlias = PLAYER_BASELINE_ENTRIES.find(
-    (entry) => entry.identifier === 'animation.player.first_person_base_pose',
+    (entry) => entry.identifier === 'animation.player.first_person.base_pose',
   )?.alias;
   const firstPersonAttackAlias = PLAYER_BASELINE_ENTRIES.find(
     (entry) => entry.identifier === 'controller.animation.player.first_person_attack',
