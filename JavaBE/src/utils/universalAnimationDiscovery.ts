@@ -923,7 +923,7 @@ export function runUniversalAnimationDiscovery(
       if (!text || (!text.includes('{') && !text.includes('['))) continue;
 
       // Universal pattern check for animation or geometry indicators
-      const hasAnimKeyword = /"(animations|minecraft:animations|animation_controllers|controllers|animators|bones|keyframes|state_machine|states|part_animations|poses)"\s*:/i.test(
+      const hasAnimKeyword = /"(animations|minecraft:animations|animation_controllers|controllers|animators|bones|keyframes|state_machine|states|part_animations|poses|parts|emote|bone_animations)"\s*:/i.test(
         text,
       );
       const hasGeoKeyword = /"(minecraft:geometry|geometry|outliner)"\s*:/i.test(text);
