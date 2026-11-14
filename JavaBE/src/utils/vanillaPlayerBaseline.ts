@@ -42,6 +42,8 @@ export const FIRST_PERSON_GATE = 'query.is_first_person';
  */
 export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
   'gliding_speed_value',
+  'short_arm_offset_left',
+  'short_arm_offset_right',
 ]);
 
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
