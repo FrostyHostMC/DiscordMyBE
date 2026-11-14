@@ -69,7 +69,7 @@ export const ENTITY_QUERIES = new Set([
   'is_sitting', 'is_powered', 'is_charged', 'is_crawling', 'is_eating', 'is_chested',
   'armor_slot_count', 'knockback_resistance', 'scale', 'get_equipped_item_name',
   'get_equipped_item_slot', 'delta_time', 'frame_alpha', 'all_animations_finished',
-  'any_animation_finished', 'is_delayed_attacking_bool', 'has_head_gear',
+  'any_animation_finished', 'is_delayed_attacking_bool', 'has_head_gear', 'equipped_item_any_tag',
 ]);
 
 /**
