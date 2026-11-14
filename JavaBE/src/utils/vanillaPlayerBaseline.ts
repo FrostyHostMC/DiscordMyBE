@@ -110,13 +110,13 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   // controllers, but it resolves to the real vanilla humanoid base-pose animation.
   { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null, animate: false },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
-  // The vanilla player maps look_at_target to a controller, not an animation clip.
-  { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
+  // The vanilla humanoid look-at pose is an animation, not an animation controller.
+  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
     alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person.base_pose',
+    identifier: 'animation.player.first_person_base_pose',
     kind: 'animation',
     gate: FIRST_PERSON_GATE,
   },
