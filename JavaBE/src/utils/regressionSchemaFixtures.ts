@@ -2222,9 +2222,9 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.0'
   }, {
     label: 'an animation resource pack alone cannot activate a Java source adapter',
-    expected: 'no source profile and all clips unresolved',
-    actual: assetOnlyReport.sourceProfile ?? `${assetOnlyReport.unresolved} unresolved clip(s)`,
-    passed: !assetOnlyReport.sourceProfile && assetOnlyReport.unresolved === assetOnlyReport.clipsInspected
+    expected: 'missing base Java JAR is identified; all clips remain unresolved',
+    actual: assetOnlyReport.sourceProfileCandidate ?? `${assetOnlyReport.unresolved} unresolved clip(s)`,
+    passed: !assetOnlyReport.sourceProfile && assetOnlyReport.sourceProfileCandidate?.includes('base Java mod JAR required') === true && assetOnlyReport.unresolved === assetOnlyReport.clipsInspected
   }, {
     label: 'all six supplied locomotion clips receive source-derived conditions',
     expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
