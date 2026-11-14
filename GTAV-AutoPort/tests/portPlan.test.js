@@ -15,7 +15,9 @@ test("builds a universal plan for multiple asset families", () => {
   assert.equal(plan.resources.find((item) => item.path.endsWith(".yft")).family, "fragment");
   assert.equal(plan.resources.find((item) => item.path.endsWith(".ymap")).family, "map-placement");
   assert.equal(plan.resources.find((item) => item.path.endsWith(".asi")).status, "behavior-reimplementation");
-  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).status, "manual-format-identification");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).family, "documentation");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).stage, "documentation-review");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).status, "analysis-or-authoring-only");
   assert.equal(plan.summary.installable, false);
 });
 
