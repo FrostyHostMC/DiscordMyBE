@@ -2217,9 +2217,9 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   ];
   const checks: RegressionAssertion[] = [{
     label: 'the Serious Player Animations resource namespace selects its known source profile',
-    expected: 'Serious Player Animations 1.1.0',
+    expected: 'Serious Player Animations 1.1.1',
     actual: triggerReport.sourceProfile ?? 'no source profile',
-    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.0'
+    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.1'
   }, {
     label: 'an animation resource pack alone cannot activate a Java source adapter',
     expected: 'missing base Java JAR is identified; all clips remain unresolved',
