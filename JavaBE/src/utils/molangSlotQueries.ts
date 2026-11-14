@@ -36,7 +36,7 @@ export function documentedSlotId(raw: string): string {
 }
 
 /** "Is this slot occupied?", expressed in a signature the destination accepts. */
-export function slotOccupancyExpression(slot: string): { expression: string; reason: string } {
+export function slotOccupancyExpression(slot: string): { expression: string; reason: string } | null {
   const id = documentedSlotId(slot);
   const handSlot = id === 'slot.weapon.mainhand'
     ? 'main_hand'
@@ -54,12 +54,9 @@ export function slotOccupancyExpression(slot: string): { expression: string; rea
     };
   }
 
-  // No generic occupancy query exists for armour slots. Do not fabricate an
-  // item-name test or invert an air test; callers must report this as unresolved.
-  return {
-    expression: `query.get_equipped_item_name('${id}', 0)`,
-    reason: `the ${id} slot is not a supported hand argument and cannot be safely translated`,
-  };
+  // get_equipped_item_name is hand-only. There is no evidence-backed generic occupancy
+  // expression for an arbitrary armour slot, so return null and let the caller report it.
+  return null;
 }
 
 /** Splits a call's argument list, ignoring commas inside quotes. */
