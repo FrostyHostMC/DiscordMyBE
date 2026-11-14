@@ -146,8 +146,9 @@ try {
   const wiring = result.playerEntityWiring;
   const triggers = result.playerTriggerReport;
   const playerPort = result.playerAnimationPort ?? null;
-  const unresolvedTrigger = triggers?.triggers.find((trigger) => trigger.status === 'unresolved');
-  const sourceRunningDefinition = result.playerSourceClipIds?.includes('animation.running') ?? false;
+  const unresolvedTrigger = triggers?.triggers.find((trigger) => trigger.sourceClipId === 'animation.running');
+  const javaRunningTrigger = triggers?.triggers.find((trigger) => trigger.sourceClipId === 'running');
+  const sourceRunningDefinition = Object.values(result.playerSourceClipIdByPlayerClipId ?? {}).includes('animation.running');
   const assertions = [
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
     { id: 'player-trigger-bridge-inspected-every-source-clip', expected: sourceClipIds.length, actual: triggers?.clipsInspected ?? 0, passed: Boolean(triggers && triggers.clipsInspected === sourceClipIds.length) },
@@ -155,7 +156,8 @@ try {
     { id: 'verified-serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.1', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
     { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
     { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
-    { id: 'unused-animation-running-definition-remains-unbound', expected: 1, actual: wiring?.unresolvedClips?.length ?? triggers?.unresolved ?? -1, passed: triggers?.unresolved === 1 && wiring?.unresolvedClips?.length === 1 && wiring.unresolvedClips.some((clipId) => clipId.includes('running_2')) },
+    { id: 'unused-animation.running-source-definition-remains-unbound', expected: 'source animation.running unresolved', actual: unresolvedTrigger?.status ?? 'missing', passed: sourceRunningDefinition && unresolvedTrigger?.status === 'unresolved' && Boolean(wiring?.unresolvedClips?.includes(unresolvedTrigger.clipId)) },
+    { id: 'java-running-resource-key-activates-the-correct-source-clip', expected: 'source key running mapped and controller-driven', actual: javaRunningTrigger?.clipId ?? 'missing', passed: javaRunningTrigger?.status === 'mapped' && Boolean(wiring?.controllerDrivenClips?.includes(javaRunningTrigger.clipId)) },
     { id: 'eight-source-used-clips-have-activation-paths', expected: 8, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 8 && wiring.controllerDrivenClips?.length === 8) },
     { id: 'base-and-overlay-player-controllers-are-separated', expected: '2 controller files; shield only in overlay', actual: `${controllerFiles.length} file(s), base=${baseControllerClips.length}, overlay=${overlayControllerClips.length}`, passed: controllerFiles.length === 2 && baseControllerClips.length === 6 && overlayControllerClips.length === 2 && overlayControllerClips.every((id) => id.includes('shield')) && !baseControllerClips.some((id) => id.includes('shield')) },
     { id: 'source movement state variables are reconstructed in player scope', expected: sourceMovementVariables.join(', '), actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).join(', '), passed: sourceMovementVariables.every((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))) && ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((line) => line.startsWith('variable.' + name + ' = 0.0'))) },
@@ -175,6 +177,7 @@ try {
     sourceEvidence: 'McVader34/Serious-Player-Animations@2dc73ceb744a4fb861437b51f1fe6c95ca4ac902',
     sourceClipIds,
     playerSourceClipIds: result.playerSourceClipIds ?? [],
+    playerSourceClipIdByPlayerClipId: result.playerSourceClipIdByPlayerClipId ?? {},
     emittedClipIds,
     playerEntity: playerPath ?? null,
     playerWiring: wiring ?? null,

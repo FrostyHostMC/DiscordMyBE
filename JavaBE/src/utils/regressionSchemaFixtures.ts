@@ -2168,10 +2168,16 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     loop: true,
     bones: {},
   }])) as any;
+  const sourceClipIdsByClipId = Object.fromEntries(clipIds.map((id) => [
+    id,
+    id === 'animation.running' ? 'animation.running' :
+      id === 'animation.seriousplayeranimations.running' ? 'running' :
+        (id.split(/[.:/]+/).pop() ?? id),
+  ]));
   const assetOnlyEntries = [
     fixtureText('assets/seriousplayeranimations/player_animation/idle_standing.json', '{}'),
   ];
-  const assetOnlyReport = translatePlayerTriggers({ clips, archiveEntries: assetOnlyEntries });
+  const assetOnlyReport = translatePlayerTriggers({ clips, archiveEntries: assetOnlyEntries, sourceClipIdsByClipId });
   const archiveEntries = [
     ...assetOnlyEntries,
     fixtureText('fabric.mod.json', JSON.stringify({ id: 'seriousplayeranimations', version: '1.1.0' })),
@@ -2180,12 +2186,14 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
       'reloadAnimationVariables moveSpeed isMovingBackwards prevbyaw ShieldItem walking_sneak',
     ),
   ];
-  const triggerReport = translatePlayerTriggers({ clips, archiveEntries });
+  const triggerReport = translatePlayerTriggers({ clips, archiveEntries, sourceClipIdsByClipId });
   const triggerFor = (name: string) => triggerReport.triggers.find(
     (trigger) => trigger.clipId === `animation.seriousplayeranimations.${name}`,
   );
   const shieldTrigger = triggerFor('shield');
   const shieldSneakTrigger = triggerFor('shield_sneak');
+  const unusedRunningTrigger = triggerReport.triggers.find((trigger) => trigger.sourceClipId === 'animation.running');
+  const javaRunningTrigger = triggerReport.triggers.find((trigger) => trigger.sourceClipId === 'running');
   const controller = synthesizePlayerAnimationController({
     modId: 'seriousplayeranimations',
     clips,
@@ -2281,8 +2289,8 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'the extra animation.running definition is not falsely activated',
     expected: 'unreferenced source definition remains unresolved',
-    actual: triggerReport.triggers.find((trigger) => trigger.clipId === 'animation.running')?.status ?? 'missing',
-    passed: triggerReport.triggers.find((trigger) => trigger.clipId === 'animation.running')?.status === 'unresolved'
+    actual: `unused=${unusedRunningTrigger?.status ?? 'missing'}; java-running=${javaRunningTrigger?.status ?? 'missing'}`,
+    passed: unusedRunningTrigger?.status === 'unresolved' && javaRunningTrigger?.status === 'mapped'
   }, {
     label: 'shield clips retain their separate overlay layer',
     expected: 'shield and shield_sneak are overlay triggers',
@@ -2299,7 +2307,9 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     actual: `base=${baseStateClips.length}, overlay=${overlayStateClips.length}`,
     passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(`animation.seriousplayeranimations.${name}`)) &&
       shieldIds.every((id) => overlayStateClips.includes(id)) &&
-      shieldIds.every((id) => !baseStateClips.includes(id))
+      shieldIds.every((id) => !baseStateClips.includes(id)) &&
+      Boolean(javaRunningTrigger && baseStateClips.includes(javaRunningTrigger.clipId)) &&
+      Boolean(unusedRunningTrigger && !baseStateClips.includes(unusedRunningTrigger.clipId))
   }, {
     label: 'all source-derived movement expressions are accepted in Bedrock player Molang scope',
     expected: 'all eight expressions have no unresolved or rejected query references',

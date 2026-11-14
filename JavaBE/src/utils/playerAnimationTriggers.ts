@@ -25,6 +25,8 @@ export type PlayerTriggerStatus = 'mapped' | 'approximated' | 'script-driven' | 
 
 export interface PlayerClipTrigger {
   clipId: string;
+  /** Exact source-document key before canonical Bedrock identifier normalization. */
+  sourceClipId?: string;
   /** Short name registered in the player client entity's `animations` map. */
   shortName: string;
   /** Java-side concept the trigger was recovered from. */
@@ -197,9 +199,11 @@ function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolea
 function seriousPlayerAnimationTrigger(
   clipId: string,
   shortName: string,
+  sourceClipId: string,
 ): PlayerClipTrigger | null {
   const lower = clipId.toLowerCase();
-  const tail = lower.split(/[.:/]+/).pop() ?? lower;
+  const sourceLower = sourceClipId.toLowerCase();
+  const tail = sourceLower.split(/[.:/]+/).pop() ?? sourceLower;
   const evidence = 'McVader34/Serious-Player-Animations 1.1.1 upstream source (JAR metadata version 1.1.0): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
   const move = 'variable.spa_move_speed';
   const backwards = 'variable.spa_moving_backwards';
@@ -207,13 +211,14 @@ function seriousPlayerAnimationTrigger(
   const shieldHeld = "(query.is_item_name_any('slot.weapon.mainhand', 'minecraft:shield') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:shield'))";
   const base = {
     clipId,
+    sourceClipId,
     shortName,
     javaEvidence: evidence,
     scriptDriven: false,
     perspective: 'third' as const,
   };
 
-  if (/(^|[.:/])animation\.running$/.test(lower)) {
+  if (sourceLower === 'animation.running' || sourceLower.endsWith('.animation.running')) {
     return {
       ...base,
       concept: 'unreferenced-source-definition',
@@ -301,6 +306,8 @@ function seriousPlayerAnimationTrigger(
 export function translatePlayerTriggers(options: {
   clips: Record<string, BedrockAnimationClip>;
   archiveEntries?: ExtractedZipEntry[];
+  /** Exact imported clip id -> original key in the source animation document. */
+  sourceClipIdsByClipId?: Record<string, string>;
   mainhandItemIds?: string[];
   onLog?: (line: string) => void;
 }): PlayerTriggerReport {
@@ -314,6 +321,7 @@ export function translatePlayerTriggers(options: {
   const itemIds = options.mainhandItemIds ?? [];
 
   for (const [clipId, clip] of Object.entries(options.clips)) {
+    const sourceClipId = options.sourceClipIdsByClipId?.[clipId] ?? clipId;
     const tail = clipId.split(/[.:/]+/).pop() ?? clipId;
     const base = safeFileId(tail) || 'clip';
     let shortName = `ported_${base}`;
@@ -332,7 +340,7 @@ export function translatePlayerTriggers(options: {
     const perspective = perspectiveOf(clipId);
 
     if (seriousPlayerProfile) {
-      const sourceTrigger = seriousPlayerAnimationTrigger(clipId, shortName);
+      const sourceTrigger = seriousPlayerAnimationTrigger(clipId, shortName, sourceClipId);
       if (sourceTrigger) {
         triggers.push(sourceTrigger);
         continue;
@@ -342,6 +350,7 @@ export function translatePlayerTriggers(options: {
     if (!concept) {
       triggers.push({
         clipId,
+        sourceClipId,
         shortName,
         concept: 'unclassified',
         javaEvidence: 'no Java condition correlated with this clip',
@@ -358,6 +367,7 @@ export function translatePlayerTriggers(options: {
       if (!evidencePath) {
         triggers.push({
           clipId,
+          sourceClipId,
           shortName,
           concept: concept.concept,
           javaEvidence: `${concept.java.source} not found in archive bytecode; clip name alone is insufficient`,
@@ -370,6 +380,7 @@ export function translatePlayerTriggers(options: {
       }
       triggers.push({
         clipId,
+        sourceClipId,
         shortName,
         concept: concept.concept,
         javaEvidence: evidencePath,
@@ -388,6 +399,7 @@ export function translatePlayerTriggers(options: {
     const correlatedOnly = !evidencePath;
     triggers.push({
       clipId,
+      sourceClipId,
       shortName,
       concept: concept.concept,
       condition,

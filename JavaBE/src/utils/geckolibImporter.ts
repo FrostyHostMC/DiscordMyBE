@@ -271,6 +271,8 @@ export interface GeckolibImportResult {
   files: GeckolibSourceFile[];
   /** Owner key → translated Bedrock clips. */
   clipsByOwner: Record<string, Record<string, BedrockAnimationClip>>;
+  /** Translated clip id -> exact key from the source animation document, grouped by owner. */
+  sourceClipIdsByOwner?: Record<string, Record<string, string>>;
   owners: string[];
   sourcePathsByOwner: Record<string, string[]>;
   /** Files carrying clips that no owner claimed. */
@@ -343,6 +345,7 @@ export function importGeckolibAnimations(
   };
   const files: GeckolibSourceFile[] = [];
   const clipsByOwner: Record<string, Record<string, BedrockAnimationClip>> = {};
+  const sourceClipIdsByOwner: Record<string, Record<string, string>> = {};
   const owners: string[] = [];
   const sourcePathsByOwner: Record<string, string[]> = {};
   const unattributedFiles: Record<string, string> = {};
@@ -386,6 +389,9 @@ export function importGeckolibAnimations(
     stats.molangValuesTranslated += molangCounter.count;
 
     const translation = translateJavaAnimationSet(prepared, { fileHint: fileOwner || modKey });
+    const sourceIdByTranslatedId = new Map(
+      Object.entries(translation.idMap).map(([sourceId, translatedId]) => [translatedId, sourceId]),
+    );
     stats.filesParsed += 1;
     stats.channels += translation.stats.channels;
     stats.keyframes += translation.stats.keyframes;
@@ -419,6 +425,9 @@ export function importGeckolibAnimations(
         owners.push(owner);
       }
       clipsByOwner[owner][clipId] = clip;
+      const ownerSourceIds = sourceClipIdsByOwner[owner] ?? {};
+      ownerSourceIds[clipId] = sourceIdByTranslatedId.get(clipId) ?? clipId;
+      sourceClipIdsByOwner[owner] = ownerSourceIds;
       const ownerPaths = sourcePathsByOwner[owner] ?? [];
       if (!ownerPaths.includes(path)) ownerPaths.push(path);
       sourcePathsByOwner[owner] = ownerPaths;
@@ -458,7 +467,7 @@ export function importGeckolibAnimations(
     logLine('[GECKOLIB] No GeckoLib / Java animation documents found in the archive — nothing to import (reported, not invented).');
   }
 
-  return { dependency, stats, files, clipsByOwner, owners, sourcePathsByOwner, unattributedFiles, log };
+  return { dependency, stats, files, clipsByOwner, sourceClipIdsByOwner, owners, sourcePathsByOwner, unattributedFiles, log };
 }
 
 /** Re-binds imported clips onto the bones the shipped geometry actually declares. */

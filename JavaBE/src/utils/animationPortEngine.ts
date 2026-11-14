@@ -171,14 +171,23 @@ function bridgePlayerRigClips(
   clipIds: string[];
   /** Original source identifiers represented by the retargeted player clips. */
   sourceClipIds: string[];
+  /** Exact raw source-document key for each retargeted player animation id. */
+  sourceClipIdByPlayerClipId: Record<string, string>;
   mappingCount: number;
   unmappedBones: string[];
   learnedAliases: number;
 } {
   const merged: Record<string, BedrockAnimationClip> = {};
-  for (const ownerClips of Object.values(clipsByOwner)) Object.assign(merged, clipsWithMotion(ownerClips));
+  const sourceClipIdByMergedClipId: Record<string, string> = {};
+  for (const [owner, ownerClips] of Object.entries(clipsByOwner)) {
+    const usable = clipsWithMotion(ownerClips);
+    Object.assign(merged, usable);
+    for (const clipId of Object.keys(usable)) {
+      sourceClipIdByMergedClipId[clipId] = sourceClipIdsByOwner[owner]?.[clipId] ?? clipId;
+    }
+  }
   if (Object.keys(merged).length === 0) {
-    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -213,6 +222,7 @@ function bridgePlayerRigClips(
   for (const warning of hierarchy.warnings.slice(0, 8)) log(`[PLAYER-HIERARCHY] ${warning}`);
   const renamed: Record<string, BedrockAnimationClip> = {};
   const sourceClipIds: string[] = [];
+  const sourceClipIdByPlayerClipId: Record<string, string> = {};
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
@@ -230,6 +240,7 @@ function bridgePlayerRigClips(
     }
     renamed[id] = mapped;
     sourceClipIds.push(clipId);
+    sourceClipIdByPlayerClipId[id] = sourceClipIdByMergedClipId[clipId] ?? clipId;
   }
   for (const mapping of fit.mappings.slice(0, 10)) {
     log(
@@ -278,6 +289,7 @@ function bridgePlayerRigClips(
     clips: renamed,
     clipIds: Object.keys(renamed),
     sourceClipIds,
+    sourceClipIdByPlayerClipId,
     mappingCount: fit.mappings.length,
     unmappedBones: fit.unmapped,
     learnedAliases: fit.learnedAliases,
@@ -352,6 +364,8 @@ export interface AnimationPortResult {
   playerRigClipsBridged?: number;
   /** Source clip identifiers already represented by retargeted player-bridge clips. */
   playerSourceClipIds?: string[];
+  /** Exact raw source-document key for each retargeted player animation id. */
+  playerSourceClipIdByPlayerClipId?: Record<string, string>;
   /** Number of source-to-Bedrock bone mappings applied by the player animation bridge. */
   playerRigBoneMappings?: number;
   /** Player bone names the bridge could not resolve (reported, never silently dropped). */
@@ -513,7 +527,12 @@ export function portMobAndPlayerAnimations(
   // 2a. Granular Java-bone mapping layer: bind the mod's own player-rig clips to verified
   // Bedrock bones. Evidence-gated per-clip bindings drive them; no generic state controller
   // guesses which source clip means idle, move, attack or hurt.
-  const playerRigBridge = bridgePlayerRigClips(rigClassification.playerClipsByOwner, log, additionalAnimations.discoveryReport?.skeletons ?? []);
+  const playerRigBridge = bridgePlayerRigClips(
+    rigClassification.playerClipsByOwner,
+    log,
+    additionalAnimations.discoveryReport?.skeletons ?? [],
+    geckolib.sourceClipIdsByOwner ?? {},
+  );
   if (playerRigBridge.clipIds.length === 0) {
     log(
       '[OWNERSHIP] No clip is mapped onto the Bedrock player skeleton: no player class, player-only API, or explicit player source-rig evidence proved an owner for this clip set.',
@@ -558,6 +577,7 @@ export function portMobAndPlayerAnimations(
       .map((it) => `${modId}:${it.id}`);
     const triggerReport = translatePlayerTriggers({
       clips: playerRigBridge.clips,
+      sourceClipIdsByClipId: playerRigBridge.sourceClipIdByPlayerClipId,
       archiveEntries,
       mainhandItemIds,
       onLog: log,
@@ -1362,6 +1382,7 @@ export function portMobAndPlayerAnimations(
     geckolibBoundOwners,
     playerRigClipsBridged: playerRigBridge.clipIds.length,
     playerSourceClipIds: playerRigBridge.sourceClipIds,
+    playerSourceClipIdByPlayerClipId: playerRigBridge.sourceClipIdByPlayerClipId,
     playerRigBoneMappings: playerRigBridge.mappingCount,
     playerRigUnmappedBones: playerRigBridge.unmappedBones,
     playerRigLearnedBoneAliases: playerRigBridge.learnedAliases,
