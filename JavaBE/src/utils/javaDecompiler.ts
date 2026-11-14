@@ -972,7 +972,7 @@ export function decompileJavaMod(
   }).filter(Boolean);
   const iconBytes = foundIconEntry ? foundIconEntry.data : null;
   const classSummaries: DecompileClassSummary[] = parsedClasses.map(c => ({
-    className: c.className.split('.').pop() ?? c.className,
+    className: c.className.split('.').pop() ?? c.className,\n    qualifiedClassName: c.className,
     // Inheritance and the namespaced identifiers a class declares are the evidence the item
     // semantics engine reads. Neither is a name-based guess: both come from the class file.
     superName: c.superName,
@@ -1113,9 +1113,9 @@ export async function decompileAndInspectJarAsync(
     chunkSize,
     onProgress: (done, total) => options?.onProgress?.(done, total),
   });
-  const byClass = new Map(jvm.classes.map((item) => [item.name.split('.').pop() ?? item.name, item]));
+  const byClass = new Map(jvm.classes.map((item) => [item.name, item]));
   result.stats.classes = result.stats.classes.map((summary) => {
-    const detail = byClass.get(summary.className);
+    const detail = byClass.get(summary.qualifiedClassName ?? summary.className);
     if (!detail) return summary;
     const methodNames = detail.methods.map((method) => method.name);
     const callEvidence = detail.methods.flatMap((method) => method.calls.map((call) =>
@@ -1134,7 +1134,7 @@ export async function decompileAndInspectJarAsync(
       signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
     };
   });
-  (result.stats as DecompileStats & { jvmAnalysis?: typeof jvm }).jvmAnalysis = jvm;
+  result.stats.jvmAnalysis = jvm;
   inspectionCache.set(entries, { key, result });
   return result;
 }
