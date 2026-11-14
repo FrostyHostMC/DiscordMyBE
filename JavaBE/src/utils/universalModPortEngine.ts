@@ -19,51 +19,20 @@ export interface UniversalPortResult {
 }
 
 const PALETTES = {
-  honey: ['#f59e0b', '#fbbf24', '#d97706', '#78350f'],
-  leather: ['#854d0e', '#a16207', '#713f12', '#451a03'],
-  iron: ['#94a3b8', '#cbd5e1', '#64748b', '#334155'],
-  diamond: ['#06b6d4', '#22d3ee', '#0891b2', '#164e63'],
-  netherite: ['#3f3f46', '#27272a', '#52525b', '#18181b'],
-  ender: ['#0d9488', '#14b8a6', '#581c87', '#0f172a'],
-  nature: ['#10b981', '#34d399', '#059669', '#064e3b'],
-  ruby: ['#ef4444', '#f87171', '#b91c1c', '#7f1d1d'],
-  magic: ['#8b5cf6', '#a78bfa', '#6d28d9', '#4c1d95'],
-  gold: ['#eab308', '#facc15', '#ca8a04', '#713f12'],
-  slate: ['#64748b', '#94a3b8', '#475569', '#1e293b'],
-  copper: ['#c2703e', '#e08c52', '#8a4d24', '#5c2f14'],
-  energy: ['#f97316', '#fbbf24', '#ea580c', '#7c2d12'],
-  fluid: ['#38bdf8', '#7dd3fc', '#0284c7', '#0c4a6e'],
+  neutral: ['#64748b', '#94a3b8', '#475569', '#1e293b'],
 };
 
-function selectPalette(name: string): string[] {
-  const lower = name.toLowerCase();
-  if (lower.includes('honey') || lower.includes('sugar') || lower.includes('jelly') || lower.includes('bee')) return PALETTES.honey;
-  if (lower.includes('leather') || lower.includes('wood') || lower.includes('bark')) return PALETTES.leather;
-  if (lower.includes('diamond') || lower.includes('cyan') || lower.includes('crystal')) return PALETTES.diamond;
-  if (lower.includes('netherite') || lower.includes('obsidian') || lower.includes('dark')) return PALETTES.netherite;
-  if (lower.includes('ender') || lower.includes('void') || lower.includes('teleport')) return PALETTES.ender;
-  if (lower.includes('plant') || lower.includes('root') || lower.includes('leaf') || lower.includes('slime')) return PALETTES.nature;
-  if (lower.includes('red') || lower.includes('blood') || lower.includes('fire') || lower.includes('ruby')) return PALETTES.ruby;
-  if (lower.includes('magic') || lower.includes('arcane') || lower.includes('spell') || lower.includes('rune')) return PALETTES.magic;
-  if (lower.includes('gold') || lower.includes('sun') || lower.includes('queen') || lower.includes('crown')) return PALETTES.gold;
-  if (lower.includes('iron') || lower.includes('steel') || lower.includes('metal')) return PALETTES.iron;
-  if (lower.includes('copper') || lower.includes('bronze') || lower.includes('brass')) return PALETTES.copper;
-  if (lower.includes('energy') || lower.includes('power') || lower.includes('reactor') || lower.includes('dynamo') || lower.includes('solar') || lower.includes('battery') || lower.includes('generator')) return PALETTES.energy;
-  if (lower.includes('fluid') || lower.includes('water') || lower.includes('oil') || lower.includes('molten') || lower.includes('liquid')) return PALETTES.fluid;
-  return PALETTES.slate;
+/** Neutral presentation fallback only; source textures remain the authoritative appearance. */
+function selectPalette(_name: string): string[] {
+  return PALETTES.neutral;
 }
 
 function isValidDisplayName(name: string): boolean {
-  if (!name || name.length < 3 || name.length > 32) return false;
-  if (/%[sdf0-9]|§|\u00a7|<-|->|:\s*%|\n|\r|%s|%d|_s\b|_d\b|\+/i.test(name)) return false;
-  if (/^(name:|type:|registry name:|release\b|consume\b|press\b|hold\b|sneak\b|no\b|to\b|for\b|requires\b|when\b|if\b)/i.test(name)) return false;
-  if (/^(Release|Consume|No|To|For|Requires|When|If|Press|Hold|Sneak|Name|Type|Registry)\b/i.test(name)) return false;
-  if (/\b(health|inventory|stinger back|grow baby|pollinate|maze|cell maze|new compass|spawned|subtitle|tooltip|advancement|criteria)\b/i.test(name)) return false;
-  if (/\b(baby to adult|heal 2|put stinger|6honey)\b/i.test(name)) return false;
-  if (/\b[a-z0-9]_[a-z0-9]\b|_s\b|_d\b|\b[A-Z]\s+[S|D]$/i.test(name)) return false;
-  if (/^[a-z]/.test(name)) return false;
-  if (/ - |:\s+|\.\s|!\s|\?\s|_/.test(name)) return false;
-  if (name.split(' ').length > 4) return false;
+  // Validate encoding/format only. Do not reject real source content because its name
+  // resembles a known item, mechanic, material, mob or another mod's identifier.
+  if (!name || name.length > 128) return false;
+  if (/[\u0000-\u001f\u007f]/.test(name)) return false;
+  if (/%[sdf0-9]|§|\u00a7|<-|->|:\s*%|\n|\r/i.test(name)) return false;
   return true;
 }
 

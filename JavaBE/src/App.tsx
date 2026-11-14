@@ -44,8 +44,8 @@ export default function App() {
   const hapticsEnabled = false;
   const configuredUpscaling = true;
   const [upscalingEnabled, setUpscalingEnabled] = useState(() => configuredUpscaling && getAutoUpscaleLegacyTextures());
-  const [targetVersion, setTargetVersion] = useState<BedrockVersionTarget>('1.21.50');
-  const [experimentConfig, setExperimentConfig] = useState<BedrockExperimentConfig>({ targetVersion: '1.21.50', enableBetaApis: true, enableCameras: true, enableCustomUi: true, enableVoxelShapes: true, enableUpcomingCreatorFeatures: true, enablePbr: false, enableScriptEval: false });
+  const [targetVersion, setTargetVersion] = useState<BedrockVersionTarget>('1.26.63');
+  const [experimentConfig, setExperimentConfig] = useState<BedrockExperimentConfig>({ targetVersion: '1.26.63', enableBetaApis: true, enableCameras: true, enableCustomUi: true, enableVoxelShapes: true, enableUpcomingCreatorFeatures: true, enablePbr: false, enableScriptEval: false });
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>('convert');
   const [activeTab, setActiveTab] = useState<AppTab>('deterministic');
   const [brief, setBrief] = useState('');
@@ -129,6 +129,12 @@ export default function App() {
         });
         setInspectionStats(inspection.stats);
         appendLog(`[SCAN] ${inspection.stats.modName} (${inspection.stats.version}): ${inspection.stats.classesCount} classes, ${inspection.stats.texturesCount} textures, ${inspection.stats.modelsCount} models.`);
+        const jvm = inspection.stats.jvmAnalysis;
+        if (jvm) {
+          appendLog(`[JVM-IR] Parsed ${jvm.totals.parsedClasses}/${jvm.totals.classFiles} class files; ${jvm.totals.methods} methods (${jvm.totals.methodsWithCode} with bodies), ${jvm.totals.instructions} instructions, ${jvm.totals.basicBlocks} control-flow blocks.`);
+          appendLog(`[JVM-IR] Recovered ${jvm.totals.methodCalls} method-call references, ${jvm.totals.fieldAccesses} field accesses, ${jvm.totals.exceptionHandlers} exception handlers and ${jvm.totals.bootstrapMethods} invokedynamic bootstrap methods; ${jvm.totals.malformedClasses} malformed class files.`);
+          if (!jvm.complete) appendLog(`[JVM-IR] Diagnostics: ${jvm.warnings.length} warning(s), ${jvm.unresolvedClassFiles.length} unreadable class file(s). Conversion continues with available evidence.`);
+        }
         // Second frame hand-back before the conversion engine starts its own long passes.
         await pauseForUi(24);
       }

@@ -2,7 +2,8 @@ import assetsData from "@/config/assets";
 import type { DecompileClassSummary, DecompileStats } from '@/types/remaker';
 import type { ExtractedZipEntry } from '@/utils/zip';
 import { isGhostEntityName } from '@/utils/ghostEntityFilter';
-import { CLASS_SCAN_BYTE_BUDGET, yieldToUi } from '@/utils/archiveScale';
+import { yieldToUi } from '@/utils/archiveScale';
+import { analyzeJvmArchive } from '@/utils/jvmBytecodeIR';
 export interface SourceTextureEntry {
   name: string;
   data: Uint8Array;
@@ -24,10 +25,10 @@ export function bytesToDataUrl(bytes: Uint8Array, mimeType = 'image/png'): strin
 }
 /**
  * Animation/audio/pose state suffixes. Texture or registry names ending with these
- * are state variants of an existing mob/item (e.g. kamikazeidle.png, gilbertambient.png,
- * sintaunt.png) — NOT standalone entities. Filtered everywhere registration happens.
+ * are state variants of an existing mob/item, not standalone entities. Filtered wherever
+ * registration evidence is collected.
  */
-const STATE_SUFFIX_RE = /(idle|walk|attack|ambient|taunt|scream|execute|reload|audio|sound|clank|death|die|dead|hurt|stun|enraged|enrage|block|phase\d*|shoot|aim|charge\d*|swing|crawl|sit|sleep|open|close|chainsaw|spawner|notinfected|infected|kill|roar|howl|growl)$/i;
+const STATE_SUFFIX_RE = /(idle|walk|run|attack|ambient|taunt|scream|execute|reload|death|die|dead|hurt|stun|enraged|enrage|block|phase\d*|shoot|aim|charge\d*|swing|crawl|sit|sleep|open|close|kill|roar|howl|growl)$/i;
 
 export interface ParsedClass {
   className: string;
@@ -698,9 +699,10 @@ export function decompileJavaMod(
   const registeredEntities: string[] = [];
   const spawnableEntities: string[] = [];
   const seenLangIds = new Set<string>();
-  const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|jade|waila|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
-  // Reject UI/format strings that are not real item display names
-  const BAD_DISPLAY = /%[sdf0-9]|§|\u00a7|<-|->|:\s*%|\n|\r|%s|%d|_s\b|_d\b|\+|\bcommands?\b|\bargument\b|^name:|^type:|^registry name:|^release\b|^consume\b|^press\b|^hold\b|^sneak\b|^no\b|^to\b|^for\b|^requires\b|^when\b|^if\b|\bhealth\b|\binventory\b|\bspawned\b|\bmaze\b|\bcell\b|\bstinger back\b|\bgrow baby\b|\bpollinate\b|\bsubtitle\b|\btooltip\b|\b6honey\b|\bput stinger\b|\bheal 2\b|\bbaby to adult\b/i;
+  const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
+  // Reject only malformed/control/format-placeholder values. Display wording is
+  // intentionally not blacklisted: valid mod content may use any word or phrase.
+  const BAD_DISPLAY = /%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|[\\u0000-\\u001f]/i;
   const pushLang = (key: string, val: string, target: string[]) => {
     if (GENERIC_KEY.test(key)) return;
     const cleanKey = key.endsWith('.name') ? key.slice(0, -5) : key;
@@ -755,12 +757,12 @@ export function decompileJavaMod(
     const match = str.match(/^([a-z0-9_.-]+):([a-z0-9_]+)$/i);
     if (match) {
       const itemName = match[2].toLowerCase();
-      if (!itemName || itemName.length < 3 || itemName.length > 32) continue;
+      if (!itemName) continue;
       if (/recipe|screen|menu|container|gui|creative|_tab|advancement|_particle|sound|block_entity|tooltip|desc|info|message|hint|debug|stat|event|action|mode|state|subtitle/i.test(itemName)) continue;
-      if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$|^[a-z]{1,2}$/i.test(itemName)) continue;
-      if (/^(to_|no_|consume_|press_|hold_|when_|if_|heal_|grow_|pollinate_|release_|name_|type_|registry_name_)/i.test(itemName)) continue;
-      if (/\b(health|inventory|stinger_back|grow_baby|pollinate|maze|cell_maze|new_compass|spawned|6honey_bottle|heal_2|put_stinger|baby_to_adult)\b/i.test(itemName)) continue;
-      if (itemName.split('_').length > 4) continue;
+      if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$/i.test(itemName)) continue;
+      // Keep unusual source identifiers; registration structure, not identifier wording, determines type.
+      // Source identifiers are preserved regardless of their names.
+      // Preserve identifiers of any length and token count.
       if (STATE_SUFFIX_RE.test(itemName)) continue;
       const readable = itemName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       if (BAD_DISPLAY.test(readable)) continue;
@@ -775,7 +777,7 @@ export function decompileJavaMod(
         }
       } else {
         if (registeredItems.includes(readable)) continue;
-        if (/(^|_)backpack$/.test(itemName) && registeredItems.some(r => r.replace(/\s+/g, '_') === itemName)) continue;
+
         registeredItems.push(readable);
       }
     }
@@ -802,11 +804,9 @@ export function decompileJavaMod(
     const itemTexMatch = lower.match(/(?:^|\/)textures\/items?\/([^/]+)\.png$/);
     if (itemTexMatch) {
       const raw = itemTexMatch[1];
-      if (!/particle|overlay|layer|gui|slot|base|blank|empty|template|cell_maze|new_compass|6honey_bottle/i.test(raw) && !/^(to_|no_|consume_|release_|type_|registry_name_)/i.test(raw) && !STATE_SUFFIX_RE.test(raw)) {
-        const readable = raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        if (!registeredItems.some(i => i.toLowerCase() === readable.toLowerCase())) {
-          registeredItems.push(readable);
-        }
+      const readable = raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      if (!registeredItems.some(i => i.toLowerCase() === readable.toLowerCase())) {
+        registeredItems.push(readable);
       }
     }
 
@@ -826,8 +826,8 @@ export function decompileJavaMod(
     const entityTexMatch = lower.match(/(?:^|\/)textures\/(?:entities|entity)\/(?:[^/]+\/)*([^/]+)\.png$/);
     if (entityTexMatch) {
       const raw = entityTexMatch[1];
-      // State/variant textures (e.g. gilbert/gilbertambient.png, chimera/chimerataunt.png)
-      // live in the mob's own folder — they are NOT separate mobs. Skip when the stem
+      // State/variant textures live in the mob's own folder, not as separate mobs. Skip when the stem
+
       // is prefixed by its parent folder name (mob id) or ends with an animation/audio
       // state suffix, otherwise every animation frame becomes a ghost entity + spawn egg.
       const folderSegs = lower.split('/');
@@ -971,15 +971,16 @@ export function decompileJavaMod(
     }
   }).filter(Boolean);
   const iconBytes = foundIconEntry ? foundIconEntry.data : null;
-  const classSummaries: DecompileClassSummary[] = parsedClasses.slice(0, 350).map(c => ({
+  const classSummaries: DecompileClassSummary[] = parsedClasses.map(c => ({
     className: c.className.split('.').pop() ?? c.className,
+    qualifiedClassName: c.className,
     // Inheritance and the namespaced identifiers a class declares are the evidence the item
     // semantics engine reads. Neither is a name-based guess: both come from the class file.
     superName: c.superName,
     registryIds: c.strings,
     role: c.role,
-    methods: [...c.methods.filter((method) => /projectile|shoot|launch|fire|cast|spell|attack|hit|arrow|bullet|reload|charge|cooldown|throw/i.test(method)), ...c.methods].slice(0, 12),
-    signals: c.signals.slice(0, 12),
+    methods: Array.from(new Set(c.methods)),
+    signals: Array.from(new Set(c.signals)),
   }));
   const iconDataUrl = iconBytes ? bytesToDataUrl(iconBytes, 'image/png') : undefined;
   const stats: DecompileStats = {
@@ -1045,7 +1046,7 @@ export function decompileAndInspectJar(entries: ExtractedZipEntry[], fallbackNam
 }
 
 /** Class count a single conversion inspects, matching the long-standing archive scan budget. */
-export const CLASS_SCAN_LIMIT = 350;
+export const CLASS_SCAN_LIMIT = Number.MAX_SAFE_INTEGER;
 
 /**
  * The class entries a conversion actually reads. A modpack can ship far more bytecode than a phone
@@ -1053,16 +1054,10 @@ export const CLASS_SCAN_LIMIT = 350;
  * whichever comes first — instead of pushing hundreds of megabytes through the parser at once.
  */
 export function classEntriesForScan(classEntries: ExtractedZipEntry[]): ExtractedZipEntry[] {
-  const selected: ExtractedZipEntry[] = [];
-  let bytes = 0;
-  for (const entry of classEntries) {
-    if (selected.length >= CLASS_SCAN_LIMIT) break;
-    const size = entry.data?.length ?? 0;
-    if (bytes + size > CLASS_SCAN_BYTE_BUDGET) break;
-    selected.push(entry);
-    bytes += size;
-  }
-  return selected;
+  // Never silently omit source classes: a class beyond an arbitrary count/byte threshold may
+  // contain a registry, static initializer, method body or dependency used by the mod.
+  // The asynchronous caller yields between chunks to keep the Discord Activity responsive.
+  return classEntries;
 }
 
 /** Parses every class entry handed in, skipping a malformed class instead of the whole archive. */
@@ -1112,6 +1107,43 @@ export async function decompileAndInspectJarAsync(
     if (end < classEntries.length) await yieldToUi();
   }
   const result = decompileJavaMod(entries, fallbackName, parsed);
+  // Run the full instruction-level analysis over every class, not just the lightweight
+  // signature scanner. Enrich the existing semantic inputs so downstream generic translators
+  // can see real method calls, field accesses and registry references.
+  const jvm = await analyzeJvmArchive(entries, {
+    chunkSize,
+    onProgress: (done, total) => options?.onProgress?.(done, total),
+  });
+  const byClass = new Map(jvm.classes.map((item) => [item.name, item]));
+  result.stats.classes = result.stats.classes.map((summary) => {
+    const detail = byClass.get(summary.qualifiedClassName ?? summary.className);
+    if (!detail) return summary;
+    const methodNames = detail.methods.map((method) => method.name);
+    const callEvidence = detail.methods.flatMap((method) => method.calls.map((call) =>
+      call.owner && call.name ? `${call.owner}.${call.name}` : call.name ?? call.kind
+    ));
+    const fieldEvidence = detail.methods.flatMap((method) => method.fieldAccesses.map((field) =>
+      field.owner && field.name ? `${field.owner}.${field.name}` : field.name ?? field.kind
+    ));
+    const registryIds = detail.references
+      .filter((reference) => typeof reference.value === 'string' && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/i.test(reference.value))
+      .map((reference) => String(reference.value));
+    return {
+      ...summary,
+      methods: Array.from(new Set([...summary.methods, ...methodNames])),
+      registryIds: Array.from(new Set([...(summary.registryIds ?? []), ...registryIds])),
+      fieldDefinitions: detail.fields,
+      methodSignatures: detail.methods.map((method) => ({
+        name: method.name,
+        descriptor: method.descriptor,
+        access: method.access,
+        codeLength: method.codeLength,
+        localVariables: method.localVariables,
+      })),
+      signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
+    };
+  });
+  result.stats.jvmAnalysis = jvm;
   inspectionCache.set(entries, { key, result });
   return result;
 }

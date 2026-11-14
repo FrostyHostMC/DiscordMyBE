@@ -62,7 +62,9 @@ export function scanModEvidence(
 
   const allText: string[] = [];
   for (const entry of classes) {
-    const text = [entry.className, ...(entry.methods ?? []), ...(entry.signals ?? [])].join(' ');
+    const fields = (entry.fieldDefinitions ?? []).map((field) => `${field.name} ${field.descriptor}`);
+    const methods = (entry.methodSignatures ?? []).map((method) => `${method.name} ${method.descriptor} ${method.localVariables.map((local) => local.name).join(' ')}`);
+    const text = [entry.className, ...(entry.methods ?? []), ...fields, ...methods, ...(entry.signals ?? [])].join(' ');
     index.classText.set(entry.className, text);
     allText.push(text);
   }

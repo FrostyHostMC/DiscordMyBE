@@ -233,6 +233,15 @@ export interface DependencyResolution {
 
 export interface DecompileClassSummary {
   className: string;
+  /** Fully-qualified class identity; className remains the display-friendly simple name. */
+  qualifiedClassName?: string;
+  /** Recovered declared fields, including JVM descriptors and access flags. */
+  fieldDefinitions?: Array<{ name: string; descriptor: string; access: number; constant?: unknown }>;
+  /** Recovered method signatures and local-variable debug metadata. */
+  methodSignatures?: Array<{
+    name: string; descriptor: string; access: number; codeLength: number;
+    localVariables: Array<{ name: string; descriptor: string; index: number; start: number; length: number }>;
+  }>;
   /** Fully qualified superclass recovered from the class file, used as inheritance evidence. */
   superName?: string;
   /** Namespaced identifiers (e.g. `mod:rune_blade`) the class itself declares. */
@@ -243,6 +252,8 @@ export interface DecompileClassSummary {
 }
 
 export interface DecompileStats {
+  /** Full instruction-level JVM analysis; present when the asynchronous archive scan ran. */
+  jvmAnalysis?: import('@/utils/jvmBytecodeIR').JvmArchiveAnalysisReport;
   modId: string;
   modName: string;
   version: string;

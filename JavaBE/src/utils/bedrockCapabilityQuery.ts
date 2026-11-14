@@ -23,7 +23,7 @@ export interface CapabilityStatus {
   engineDelivery: string;
 }
 
-export type BedrockVersionTarget = '1.21.50' | '1.21.20' | '1.21.0' | '1.20.80' | 'preview';
+export type BedrockVersionTarget = '1.26.63' | '1.21.50' | '1.21.20' | '1.21.0' | '1.20.80' | 'preview';
 
 export type VersionTriple = [number, number, number];
 
@@ -38,12 +38,19 @@ export interface VersionTargetOption {
 
 export const VERSION_TARGETS: VersionTargetOption[] = [
   {
+    id: '1.26.63',
+    label: 'Bedrock 26.63 (Latest Stable)',
+    version: [1, 26, 63],
+    scriptApiVersion: '2.11.0',
+    description: 'Latest stable Bedrock release verified from Mojang release notes; stable @minecraft/server 2.11.0.',
+    isLatest: true,
+  },
+  {
     id: '1.21.50',
-    label: 'Bedrock 1.21.50 (Latest)',
+    label: 'Bedrock 1.21.50 (Legacy)',
     version: [1, 21, 50],
     scriptApiVersion: '1.16.0',
-    description: 'Latest Bedrock release: data-driven blocks, custom components, Deferred PBR, and @minecraft/server v1.16.0.',
-    isLatest: true,
+    description: 'Legacy Bedrock 1.21.50 target with @minecraft/server 1.16.0.',
   },
   {
     id: '1.21.20',
@@ -68,9 +75,9 @@ export const VERSION_TARGETS: VersionTargetOption[] = [
   },
   {
     id: 'preview',
-    label: 'Bedrock Preview / Beta',
-    version: [1, 21, 60],
-    scriptApiVersion: '1.17.0-beta',
+    label: 'Bedrock Preview 26.70 / Beta',
+    version: [1, 26, 70],
+    scriptApiVersion: '2.13.0-beta',
     description: 'Experimental testing environment: enables script_eval, beta modules, and pre-release engine features.',
   },
 ];
@@ -131,7 +138,8 @@ const ALWAYS_SUPPORTED_CAPABILITIES: Record<string, string> = {
 
 /** @minecraft/server module versions and the minimum engine that accepts them. */
 const SCRIPT_API_TABLE: Array<{ min: VersionTriple; version: string }> = [
-  { min: [1, 21, 60], version: '1.17.0-beta' },
+  { min: [1, 26, 70], version: '2.13.0-beta' },
+  { min: [1, 26, 63], version: '2.11.0' },
   { min: [1, 21, 50], version: '1.16.0' },
   { min: [1, 21, 20], version: '1.15.0' },
   { min: [1, 21, 0], version: '1.14.0' },
@@ -155,7 +163,7 @@ export function normalizeVersion(raw: unknown): VersionTriple {
     while (parts.length < 3) parts.push(0);
     return [parts[0] ?? 1, parts[1] ?? 20, parts[2] ?? 80];
   }
-  const arr = Array.isArray(raw) ? raw : [1, 21, 50];
+  const arr = Array.isArray(raw) ? raw : [1, 26, 63];
   const nums = arr.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n >= 0);
   while (nums.length < 3) nums.push(0);
   return [nums[0] ?? 1, nums[1] ?? 21, nums[2] ?? 50];
@@ -177,7 +185,7 @@ export function detectModExperimentNeeds(
     filePaths.some((p) => /projectile|spell|bullet|magic|shoot|weapon/.test(p));
 
   const hasBossesOrCutscenes =
-    /boss|cutscene|cinematic|camera|intro|phase|dragon|titan|wither|golem|stalker/.test(text) ||
+    /cutscene|cinematic|camera|intro/.test(text) ||
     filePaths.some((p) => /boss|cutscene|cinematic/.test(p));
 
   const hasCustomBlocks =
@@ -251,7 +259,7 @@ export function queryBedrockCapabilities(
   const detected = detectModExperimentNeeds(brief, entries);
 
   const is121OrNewer = version[0] > 1 || (version[0] === 1 && version[1] >= 21);
-  const isPreview = version[1] >= 21 && version[2] >= 60;
+  const isPreview = (version[1] === 21 && version[2] >= 60) || (version[1] >= 26 && version[2] >= 70);
 
   const capabilities: CapabilityStatus[] = [];
 
@@ -469,7 +477,7 @@ export function autoConfigureExperimentsForMod(
   const detected = detectModExperimentNeeds(brief, entries);
   const reasons: string[] = [];
 
-  let targetVersion: BedrockVersionTarget = preferredVersion ?? '1.21.50';
+  let targetVersion: BedrockVersionTarget = preferredVersion ?? '1.26.63';
   if (detected.scriptEval.detected && !preferredVersion) {
     targetVersion = 'preview';
     reasons.push('Target adjusted to Bedrock Preview to support experimental script evaluation.');
@@ -546,9 +554,9 @@ const SCHEMA_REMOTE_ENDPOINTS = [
 const BUNDLED_SCHEMA_CATALOG: SchemaCatalog = {
   source: 'bundled',
   fetchedAt: null,
-  latestStableVersion: [1, 21, 50],
-  latestStableLabel: '1.21.50',
-  latestPreviewVersion: [1, 21, 60],
+  latestStableVersion: [1, 26, 63],
+  latestStableLabel: '1.26.63',
+  latestPreviewVersion: [1, 26, 70],
   minEngineVersion: [1, 21, 0],
   discoveredCapabilities: [],
   note: 'Using bundled Bedrock schema defaults (offline or first run).',
