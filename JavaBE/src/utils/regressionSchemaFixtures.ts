@@ -2204,6 +2204,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     modId: 'seriousplayeranimations',
     resourcePackFiles: files,
     behaviorPackFiles: {},
+    sourceProfiles: triggerReport.sourceProfile ? [triggerReport.sourceProfile] : [],
   });
   const finalEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
   const scripts = finalEntity?.scripts ?? {};
