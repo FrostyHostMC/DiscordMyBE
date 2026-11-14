@@ -371,6 +371,8 @@ export interface ReadZipOptions {
   maxEntryBytes?: number;
   /** Total inflated bytes allowed for the archive. Highest-evidence entries win. */
   maxTotalBytes?: number;
+  /** Reject decompression bombs whose expanded size is disproportionate to their compressed bytes. */
+  maxCompressionRatio?: number;
   /** Called once for every entry skipped because of a size budget. */
   onSkip?: (path: string, bytes: number, reason: 'entry-too-large' | 'budget-exhausted') => void;
 }
@@ -512,6 +514,7 @@ export async function readZipArchive(
   // ones that survive. Sounds and oversized binaries are dropped instead of the pack content.
   const maxEntryBytes = options?.maxEntryBytes ?? MAX_ENTRY_BYTES;
   const maxTotalBytes = options?.maxTotalBytes ?? 768 * 1024 * 1024;
+  const maxCompressionRatio = options?.maxCompressionRatio ?? 200;
   const files = descriptors.filter((descriptor) => !descriptor.isDirectory);
   const declaredSize = (descriptor: CentralDirectoryEntry) =>
     descriptor.uncompressedSize > 0 ? descriptor.uncompressedSize : descriptor.compressedSize;
@@ -529,7 +532,8 @@ export async function readZipArchive(
     );
     for (const descriptor of ordered) {
       const estimate = declaredSize(descriptor);
-      if (estimate > maxEntryBytes) {
+      const ratio = descriptor.compressedSize > 0 ? estimate / descriptor.compressedSize : (estimate > 0 ? Infinity : 1);
+      if (estimate > maxEntryBytes || ratio > maxCompressionRatio) {
         options?.onSkip?.(descriptor.path, estimate, 'entry-too-large');
         continue;
       }
