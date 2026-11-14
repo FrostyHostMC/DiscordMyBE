@@ -49,16 +49,16 @@ export function getArchiveBudget(): ArchiveBudget {
     // File.arrayBuffer, inflated entries, bytecode IR and generated packs coexist at stages;
     // a 160 MB extraction budget was therefore not a safe mobile working-set budget.
     return {
-      maxInputBytes: 96 * 1024 * 1024,
-      maxGeneratedBytes: 32 * 1024 * 1024,
+      maxInputBytes: 64 * 1024 * 1024,
+      maxGeneratedBytes: 24 * 1024 * 1024,
       maxEntries: 12000,
-      maxTotalBytes: 64 * 1024 * 1024,
-      maxEntryBytes: 12 * 1024 * 1024,
+      maxTotalBytes: 48 * 1024 * 1024,
+      maxEntryBytes: 8 * 1024 * 1024,
       maxNestedArchives: 4,
       maxNestedDepth: 2,
-      maxNestedArchiveBytes: 8 * 1024 * 1024,
-      maxClassBytes: 8 * 1024 * 1024,
-      maxClassCount: 2000,
+      maxNestedArchiveBytes: 4 * 1024 * 1024,
+      maxClassBytes: 6 * 1024 * 1024,
+      maxClassCount: 1200,
       profile: 'mobile',
     };
   }
