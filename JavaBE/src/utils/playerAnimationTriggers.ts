@@ -35,6 +35,8 @@ export interface PlayerClipTrigger {
   status: PlayerTriggerStatus;
   scriptDriven: boolean;
   perspective: 'first' | 'third';
+  /** Overlay clips run in a separate controller so they can blend with locomotion. */
+  layer?: 'base' | 'overlay';
   note: string;
 }
 
@@ -46,6 +48,7 @@ export interface PlayerTriggerReport {
   unresolved: number;
   classesScanned: number;
   javaSignals: string[];
+  sourceProfile?: string;
   triggers: PlayerClipTrigger[];
   summary: string;
 }
@@ -122,6 +125,122 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
     : 'third';
 }
 
+/** The upstream Serious Player Animations resource namespace identifies its source state machine. */
+function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolean {
+  return entries.some((entry) => {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    return path.includes('assets/seriousplayeranimations/player_animation/') ||
+      path.includes('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class');
+  });
+}
+
+/**
+ * Source-backed adapter for Serious Player Animations 1.1.1.
+ *
+ * The upstream mixin selects locomotion clips from per-tick position deltas, body-yaw deltas,
+ * sneaking and sprinting state. Shield clips are a second animation layer, not locomotion states.
+ * The extra animation.running Blender-rig definition is not loaded by the Java state machine:
+ * reloadAnimationVariables() requests the resource key running.
+ */
+function seriousPlayerAnimationTrigger(
+  clipId: string,
+  shortName: string,
+): PlayerClipTrigger | null {
+  const lower = clipId.toLowerCase();
+  const tail = lower.split(/[.:/]+/).pop() ?? lower;
+  const evidence = 'McVader34/Serious-Player-Animations MAIN-1.1.1: SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
+  const move = 'variable.spa_move_speed';
+  const backwards = 'variable.spa_moving_backwards';
+  const notSneaking = '!query.is_sneaking';
+  const shieldHeld = "(query.is_item_name_any('slot.weapon.mainhand', 'minecraft:shield') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:shield'))";
+  const base = {
+    clipId,
+    shortName,
+    javaEvidence: evidence,
+    scriptDriven: false,
+    perspective: 'third' as const,
+  };
+
+  if (/(^|[.:/])animation\.running$/.test(lower)) {
+    return {
+      ...base,
+      concept: 'unreferenced-source-definition',
+      status: 'unresolved',
+      note: 'The upstream Java state machine loads the running resource key; this separate animation.running Blender-rig definition is not referenced by reloadAnimationVariables() and has no runtime start path.',
+    };
+  }
+  switch (tail) {
+    case 'idle_standing':
+      return {
+        ...base,
+        concept: 'idle',
+        condition: move + ' == 0.0 && ' + notSneaking + ' && variable.spa_turn_delta == 0.0',
+        status: 'mapped',
+        note: 'Exact source state: zero horizontal movement, not sneaking, and no body-yaw delta.',
+      };
+    case 'walking':
+      return {
+        ...base,
+        concept: 'moving',
+        condition: move + ' > 0.0 && ' + move + ' < 0.23 && !' + backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: horizontal speed below 0.23 blocks/tick, moving forward, and not sneaking.',
+      };
+    case 'walking_backwards':
+      return {
+        ...base,
+        concept: 'moving',
+        condition: backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: movement-vector dot look-vector is negative and the player is not sneaking.',
+      };
+    case 'running':
+      return {
+        ...base,
+        concept: 'sprinting',
+        condition: move + ' > 0.23 && query.is_sprinting && !' + backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: speed above 0.23 blocks/tick, sprinting, moving forward, and not sneaking.',
+      };
+    case 'idle_sneak':
+      return {
+        ...base,
+        concept: 'sneaking',
+        condition: 'query.is_sneaking && ' + move + ' == 0.0 && !' + backwards,
+        status: 'mapped',
+        note: 'Exact source state: sneaking with no horizontal movement.',
+      };
+    case 'walking_sneak':
+      return {
+        ...base,
+        concept: 'sneaking',
+        condition: 'query.is_sneaking && ' + move + ' > 0.0 && !' + backwards,
+        status: 'mapped',
+        note: 'Exact source state: sneaking while moving forward.',
+      };
+    case 'shield':
+      return {
+        ...base,
+        concept: 'using-item',
+        condition: 'query.is_using_item && ' + shieldHeld + ' && !query.is_sneaking',
+        layer: 'overlay',
+        status: 'approximated',
+        note: 'Source shield pose is an independent overlay layer. Bedrock preserves that layer; offhand mirroring from the Java MirrorModifier remains approximate.',
+      };
+    case 'shield_sneak':
+      return {
+        ...base,
+        concept: 'using-item',
+        condition: 'query.is_using_item && ' + shieldHeld + ' && query.is_sneaking',
+        layer: 'overlay',
+        status: 'approximated',
+        note: 'Source crouching-shield pose is an independent overlay layer. Bedrock preserves that layer; offhand mirroring from the Java MirrorModifier remains approximate.',
+      };
+    default:
+      return null;
+  }
+}
+
 /**
  * Translates every imported player clip's Java trigger into a Bedrock-evaluable condition.
  * Nothing is invented: a clip whose Java condition cannot be recovered is reported as
@@ -134,7 +253,9 @@ export function translatePlayerTriggers(options: {
   onLog?: (line: string) => void;
 }): PlayerTriggerReport {
   const log = (line: string) => options.onLog?.(line);
-  const { classesScanned, hits } = scanJavaSignals(options.archiveEntries ?? []);
+  const archiveEntries = options.archiveEntries ?? [];
+  const { classesScanned, hits } = scanJavaSignals(archiveEntries);
+  const seriousPlayerProfile = hasSeriousPlayerAnimationsProfile(archiveEntries);
   const usedShortNames = new Set<string>();
   const triggers: PlayerClipTrigger[] = [];
   const itemIds = options.mainhandItemIds ?? [];
@@ -156,6 +277,14 @@ export function translatePlayerTriggers(options: {
       return [...identityTokens(tail)].some((token) => rule.clip.test(token)) || rule.clip.test(tail);
     });
     const perspective = perspectiveOf(clipId);
+
+    if (seriousPlayerProfile) {
+      const sourceTrigger = seriousPlayerAnimationTrigger(clipId, shortName);
+      if (sourceTrigger) {
+        triggers.push(sourceTrigger);
+        continue;
+      }
+    }
 
     if (!concept) {
       triggers.push({
@@ -231,11 +360,12 @@ export function translatePlayerTriggers(options: {
     scriptDriven: triggers.filter((t) => t.scriptDriven).length,
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
-    javaSignals: [...hits.keys()],
+    javaSignals: [...hits.keys(), ...(seriousPlayerProfile ? ['serious-player-animations:known-source-profile'] : [])],
+    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
     triggers,
     summary: '',
   };
-  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from Java evidence, ${report.approximated} approximated from clip correlation, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved.`;
+  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from source evidence, ${report.approximated} approximated, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved${report.sourceProfile ? `; source profile ${report.sourceProfile}` : ''}.`;
   if (report.clipsInspected > 0) {
     log(`[TRIGGER-BRIDGE] ${report.summary}`);
     if (report.javaSignals.length > 0) {
