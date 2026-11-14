@@ -13,8 +13,8 @@ import { safeFileId } from '@/utils/bedrockIds';
  * actually exists in the player client-entity context and records the evidence it used.
  *
  * Rules it enforces:
- *  - a condition is only emitted when the archive's own code/data references the matching
- *    Java concept; a matching clip name is a candidate, not proof of playback intent;
+ *  - a condition is emitted only from archive code/data evidence or a versioned built-in
+ *    framework adapter selected by an exact resource namespace; clip names alone are not proof;
  *  - mob-only queries (`query.has_target`, `query.target_distance`, …) are never emitted
  *    for a player, because they do not exist in that context;
  *  - one-shot Java logic (attack / combo / special moves) becomes a script-driven clip,
@@ -406,7 +406,7 @@ export function translatePlayerTriggers(options: {
     scriptDriven: triggers.filter((t) => t.scriptDriven).length,
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
-    javaSignals: [...hits.keys(), ...(seriousPlayerProfile ? ['serious-player-animations:known-source-profile'] : [])],
+    javaSignals: [...hits.keys()],
     sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
     triggers,
     summary: '',
@@ -414,6 +414,9 @@ export function translatePlayerTriggers(options: {
   report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from source evidence, ${report.approximated} approximated, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved${report.sourceProfile ? `; source profile ${report.sourceProfile}` : ''}.`;
   if (report.clipsInspected > 0) {
     log(`[TRIGGER-BRIDGE] ${report.summary}`);
+    if (report.sourceProfile) {
+      log(`[TRIGGER-BRIDGE] Recognized versioned source profile ${report.sourceProfile} from the imported resource namespace.`);
+    }
     if (report.javaSignals.length > 0) {
       log(`[TRIGGER-BRIDGE] Java player states found in ${classesScanned} scanned class(es): ${report.javaSignals.join(', ')}.`);
     }
