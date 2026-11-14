@@ -27,6 +27,7 @@ try {
   const { decompileAndInspectJarAsync } = await server.ssrLoadModule('/src/utils/javaDecompiler.ts');
   const { autoConfigureExperimentsForMod } = await server.ssrLoadModule('/src/utils/bedrockCapabilityQuery.ts');
   const { convertJavaToBedrockAddon } = await server.ssrLoadModule('/src/utils/bedrockGenerator.ts');
+  const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
 
   setPlayableMode(false);
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
@@ -67,6 +68,20 @@ try {
       // The converter's own parser reports malformed source documents.
     }
   }
+
+  const syntheticClip = { bones: { rightArm: { rotation: { '0': [0, 0, 0], '0.4': [45, 0, 0] } } }, loop: false, animation_length: 0.4 };
+  const unrelatedClass = new TextEncoder().encode('net/example/Unrelated.class isSprinting');
+  const registeredClass = new TextEncoder().encode('net/example/WalkingAnimation.class walking isSprinting');
+  const unrelatedTrigger = translatePlayerTriggers({
+    clips: { 'animation.walking': syntheticClip },
+    archiveEntries: [{ path: 'net/example/Unrelated.class', data: unrelatedClass }],
+    sourceClipIdsByClipId: { 'animation.walking': 'walking' },
+  }).triggers[0];
+  const registeredTrigger = translatePlayerTriggers({
+    clips: { 'animation.walking': syntheticClip },
+    archiveEntries: [{ path: 'net/example/WalkingAnimation.class', data: registeredClass }],
+    sourceClipIdsByClipId: { 'animation.walking': 'walking' },
+  }).triggers[0];
 
   const expectedPlayerClipIds = sourceClipIds;
   const logs = [];
@@ -153,6 +168,8 @@ try {
   const javaRunningTrigger = triggers?.triggers.find((trigger) => trigger.sourceClipId === 'running');
   const sourceRunningDefinition = Object.values(result.playerSourceClipIdByPlayerClipId ?? {}).includes('animation.running');
   const assertions = [
+    { id: 'unrelated-java-api-hit-does-not-activate-a-clip', expected: 'unresolved', actual: unrelatedTrigger?.status ?? 'missing', passed: unrelatedTrigger?.status === 'unresolved' && !unrelatedTrigger.condition },
+    { id: 'same-class-clip-registration-and-java-state-correlate', expected: 'mapped', actual: registeredTrigger?.status ?? 'missing', passed: registeredTrigger?.status === 'mapped' && Boolean(registeredTrigger.condition) },
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
     { id: 'player-trigger-bridge-inspected-every-source-clip', expected: sourceClipIds.length, actual: triggers?.clipsInspected ?? 0, passed: Boolean(triggers && triggers.clipsInspected === sourceClipIds.length) },
     { id: 'all-java-loaded-clips-registered-on-player', expected: expectedPlayerClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === expectedPlayerClipIds.length) },
