@@ -1,7 +1,7 @@
 import { PS4_TARGET } from "./target.js";
 
 const ROUTES = Object.freeze({
-  ".rpf": { family: "archive", stage: "archive-analysis", source: "archive-parser-required", target: "archive-writer-unverified", risk: "container-only" },
+  ".rpf": { family: "archive", stage: "archive-analysis", source: "ragekit-rpf-reader", target: "ps4-archive-layout-unverified", risk: "encryption-keys-and-target-container-layout" },
   ".yft": { family: "fragment", stage: "resource-decode", source: "native-inspector-partial", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ydr": { family: "drawable", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ydd": { family: "drawable-dictionary", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
