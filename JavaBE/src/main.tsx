@@ -33,21 +33,15 @@ function GateScreen({ state, message, retry }: {
 
   return (
     <main className="javabe-launch-screen" role={isLoading ? 'status' : 'alert'} aria-live="polite">
-      <div className="javabe-launch-aurora" aria-hidden="true">
-        <span className="javabe-launch-orb javabe-launch-orb-one" />
-        <span className="javabe-launch-orb javabe-launch-orb-two" />
-        <span className="javabe-launch-stars" />
-      </div>
-
       <section className="javabe-launch-content">
         <div className="javabe-launch-brand">
-          <div className="javabe-launch-logo">
-            <Cpu size={29} strokeWidth={1.8} />
-            <span className="javabe-launch-logo-glint" />
-          </div>
-          <p className="javabe-launch-kicker">JAVA TO BEDROCK</p>
-          <h1>Java<span>BE</span></h1>
-          <p className="javabe-launch-tagline">Your mods. Rebuilt for Bedrock.</p>
+          <img
+            className="javabe-launch-brand-gif"
+            src="/assets/JavaBE_Discord_Icon_Zoomed.gif"
+            alt="JavaBE animated logo with purple clouds"
+            decoding="async"
+            fetchPriority="high"
+          />
         </div>
 
         {isLocked ? (
