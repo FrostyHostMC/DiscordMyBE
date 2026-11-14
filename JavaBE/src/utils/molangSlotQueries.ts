@@ -38,11 +38,28 @@ export function documentedSlotId(raw: string): string {
 /** "Is this slot occupied?", expressed in a signature the destination accepts. */
 export function slotOccupancyExpression(slot: string): { expression: string; reason: string } {
   const id = documentedSlotId(slot);
+  const handSlot = id === 'slot.weapon.mainhand'
+    ? 'main_hand'
+    : id === 'slot.weapon.offhand'
+      ? 'off_hand'
+      : null;
+
+  // get_equipped_item_name does NOT accept Bedrock inventory slot identifiers or an
+  // (inventory slot, index) pair. Its hand argument is exactly 0/'main_hand' or
+  // 1/'off_hand'. Passing slot.weapon.mainhand, 0 is rejected by the Molang runtime.
+  if (handSlot) {
+    return {
+      expression: `(query.get_equipped_item_name('${handSlot}') != '')`,
+      reason: `the ${id} occupancy check is expressed with the documented get_equipped_item_name('${handSlot}') hand argument`,
+    };
+  }
+
+  // Non-hand slots cannot be queried through get_equipped_item_name. Keep the slot
+  // explicit and use the item-name query's documented slot/index/name signature only
+  // when a concrete item name is known; do not fabricate one for a generic occupancy test.
   return {
-    expression: `(query.get_equipped_item_name('${id}', 0) != '')`,
-    reason:
-      `the presence form of query.is_item_name_any needs at least one item name, so "the ${id} slot is occupied" ` +
-      'is evaluated with query.get_equipped_item_name(slot, index), which accepts the same documented slot and returns the same boolean',
+    expression: `query.is_item_name_any('${id}', 0, 'minecraft:air') == false`,
+    reason: `the ${id} occupancy check uses the slot/index/item-name signature rather than the hand-only equipped-item query`,
   };
 }
 
