@@ -398,7 +398,8 @@ export function importGeckolibAnimations(
     const unattributed: Record<string, BedrockAnimationClip> = {};
     for (const [clipId, clip] of Object.entries(translation.animations)) {
       const inferredOwner = ownerFromClipId(clipId, fileOwner, modId);
-      const isPlayerAnimationPath = /(?:^|\\/)player[_-]?animation(?:s)?(?:\\/|$)/i.test(path);
+      const lowerPath = path.toLowerCase();
+      const isPlayerAnimationPath = lowerPath.includes('/player_animation/') || lowerPath.includes('/player-animations/') || lowerPath.includes('/player_animations/');
       const owner = isPlayerAnimationPath ? 'player' : inferredOwner;
       if (!owner) {
         unattributed[clipId] = clip;
