@@ -756,12 +756,12 @@ export function decompileJavaMod(
     const match = str.match(/^([a-z0-9_.-]+):([a-z0-9_]+)$/i);
     if (match) {
       const itemName = match[2].toLowerCase();
-      if (!itemName || itemName.length < 3 || itemName.length > 32) continue;
+      if (!itemName) continue;
       if (/recipe|screen|menu|container|gui|creative|_tab|advancement|_particle|sound|block_entity|tooltip|desc|info|message|hint|debug|stat|event|action|mode|state|subtitle/i.test(itemName)) continue;
       if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$|^[a-z]{1,2}$/i.test(itemName)) continue;
       // Keep unusual source identifiers; registration structure, not identifier wording, determines type.
       // Source identifiers are preserved regardless of their names.
-      if (itemName.split('_').length > 4) continue;
+      // Preserve identifiers of any length and token count.
       if (STATE_SUFFIX_RE.test(itemName)) continue;
       const readable = itemName.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
       if (BAD_DISPLAY.test(readable)) continue;
@@ -803,11 +803,9 @@ export function decompileJavaMod(
     const itemTexMatch = lower.match(/(?:^|\/)textures\/items?\/([^/]+)\.png$/);
     if (itemTexMatch) {
       const raw = itemTexMatch[1];
-      // Source identifiers are preserved regardless of their names.
-        const readable = raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-        if (!registeredItems.some(i => i.toLowerCase() === readable.toLowerCase())) {
-          registeredItems.push(readable);
-        }
+      const readable = raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      if (!registeredItems.some(i => i.toLowerCase() === readable.toLowerCase())) {
+        registeredItems.push(readable);
       }
     }
 
