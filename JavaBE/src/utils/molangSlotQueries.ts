@@ -115,8 +115,9 @@ function itemNameArguments(args: string[]): string[] {
 }
 
 /**
- * Rewrites every `query.is_item_name_any` call that carries no item name into the occupancy form.
- * Calls that test concrete names are left untouched, so an evidence-backed item test keeps working.
+ * Rewrites `query.is_item_name_any` calls that carry no item name only when the slot is a hand.
+ * Generic armour occupancy has no supported expression without a concrete item list, so it is
+ * preserved and reported instead of guessed. Calls that test concrete names are left untouched.
  */
 export function repairItemNameQueryArity(expression: string): {
   expression: string;
