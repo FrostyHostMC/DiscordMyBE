@@ -1133,6 +1133,14 @@ export async function decompileAndInspectJarAsync(
       ...summary,
       methods: Array.from(new Set([...summary.methods, ...methodNames])),
       registryIds: Array.from(new Set([...(summary.registryIds ?? []), ...registryIds])),
+      fieldDefinitions: detail.fields,
+      methodSignatures: detail.methods.map((method) => ({
+        name: method.name,
+        descriptor: method.descriptor,
+        access: method.access,
+        codeLength: method.codeLength,
+        localVariables: method.localVariables,
+      })),
       signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
     };
   });
