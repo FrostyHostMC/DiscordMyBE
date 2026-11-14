@@ -14,7 +14,7 @@ import { safeFileId } from '@/utils/bedrockIds';
  *
  * Rules it enforces:
  *  - a condition is emitted only from archive code/data evidence or a versioned built-in
- *    framework adapter selected by an exact resource namespace; clip names alone are not proof;
+ *    adapter selected by matching mod metadata and Java class evidence; clip names alone are not proof;
  *  - mob-only queries (`query.has_target`, `query.target_distance`, …) are never emitted
  *    for a player, because they do not exist in that context;
  *  - one-shot Java logic (attack / combo / special moves) becomes a script-driven clip,
