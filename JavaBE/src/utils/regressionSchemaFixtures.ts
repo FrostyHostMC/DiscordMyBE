@@ -19,6 +19,8 @@ import { reconstructAnimationDependencies } from '@/utils/animationDependencyRec
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
 import { PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
+import { translateMolangExpression } from '@/utils/molangCompatibility';
 import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
 import { translatePlayerTriggers } from '@/utils/playerAnimationTriggers';
 import { synthesizePlayerAnimationController } from '@/utils/playerAnimationController';
@@ -2213,6 +2215,18 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(`variable.${name} =`));
   const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
+  const sourceMovementVariables = [
+    'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
+    'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw',
+  ] as const;
+  const sourceVariableTranslations = sourceMovementVariables.map((name) => {
+    const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+    const translated = translateMolangExpression(
+      `variable.${name} = ${baseline?.expression ?? ''}`,
+      'player_entity',
+    );
+    return { name, unresolved: translated.unresolved, rejected: translated.rejected };
+  });
   const shieldIds = [
     'animation.seriousplayeranimations.shield',
     'animation.seriousplayeranimations.shield_sneak',
@@ -2254,6 +2268,11 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(`animation.seriousplayeranimations.${name}`)) &&
       shieldIds.every((id) => overlayStateClips.includes(id)) &&
       shieldIds.every((id) => !baseStateClips.includes(id))
+  }, {
+    label: 'all source-derived movement expressions are accepted in Bedrock player Molang scope',
+    expected: 'all eight expressions have no unresolved or rejected query references',
+    actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
+    passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
   }, {
     label: 'the source movement and direction calculations are restored in player Molang scope',
     expected: 'move speed, backward direction and turn delta expressions injected',
