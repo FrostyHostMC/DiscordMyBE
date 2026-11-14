@@ -306,62 +306,51 @@ export async function createZipArchiveAsync(
   return archive;
 }
 
-async function decompressDeflateRaw(compressed: Uint8Array): Promise<Uint8Array> {
-  if (typeof DecompressionStream !== 'undefined') {
-    try {
-      const stream = new DecompressionStream('deflate-raw');
-      const writer = stream.writable.getWriter();
-      void writer.write(compressed as unknown as BufferSource);
-      void writer.close();
-      const reader = stream.readable.getReader();
-      const chunks: Uint8Array[] = [];
-      let totalLength = 0;
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          chunks.push(value);
-          totalLength += value.length;
-        }
+async function decompressDeflateRaw(
+  compressed: Uint8Array,
+  expectedLength = 0,
+  maxEntryBytes = 128 * 1024 * 1024,
+): Promise<Uint8Array> {
+  if (typeof DecompressionStream === 'undefined') return compressed;
+  const decompress = async (format: 'deflate-raw' | 'deflate'): Promise<Uint8Array> => {
+    const stream = new DecompressionStream(format);
+    const writer = stream.writable.getWriter();
+    await writer.write(compressed as unknown as BufferSource);
+    await writer.close();
+    const reader = stream.readable.getReader();
+    const output = expectedLength > 0 ? new Uint8Array(expectedLength) : null;
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      if (total + value.byteLength > maxEntryBytes || (output && total + value.byteLength > output.byteLength)) {
+        await reader.cancel();
+        throw new Error('Expanded ZIP entry exceeds the configured memory safety limit.');
       }
-      const combined = new Uint8Array(totalLength);
-      let pos = 0;
-      for (const chunk of chunks) {
-        combined.set(chunk, pos);
-        pos += chunk.length;
-      }
-      return combined;
-    } catch {
-      // Fall through to deflate with zlib wrapper attempt
-      try {
-        const stream = new DecompressionStream('deflate');
-        const writer = stream.writable.getWriter();
-        void writer.write(compressed as unknown as BufferSource);
-        void writer.close();
-        const reader = stream.readable.getReader();
-        const chunks: Uint8Array[] = [];
-        let totalLength = 0;
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value) {
-            chunks.push(value);
-            totalLength += value.length;
-          }
-        }
-        const combined = new Uint8Array(totalLength);
-        let pos = 0;
-        for (const chunk of chunks) {
-          combined.set(chunk, pos);
-          pos += chunk.length;
-        }
-        return combined;
-      } catch {
-        return compressed;
-      }
+      if (output) output.set(value, total);
+      else chunks.push(value);
+      total += value.byteLength;
     }
+    if (output) {
+      if (total !== expectedLength) throw new Error('Expanded ZIP entry did not match its declared size.');
+      return output;
+    }
+    const combined = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    chunks.length = 0;
+    return combined;
+  };
+  try {
+    return await decompress('deflate-raw');
+  } catch {
+    return await decompress('deflate');
   }
-  return compressed;
 }
 
 export interface ReadZipOptions {
@@ -571,7 +560,7 @@ export async function readZipArchive(
       // on iOS where a 150 MB JAR plus copied entries can exceed the WebView heap.
       decompressed = rawData.subarray(0, descriptor.uncompressedSize || rawData.length);
     } else if (descriptor.compressionMethod === 8) {
-      decompressed = await decompressDeflateRaw(rawData);
+      decompressed = await decompressDeflateRaw(rawData, descriptor.uncompressedSize, maxEntryBytes);
     } else {
       decompressed = rawData;
     }
