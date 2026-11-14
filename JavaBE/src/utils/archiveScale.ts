@@ -20,6 +20,7 @@ export interface ArchiveEntryLike {
 
 export interface ArchiveBudget {
   maxInputBytes: number;
+  maxGeneratedBytes: number;
   maxEntries: number;
   maxTotalBytes: number;
   maxEntryBytes: number;
@@ -49,6 +50,7 @@ export function getArchiveBudget(): ArchiveBudget {
     // a 160 MB extraction budget was therefore not a safe mobile working-set budget.
     return {
       maxInputBytes: 96 * 1024 * 1024,
+      maxGeneratedBytes: 32 * 1024 * 1024,
       maxEntries: 12000,
       maxTotalBytes: 64 * 1024 * 1024,
       maxEntryBytes: 12 * 1024 * 1024,
@@ -65,6 +67,7 @@ export function getArchiveBudget(): ArchiveBudget {
     : 384 * 1024 * 1024;
   return {
     maxInputBytes: 512 * 1024 * 1024,
+    maxGeneratedBytes: 192 * 1024 * 1024,
     maxEntries: 30000,
     maxTotalBytes,
     maxEntryBytes: 64 * 1024 * 1024,
