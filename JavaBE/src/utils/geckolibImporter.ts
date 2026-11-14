@@ -346,6 +346,7 @@ export function importGeckolibAnimations(
   const owners: string[] = [];
   const sourcePathsByOwner: Record<string, string[]> = {};
   const unattributedFiles: Record<string, string> = {};
+  const registeredSourceClipFingerprints = new Set<string>();
   const modKey = normaliseOwnerKey(modId);
 
   if (dependency.detected) {
@@ -396,12 +397,18 @@ export function importGeckolibAnimations(
     const attributed = new Map<string, Record<string, BedrockAnimationClip>>();
     const unattributed: Record<string, BedrockAnimationClip> = {};
     for (const [clipId, clip] of Object.entries(translation.animations)) {
-      const owner = ownerFromClipId(clipId, fileOwner, modId);
+      const inferredOwner = ownerFromClipId(clipId, fileOwner, modId);
+      const isPlayerAnimationPath = /(?:^|\\/)player[_-]?animation(?:s)?(?:\\/|$)/i.test(path);
+      const owner = isPlayerAnimationPath ? 'player' : inferredOwner;
       if (!owner) {
         unattributed[clipId] = clip;
         stats.clipsUnattributed += 1;
         continue;
       }
+      const sourceIdentity = (clipId.split(/[.:/]+/).pop() ?? clipId).trim().toLowerCase();
+      const fingerprint = `${owner}::${sourceIdentity}::${JSON.stringify(clip)}`;
+      if (registeredSourceClipFingerprints.has(fingerprint)) continue;
+      registeredSourceClipFingerprints.add(fingerprint);
       const bucket: Record<string, BedrockAnimationClip> = attributed.get(owner) ?? {};
       bucket[clipId] = clip;
       attributed.set(owner, bucket);
