@@ -20,6 +20,8 @@ import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
 import { PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
 import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
+import { translatePlayerTriggers } from '@/utils/playerAnimationTriggers';
+import { synthesizePlayerAnimationController } from '@/utils/playerAnimationController';
 import { buildAnimationResourceRegistry } from '@/utils/animationResourceRegistry';
 import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
@@ -2103,4 +2105,157 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     passed: playerDependencyReport.variables.unresolved.length === 0 && Boolean(vanillaTcos && vanillaSpear)
   }];
   return build('player-molang-variable-initialization', 'Player Molang variables (semantic resource ownership, equipment visibility)', 'Animation', checks, [], ['Live Minecraft Molang evaluation is not measured by this structural fixture.'], started);
+}
+
+/** Source-backed fixture for the Serious Player Animations resource namespace and state machine. */
+export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureResult {
+  const started = performance.now();
+  const clipNames = [
+    'idle_standing',
+    'walking',
+    'walking_backwards',
+    'running',
+    'idle_sneak',
+    'walking_sneak',
+    'shield',
+    'shield_sneak',
+  ];
+  const clipIds = [
+    ...clipNames.map((name) => \`animation.seriousplayeranimations.\${name}\`),
+    'animation.running',
+  ];
+  const clips = Object.fromEntries(clipIds.map((id) => [id, {
+    animation_length: 2.0,
+    loop: true,
+    bones: {},
+  }])) as any;
+  const archiveEntries = [
+    fixtureText('assets/seriousplayeranimations/player_animation/idle_standing.json', '{}'),
+  ];
+  const triggerReport = translatePlayerTriggers({ clips, archiveEntries });
+  const triggerFor = (name: string) => triggerReport.triggers.find(
+    (trigger) => trigger.clipId === \`animation.seriousplayeranimations.\${name}\`,
+  );
+  const shieldTrigger = triggerFor('shield');
+  const shieldSneakTrigger = triggerFor('shield_sneak');
+  const controller = synthesizePlayerAnimationController({
+    modId: 'seriousplayeranimations',
+    clips,
+    triggers: triggerReport.triggers,
+  });
+  const controllerDocs = Object.entries(controller.files).map(([path, raw]) => ({
+    path,
+    doc: JSON.parse(raw),
+  }));
+  const baseDoc = controllerDocs.find((entry) => entry.path.includes('seriousplayeranimations.player.animation_controllers.json'));
+  const overlayDoc = controllerDocs.find((entry) => entry.path.includes('seriousplayeranimations_overlay.player.animation_controllers.json'));
+  const baseId = controller.controllerIds.find((id) => id.includes('seriousplayeranimations.player_ported'));
+  const overlayId = controller.controllerIds.find((id) => id.includes('seriousplayeranimations_overlay.player_ported'));
+  const clipIdsIn = (doc: any, id: string | undefined): string[] => {
+    const states = id ? doc?.animation_controllers?.[id]?.states ?? {} : {};
+    return Object.values(states).flatMap((state: any) => Array.isArray(state.animations) ? state.animations : []);
+  };
+  const baseStateClips = clipIdsIn(baseDoc?.doc, baseId);
+  const overlayStateClips = clipIdsIn(overlayDoc?.doc, overlayId);
+
+  const playerEntity = {
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: {
+        identifier: 'minecraft:player',
+        animations: {
+          root: 'controller.animation.player.root',
+          serious_base: baseId,
+          serious_overlay: overlayId,
+        },
+        scripts: {
+          animate: ['root', 'serious_base', 'serious_overlay'],
+        },
+      },
+    },
+  };
+  const files: Record<string, PackFile> = {
+    ...controller.files,
+    'animations/seriousplayeranimations.animation.json': JSON.stringify({
+      format_version: '1.8.0',
+      animations: Object.fromEntries(clipIds.map((id) => [id, {
+        animation_length: 2.0,
+        loop: true,
+        bones: {},
+      }])),
+    }),
+    'entity/player.entity.json': JSON.stringify(playerEntity),
+  };
+  const dependencyReport = resolvePlayerDependencies({
+    modId: 'seriousplayeranimations',
+    resourcePackFiles: files,
+    behaviorPackFiles: {},
+  });
+  const finalEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const scripts = finalEntity?.scripts ?? {};
+  const preAnimation = Array.isArray(scripts.pre_animation) ? scripts.pre_animation as string[] : [];
+  const initialize = Array.isArray(scripts.initialize) ? scripts.initialize as string[] : [];
+  const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(\`variable.\${name} =\`));
+  const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
+  const shieldIds = [
+    'animation.seriousplayeranimations.shield',
+    'animation.seriousplayeranimations.shield_sneak',
+  ];
+  const checks: RegressionAssertion[] = [{
+    label: 'the Serious Player Animations resource namespace selects its known source profile',
+    expected: 'Serious Player Animations 1.1.1',
+    actual: triggerReport.sourceProfile ?? 'no source profile',
+    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.1'
+  }, {
+    label: 'all six supplied locomotion clips receive source-derived conditions',
+    expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
+    actual: \`\${locomotion.length} mapped locomotion trigger(s)\`,
+    passed: locomotion.length === 6 && locomotion.every((trigger) => Boolean(trigger.condition))
+  }, {
+    label: 'the extra animation.running definition is not falsely activated',
+    expected: 'unreferenced source definition remains unresolved',
+    actual: triggerReport.triggers.find((trigger) => trigger.clipId === 'animation.running')?.status ?? 'missing',
+    passed: triggerReport.triggers.find((trigger) => trigger.clipId === 'animation.running')?.status === 'unresolved'
+  }, {
+    label: 'shield clips retain their separate overlay layer',
+    expected: 'shield and shield_sneak are overlay triggers',
+    actual: shieldTrigger?.layer === 'overlay' && shieldSneakTrigger?.layer === 'overlay' ? 'both overlay' : 'layer missing',
+    passed: shieldTrigger?.layer === 'overlay' && shieldSneakTrigger?.layer === 'overlay'
+  }, {
+    label: 'the player controller generator emits independent base and overlay controllers',
+    expected: 'two controller IDs and two controller files',
+    actual: \`\${controller.controllerIds.length} controller(s), \${controllerDocs.length} file(s)\`,
+    passed: controller.controllerIds.length === 2 && controllerDocs.length === 2 && Boolean(baseId && overlayId)
+  }, {
+    label: 'locomotion and shield states do not compete in the same controller',
+    expected: 'six locomotion clips in base; two shield clips in overlay',
+    actual: \`base=\${baseStateClips.length}, overlay=\${overlayStateClips.length}\`,
+    passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(\`animation.seriousplayeranimations.\${name}\`)) &&
+      shieldIds.every((id) => overlayStateClips.includes(id)) &&
+      shieldIds.every((id) => !baseStateClips.includes(id))
+  }, {
+    label: 'the source movement and direction calculations are restored in player Molang scope',
+    expected: 'move speed, backward direction and turn delta expressions injected',
+    actual: ['spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
+    passed: ['spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+  }, {
+    label: 'the previous body yaw variable starts from the source initial value',
+    expected: 'variable.spa_previous_body_yaw = 0.0 in initialize',
+    actual: initialize.find((statement) => statement.startsWith('variable.spa_previous_body_yaw =')) ?? 'missing',
+    passed: initialize.some((statement) => statement.startsWith('variable.spa_previous_body_yaw = 0.0'))
+  }, {
+    label: 'all reconstructed source variables pass the player dependency audit',
+    expected: 'zero unresolved player variables',
+    actual: dependencyReport.variables.unresolved.map((entry) => entry.variable).join(', ') || 'none',
+    passed: dependencyReport.variables.unresolved.length === 0
+  }];
+  return build(
+    'serious-player-animation-source-adapter',
+    'Serious Player Animations (source-derived locomotion, overlays and Molang scope)',
+    'Animation',
+    checks,
+    [],
+    ['Offhand shield mirroring remains an explicit approximation; live Bedrock playback is not measured by this structural fixture.'],
+    started,
+  );
 }
