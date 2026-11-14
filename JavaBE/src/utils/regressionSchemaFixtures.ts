@@ -1976,6 +1976,9 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
         description: {
           identifier: 'minecraft:player',
           animations: {
+            base_pose: 'animation.player.base_pose',
+            look_at_target: 'animation.humanoid.look_at_target',
+            first_person_base_pose: 'animation.player.first_person_base_pose',
             ported_clip: 'animation.sample.equipment_pose',
             ported_controller: controllerId
           },
@@ -1994,6 +1997,20 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     modId: 'regress',
     resourcePackFiles: files,
     behaviorPackFiles: {}
+  });
+  const resolverPlayerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const resolverAnimations = resolverPlayerEntity?.animations ?? {};
+  const resolverCorrectedVanillaAliases =
+    resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
+    resolverAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
+    resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
+  // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
+  resolverAnimations.look_at_target = 'animation.humanoid.look_at_target';
+  files['entity/player.entity.json'] = JSON.stringify({
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: { ...resolverPlayerEntity, animations: resolverAnimations }
+    }
   });
   const playerBaselineGuardReport = guaranteePlayerBaselineWiring({
     resourcePackFiles: files
@@ -2021,11 +2038,14 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const vanillaTcos = playerPreAnimation.find(statement => /^variable\.tcos0\s*=/.test(statement));
   const vanillaSpear = playerPreAnimation.find(statement => /^variable\.melee_spear_equipped\s*=/.test(statement));
   const baselineByAlias = new Map(PLAYER_BASELINE_ENTRIES.map(entry => [entry.alias, entry]));
+  const finalPlayerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const finalAnimations = finalPlayerEntity?.animations ?? {};
   const correctVanillaAliases =
-    baselineByAlias.get('base_pose')?.identifier === 'animation.humanoid.base_pose' &&
-    baselineByAlias.get('look_at_target')?.identifier === 'controller.animation.humanoid.look_at_target' &&
-    baselineByAlias.get('look_at_target')?.kind === 'controller' &&
-    baselineByAlias.get('first_person_base_pose')?.identifier === 'animation.player.first_person.base_pose';
+    resolverCorrectedVanillaAliases &&
+    finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
+    finalAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
+    finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
+    baselineByAlias.get('look_at_target')?.kind === 'controller';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
     label: 'player-owned clips are identified by entity registration rather than filenames',
