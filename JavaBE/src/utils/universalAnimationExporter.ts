@@ -1,7 +1,5 @@
 import type { UniversalAnimationIRReport } from '@/utils/universalAnimationIR';
-import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import { emitAnimationClip } from '@/utils/animationIREmitter';
-import { inferClipTrigger } from '@/utils/animationTriggerInference';
 import { safeFileId } from '@/utils/bedrockIds';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
 import { resolvePlayerBone } from '@/utils/playerBoneAliases';
@@ -38,6 +36,8 @@ export interface UniversalAnimationExportReport {
   animationFiles: string[];
   registeredClips: string[];
   activatedClips: string[];
+  /** Registered clips withheld from automatic playback because no source activation condition was recovered. */
+  unresolvedActivationClips: string[];
   registeredOnEntities: string[];
   standaloneOwners: string[];
   /** Clips the pack defines but no client entity could own, with the reason. */
@@ -227,22 +227,19 @@ function ensurePlayerSlot(
 }
 
 /**
- * The condition a clip runs under. The translated source trigger wins when it exists; otherwise
- * perspective decides. A clip with neither is gated off the first-person view rather than left
- * permanently active, because a body clip that runs in every context deforms the hand pose.
+ * A clip may only be auto-started when its source activation condition was recovered and
+ * translated. Perspective is an additional safety gate, never a substitute for the trigger.
+ * Inferring attack/idle/locomotion from a clip name or its bone layout fabricates behavior and
+ * can cause unrelated clips to fight over the same player rig.
  */
 function clipCondition(
   perspective: string,
-  clipId: string,
-  document: Record<string, unknown>,
   sourceCondition?: string,
-): string {
+): string | null {
+  const trigger = (sourceCondition ?? '').trim();
+  if (!trigger) return null;
   const view = perspective === 'first_person' ? 'query.is_first_person' : '!query.is_first_person';
-  const parts: string[] = [view];
-  const trigger = (sourceCondition ?? '').trim()
-    || (inferClipTrigger(clipId, document as unknown as BedrockAnimationClip)?.condition ?? '').trim();
-  if (trigger && !parts.includes(trigger)) parts.push(trigger);
-  return parts.join(' && ');
+  return `(${trigger}) && (${view})`;
 }
 
 function uniqueKey(raw: string, taken: Set<string>): string {
@@ -352,6 +349,7 @@ export function exportUniversalAnimationIR(input: {
     animationFiles: [],
     registeredClips: [],
     activatedClips: [],
+    unresolvedActivationClips: [],
     registeredOnEntities: [],
     standaloneOwners: [],
     unregisteredClips: [],
@@ -543,10 +541,15 @@ export function exportUniversalAnimationIR(input: {
       }
       const condition = clipCondition(
         clipMeta[clipId]?.perspective ?? 'unspecified',
-        clipId,
-        shipped.get(clipId)?.body ?? {},
         triggerConditions[clipId],
       );
+      if (!condition) {
+        // Registration is not activation. Do not invent an attack/idle/movement condition from
+        // a filename or track shape: leave the clip available for explicit runtime playback and
+        // make the missing source-state relationship visible in the conversion report.
+        report.unresolvedActivationClips.push(clipId);
+        continue;
+      }
       existingAnimate.push({ [key]: condition });
       report.activatedClips.push(clipId);
       activated += 1;
@@ -589,7 +592,7 @@ export function exportUniversalAnimationIR(input: {
 
   report.summary =
     `Universal animation writer: ${report.irClips} interpreted clip(s) → ${report.emittedClips.length} new definition(s) written across ${report.animationFiles.length} document(s), ${report.alreadyShipped} already carried; ` +
-    `${report.registeredClips.length} newly registered on ${report.registeredOnEntities.length} client entit(ies) (${report.activatedClips.length} activated here, ${report.scriptDrivenClips.length} fired from the behaviour script), ` +
+    `${report.registeredClips.length} newly registered on ${report.registeredOnEntities.length} client entit(ies) (${report.activatedClips.length} source-triggered here, ${report.scriptDrivenClips.length} fired from the behaviour script, ${report.unresolvedActivationClips.length} awaiting recovered source triggers), ` +
     `${report.clientEntitiesCreated.length} client entity document(s) created so a clip set has a rendering owner, ` +
     `${report.unregisteredClips.length} clip(s) UNREGISTERED with the reason recorded, ${report.duplicateRegistrations} already-registered clip(s) skipped` +
     `${report.budgetExhausted ? ', emission budget exhausted' : ''}.`;
