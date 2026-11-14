@@ -1,5 +1,7 @@
 # GTAV AutoPort
 
+**2026-11-14 — Local 7z archive intake:** AutoPort now bundles the 7-Zip command-line binary for local extraction of `.7z` mods, including archives such as the Durango SRT test target. Extraction is performed by the local Vite workbench, inventories entries before extraction, rejects unsafe paths/links and encrypted entries, and enforces 160 MiB compressed / 512 MiB expanded / 5,000-file limits. No archive is uploaded to a remote service; this does not convert resources for PS4.
+
 **2026-11-14 — OpenIV OIV intake:** AutoPort now opens `.oiv` packages directly using the ZIP container reader, detects and parses `assembly.xml`, extracts basic package metadata and inventories declared file operations for review. It does not execute OIV install instructions or assume PC install paths are valid on PS4.
 
 **2026-11-14 — Guided workflow update:** the workbench now includes an in-app step-by-step porting guide, contextual next-step prompts, and first-run native-tool setup. `START-AUTOPORT.bat` installs web dependencies and attempts to fetch/build the pinned RageKit backend automatically when the local CMake/C++ toolchain is present. PS4 1.73 output remains unvalidated.
@@ -20,7 +22,7 @@ Universal intake does not mean every PC mod is automatically portable: Windows/A
 
 A separate, local-first project inside this repository for analyzing PC Grand Theft Auto V mods and preparing validated PlayStation 4 Story Mode conversions for GoldHEN.
 
-> **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
+> **Development status:** ZIP/OIV/7z/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
 
 ## Latest update
 
@@ -140,7 +142,7 @@ A PC replacement for the existing `glendale` vehicle containing `glendale.yft`, 
 ## Run the workbench
 Requirements: Node.js 20 or newer.
 
-On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs dependencies on first launch, and starts the local workbench. Keep the terminal window open while using the app.
+On Windows, double-click `START-AUTOPORT.bat`. It checks Node.js, installs dependencies (including the bundled 7-Zip executable) on first launch, and starts the local workbench. Keep the terminal window open while using the app. The `.7z` extraction endpoint is provided by this local development server; a static hosted build alone cannot run native archive extraction.
 
     npm install
     npm run dev
