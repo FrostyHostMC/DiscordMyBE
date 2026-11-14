@@ -21,10 +21,84 @@ export interface PlayerBaselineEntry {
   kind: PlayerBaselineKind;
   /** Molang gate the vanilla file applies to this entry, or null when it always plays. */
   gate: string | null;
+  /** False for compatibility aliases resolved by a controller rather than played directly. */
+  animate?: boolean;
 }
 
 /** Gate Bedrock uses to keep hand/first-person resources out of the third-person body. */
 export const FIRST_PERSON_GATE = 'query.is_first_person';
+
+/**
+ * Player-scope variables required by the vanilla player animation contract.
+ *
+ * These expressions are based on Mojang's published Bedrock player resources. They are
+ * restored into the player entity because a custom player.entity.json replaces the vanilla
+ * script scope along with its animation map.
+ */
+/**
+ * Variables supplied by the Bedrock engine itself. Mojang's published entity resources
+ * read these without declaring them in entity scripts, so the resolver must not synthesize
+ * a constant or report them as missing player-scope assignments.
+ */
+export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
+  'gliding_speed_value',
+  'short_arm_offset_left',
+  'short_arm_offset_right',
+]);
+
+export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
+  expression: string;
+  evidence: string;
+  always?: boolean;
+  initializeExpression?: string;
+}> = {
+  tcos0: {
+    expression: '(math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3',
+    evidence: 'Mojang bedrock-samples resource_pack/entity/player.entity.json pre_animation expression',
+    always: true,
+  },
+  melee_spear_equipped: {
+    expression: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
+    evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
+    always: true,
+  },
+  // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
+  spa_dx: {
+    expression: 'query.position(0) - variable.spa_last_x',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): vx = pos.x - lastPos.x',
+  },
+  spa_dz: {
+    expression: 'query.position(2) - variable.spa_last_z',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): vz = pos.z - lastPos.z',
+  },
+  spa_move_speed: {
+    expression: 'math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0))',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz)',
+  },
+  spa_moving_backwards: {
+    expression: '(variable.spa_move_speed > 0.0) && ((variable.spa_dx * math.cos((query.body_y_rotation + 90.0) * 0.01745329252) + variable.spa_dz * math.sin((query.body_y_rotation + 90.0) * 0.01745329252)) < 0.0)',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): movementVector.length() > 0 && movementVector.dot(lookVector) < 0',
+  },
+  spa_turn_delta: {
+    expression: 'query.body_y_rotation - variable.spa_previous_body_yaw',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = byaw - prevbyaw',
+  },
+  spa_last_x: {
+    expression: 'query.position(0)',
+    initializeExpression: '0.0',
+    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.x to 0 and updates it to pos.x after each tick',
+  },
+  spa_last_z: {
+    expression: 'query.position(2)',
+    initializeExpression: '0.0',
+    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.z to 0 and updates it to pos.z after each tick',
+  },
+  spa_previous_body_yaw: {
+    expression: 'query.body_y_rotation',
+    initializeExpression: '0.0',
+    evidence: 'SeriousPlayerAnimationsMixin initializes prevbyaw to 0 and updates it to byaw after each tick',
+  },
+};
 
 /**
  * Baseline wiring of `minecraft:player`. `base_pose` builds the rest pose, `look_at_target`
@@ -32,7 +106,11 @@ export const FIRST_PERSON_GATE = 'query.is_first_person';
  * controller every other pose is layered under.
  */
 export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
+  // `base_pose` is retained as a compatibility alias for older/generated player
+  // controllers, but it resolves to the real vanilla humanoid base-pose animation.
+  { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null, animate: false },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
+  // The vanilla humanoid look-at pose is an animation, not an animation controller.
   { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
@@ -50,24 +128,26 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   },
 ];
 
-
-/** Vanilla player-scope values required by the baseline animation/controller resources. */
+/**
+ * Vanilla player-scope values required by the baseline animation/controller resources.
+ * The canonical expressions live in PLAYER_SCOPE_VARIABLE_EXPRESSIONS so dependency
+ * reconstruction and baseline wiring cannot drift or disagree about spear detection.
+ */
 export const PLAYER_BASELINE_PRE_ANIMATION: string[] = [
-  // Used by the vanilla player/humanoid locomotion clips (including arm and leg swing).
-  'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;',
-  // The vanilla root controller selects spear-specific clips from this live equipment flag.
-  "variable.melee_spear_equipped = query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:spear');",
-];
+  'tcos0',
+  'melee_spear_equipped',
+].map((name) => {
+  const definition = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+  return `variable.${name} = ${definition.expression};`;
+});
 
 /** Alias -> identifier map every player definition must declare. */
 export const VANILLA_PLAYER_ANIMATIONS: Record<string, string> = Object.fromEntries(
   PLAYER_BASELINE_ENTRIES.map((entry) => [entry.alias, entry.identifier]),
 );
 
-/** `scripts.animate` entries that keep the vanilla player animated. */
-export const VANILLA_PLAYER_ANIMATE: Array<string | Record<string, string>> = PLAYER_BASELINE_ENTRIES.map(
-  (entry) => (entry.gate ? { [entry.alias]: entry.gate } : entry.alias),
-);
+/** The vanilla player runs its root controller; that controller layers the remaining aliases. */
+export const VANILLA_PLAYER_ANIMATE: Array<string | Record<string, string>> = ['root'];
 
 /** Animation identifiers the base game defines for the player/humanoid rig. */
 export const VANILLA_PLAYER_ANIMATION_IDS = new Set<string>(
@@ -106,6 +186,7 @@ export const VANILLA_PLAYER_DOCUMENT_PATHS = new Set<string>([
   'animations/player.animation.json',
   'animations/humanoid.animation.json',
   'animation_controllers/player.animation_controllers.json',
+  'animation_controllers/humanoid.animation_controllers.json',
   'render_controllers/player.render_controllers.json',
 ]);
 
