@@ -26,6 +26,7 @@ import { resolveMobStatProfile } from '@/utils/mobStatResolver';
 import { isPlayableModeEnabled } from '@/utils/provenance';
 import { remapAnimationBones, type BedrockAnimationClip } from '@/utils/animationTranslator';
 import { mapClipsToPlayerSkeleton } from '@/utils/playerBoneMapping';
+import { retargetJavaPlayerHierarchy } from '@/utils/playerHierarchyRetarget';
 import { getPlayerBoneAliasStats } from '@/utils/playerBoneAliases';
 import { translatePlayerTriggers, type PlayerTriggerReport } from '@/utils/playerAnimationTriggers';
 import { classifyPlayerAnimationOwnership } from '@/utils/animationOwnership';
@@ -181,10 +182,13 @@ function bridgePlayerRigClips(
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
     return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
+  const hierarchy = retargetJavaPlayerHierarchy(fit.clips, 'classic');
+  if (hierarchy.transformed > 0) log(`[PLAYER-HIERARCHY] Parent-relative transforms recalculated for ${hierarchy.transformed} clip(s) across the Bedrock root → waist → body → limb hierarchy.`);
+  for (const warning of hierarchy.warnings.slice(0, 8)) log(`[PLAYER-HIERARCHY] ${warning}`);
   const renamed: Record<string, BedrockAnimationClip> = {};
   for (const [owner, ownerClips] of Object.entries(clipsByOwner)) {
     for (const clipId of Object.keys(ownerClips)) {
-      const mapped = fit.clips[clipId];
+      const mapped = hierarchy.clips[clipId];
       if (!mapped?.bones || Object.keys(mapped.bones).length === 0) continue;
       const tail = safeFileId(clipId.split(/[.:/]+/).pop() ?? clipId) || 'clip';
       const ownerSlug = safeFileId(owner) || 'source';
