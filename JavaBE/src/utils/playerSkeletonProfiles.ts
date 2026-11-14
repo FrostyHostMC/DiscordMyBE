@@ -92,6 +92,10 @@ export interface PlayerRigBoneAudit {
   sourceParent?: string | null;
   resolvedTarget: string | null;
   targetParents: Partial<Record<'javaClassic' | 'javaSlim' | 'bedrockClassic' | 'bedrockSlim', string | null>>;
+  /** Whether the source parent relationship agrees with the corresponding Bedrock parent. */
+  parentRelationship: 'same' | 'different' | 'unmeasured';
+  sourceParentOnJavaProfile: string | null;
+  bedrockParentForTarget: string | null;
   attachment: boolean;
   status: 'exact' | 'variant-compatible' | 'unmapped';
 }
@@ -125,14 +129,28 @@ export function auditPlayerRigBones(
     const roles = Object.values(matches).filter(Boolean).map((bone) => bone!.role);
     const allFour = present === 4;
     const variantCompatible = present > 0 && new Set(roles).size === 1;
+    const sourceParent = sourceParents[sourceBone] ?? null;
+    const sourceParentProfile = sourceParent
+      ? java('classic').bones.find((bone) => normalized(bone.name) === normalized(sourceParent)) ?? null
+      : null;
+    const bedrockTarget = matches.bedrockClassic;
+    const parentRelationship: PlayerRigBoneAudit['parentRelationship'] =
+      !sourceParent || !sourceParentProfile || !bedrockTarget
+        ? 'unmeasured'
+        : normalized(sourceParentProfile.parent ?? '') === normalized(bedrockTarget.parent ?? '')
+          ? 'same'
+          : 'different';
     return {
       sourceBone,
       javaClassic: matches.javaClassic?.name ?? null,
       javaSlim: matches.javaSlim?.name ?? null,
       bedrockClassic: matches.bedrockClassic?.name ?? null,
       bedrockSlim: matches.bedrockSlim?.name ?? null,
-      sourceParent: sourceParents[sourceBone] ?? null,
+      sourceParent,
       resolvedTarget: mappedTargets[sourceBone] ?? null,
+      parentRelationship,
+      sourceParentOnJavaProfile: sourceParentProfile?.parent ?? null,
+      bedrockParentForTarget: bedrockTarget?.parent ?? null,
       targetParents: {
         javaClassic: matches.javaClassic?.parent ?? null,
         javaSlim: matches.javaSlim?.parent ?? null,
