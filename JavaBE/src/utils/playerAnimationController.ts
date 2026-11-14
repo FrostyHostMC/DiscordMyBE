@@ -32,6 +32,8 @@ import { translateMolangExpression } from '@/utils/molangCompatibility';
 export interface PlayerControllerReport {
   controllerId: string | null;
   filePath: string | null;
+  overlayControllerId?: string | null;
+  overlayFilePath?: string | null;
   states: string[];
   /** Clips activated by a controller state, in evaluation order. */
   controllerDrivenClips: string[];
@@ -85,6 +87,8 @@ export function synthesizePlayerAnimationController(options: {
   clips: Record<string, BedrockAnimationClip>;
   triggers: PlayerClipTrigger[];
   onLog?: (line: string) => void;
+  /** Internal recursion guard when compiling the base and overlay layers independently. */
+  _singleLayer?: boolean;
 }): PlayerControllerSynthesis {
   const log = (line: string) => options.onLog?.(line);
   // Clips without a recovered condition remain registered on the entity but are not started
@@ -106,6 +110,59 @@ export function synthesizePlayerAnimationController(options: {
       note,
     },
   });
+
+  // The source mod runs shield poses on a second animation layer. Compile those separately so
+  // they blend over locomotion instead of competing with walking/running in one exclusive state
+  // machine. Generic player clips remain on the base layer unless the source adapter proves
+  // otherwise.
+  if (!options._singleLayer && options.triggers.some((trigger) => trigger.layer === 'overlay')) {
+    const baseTriggers = options.triggers.filter((trigger) => trigger.layer !== 'overlay');
+    const overlayTriggers = options.triggers.filter((trigger) => trigger.layer === 'overlay');
+    const baseResult = baseTriggers.some((trigger) => Boolean(trigger.condition) && !trigger.scriptDriven)
+      ? synthesizePlayerAnimationController({
+          ...options,
+          triggers: baseTriggers,
+          _singleLayer: true,
+        })
+      : null;
+    const overlayResult = synthesizePlayerAnimationController({
+      ...options,
+      modId: `${options.modId}_overlay`,
+      triggers: overlayTriggers,
+      _singleLayer: true,
+    });
+    const results = [baseResult, overlayResult].filter(
+      (result): result is PlayerControllerSynthesis => Boolean(result && result.controllerIds.length > 0),
+    );
+    if (results.length === 0) return empty('No source-backed player animation layer carried a translatable trigger.');
+    const files = Object.assign({}, ...results.map((result) => result.files));
+    const controllerIds = results.flatMap((result) => result.controllerIds);
+    const controllerDrivenClips = results.flatMap((result) => result.controllerDrivenClips);
+    const note = results.map((result, index) =>
+      `${index === 0 && baseResult ? 'Base layer' : 'Overlay layer'}: ${result.report.note}`,
+    ).join(' ');
+    log(`[ANIM:CONTROLLER] Compiled ${controllerIds.length} independent player animation layer controller(s); overlay clips can now blend with locomotion.`);
+    return {
+      files,
+      controllerIds,
+      controllerDrivenClips,
+      report: {
+        controllerId: baseResult?.report.controllerId ?? overlayResult.report.controllerId,
+        filePath: baseResult?.report.filePath ?? overlayResult.report.filePath,
+        overlayControllerId: baseResult ? overlayResult.report.controllerId : null,
+        overlayFilePath: baseResult ? overlayResult.report.filePath : null,
+        states: results.flatMap((result, index) =>
+          result.report.states.map((state) => `${index === 0 && baseResult ? 'base' : 'overlay'}:${state}`),
+        ),
+        controllerDrivenClips,
+        clipsLeftInAnimate: results.flatMap((result) => result.report.clipsLeftInAnimate),
+        conditionRepairs: results.flatMap((result) => result.report.conditionRepairs),
+        unresolved: results.flatMap((result) => result.report.unresolved),
+        sharedConditions: results.flatMap((result) => result.report.sharedConditions),
+        note,
+      },
+    };
+  }
 
   const candidates = options.triggers.filter(
     (trigger) => !trigger.scriptDriven && Boolean(trigger.condition) && Boolean(options.clips[trigger.clipId]),
