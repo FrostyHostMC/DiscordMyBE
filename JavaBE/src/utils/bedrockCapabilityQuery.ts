@@ -75,9 +75,9 @@ export const VERSION_TARGETS: VersionTargetOption[] = [
   },
   {
     id: 'preview',
-    label: 'Bedrock Preview / Beta',
-    version: [1, 21, 60],
-    scriptApiVersion: '1.17.0-beta',
+    label: 'Bedrock Preview 26.70 / Beta',
+    version: [1, 26, 70],
+    scriptApiVersion: '2.13.0-beta',
     description: 'Experimental testing environment: enables script_eval, beta modules, and pre-release engine features.',
   },
 ];
