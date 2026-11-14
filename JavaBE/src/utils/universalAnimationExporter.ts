@@ -335,6 +335,8 @@ export function exportUniversalAnimationIR(input: {
   triggerConditions?: Record<string, string>;
   /** Clips the shipped behaviour script fires; they are registered but not gated by Molang. */
   scriptDrivenClips?: string[];
+  /** Source clip ids already represented by a retargeted player-bridge definition. */
+  handledSourceClipIds?: string[];
   onLog?: (line: string) => void;
 }): UniversalAnimationExportReport {
   const { ir, resourcePackFiles } = input;
@@ -342,6 +344,7 @@ export function exportUniversalAnimationIR(input: {
   const modId = input.modId ?? 'aippy';
   const triggerConditions = input.triggerConditions ?? {};
   const scriptDriven = new Set(input.scriptDrivenClips ?? []);
+  const handledSourceClipIds = new Set(input.handledSourceClipIds ?? []);
   const report: UniversalAnimationExportReport = {
     irClips: 0,
     alreadyShipped: 0,
@@ -401,6 +404,13 @@ export function exportUniversalAnimationIR(input: {
     report.irClips += 1;
     if (treated.has(clip.id)) continue;
     treated.add(clip.id);
+    if (handledSourceClipIds.has(clip.id)) {
+      report.skipped.push({
+        clipId: clip.id,
+        reason: 'already represented by a retargeted player-bridge clip; the unretargeted source copy is withheld to prevent duplicate player playback',
+      });
+      continue;
+    }
     if (shipped.has(clip.id)) {
       report.alreadyShipped += 1;
     } else {
