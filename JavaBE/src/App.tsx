@@ -153,7 +153,23 @@ export default function App() {
     setExporting(true); setExportStatus(null);
     try {
       const outcome = await exportAddonFile(remake.zipBytes, remake.fileName);
-      setExportStatus(outcome.message); appendLog(`[EXPORT] ${outcome.message}`); playSuccess();
+      setExportStatus(outcome.message);
+      appendLog(`[EXPORT] ${outcome.message}`);
+      if (outcome.success) {
+        // The browser/share sheet has accepted the file. Keep the conversion report in
+        // memory, but release the large generated archive so JavaBE does not retain a
+        // second copy for the rest of the session. Nothing is uploaded or persisted.
+        setRemake(current => current ? {
+          ...current,
+          zipBytes: new Uint8Array(0),
+          behaviorPackFiles: {},
+          resourcePackFiles: {},
+          geyserBundle: current.geyserBundle
+            ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
+            : undefined,
+        } : current);
+      }
+      playSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setExportStatus(`Export failed: ${message}`); appendLog(`[EXPORT ERROR] ${message}`); playError();
@@ -203,7 +219,7 @@ export default function App() {
         {activeWorkspace === 'convert' && <>
           <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3.5 sm:p-5"><InputPanel value={brief} file={file} entries={entries} upscalingEnabled={upscalingEnabled} onChange={setBrief} onFileLoaded={(newFile, newEntries) => { setFile(newFile); setEntries(newEntries); setStage('idle'); setRemake(null); setError(null); setExportStatus(null); setInspectionStats(null); if (newFile) appendLog(`[SCAN] ${newFile.name} loaded; conversion options are inferred from its contents.`); if (newFile && newEntries.length > 0) void handleGenerate(newFile, newEntries); }} onGenerate={() => void handleGenerate()} onUpscalingChange={updateUpscaling} generating={stage === 'analyzing' || stage === 'generating'} accent={accent} /></section>
           {entries.length > 0 && <TexturePreviewComparison entries={entries} upscalingEnabled={upscalingEnabled} />}
-          {stage === 'ready' && remake && <section className="flex flex-col gap-3 rounded-2xl border border-emerald-700/40 bg-emerald-950/20 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold text-white">{remake.name}</h2><p className="text-xs text-slate-400">Bedrock add-on ready to download</p></div><span className="max-w-full truncate font-mono text-[10px] text-emerald-200">{remake.fileName}</span></div><p className="text-xs leading-relaxed text-slate-300">Review validation and unsupported-content notes before importing. Conversion results can still require in-game testing.</p><button type="button" onClick={() => void handleExport()} disabled={exporting} className="flex min-h-[60px] items-center justify-center gap-2 rounded-xl bg-violet-300 px-4 text-sm font-bold text-slate-950 active:scale-[0.99] disabled:opacity-50"><Download className="h-5 w-5" />{exporting ? 'Preparing download…' : 'Download Bedrock add-on'}</button>{exportStatus && <p aria-live="polite" className="text-xs text-emerald-200">{exportStatus}</p>}{validationReport && <button type="button" onClick={() => switchTab('validation')} className="min-h-[52px] rounded-xl border border-slate-700 px-3 text-xs font-semibold text-slate-200 active:bg-slate-800">Review validation · {validationReport.repairedCount} repaired · {validationReport.errorCount} unresolved</button>}</section>}
+          {stage === 'ready' && remake && <section className="flex flex-col gap-3 rounded-2xl border border-emerald-700/40 bg-emerald-950/20 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h2 className="font-bold text-white">{remake.name}</h2><p className="text-xs text-slate-400">Bedrock add-on ready to download</p></div><span className="max-w-full truncate font-mono text-[10px] text-emerald-200">{remake.fileName}</span></div><p className="text-xs leading-relaxed text-slate-300">Review validation and unsupported-content notes before importing. Conversion results can still require in-game testing.</p>{remake.zipBytes.length > 0 ? <button type="button" onClick={() => void handleExport()} disabled={exporting} className="flex min-h-[60px] items-center justify-center gap-2 rounded-xl bg-violet-300 px-4 text-sm font-bold text-slate-950 active:scale-[0.99] disabled:opacity-50"><Download className="h-5 w-5" />{exporting ? 'Preparing download…' : 'Download Bedrock add-on'}</button> : <p className="rounded-xl border border-emerald-700/40 bg-emerald-950/20 px-4 py-3 text-center text-xs text-emerald-200">Export handed off. Temporary addon data cleared from this session.</p>}{exportStatus && <p aria-live="polite" className="text-xs text-emerald-200">{exportStatus}</p>}{validationReport && <button type="button" onClick={() => switchTab('validation')} className="min-h-[52px] rounded-xl border border-slate-700 px-3 text-xs font-semibold text-slate-200 active:bg-slate-800">Review validation · {validationReport.repairedCount} repaired · {validationReport.errorCount} unresolved</button>}</section>}
           <section className="rounded-2xl border border-slate-800 bg-slate-900/55 p-3.5 sm:p-4"><AnalysisPanel stage={stage} error={error} accent={accent2} decompileStats={currentStats || remake?.decompileStats} translationStatus={remake?.translationStatus} logs={logs} parityHealth={remake?.parityHealth} isAutoHealing={isAutoHealing} /></section>
           <details className="rounded-2xl border border-slate-800 bg-slate-900/50"><summary className="flex min-h-[60px] cursor-pointer items-center gap-2 px-4 text-sm font-semibold text-slate-200"><Sliders className="h-4 w-4 text-violet-300" />Advanced target and compatibility</summary><div className="border-t border-slate-800 p-3"><CapabilityQueryPanel accent={accent} targetVersion={targetVersion} onTargetVersionChange={version => { setTargetVersion(version); setExperimentConfig(previous => ({ ...previous, targetVersion: version })); }} experimentConfig={experimentConfig} onExperimentConfigChange={setExperimentConfig} brief={brief} entries={entries} /></div></details>
           <label className="flex min-h-[56px] items-center justify-between rounded-xl border border-slate-800 bg-slate-900/40 px-4 text-xs text-slate-300"><span>Upscale legacy textures</span><input type="checkbox" checked={upscalingEnabled} onChange={event => updateUpscaling(event.target.checked)} className="h-5 w-5 accent-violet-400" /></label>
