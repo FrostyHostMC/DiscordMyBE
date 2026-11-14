@@ -9,7 +9,7 @@ const ZERO: Vec3 = [0, 0, 0];
 const ONE: Vec3 = [1, 1, 1];
 const IDENTITY: Quat = [0, 0, 0, 1];
 const JAVA_TO_BEDROCK: Record<string, string> = {
-  root: 'root', head: 'head', hat: 'hat', body: 'body',
+  head: 'head', hat: 'hat', body: 'body',
   right_arm: 'rightArm', left_arm: 'leftArm', right_leg: 'rightLeg', left_leg: 'leftLeg',
   right_sleeve: 'rightSleeve', left_sleeve: 'leftSleeve',
   right_pants: 'rightPants', left_pants: 'leftPants', jacket: 'jacket', cloak: 'cape',
@@ -209,7 +209,7 @@ export function retargetJavaPlayerHierarchy(
 
         const originalTrack = original[bone.name] ?? {};
         const needsTrack = Boolean(original[bone.name]) || !isIdentity(local) ||
-          (bone.name === 'leftArm' || bone.name === 'rightArm');
+          false;
         if (!needsTrack) continue;
         const track = rewritten[bone.name] ?? { ...originalTrack };
         const existingFrames = (rewritten[bone.name] as Record<string, unknown> | undefined) ?? {};
