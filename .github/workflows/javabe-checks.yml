@@ -39,6 +39,25 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Build Activity
         run: pnpm build
+      - name: Setup Java 17 for the source dependency
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Setup Gradle for the source dependency
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.3'
+      - name: Checkout Serious Player Animations 1.1.0 source
+        run: git clone --depth 1 --branch 1.1.0 https://github.com/McVader34/Serious-Player-Animations.git /tmp/serious-player-animations
+      - name: Build the verified Serious Player Animations Java dependency
+        run: gradle :fabric:remapJar --no-daemon --stacktrace
+        working-directory: /tmp/serious-player-animations
+      - name: Export the source dependency JAR path
+        run: |
+          jar_path="$(find /tmp/serious-player-animations/fabric/build/libs -maxdepth 1 -type f -name 'seriousplayeranimations-1.1.0.jar' | head -n 1)"
+          test -n "$jar_path"
+          echo "SERIOUS_PLAYER_ANIMATIONS_JAR=$jar_path" >> "$GITHUB_ENV"
       - name: Run player Molang baseline regression
         run: node scripts/run-player-baseline-regression.mjs
       - name: Convert the original Pierced fixture through the current animation engine
