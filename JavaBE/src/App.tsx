@@ -192,7 +192,7 @@ export default function App() {
   const updateUpscaling = (enabled: boolean) => { setUpscalingEnabled(enabled); setAutoUpscaleLegacyTextures(enabled); };
 
   return (
-    <div className="javabe-app-shell min-h-screen w-full font-sans text-slate-100" style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
+    <div className={`javabe-app-shell min-h-screen w-full font-sans text-slate-100 ${stage === 'analyzing' || stage === 'generating' ? 'is-processing' : ''}`} style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
       <div className="javabe-cosmic-backdrop" aria-hidden="true"><span className="javabe-cosmic-cloud javabe-cosmic-cloud--one" /><span className="javabe-cosmic-cloud javabe-cosmic-cloud--two" /><span className="javabe-cosmic-stars" /><span className="javabe-cosmic-horizon" /></div>
       <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
         <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
