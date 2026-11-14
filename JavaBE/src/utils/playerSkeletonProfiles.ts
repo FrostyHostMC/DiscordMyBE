@@ -82,6 +82,64 @@ export const JAVA_PLAYER_BONE_NAMES = java('classic').map((bone) => bone.name) a
 export function getPlayerSkeletonProfile(platform: PlayerRigPlatform, armModel: PlayerArmModel): PlayerSkeletonProfile {
   return PLAYER_SKELETON_PROFILES[platform][armModel];
 }
+
+export interface PlayerRigBoneAudit {
+  sourceBone: string;
+  javaClassic: string | null;
+  javaSlim: string | null;
+  bedrockClassic: string | null;
+  bedrockSlim: string | null;
+  sourceParent?: string | null;
+  targetParents: Partial<Record<'javaClassic' | 'javaSlim' | 'bedrockClassic' | 'bedrockSlim', string | null>>;
+  attachment: boolean;
+  status: 'exact' | 'variant-compatible' | 'unmapped';
+}
+
+/** Audits each discovered source bone against all four authoritative vanilla player profiles.
+ * A name match is not enough: the profile parent and role are returned so callers can detect
+ * hierarchy changes and attachment-vs-deform mismatches rather than silently aliasing them.
+ */
+export function auditPlayerRigBones(
+  bones: string[],
+  sourceParents: Record<string, string> = {},
+): PlayerRigBoneAudit[] {
+  const profiles = {
+    javaClassic: getPlayerSkeletonProfile('java', 'classic'),
+    javaSlim: getPlayerSkeletonProfile('java', 'slim'),
+    bedrockClassic: getPlayerSkeletonProfile('bedrock', 'classic'),
+    bedrockSlim: getPlayerSkeletonProfile('bedrock', 'slim'),
+  } as const;
+  const normalized = (value: string) => normaliseBoneName(value);
+  return [...new Set(bones)].map((sourceBone) => {
+    const key = normalized(sourceBone);
+    const matches = Object.fromEntries(
+      Object.entries(profiles).map(([profileKey, profile]) => {
+        const hit = profile.bones.find((bone) => normalized(bone.name) === key);
+        return [profileKey, hit ?? null];
+      }),
+    ) as Record<keyof typeof profiles, PlayerRigBoneProfile | null>;
+    const present = Object.values(matches).filter(Boolean).length;
+    const roles = Object.values(matches).filter(Boolean).map((bone) => bone!.role);
+    const allFour = present === 4;
+    const variantCompatible = present > 0 && new Set(roles).size === 1;
+    return {
+      sourceBone,
+      javaClassic: matches.javaClassic?.name ?? null,
+      javaSlim: matches.javaSlim?.name ?? null,
+      bedrockClassic: matches.bedrockClassic?.name ?? null,
+      bedrockSlim: matches.bedrockSlim?.name ?? null,
+      sourceParent: sourceParents[sourceBone] ?? null,
+      targetParents: {
+        javaClassic: matches.javaClassic?.parent ?? null,
+        javaSlim: matches.javaSlim?.parent ?? null,
+        bedrockClassic: matches.bedrockClassic?.parent ?? null,
+        bedrockSlim: matches.bedrockSlim?.parent ?? null,
+      },
+      attachment: roles.includes('attachment'),
+      status: allFour && variantCompatible ? 'exact' : present > 0 && variantCompatible ? 'variant-compatible' : 'unmapped',
+    };
+  });
+}
 function normaliseBoneName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
