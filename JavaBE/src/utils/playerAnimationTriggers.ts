@@ -201,7 +201,6 @@ function seriousPlayerAnimationTrigger(
   shortName: string,
   sourceClipId: string,
 ): PlayerClipTrigger | null {
-  const lower = clipId.toLowerCase();
   const sourceLower = sourceClipId.toLowerCase();
   const tail = sourceLower.split(/[.:/]+/).pop() ?? sourceLower;
   const evidence = 'McVader34/Serious-Player-Animations 1.1.1 upstream source (JAR metadata version 1.1.0): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';

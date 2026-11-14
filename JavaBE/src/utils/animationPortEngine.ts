@@ -166,6 +166,7 @@ function bridgePlayerRigClips(
   clipsByOwner: Record<string, Record<string, BedrockAnimationClip>>,
   log: (line: string) => void,
   sourceSkeletons: UniversalAnimationDiscoveryReport['skeletons'] = [],
+  sourceClipIdsByOwner: Record<string, Record<string, string>> = {},
 ): {
   clips: Record<string, BedrockAnimationClip>;
   clipIds: string[];
@@ -204,7 +205,7 @@ function bridgePlayerRigClips(
   const fit = mapClipsToPlayerSkeleton(merged, 'player-animation-bridge', 1, sourceParents);
   if (!fit) {
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
-    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const auditExact = fit.rigAudit.filter((bone) => bone.status === 'exact').length;
   const auditVariant = fit.rigAudit.filter((bone) => bone.status === 'variant-compatible').length;
