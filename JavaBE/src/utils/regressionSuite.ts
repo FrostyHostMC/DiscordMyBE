@@ -568,7 +568,7 @@ function buildBundle(index: AssetIndex, entries: ExtractedZipEntry[], geometryFi
     behaviorPackFiles
   };
 }
-function measureFixture(fixture: RegressionFixture, modId: string, playableMode: boolean): RegressionFixtureResult {
+async function measureFixture(fixture: RegressionFixture, modId: string, playableMode: boolean): Promise<RegressionFixtureResult> {
   const started = performance.now();
   const entries = fixture.build();
   const expect = fixture.expect;
@@ -760,7 +760,7 @@ function measureFixture(fixture: RegressionFixture, modId: string, playableMode:
 
   // Animated texture timing.
   if (expect.animatedTextures && expect.animatedTextures.length > 0) {
-    const engine = runUniversalTextureEngine(entries, index);
+    const engine = await runUniversalTextureEngine(entries, index);
     for (const expected of expect.animatedTextures) {
       const recordEntry = findAnimatedTextureRecord(engine, expected.tail);
       record(`animation timing ${expected.tail}`, Boolean(recordEntry && recordEntry.frameCount === expected.frames && recordEntry.ticksPerFrame === expected.ticksPerFrame), `${expected.frames} frame(s) @ ${expected.ticksPerFrame} tick(s)`, recordEntry ? `${recordEntry.frameCount} frame(s) @ ${recordEntry.ticksPerFrame} tick(s)` : 'not decoded as animated');
@@ -1063,14 +1063,14 @@ function measureNestedMobBehaviorEvidence(): RegressionFixtureResult {
 }
 
 /** Runs the whole regression suite. Never throws: a broken fixture is reported as failed. */
-export function runRegressionSuite(options: RegressionRunOptions = {}): RegressionSuiteReport {
+export async function runRegressionSuite(options: RegressionRunOptions = {}): Promise<RegressionSuiteReport> {
   const modId = options.modId ?? DEFAULT_MOD_ID;
   const playableMode = options.playableMode ?? false;
   const log = (line: string) => options.onLog?.(line);
   log('[REGRESSION] Automated regression suite engaged — comparing source evidence with converted output...');
-  const fixtures: RegressionFixtureResult[] = REGRESSION_FIXTURES.map(fixture => {
+  const fixtures: RegressionFixtureResult[] = await Promise.all(REGRESSION_FIXTURES.map(async (fixture) => {
     try {
-      const result = measureFixture(fixture, modId, playableMode);
+      const result = await measureFixture(fixture, modId, playableMode);
       log(`[REGRESSION] ${result.status.toUpperCase()} ${fixture.label} (${result.durationMs} ms).`);
       return result;
     } catch (error) {
@@ -1093,7 +1093,7 @@ export function runRegressionSuite(options: RegressionRunOptions = {}): Regressi
         durationMs: 0
       };
     }
-  });
+  }));
   // Conversion-specific fixture measurements run through the real modules, never a template.
   const extraFixtures = [
     measureIdentifierNormalization(),
