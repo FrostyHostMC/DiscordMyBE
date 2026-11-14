@@ -320,7 +320,7 @@ export function resolvePlayerDependencies(input: {
   const animate: unknown[] = Array.isArray(scripts.animate) ? [...scripts.animate] : [];
 
   for (const entry of PLAYER_BASELINE_ENTRIES) {
-    if (typeof animations[entry.alias] !== 'string') {
+    if (animations[entry.alias] !== entry.identifier) {
       animations[entry.alias] = entry.identifier;
       report.baselineWiringAdded.push(entry.alias);
     }
