@@ -200,7 +200,7 @@ function seriousPlayerAnimationTrigger(
 ): PlayerClipTrigger | null {
   const lower = clipId.toLowerCase();
   const tail = lower.split(/[.:/]+/).pop() ?? lower;
-  const evidence = 'McVader34/Serious-Player-Animations 1.1.1 source (upstream revision 2dc73ceb744a): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
+  const evidence = 'McVader34/Serious-Player-Animations 1.1.0 source (verified upstream branch): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
   const move = 'variable.spa_move_speed';
   const backwards = 'variable.spa_moving_backwards';
   const notSneaking = '!query.is_sneaking';
