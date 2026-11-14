@@ -192,6 +192,7 @@ function cpRef(cp: Cp[], index: number): JvmConstantReference | undefined {
   else if (item.tag === 9 || item.tag === 10 || item.tag === 11 || item.tag === 17 || item.tag === 18) {
     const nt = cp[item.b ?? 0];
     result.owner = item.tag === 17 || item.tag === 18 ? undefined : cpClass(cp, item.a ?? 0);
+    if (item.tag === 17 || item.tag === 18) result.bootstrapIndex = item.a;
     if (nt?.tag === 12) {
       result.name = cpUtf8(cp, nt.a ?? 0);
       result.descriptor = cpUtf8(cp, nt.b ?? 0);
@@ -201,8 +202,6 @@ function cpRef(cp: Cp[], index: number): JvmConstantReference | undefined {
   } else if (item.tag === 15) {
     result.referenceKind = item.a ?? 0;
     result.reference = cpRef(cp, item.b ?? 0);
-  } else if (item.tag === 17 || item.tag === 18) {
-    result.bootstrapIndex = item.a;
   } else if (item.tag === 16) {
     result.descriptor = cpUtf8(cp, item.a ?? 0);
   }
