@@ -1,0 +1,25 @@
+name: JavaBE Pierced fixture analysis
+on:
+  push:
+    branches:
+      - javabe/pierced-fixture-analysis
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  analyze-fixtures:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Inspect original Java mod and generated Bedrock addon
+        run: python JavaBE/scripts/analyze-pierced-fixtures.py
+      - name: Upload fixture comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: javabe-pierced-fixture-analysis
+          path: fixture-analysis/
+          if-no-files-found: error
