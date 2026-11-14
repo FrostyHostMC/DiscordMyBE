@@ -1,45 +1,34 @@
 import type { BedrockAnimationClip } from '@/utils/animationTranslator';
-import { readChannel, sampleChannel, writeChannel } from '@/utils/animationTrackMath';
-import {
-  getPlayerSkeletonProfile,
-  javaPivotToBedrockPivot,
-  type PlayerArmModel,
-  type PlayerRigBoneProfile,
-} from '@/utils/playerSkeletonProfiles';
+import { readChannel, sampleChannel } from '@/utils/animationTrackMath';
+import { getPlayerSkeletonProfile, javaPivotToBedrockPivot, type PlayerArmModel, type PlayerRigBoneProfile } from '@/utils/playerSkeletonProfiles';
 
 type Vec3 = [number, number, number];
 type Quat = [number, number, number, number];
 interface Transform { origin: Vec3; rotation: Quat; scale: Vec3 }
-const IDENTITY_Q: Quat = [0, 0, 0, 1];
-const ONE: Vec3 = [1, 1, 1];
 const ZERO: Vec3 = [0, 0, 0];
-const SOURCE_BONE: Record<string, string> = {
-  head: 'head', hat: 'hat', body: 'body', right_arm: 'rightArm', left_arm: 'leftArm',
-  right_leg: 'rightLeg', left_leg: 'leftLeg', right_sleeve: 'rightSleeve',
-  left_sleeve: 'leftSleeve', right_pants: 'rightPants', left_pants: 'leftPants',
-  jacket: 'jacket', ear: 'ear', cloak: 'cape',
+const ONE: Vec3 = [1, 1, 1];
+const IDENTITY: Quat = [0, 0, 0, 1];
+const JAVA_TO_BEDROCK: Record<string, string> = {
+  root: 'root', head: 'head', hat: 'hat', body: 'body',
+  right_arm: 'rightArm', left_arm: 'leftArm', right_leg: 'rightLeg', left_leg: 'leftLeg',
+  right_sleeve: 'rightSleeve', left_sleeve: 'leftSleeve',
+  right_pants: 'rightPants', left_pants: 'leftPants', jacket: 'jacket', cloak: 'cape',
 };
-const SOURCE_POSE_PARENT: Record<string, string> = {
-  hat: 'head', rightSleeve: 'rightArm', leftSleeve: 'leftArm',
-  rightPants: 'rightLeg', leftPants: 'leftLeg', jacket: 'body',
+const BEDROCK_LAYER_PARENT: Record<string, string> = {
+  hat: 'head', leftSleeve: 'leftArm', rightSleeve: 'rightArm',
+  leftPants: 'leftLeg', rightPants: 'rightLeg', jacket: 'body', cape: 'body',
 };
-const SOURCE_PIVOTS: Record<string, Vec3> = {
-  head: [0, 24, 0], hat: [0, 24, 0], body: [0, 24, 0],
-  rightArm: [-5, 22, 0], leftArm: [5, 22, 0],
-  rightLeg: [-1.9, 12, 0], leftLeg: [1.9, 12, 0],
-  rightSleeve: [-5, 22, 0], leftSleeve: [5, 22, 0],
-  rightPants: [-1.9, 12, 0], leftPants: [1.9, 12, 0],
-  jacket: [0, 24, 0], ear: [0, 24, 0], cape: [0, 24, 0],
+const SOURCE_LAYER_PARENT: Record<string, string> = {
+  hat: 'head', leftSleeve: 'leftArm', rightSleeve: 'rightArm',
+  leftPants: 'leftLeg', rightPants: 'rightLeg', jacket: 'body', cape: 'body',
 };
 const add = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const sub = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const mul = (a: Vec3, b: Vec3): Vec3 => [a[0] * b[0], a[1] * b[1], a[2] * b[2]];
 const div = (a: Vec3, b: Vec3): Vec3 => [a[0] / (b[0] || 1), a[1] / (b[1] || 1), a[2] / (b[2] || 1)];
-const scale = (a: Vec3, n: number): Vec3 => [a[0] * n, a[1] * n, a[2] * n];
-const near = (a: number, b = 0): boolean => Math.abs(a - b) < 1e-5;
-const isIdentity = (t: Transform): boolean =>
-  t.rotation.slice(0, 3).every((v) => near(v)) && near(t.rotation[3], 1) &&
-  t.origin.every((v, i) => near(v, [0, 0, 0][i])) && t.scale.every((v) => near(v, 1));
+const isNear = (a: number, b = 0) => Math.abs(a - b) < 1e-5;
+const isIdentity = (t: Transform) => t.origin.every((v) => isNear(v)) &&
+  t.rotation.slice(0, 3).every((v) => isNear(v)) && isNear(t.rotation[3], 1) && t.scale.every((v) => isNear(v, 1));
 
 function qMul(a: Quat, b: Quat): Quat {
   return [
@@ -50,74 +39,102 @@ function qMul(a: Quat, b: Quat): Quat {
   ];
 }
 function qInverse(q: Quat): Quat { return [-q[0], -q[1], -q[2], q[3]]; }
-function qFromEuler(value: Vec3): Quat {
-  const h = value.map((v) => v * Math.PI / 360);
-  const [sx, sy, sz] = h.map(Math.sin);
-  const [cx, cy, cz] = h.map(Math.cos);
-  const x: Quat = [sx, 0, 0, cx], y: Quat = [0, sy, 0, cy], z: Quat = [0, 0, sz, cz];
-  return qMul(qMul(x, y), z);
+function qFromEuler(degrees: Vec3): Quat {
+  const [x, y, z] = degrees.map((v) => v * Math.PI / 360);
+  const qx: Quat = [Math.sin(x), 0, 0, Math.cos(x)];
+  const qy: Quat = [0, Math.sin(y), 0, Math.cos(y)];
+  const qz: Quat = [0, 0, Math.sin(z), Math.cos(z)];
+  return qMul(qMul(qz, qy), qx);
 }
 function qToEuler(q: Quat): Vec3 {
   const [x, y, z, w] = q;
-  const r11 = 1 - 2 * (y * y + z * z);
-  const r12 = 2 * (x * y - z * w);
-  const r13 = 2 * (x * z + y * w);
-  const r23 = 2 * (y * z - x * w);
-  const r33 = 1 - 2 * (x * x + y * y);
-  const pitchY = Math.asin(Math.max(-1, Math.min(1, r13)));
-  const cosY = Math.cos(pitchY);
-  const rollX = Math.abs(cosY) > 1e-6 ? Math.atan2(-r23, r33) : 0;
-  const yawZ = Math.abs(cosY) > 1e-6 ? Math.atan2(-r12, r11) : 0;
-  return [rollX, pitchY, yawZ].map((v) => v * 180 / Math.PI) as Vec3;
+  const sinr = 2 * (w * x + y * z);
+  const cosr = 1 - 2 * (x * x + y * y);
+  const sinp = 2 * (w * y - z * x);
+  const siny = 2 * (w * z + x * y);
+  const cosy = 1 - 2 * (y * y + z * z);
+  return [
+    Math.atan2(sinr, cosr) * 180 / Math.PI,
+    Math.asin(Math.max(-1, Math.min(1, sinp))) * 180 / Math.PI,
+    Math.atan2(siny, cosy) * 180 / Math.PI,
+  ];
 }
 function qRotate(q: Quat, v: Vec3): Vec3 {
   const p: Quat = [v[0], v[1], v[2], 0];
-  const result = qMul(qMul(q, p), qInverse(q));
-  return [result[0], result[1], result[2]];
+  const out = qMul(qMul(q, p), qInverse(q));
+  return [out[0], out[1], out[2]];
 }
-function channelAt(track: Record<string, unknown> | undefined, name: string, time: number, fallback: Vec3): Vec3 | null {
-  const raw = track?.[name];
+function readVector(track: Record<string, unknown> | undefined, channel: string, time: number, fallback: Vec3): Vec3 | null {
+  const raw = track?.[channel];
   if (raw === undefined) return fallback;
   const frames = readChannel(raw);
   if (!frames) return null;
-  const value = sampleChannel(frames, time);
-  return [value[0] ?? fallback[0], value[1] ?? fallback[1], value[2] ?? fallback[2]];
+  const sampled = sampleChannel(frames, time);
+  return [sampled[0] ?? fallback[0], sampled[1] ?? fallback[1], sampled[2] ?? fallback[2]];
 }
-function channelTimes(track: Record<string, unknown> | undefined): number[] {
-  const times = new Set<number>();
-  for (const name of ['rotation', 'position', 'scale']) {
-    const raw = track?.[name];
-    if (raw === undefined) continue;
-    const frames = readChannel(raw);
-    if (frames) for (const frame of frames) times.add(frame.time);
+function collectTimes(bones: Record<string, Record<string, unknown>>): number[] {
+  const times = new Set<number>([0]);
+  for (const track of Object.values(bones)) {
+    for (const channel of ['rotation', 'position', 'scale']) {
+      const frames = track[channel] === undefined ? null : readChannel(track[channel]);
+      if (frames) for (const frame of frames) times.add(frame.time);
+    }
   }
-  return [...times];
+  return [...times].sort((a, b) => a - b);
 }
-function roundVec(v: Vec3): Vec3 { return v.map((n) => Math.round(n * 100000) / 100000) as Vec3; }
+function round(v: number): number { return Math.round(v * 100000) / 100000; }
+function writeNumericChannel(frames: Array<{ time: number; value: Vec3 }>): unknown {
+  if (frames.length === 1) return frames[0].value.map(round);
+  const out: Record<string, number[]> = {};
+  for (const frame of frames) out[String(round(frame.time))] = frame.value.map(round);
+  return out;
+}
+function writeSlimArmPosition(frames: Array<{ time: number; value: Vec3 }>, side: 'left' | 'right'): unknown {
+  const variable = side === 'left' ? 'variable.short_arm_offset_left' : 'variable.short_arm_offset_right';
+  const expression = (value: number) => `(${round(value)} + ${variable})`;
+  if (frames.length === 1) {
+    const [x, y, z] = frames[0].value;
+    return [round(x), expression(y), round(z)];
+  }
+  const out: Record<string, Array<number | string>> = {};
+  for (const frame of frames) out[String(round(frame.time))] = [
+    round(frame.value[0]), expression(frame.value[1]), round(frame.value[2]),
+  ];
+  return out;
+}
 function getBone(profile: readonly PlayerRigBoneProfile[], name: string): PlayerRigBoneProfile | undefined {
   return profile.find((bone) => bone.name === name);
 }
+function sourcePositionToBedrock(value: Vec3): Vec3 {
+  // Java model-local coordinates are Y-down; Bedrock geometry/animation coordinates are Y-up.
+  return [value[0], -value[1], value[2]];
+}
+function sourceRotationToBedrock(value: Vec3): Vec3 {
+  // Reflecting the Y axis changes the signs of the X/Z rotation pseudovector components.
+  return [-value[0], value[1], -value[2]];
+}
 
 /**
- * Converts Java's root-sibling ModelPart transforms into Bedrock's parent-relative bone
- * transforms. Java PlayerEntityModel's head/hat/body/arms/legs and player layers are root parts;
- * Bedrock humanoid.custom nests head/arms under body and layers under their rendered limb.
+ * Retargets Java PlayerEntityModel root-sibling transforms onto Bedrock's nested humanoid rig.
+ * Every sample is evaluated at the union of all source keyframe times. Child-local transforms are
+ * solved against the parent's world transform at that SAME time; this is essential when a body
+ * animation and an independently animated head/arm overlap.
  *
- * The source part pivots are converted from Java's Y-down 24px model frame to Bedrock's Y-up
- * geometry frame. For every animated parent, child local transforms are solved from world
- * transforms (inverse parent rotation, translated pivot delta), rather than copied or added.
+ * Layer parts follow the corresponding Java body part when they have no explicit source track,
+ * matching PlayerEntityModel's copyTransform behavior. Explicit layer tracks are preserved as
+ * independent world poses and converted into Bedrock child-local transforms.
  */
 export function retargetJavaPlayerHierarchy(
   clips: Record<string, BedrockAnimationClip>,
   armModel: PlayerArmModel = 'classic',
 ): { clips: Record<string, BedrockAnimationClip>; transformed: number; warnings: string[] } {
-  const target = getPlayerSkeletonProfile('bedrock', armModel).bones;
-  const java = getPlayerSkeletonProfile('java', armModel).bones;
-  const targetByName = new Map(target.map((bone) => [bone.name, bone]));
-  const sourcePivot = new Map<string, Vec3>();
-  for (const [sourceName, targetName] of Object.entries(SOURCE_BONE)) {
-    const source = getBone(java, sourceName);
-    if (source) sourcePivot.set(targetName, javaPivotToBedrockPivot(source.pivot));
+  const javaBones = getPlayerSkeletonProfile('java', armModel).bones;
+  const bedrockBones = getPlayerSkeletonProfile('bedrock', 'classic').bones;
+  const targetByName = new Map(bedrockBones.map((bone) => [bone.name, bone]));
+  const javaSourceForTarget = new Map<string, PlayerRigBoneProfile>();
+  for (const source of javaBones) {
+    const target = JAVA_TO_BEDROCK[source.name];
+    if (target) javaSourceForTarget.set(target, source);
   }
   const warnings: string[] = [];
   let transformed = 0;
@@ -125,98 +142,115 @@ export function retargetJavaPlayerHierarchy(
 
   for (const [clipId, clip] of Object.entries(clips)) {
     const original = clip.bones ?? {};
-    const allTimes = new Set<number>([0]);
-    for (const track of Object.values(original)) for (const time of channelTimes(track)) allTimes.add(time);
-    const times = [...allTimes].sort((a, b) => a - b);
+    const times = collectTimes(original);
+    const unsupported = Object.entries(original).filter(([, track]) =>
+      ['rotation', 'position', 'scale'].some((channel) => track[channel] !== undefined && !readChannel(track[channel])),
+    );
+    if (unsupported.length > 0) {
+      warnings.push(`clip ${clipId}: hierarchy compensation skipped because expression/easing channels on ${unsupported.map(([name]) => name).slice(0, 4).join(', ')} cannot be safely sampled; original tracks preserved`);
+      output[clipId] = clip;
+      continue;
+    }
+
     const rewritten: Record<string, Record<string, unknown>> = { ...original };
-    const world = new Map<string, Transform>();
-    const local = new Map<string, Transform>();
-    let clipChanged = false;
-    let clipUnsupported = false;
-
-    for (const bone of target) {
-      const parent = bone.parent ? targetByName.get(bone.parent) : undefined;
-      const parentWorld = bone.parent ? world.get(bone.parent) : undefined;
-      const parentTransform: Transform = parentWorld ?? { origin: ZERO, rotation: IDENTITY_Q, scale: ONE };
-      const ownTrack = original[bone.name];
-      const poseSource = SOURCE_POSE_PARENT[bone.name];
-      const inheritedTrack = poseSource ? original[poseSource] : undefined;
-      const sourceTrack = ownTrack ?? inheritedTrack;
-      const hasSourceRigBone = sourcePivot.has(bone.name) || Boolean(poseSource) || bone.name === 'leftItem' || bone.name === 'rightItem';
-      if (!hasSourceRigBone && !parentWorld) {
-        const pivot = bone.pivot as Vec3;
-        world.set(bone.name, { origin: pivot, rotation: IDENTITY_Q, scale: ONE });
-        local.set(bone.name, { origin: ZERO, rotation: IDENTITY_Q, scale: ONE });
-        continue;
-      }
-      const targetPivot = bone.pivot as Vec3;
-      const parentPivot = (parent?.pivot ?? ZERO) as Vec3;
-      const sourcePosition = sourcePivot.get(bone.name) ?? targetPivot;
-      const localFrames: { time: number; rotation: Vec3; position: Vec3; scale: Vec3 }[] = [];
-      const worldFrames: { time: number; transform: Transform }[] = [];
-      let unsupported = false;
-
-      for (const time of times) {
-        const rotation = channelAt(sourceTrack, 'rotation', time, ZERO);
-        const position = channelAt(sourceTrack, 'position', time, ZERO);
-        const boneScale = channelAt(sourceTrack, 'scale', time, ONE);
-        if (!rotation || !position || !boneScale) { unsupported = true; break; }
-        const desiredRotation = qFromEuler(rotation);
-        const desiredOrigin = add(sourcePosition, position);
-        const inverseParent = qInverse(parentTransform.rotation);
-        const relativeRotation = qMul(inverseParent, desiredRotation);
-        const relativeOffset = div(qRotate(inverseParent, sub(desiredOrigin, parentTransform.origin)), parentTransform.scale);
-        const relativePosition = sub(relativeOffset, sub(targetPivot, parentPivot));
-        const relativeScale = div(boneScale, parentTransform.scale);
-        const localTransform: Transform = { origin: relativePosition, rotation: relativeRotation, scale: relativeScale };
-        const worldOrigin = add(
-          parentTransform.origin,
-          qRotate(parentTransform.rotation, mul(parentTransform.scale, add(sub(targetPivot, parentPivot), relativePosition))),
-        );
-        const worldRotation = qMul(parentTransform.rotation, relativeRotation);
-        const worldScale = mul(parentTransform.scale, relativeScale);
-        localFrames.push({ time, rotation: qToEuler(relativeRotation), position: relativePosition, scale: relativeScale });
-        worldFrames.push({ time, transform: { origin: worldOrigin, rotation: worldRotation, scale: worldScale } });
-        if (bone.name === 'root' || bone.name === 'waist') continue;
-      }
-      if (unsupported) {
-        clipUnsupported = true;
-        warnings.push(`clip ${clipId}: ${bone.name} has a non-numeric Molang/expression channel; parent compensation was not applied to that bone`);
-        if (parentWorld) world.set(bone.name, parentWorld);
-        else world.set(bone.name, { origin: targetPivot, rotation: IDENTITY_Q, scale: ONE });
-        continue;
-      }
-      const finalWorld = worldFrames[worldFrames.length - 1]?.transform ?? {
-        origin: add(parentTransform.origin, qRotate(parentTransform.rotation, mul(parentTransform.scale, sub(targetPivot, parentPivot)))),
-        rotation: parentTransform.rotation,
-        scale: parentTransform.scale,
-      };
-      world.set(bone.name, finalWorld);
-      const parentAnimated = Boolean(parentWorld && !isIdentity(parentWorld));
-      const explicitOverlay = Boolean(ownTrack && poseSource);
-      const needsRewrite = Boolean(ownTrack && parentWorld) || Boolean(parentAnimated && hasSourceRigBone && !poseSource) || explicitOverlay;
-      if (needsRewrite && localFrames.length > 0) {
-        const rotationFrames = localFrames.map((frame) => ({ time: frame.time, value: frame.rotation }));
-        const positionFrames = localFrames.map((frame) => ({ time: frame.time, value: frame.position }));
-        const scaleFrames = localFrames.map((frame) => ({ time: frame.time, value: frame.scale }));
-        const track: Record<string, unknown> = { ...(ownTrack ?? {}) };
-        track.rotation = writeChannel(rotationFrames);
-        track.position = writeChannel(positionFrames);
-        track.scale = writeChannel(scaleFrames);
-        rewritten[bone.name] = track;
-        transformed += 1;
-        clipChanged = true;
-      } else if (ownTrack && parent && !parentWorld) {
-        // No animated parent: the original root-relative channels are already correct.
-        world.set(bone.name, {
-          origin: add(targetPivot, channelAt(ownTrack, 'position', times[times.length - 1], ZERO) ?? ZERO),
-          rotation: qFromEuler(channelAt(ownTrack, 'rotation', times[times.length - 1], ZERO) ?? ZERO),
-          scale: channelAt(ownTrack, 'scale', times[times.length - 1], ONE) ?? ONE,
+    let changed = false;
+    for (const time of times) {
+      const sourceWorld = new Map<string, Transform>();
+      for (const [targetName, sourceBone] of javaSourceForTarget) {
+        const sourceTrack = original[targetName];
+        const layerParent = SOURCE_LAYER_PARENT[targetName];
+        const explicit = Boolean(sourceTrack);
+        if (layerParent && !explicit) {
+          const inherited = sourceWorld.get(layerParent);
+          if (inherited) {
+            sourceWorld.set(targetName, inherited);
+            continue;
+          }
+        }
+        const pivot = javaPivotToBedrockPivot(sourceBone.pivot) as Vec3;
+        const rawPosition = readVector(sourceTrack, 'position', time, ZERO);
+        const rawRotation = readVector(sourceTrack, 'rotation', time, ZERO);
+        const rawScale = readVector(sourceTrack, 'scale', time, ONE);
+        if (!rawPosition || !rawRotation || !rawScale) continue;
+        sourceWorld.set(targetName, {
+          origin: add(pivot, sourcePositionToBedrock(rawPosition)),
+          rotation: qFromEuler(sourceRotationToBedrock(rawRotation)),
+          scale: rawScale,
         });
       }
+
+      const targetWorld = new Map<string, Transform>();
+      for (const bone of bedrockBones) {
+        const parent = bone.parent ? targetWorld.get(bone.parent) : undefined;
+        const parentTransform = parent ?? { origin: ZERO, rotation: IDENTITY, scale: ONE };
+        const parentBone = bone.parent ? targetByName.get(bone.parent) : undefined;
+        const targetPivot = bone.pivot as Vec3;
+        const parentPivot = (parentBone?.pivot ?? ZERO) as Vec3;
+        const source = sourceWorld.get(bone.name);
+        if (!source) {
+          const bindOffset = sub(targetPivot, parentPivot);
+          targetWorld.set(bone.name, {
+            origin: add(parentTransform.origin, qRotate(parentTransform.rotation, mul(parentTransform.scale, bindOffset))),
+            rotation: parentTransform.rotation,
+            scale: parentTransform.scale,
+          });
+          continue;
+        }
+
+        const relativeRotation = qMul(qInverse(parentTransform.rotation), source.rotation);
+        const relativeOffset = div(
+          qRotate(qInverse(parentTransform.rotation), sub(source.origin, parentTransform.origin)),
+          parentTransform.scale,
+        );
+        const relativePosition = sub(relativeOffset, sub(targetPivot, parentPivot));
+        const relativeScale = div(source.scale, parentTransform.scale);
+        const local: Transform = { origin: relativePosition, rotation: relativeRotation, scale: relativeScale };
+        targetWorld.set(bone.name, source);
+
+        const originalTrack = original[bone.name] ?? {};
+        const needsTrack = Boolean(original[bone.name]) || !isIdentity(local) ||
+          (bone.name === 'leftArm' || bone.name === 'rightArm');
+        if (!needsTrack) continue;
+        const track = rewritten[bone.name] ?? { ...originalTrack };
+        const existingFrames = (rewritten[bone.name] as Record<string, unknown> | undefined) ?? {};
+        const rotationFrames = (existingFrames.__rotationFrames as Array<{ time: number; value: Vec3 }> | undefined) ?? [];
+        const positionFrames = (existingFrames.__positionFrames as Array<{ time: number; value: Vec3 }> | undefined) ?? [];
+        const scaleFrames = (existingFrames.__scaleFrames as Array<{ time: number; value: Vec3 }> | undefined) ?? [];
+        rotationFrames.push({ time, value: qToEuler(relativeRotation) });
+        positionFrames.push({ time, value: relativePosition });
+        scaleFrames.push({ time, value: relativeScale });
+        track.__rotationFrames = rotationFrames;
+        track.__positionFrames = positionFrames;
+        track.__scaleFrames = scaleFrames;
+        rewritten[bone.name] = track;
+      }
     }
+
+    for (const bone of bedrockBones) {
+      const track = rewritten[bone.name];
+      if (!track || !Array.isArray(track.__rotationFrames)) continue;
+      const rotationFrames = track.__rotationFrames as Array<{ time: number; value: Vec3 }>;
+      const positionFrames = track.__positionFrames as Array<{ time: number; value: Vec3 }>;
+      const scaleFrames = track.__scaleFrames as Array<{ time: number; value: Vec3 }>;
+      delete track.__rotationFrames;
+      delete track.__positionFrames;
+      delete track.__scaleFrames;
+      const isArm = bone.name === 'leftArm' || bone.name === 'rightArm';
+      const side = bone.name === 'leftArm' ? 'left' : 'right';
+      const rotationsNeeded = rotationFrames.some((frame) => !frame.value.every((v) => isNear(v)));
+      const positionsNeeded = positionFrames.some((frame) => !frame.value.every((v) => isNear(v)));
+      const scalesNeeded = scaleFrames.some((frame) => !frame.value.every((v, i) => isNear(v, 1)));
+      if (rotationsNeeded) track.rotation = writeNumericChannel(rotationFrames);
+      else if (track.rotation !== undefined && !isArm) delete track.rotation;
+      if (positionsNeeded || isArm) {
+        track.position = isArm ? writeSlimArmPosition(positionFrames, side) : writeNumericChannel(positionFrames);
+      } else if (track.position !== undefined) delete track.position;
+      if (scalesNeeded) track.scale = writeNumericChannel(scaleFrames);
+      else if (track.scale !== undefined) delete track.scale;
+      if (Object.keys(track).length > 0) changed = true;
+    }
+    if (changed) transformed += 1;
     output[clipId] = { ...clip, bones: rewritten };
-    if (clipChanged && clipUnsupported) warnings.push(`clip ${clipId}: some tracks were retargeted while expression-driven tracks were preserved as-is`);
   }
   return { clips: output, transformed, warnings };
 }
