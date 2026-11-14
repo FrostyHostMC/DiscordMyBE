@@ -8,6 +8,7 @@ import {
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
   PLAYER_SCOPE_VARIABLE_EXPRESSIONS,
+  VANILLA_PLAYER_ENGINE_VARIABLES,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
   isVanillaPlayerDocumentPath,
@@ -564,6 +565,7 @@ export function resolvePlayerDependencies(input: {
       if (!baseline) continue;
       for (const match of baseline.expression.matchAll(VARIABLE_READ)) {
         const dependency = String(match[1]);
+        if (VANILLA_PLAYER_ENGINE_VARIABLES.has(dependency)) continue;
         if (!readVars.has(dependency)) {
           readVars.set(dependency, 0);
           dependenciesAdded = true;
