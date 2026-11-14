@@ -28,6 +28,7 @@ try {
   const { autoConfigureExperimentsForMod } = await server.ssrLoadModule('/src/utils/bedrockCapabilityQuery.ts');
   const { convertJavaToBedrockAddon } = await server.ssrLoadModule('/src/utils/bedrockGenerator.ts');
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
+  const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
 
   setPlayableMode(false);
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
@@ -82,6 +83,20 @@ try {
     archiveEntries: [{ path: 'net/example/WalkingAnimation.class', data: registeredClass }],
     sourceClipIdsByClipId: { 'animation.walking': 'walking' },
   }).triggers[0];
+
+  const eventTranslation = translateJavaAnimationSet({
+    animations: {
+      'animation.event_fixture': {
+        bones: { rightArm: { rotation: { '0': [0, 0, 0], '0.4': [20, 0, 0] } } },
+        sound_effects: { '0.2': { effect: 'test:swing', locator: 'right_hand', custom_payload: true } },
+        particle_effects: { '0.3': { effect: 'test:spark', locator: 'right_hand' } },
+      },
+    },
+  });
+  const eventClip = eventTranslation.animations['animation.event_fixture'];
+  const eventMetadataPreserved = eventClip?.sound_effects?.['0.2']?.locator === 'right_hand'
+    && eventClip?.particle_effects?.['0.3']?.locator === 'right_hand';
+  const eventLossReported = eventTranslation.issues.some((issue) => issue.channel === 'sound_effects' && issue.detail.includes('custom_payload'));
 
   const expectedPlayerClipIds = sourceClipIds;
   const logs = [];
@@ -168,6 +183,8 @@ try {
   const javaRunningTrigger = triggers?.triggers.find((trigger) => trigger.sourceClipId === 'running');
   const sourceRunningDefinition = Object.values(result.playerSourceClipIdByPlayerClipId ?? {}).includes('animation.running');
   const assertions = [
+    { id: 'animation-sound-and-particle-event-locators-preserved', expected: true, actual: eventMetadataPreserved, passed: eventMetadataPreserved },
+    { id: 'unsupported-animation-event-fields-reported-not-silently-dropped', expected: true, actual: eventLossReported, passed: eventLossReported },
     { id: 'unrelated-java-api-hit-does-not-activate-a-clip', expected: 'unresolved', actual: unrelatedTrigger?.status ?? 'missing', passed: unrelatedTrigger?.status === 'unresolved' && !unrelatedTrigger.condition },
     { id: 'same-class-clip-registration-and-java-state-correlate', expected: 'mapped', actual: registeredTrigger?.status ?? 'missing', passed: registeredTrigger?.status === 'mapped' && Boolean(registeredTrigger.condition) },
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
