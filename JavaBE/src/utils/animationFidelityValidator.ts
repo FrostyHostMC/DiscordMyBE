@@ -55,6 +55,8 @@ export interface ClipFidelity {
   shipped: boolean;
   registered: boolean;
   activated: boolean;
+  /** True when source code proves the definition is not part of the runtime state machine. */
+  intentionallyInactive?: boolean;
   /** 0-100, measured from sampled curve drift (100 = every sampled axis identical). */
   fidelity: number;
   bonesSource: number;
@@ -75,6 +77,8 @@ export interface AnimationFidelityReport {
   clipsInterpreted: number;
   clipsShipped: number;
   clipsMissing: number;
+  /** Shipped definitions proven unused by their source Java state machine. */
+  clipsDeliberatelyInactive: number;
   clipsFaithful: number;
   clipsApproximated: number;
   averageFidelity: number | null;
@@ -340,8 +344,10 @@ export function validateAnimationFidelity(input: {
   resourcePackFiles: Record<string, string | Uint8Array>;
   behaviorPackFiles?: Record<string, string | Uint8Array>;
   expectedClips?: string[];
-  /** Final Bedrock animation id -> original source animation id, preserving retargeted player lineage. */
+  /** Final Bedrock animation id -> original raw source animation id. */
   sourceClipIdByExportedClipId?: Record<string, string>;
+  /** Canonical source animation id -> final Bedrock animation id. */
+  sourceClipIdToExportedClipId?: Record<string, string>;
   /** Registry of the exported pack; every count below is read from it so no two stages disagree. */
   registry?: AnimationResourceRegistry;
   /** Skeleton reconciliation, so composed tracks are reported as pose approximations. */
@@ -368,6 +374,7 @@ export function validateAnimationFidelity(input: {
     clipsInterpreted: 0,
     clipsShipped: 0,
     clipsMissing: 0,
+    clipsDeliberatelyInactive: 0,
     clipsFaithful: 0,
     clipsApproximated: 0,
     averageFidelity: null,
@@ -438,8 +445,47 @@ export function validateAnimationFidelity(input: {
 
   for (const clip of Object.values(ir.clips)) {
     report.clipsInterpreted += 1;
-    const shippedClipId = exportedClipIdBySourceId.get(clip.id) ?? clip.id;
+    const shippedClipId = input.sourceClipIdToExportedClipId?.[clip.id] ?? exportedClipIdBySourceId.get(clip.id) ?? clip.id;
     const shippedClip = shipped[shippedClipId];
+    if (shippedClip && deliberatelyInactive.has(shippedClipId)) {
+      const sourceKeyframes = Object.values(clip.bones).reduce(
+        (total, bone) =>
+          total + (bone.position?.keyframes.length ?? 0) + (bone.rotation?.keyframes.length ?? 0) + (bone.scale?.keyframes.length ?? 0),
+        0,
+      );
+      report.clipsShipped += 1;
+      report.clipsDeliberatelyInactive += 1;
+      sourceBones += Object.keys(clip.bones).length;
+      report.sourceBoneTracks = sourceBones;
+      report.clips.push({
+        clipId: clip.id,
+        shippedClipId,
+        owner: clip.owner,
+        perspective: clip.perspective,
+        shipped: true,
+        registered: registryRegistered.has(shippedClipId),
+        activated: registryActivated.has(shippedClipId),
+        intentionallyInactive: true,
+        fidelity: 0,
+        bonesSource: Object.keys(clip.bones).length,
+        bonesShipped: 0,
+        bonesLost: [],
+        channelsCompared: 0,
+        channelsLost: [],
+        keyframesSource: sourceKeyframes,
+        keyframesShipped: 0,
+        durationSource: clip.timeline?.durationSeconds ?? 0,
+        durationShipped: shippedClip.length,
+        maxDrift: 0,
+      });
+      issues.push({
+        severity: 'info',
+        rule: 'source-clip-deliberately-inactive',
+        subject: clip.id,
+        detail: 'The source Java state machine does not load this definition. It is retained in the exported pack but excluded from player-pose fidelity scoring and automatic activation.',
+      });
+      continue;
+    }
     // Bones the rendered skeleton genuinely lacks come from the registry's single bone audit:
     // pack geometry plus the engine player rig the entity really renders. Re-deriving the
     // skeleton here measured pack geometry only, which is what turned the player rig's own
@@ -703,7 +749,7 @@ export function validateAnimationFidelity(input: {
     'playback: 0 verified — nothing here runs inside a Bedrock client.',
   ];
   report.summary =
-    `Animation audit: ${report.clipsInterpreted} interpreted → ${report.clipsShipped} shipped (${report.clipsMissing} missing); ` +
+    `Animation audit: ${report.clipsInterpreted} interpreted → ${report.clipsShipped} shipped (${report.clipsMissing} missing, ${report.clipsDeliberatelyInactive} deliberately inactive); ` +
     `${report.channelsCompared} channel(s) sampled at ${SAMPLE_COUNT} points, curve preservation ${curveFidelityLabel} ` +
     `(${report.clipsFaithful} faithful, ${report.clipsApproximated} approximated); source bone tracks ${report.sourceBoneTracksRetained}/${report.sourceBoneTracks} retained (${report.boneTrackCoverage}%), ` +
     `final skeleton bindings ${registry.metrics.bones.checked > 0 ? `${report.skeletonCoverage}% (${registry.metrics.bones.resolved}/${registry.metrics.bones.checked})` : 'not measured'} with ${registry.metrics.bones.unresolved.length} unresolved; ` +

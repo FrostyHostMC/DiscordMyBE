@@ -174,6 +174,8 @@ function bridgePlayerRigClips(
   sourceClipIds: string[];
   /** Exact raw source-document key for each retargeted player animation id. */
   sourceClipIdByPlayerClipId: Record<string, string>;
+  /** Canonical source animation id -> final retargeted player animation id. */
+  sourceClipIdToPlayerClipId: Record<string, string>;
   mappingCount: number;
   unmappedBones: string[];
   learnedAliases: number;
@@ -188,7 +190,7 @@ function bridgePlayerRigClips(
     }
   }
   if (Object.keys(merged).length === 0) {
-    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, sourceClipIdToPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -224,6 +226,7 @@ function bridgePlayerRigClips(
   const renamed: Record<string, BedrockAnimationClip> = {};
   const sourceClipIds: string[] = [];
   const sourceClipIdByPlayerClipId: Record<string, string> = {};
+  const sourceClipIdToPlayerClipId: Record<string, string> = {};
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
@@ -242,6 +245,7 @@ function bridgePlayerRigClips(
     renamed[id] = mapped;
     sourceClipIds.push(clipId);
     sourceClipIdByPlayerClipId[id] = sourceClipIdByMergedClipId[clipId] ?? clipId;
+    sourceClipIdToPlayerClipId[clipId] = id;
   }
   for (const mapping of fit.mappings.slice(0, 10)) {
     log(
@@ -291,6 +295,7 @@ function bridgePlayerRigClips(
     clipIds: Object.keys(renamed),
     sourceClipIds,
     sourceClipIdByPlayerClipId,
+    sourceClipIdToPlayerClipId,
     mappingCount: fit.mappings.length,
     unmappedBones: fit.unmapped,
     learnedAliases: fit.learnedAliases,
@@ -367,6 +372,8 @@ export interface AnimationPortResult {
   playerSourceClipIds?: string[];
   /** Exact raw source-document key for each retargeted player animation id. */
   playerSourceClipIdByPlayerClipId?: Record<string, string>;
+  /** Canonical source animation id -> final retargeted player animation id. */
+  playerSourceClipIdToPlayerClipId?: Record<string, string>;
   /** Number of source-to-Bedrock bone mappings applied by the player animation bridge. */
   playerRigBoneMappings?: number;
   /** Player bone names the bridge could not resolve (reported, never silently dropped). */
@@ -1389,6 +1396,7 @@ export function portMobAndPlayerAnimations(
     playerRigClipsBridged: playerRigBridge.clipIds.length,
     playerSourceClipIds: playerRigBridge.sourceClipIds,
     playerSourceClipIdByPlayerClipId: playerRigBridge.sourceClipIdByPlayerClipId,
+    playerSourceClipIdToPlayerClipId: playerRigBridge.sourceClipIdToPlayerClipId,
     playerRigBoneMappings: playerRigBridge.mappingCount,
     playerRigUnmappedBones: playerRigBridge.unmappedBones,
     playerRigLearnedBoneAliases: playerRigBridge.learnedAliases,

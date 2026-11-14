@@ -856,6 +856,8 @@ export interface BedrockRemake {
   playerScriptCode?: string;
   /** Original player source clips already represented by retargeted bridge clips. */
   playerSourceClipIds?: string[];
+  /** Canonical source animation id -> final retargeted player animation id. */
+  playerSourceClipIdToPlayerClipId?: Record<string, string>;
   /** Clip ids the animation stage intended to make playable (checked by the integration audit). */
   animationExpectedClips?: string[];
   /** Mandatory animation integration audit performed on the exported pack. */
