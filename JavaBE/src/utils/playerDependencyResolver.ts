@@ -8,6 +8,7 @@ import {
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
   PLAYER_SCOPE_VARIABLE_EXPRESSIONS,
+  ENGINE_PROVIDED_MOLANG_VARIABLES,
   VANILLA_PLAYER_ENGINE_VARIABLES,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
@@ -552,6 +553,9 @@ export function resolvePlayerDependencies(input: {
     if (typeof rawDocument === 'string') playerDocuments.push(rawDocument);
   }
   const readVars = countReads(playerDocuments);
+  // Mojang's entity resources use these variables as engine-provided inputs; they are not
+  // missing script assignments and must never be replaced with fabricated constants.
+  for (const name of ENGINE_PROVIDED_MOLANG_VARIABLES) readVars.delete(name);
   // A custom player entity also replaces vanilla script scope. Restore always-required engine
   // variables, then close over dependencies used by source-derived expressions.
   for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
