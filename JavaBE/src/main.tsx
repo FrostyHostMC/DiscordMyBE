@@ -33,14 +33,9 @@ function GateScreen({ state, message, retry }: {
   return (
     <main className="javabe-launch-screen" role={isLoading ? 'status' : 'alert'} aria-live="polite">
       <section className="javabe-launch-content">
-        <div className="javabe-launch-brand">
-          <img
-            className="javabe-launch-brand-gif"
-            src="/assets/JavaBE_Discord_Icon_Zoomed.gif"
-            alt="JavaBE animated logo with purple clouds"
-            decoding="async"
-            fetchPriority="high"
-          />
+        <div className="javabe-launch-brand" aria-label="JavaBE">
+          <span className="javabe-launch-wordmark">JavaBE</span>
+          <span className="javabe-launch-tagline">JAVA TO BEDROCK</span>
         </div>
 
         {isLocked ? (
