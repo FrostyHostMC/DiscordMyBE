@@ -182,6 +182,17 @@ function bridgePlayerRigClips(
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
     return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
+  const auditExact = fit.rigAudit.filter((bone) => bone.status === 'exact').length;
+  const auditVariant = fit.rigAudit.filter((bone) => bone.status === 'variant-compatible').length;
+  const auditUnmapped = fit.rigAudit.filter((bone) => bone.status === 'unmapped').length;
+  const parentDifferences = fit.rigAudit.filter((bone) => {
+    const parents = Object.values(bone.targetParents).filter((value) => value !== undefined);
+    return new Set(parents).size > 1;
+  }).length;
+  log(`[PLAYER-RIG-AUDIT] ${fit.rigAudit.length} discovered animation bone name(s) checked against Java Classic, Java Slim, Bedrock Classic, and Bedrock Slim: ${auditExact} exact, ${auditVariant} variant-compatible, ${auditUnmapped} absent from vanilla profiles; ${parentDifferences} have platform hierarchy differences. Attachment bones are distinguished from deform bones.`);
+  for (const bone of fit.rigAudit.filter((item) => item.status === 'unmapped').slice(0, 12)) {
+    log(`[PLAYER-RIG-AUDIT] UNMAPPED "${bone.sourceBone}" — not present on any of the four vanilla player profiles; custom geometry or an explicit semantic retarget is required.`);
+  }
   const hierarchy = retargetJavaPlayerHierarchy(fit.clips, 'classic');
   if (hierarchy.transformed > 0) log(`[PLAYER-HIERARCHY] Parent-relative transforms recalculated for ${hierarchy.transformed} clip(s) across the Bedrock root → waist → body → limb hierarchy.`);
   for (const warning of hierarchy.warnings.slice(0, 8)) log(`[PLAYER-HIERARCHY] ${warning}`);
