@@ -101,14 +101,33 @@ class Reader {
   skip(n: number): void { this.need(n); this.offset += n; }
   utf8(n: number): string {
     const raw = this.take(n);
-    // Class-file CONSTANT_Utf8 uses modified UTF-8. Preserve embedded NULs and decode
-    // the common two-byte NUL form before delegating the remaining bytes to TextDecoder.
-    const normalized: number[] = [];
-    for (let i = 0; i < raw.length; i++) {
-      if (raw[i] === 0xc0 && raw[i + 1] === 0x80) { normalized.push(0); i++; }
-      else normalized.push(raw[i]);
+    // CONSTANT_Utf8 uses modified UTF-8, not standard UTF-8: NUL is C0 80 and
+    // supplementary characters are encoded as two UTF-16 surrogate code units.
+    // Decode code units directly so Java identifiers/string constants survive intact.
+    const units: number[] = [];
+    for (let i = 0; i < raw.length;) {
+      const a = raw[i++];
+      if (a === 0) throw new Error('Invalid zero byte in modified UTF-8 constant');
+      if (a < 0x80) units.push(a);
+      else if ((a & 0xe0) === 0xc0) {
+        if (i >= raw.length) throw new Error('Truncated modified UTF-8 sequence');
+        const b = raw[i++];
+        if ((b & 0xc0) !== 0x80) throw new Error('Invalid modified UTF-8 continuation');
+        const value = ((a & 0x1f) << 6) | (b & 0x3f);
+        if (value !== 0 && value < 0x80) throw new Error('Overlong modified UTF-8 sequence');
+        units.push(value);
+      } else if ((a & 0xf0) === 0xe0) {
+        if (i + 1 >= raw.length) throw new Error('Truncated modified UTF-8 sequence');
+        const b = raw[i++], c = raw[i++];
+        if ((b & 0xc0) !== 0x80 || (c & 0xc0) !== 0x80) throw new Error('Invalid modified UTF-8 continuation');
+        const value = ((a & 0x0f) << 12) | ((b & 0x3f) << 6) | (c & 0x3f);
+        if (value < 0x800) throw new Error('Overlong modified UTF-8 sequence');
+        units.push(value);
+      } else throw new Error('Invalid modified UTF-8 leading byte');
     }
-    return new TextDecoder().decode(new Uint8Array(normalized));
+    let output = '';
+    for (let i = 0; i < units.length; i += 4096) output += String.fromCharCode(...units.slice(i, i + 4096));
+    return output;
   }
 }
 
@@ -237,9 +256,12 @@ function decodeCode(code: Uint8Array, cp: Cp[], handlers: JvmMethodIR['exception
         if (widened === 0x84) operands.push(view.getInt16(pc + 4, false));
       } else {
         if (pc + size > code.length) throw new Error('Truncated instruction');
-        if (size === 2) operands.push(code[pc + 1]);
-        if (size === 3) operands.push(op === 0x11 || op === 0x84 || (op >= 0x99 && op <= 0xa8) || op === 0xc6 || op === 0xc7
-          ? view.getInt16(pc + 1, false) : view.getUint16(pc + 1, false));
+        if (size === 2) operands.push(op === 0x10 ? view.getInt8(pc + 1) : code[pc + 1]);
+        if (size === 3) {
+          if (op === 0x84) operands.push(code[pc + 1], view.getInt8(pc + 2));
+          else operands.push(op === 0x11 || (op >= 0x99 && op <= 0xa8) || op === 0xc6 || op === 0xc7
+            ? view.getInt16(pc + 1, false) : view.getUint16(pc + 1, false));
+        }
         if (size === 4) operands.push(view.getUint16(pc + 1, false), code[pc + 3]);
         if (size === 5) operands.push(view.getUint16(pc + 1, false), code[pc + 3], code[pc + 4]);
         if ((op >= 0x99 && op <= 0xa8) || op === 0xc6 || op === 0xc7) targets.push(start + operands[0]);
