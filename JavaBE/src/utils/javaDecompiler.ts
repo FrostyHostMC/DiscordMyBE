@@ -2,7 +2,7 @@ import assetsData from "@/config/assets";
 import type { DecompileClassSummary, DecompileStats } from '@/types/remaker';
 import type { ExtractedZipEntry } from '@/utils/zip';
 import { isGhostEntityName } from '@/utils/ghostEntityFilter';
-import { yieldToUi } from '@/utils/archiveScale';
+import { getArchiveBudget, yieldToUi } from '@/utils/archiveScale';
 import { analyzeJvmArchive } from '@/utils/jvmBytecodeIR';
 export interface SourceTextureEntry {
   name: string;
@@ -1054,10 +1054,16 @@ export const CLASS_SCAN_LIMIT = Number.MAX_SAFE_INTEGER;
  * whichever comes first — instead of pushing hundreds of megabytes through the parser at once.
  */
 export function classEntriesForScan(classEntries: ExtractedZipEntry[]): ExtractedZipEntry[] {
-  // Never silently omit source classes: a class beyond an arbitrary count/byte threshold may
-  // contain a registry, static initializer, method body or dependency used by the mod.
-  // The asynchronous caller yields between chunks to keep the Discord Activity responsive.
-  return classEntries;
+  const budget = getArchiveBudget();
+  const selected: ExtractedZipEntry[] = [];
+  let bytes = 0;
+  for (const entry of classEntries) {
+    const size = entry.data?.byteLength ?? 0;
+    if (selected.length >= budget.maxClassCount || size > budget.maxClassBytes || bytes + size > budget.maxClassBytes) continue;
+    selected.push(entry);
+    bytes += size;
+  }
+  return selected;
 }
 
 /** Parses every class entry handed in, skipping a malformed class instead of the whole archive. */
@@ -1090,7 +1096,13 @@ export async function decompileAndInspectJarAsync(
   const key = fallbackName ?? '';
   const cached = inspectionCache.get(entries);
   if (cached && cached.key === key) return cached.result;
-  const classEntries = classEntriesForScan(entries.filter((entry) => entry.path.endsWith('.class')));
+  const allClassEntries = entries.filter((entry) => !entry.isDirectory && entry.path.toLowerCase().endsWith('.class'));
+  const classEntries = classEntriesForScan(allClassEntries);
+  const selectedClassSet = new Set(classEntries);
+  const omittedClasses = allClassEntries.filter(entry => !selectedClassSet.has(entry));
+  if (omittedClasses.length > 0) {
+    options?.onProgress?.(classEntries.length, allClassEntries.length);
+  }
   const chunkSize = Math.max(1, options?.chunkSize ?? 32);
   const parsed: ParsedClass[] = [];
   for (let start = 0; start < classEntries.length; start += chunkSize) {
@@ -1110,10 +1122,16 @@ export async function decompileAndInspectJarAsync(
   // Run the full instruction-level analysis over every class, not just the lightweight
   // signature scanner. Enrich the existing semantic inputs so downstream generic translators
   // can see real method calls, field accesses and registry references.
-  const jvm = await analyzeJvmArchive(entries, {
+  const jvm = await analyzeJvmArchive(classEntries, {
     chunkSize,
     onProgress: (done, total) => options?.onProgress?.(done, total),
   });
+  if (omittedClasses.length > 0) {
+    jvm.complete = false;
+    jvm.totals.classFiles = allClassEntries.length;
+    jvm.unresolvedClassFiles.push(...omittedClasses.slice(0, 2000).map(entry => entry.path));
+    jvm.warnings.unshift(`[MEMORY] ${omittedClasses.length} class file(s) were left unparsed by the ${getArchiveBudget().profile} device bytecode budget. Use desktop to inspect the complete bytecode set.`);
+  }
   const byClass = new Map(jvm.classes.map((item) => [item.name, item]));
   result.stats.classes = result.stats.classes.map((summary) => {
     const detail = byClass.get(summary.qualifiedClassName ?? summary.className);
@@ -1143,7 +1161,9 @@ export async function decompileAndInspectJarAsync(
       signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
     };
   });
-  result.stats.jvmAnalysis = jvm;
+  // Keep only compact diagnostics and counters in React state. Retaining the full IR for
+  // every method/instruction doubled or tripled the live object graph for large mods.
+  result.stats.jvmAnalysis = { ...jvm, classes: [] };
   inspectionCache.set(entries, { key, result });
   return result;
 }

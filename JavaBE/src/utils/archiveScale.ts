@@ -19,9 +19,16 @@ export interface ArchiveEntryLike {
 }
 
 export interface ArchiveBudget {
+  maxInputBytes: number;
+  maxGeneratedBytes: number;
   maxEntries: number;
   maxTotalBytes: number;
   maxEntryBytes: number;
+  maxNestedArchives: number;
+  maxNestedDepth: number;
+  maxNestedArchiveBytes: number;
+  maxClassBytes: number;
+  maxClassCount: number;
   profile: 'mobile' | 'desktop';
 }
 
@@ -38,12 +45,39 @@ export function getArchiveBudget(): ArchiveBudget {
     (touchDevice && typeof window !== 'undefined' && window.innerWidth < 900);
   const deviceMemory = Number((nav as Navigator & { deviceMemory?: number } | null)?.deviceMemory || 0);
   if (mobile) {
-    return { maxEntries: 18000, maxTotalBytes: 160 * 1024 * 1024, maxEntryBytes: 24 * 1024 * 1024, profile: 'mobile' };
+    // Discord's iOS/Android Activity runs inside a memory-constrained WebView. The original
+    // File.arrayBuffer, inflated entries, bytecode IR and generated packs coexist at stages;
+    // a 160 MB extraction budget was therefore not a safe mobile working-set budget.
+    return {
+      maxInputBytes: 64 * 1024 * 1024,
+      maxGeneratedBytes: 24 * 1024 * 1024,
+      maxEntries: 12000,
+      maxTotalBytes: 48 * 1024 * 1024,
+      maxEntryBytes: 8 * 1024 * 1024,
+      maxNestedArchives: 4,
+      maxNestedDepth: 2,
+      maxNestedArchiveBytes: 4 * 1024 * 1024,
+      maxClassBytes: 6 * 1024 * 1024,
+      maxClassCount: 1200,
+      profile: 'mobile',
+    };
   }
   const maxTotalBytes = deviceMemory > 0 && deviceMemory <= 4
-    ? 384 * 1024 * 1024
-    : 768 * 1024 * 1024;
-  return { maxEntries: 50000, maxTotalBytes, maxEntryBytes: 128 * 1024 * 1024, profile: 'desktop' };
+    ? 192 * 1024 * 1024
+    : 384 * 1024 * 1024;
+  return {
+    maxInputBytes: 512 * 1024 * 1024,
+    maxGeneratedBytes: 192 * 1024 * 1024,
+    maxEntries: 30000,
+    maxTotalBytes,
+    maxEntryBytes: 64 * 1024 * 1024,
+    maxNestedArchives: 8,
+    maxNestedDepth: 3,
+    maxNestedArchiveBytes: 24 * 1024 * 1024,
+    maxClassBytes: deviceMemory > 0 && deviceMemory <= 4 ? 16 * 1024 * 1024 : 48 * 1024 * 1024,
+    maxClassCount: deviceMemory > 0 && deviceMemory <= 4 ? 4000 : 10000,
+    profile: 'desktop',
+  };
 }
 
 /** Conservative defaults for callers that do not supply a device-specific budget. */

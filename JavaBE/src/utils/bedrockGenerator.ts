@@ -72,7 +72,7 @@ import { auditReferenceIntegrity, reconcileReferenceIntegrityMetrics } from '@/u
 import { validateAnimationRuntime } from '@/utils/animationRuntimeValidator';
 import { createAnimationPipelineTrace } from '@/utils/pipelineTrace';
 import { reconcileAnimationMetrics, type MetricClaimInput } from '@/utils/animationMetricReconciliation';
-import { yieldToUi } from '@/utils/archiveScale';
+import { getArchiveBudget, yieldToUi } from '@/utils/archiveScale';
 
 /**
  * Recovers the model that belongs to a mob when its recovered file name drifted
@@ -2709,13 +2709,17 @@ export async function convertJavaToBedrockAddon(
   await yieldToUi();
   const packBytes =
     Object.values(remake.resourcePackFiles).reduce(
-      (sum, content) => sum + (typeof content === 'string' ? content.length : content.byteLength),
+      (sum, content) => sum + (typeof content === 'string' ? content.length * 2 : content.byteLength),
       0,
     ) +
     Object.values(remake.behaviorPackFiles).reduce(
-      (sum, content) => sum + (typeof content === 'string' ? content.length : content.byteLength),
+      (sum, content) => sum + (typeof content === 'string' ? content.length * 2 : content.byteLength),
       0,
     );
+  const outputBudget = getArchiveBudget();
+  if (packBytes > outputBudget.maxGeneratedBytes) {
+    throw new Error(`JavaBE safely stopped before building a ${(packBytes / (1024 * 1024)).toFixed(1)} MB add-on in the ${outputBudget.profile} Activity. The generated files exceed this device's ${(outputBudget.maxGeneratedBytes / (1024 * 1024)).toFixed(0)} MB output-memory budget. Nothing was exported or uploaded. Try the same mod on desktop for the larger working budget.`);
+  }
   integrityLog(
     `[ZIP] Assembling the archive from ${Object.keys(remake.resourcePackFiles).length + Object.keys(remake.behaviorPackFiles).length} file(s), ${(packBytes / (1024 * 1024)).toFixed(1)} MB of content. The archive is written into a single buffer, so peak memory stays close to the final pack size instead of several copies of it.`,
   );

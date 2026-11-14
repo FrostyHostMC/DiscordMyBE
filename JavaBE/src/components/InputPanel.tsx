@@ -44,7 +44,11 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       const oversized: string[] = [];
       let skippedBytes = 0;
       const budget = getArchiveBudget();
-      const extracted = await readZipArchive(await selectedFile.arrayBuffer(), {
+      if (selectedFile.size > budget.maxInputBytes) {
+        throw new Error(`This ${budget.profile} device cannot safely process a ${formatArchiveBytes(selectedFile.size)} archive inside Discord. The safe input limit for this device is ${formatArchiveBytes(budget.maxInputBytes)}. Use a desktop browser for this larger mod; JavaBE will not start a conversion that could crash the Activity or the phone.`);
+      }
+      const sourceBuffer = await selectedFile.arrayBuffer();
+      const extracted = await readZipArchive(sourceBuffer, {
         maxEntries: budget.maxEntries,
         maxEntryBytes: budget.maxEntryBytes,
         maxTotalBytes: budget.maxTotalBytes,
@@ -55,7 +59,7 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       });
       // A mod archive is not always flat: modpacks and bundled distributions keep the real mod
       // one level down. Nested jars/zips are expanded so their clips, models and skins are found.
-      const nested = await expandNestedArchives(extracted);
+      const nested = await expandNestedArchives(extracted, budget);
       // A modpack-sized archive is trimmed to the mobile budget before it is scanned: audio and
       // oversized binaries are left unread instead of inflating hundreds of megabytes at once.
       const budgeted = prioritizeArchiveEntries(nested.entries, { maxEntries: budget.maxEntries, maxTotalBytes: budget.maxTotalBytes });
@@ -70,9 +74,11 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       }
       if (notes.length > 0) setNestedNote(notes.join(' '));
       onFileLoaded(selectedFile, budgeted.entries);
-    } catch {
-      onFileLoaded(selectedFile, []);
-      setUnzipError('Could not unpack this archive. A description can still be used for a draft.');
+      // The archive entries now hold the required byte views. Release this local reference.
+      // (The browser File itself remains selected so the user can see its name and retry.)
+    } catch (error) {
+      onFileLoaded(null, []);
+      setUnzipError(error instanceof Error ? error.message : 'Could not safely unpack this archive. Try a smaller archive or use desktop.');
     } finally { setUnzipping(false); }
   };
   const handleDrop = (event: React.DragEvent) => {
