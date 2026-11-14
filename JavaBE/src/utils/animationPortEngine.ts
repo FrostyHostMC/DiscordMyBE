@@ -176,6 +176,12 @@ function bridgePlayerRigClips(
   sourceClipIdByPlayerClipId: Record<string, string>;
   /** Canonical source animation id -> final retargeted player animation id. */
   sourceClipIdToPlayerClipId: Record<string, string>;
+  /** Bedrock-translated clips before player bone/hierarchy retargeting, keyed by canonical source id. */
+  preRetargetClips: Record<string, BedrockAnimationClip>;
+  /** Expected final player clips after the retargeting stage, keyed by exported id. */
+  expectedRetargetedClips: Record<string, BedrockAnimationClip>;
+  /** Source bone name -> Bedrock player bone name. */
+  sourceBoneToPlayerBone: Record<string, string>;
   mappingCount: number;
   unmappedBones: string[];
   learnedAliases: number;
@@ -190,7 +196,7 @@ function bridgePlayerRigClips(
     }
   }
   if (Object.keys(merged).length === 0) {
-    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, sourceClipIdToPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, sourceClipIdToPlayerClipId: {}, preRetargetClips: {}, expectedRetargetedClips: {}, sourceBoneToPlayerBone: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -227,6 +233,7 @@ function bridgePlayerRigClips(
   const sourceClipIds: string[] = [];
   const sourceClipIdByPlayerClipId: Record<string, string> = {};
   const sourceClipIdToPlayerClipId: Record<string, string> = {};
+  const sourceBoneToPlayerBone = Object.fromEntries(fit.mappings.map((mapping) => [mapping.source, mapping.bone]));
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
@@ -296,6 +303,9 @@ function bridgePlayerRigClips(
     sourceClipIds,
     sourceClipIdByPlayerClipId,
     sourceClipIdToPlayerClipId,
+    preRetargetClips: merged,
+    expectedRetargetedClips: renamed,
+    sourceBoneToPlayerBone,
     mappingCount: fit.mappings.length,
     unmappedBones: fit.unmapped,
     learnedAliases: fit.learnedAliases,
@@ -374,6 +384,12 @@ export interface AnimationPortResult {
   playerSourceClipIdByPlayerClipId?: Record<string, string>;
   /** Canonical source animation id -> final retargeted player animation id. */
   playerSourceClipIdToPlayerClipId?: Record<string, string>;
+  /** Bedrock-translated player clips before bone/hierarchy retargeting, keyed by canonical source id. */
+  playerPreRetargetClips?: Record<string, BedrockAnimationClip>;
+  /** Expected final player clips after retargeting, keyed by exported id. */
+  playerExpectedRetargetedClips?: Record<string, BedrockAnimationClip>;
+  /** Source bone name -> Bedrock player bone name. */
+  playerSourceBoneToPlayerBone?: Record<string, string>;
   /** Number of source-to-Bedrock bone mappings applied by the player animation bridge. */
   playerRigBoneMappings?: number;
   /** Player bone names the bridge could not resolve (reported, never silently dropped). */
@@ -1397,6 +1413,9 @@ export function portMobAndPlayerAnimations(
     playerSourceClipIds: playerRigBridge.sourceClipIds,
     playerSourceClipIdByPlayerClipId: playerRigBridge.sourceClipIdByPlayerClipId,
     playerSourceClipIdToPlayerClipId: playerRigBridge.sourceClipIdToPlayerClipId,
+    playerPreRetargetClips: playerRigBridge.preRetargetClips,
+    playerExpectedRetargetedClips: playerRigBridge.expectedRetargetedClips,
+    playerSourceBoneToPlayerBone: playerRigBridge.sourceBoneToPlayerBone,
     playerRigBoneMappings: playerRigBridge.mappingCount,
     playerRigUnmappedBones: playerRigBridge.unmappedBones,
     playerRigLearnedBoneAliases: playerRigBridge.learnedAliases,

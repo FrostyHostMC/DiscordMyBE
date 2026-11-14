@@ -858,6 +858,12 @@ export interface BedrockRemake {
   playerSourceClipIds?: string[];
   /** Canonical source animation id -> final retargeted player animation id. */
   playerSourceClipIdToPlayerClipId?: Record<string, string>;
+  /** Bedrock-translated player clips before bone/hierarchy retargeting. */
+  playerPreRetargetClips?: Record<string, { animation_length?: number; bones: Record<string, Record<string, unknown>> }>;
+  /** Expected final player clips after retargeting. */
+  playerExpectedRetargetedClips?: Record<string, { animation_length?: number; bones: Record<string, Record<string, unknown>> }>;
+  /** Source bone name -> Bedrock player bone name. */
+  playerSourceBoneToPlayerBone?: Record<string, string>;
   /** Clip ids the animation stage intended to make playable (checked by the integration audit). */
   animationExpectedClips?: string[];
   /** Mandatory animation integration audit performed on the exported pack. */
