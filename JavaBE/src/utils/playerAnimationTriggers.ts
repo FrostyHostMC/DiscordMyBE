@@ -77,8 +77,8 @@ const CONCEPTS: ConceptRule[] = [
   { concept: 'idle', java: /tickCount|getIdle|isIdle/, clip: /idle|stand|breath|rest/i, molang: 'query.modified_move_speed <= 0.1 && !query.is_sneaking' },
 ];
 
-const MAX_CLASSES_SCANNED = 300;
-const MAX_CLASS_BYTES = 400_000;
+const MAX_CLASSES_SCANNED = Number.POSITIVE_INFINITY;
+const MAX_CLASS_BYTES = Number.POSITIVE_INFINITY;
 const decoder = new TextDecoder();
 
 /** Held-item gate. Item ids come from the mod's own registry evidence, never from a guess. */
