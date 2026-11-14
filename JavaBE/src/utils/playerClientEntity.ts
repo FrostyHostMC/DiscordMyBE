@@ -397,13 +397,12 @@ export function buildPlayerClientEntity(options: {
  * each produce a content-log line, and `/<namespace>:animation_test` replays every ported clip
  * on the executing player so playback can be verified in game instead of assumed.
  */
-function buildPlayerScript(triggers: PlayerClipTrigger[], modId: string): string {
+function buildPlayerScript(triggers: PlayerClipTrigger[]): string {
   // Only clips that truly require a Java-side one-shot action are included here. Normal
   // locomotion, idle, attack-state and emote animation selection is handled by Bedrock's
   // native player animation controller and Molang; no diagnostic script event is shipped.
   const scriptTriggers = triggers.filter((trigger) => trigger.scriptDriven);
   if (scriptTriggers.length === 0) return '';
-  const namespace = safeFileId(modId) || 'aippy';
   const entries = scriptTriggers
     .map((trigger) => `  { clip: ${JSON.stringify(trigger.clipId)}, concept: ${JSON.stringify(trigger.concept)} },`)
     .join('\\n');
