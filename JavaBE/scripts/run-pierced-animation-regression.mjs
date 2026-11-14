@@ -72,7 +72,7 @@ try {
 
   const syntheticClip = { bones: { rightArm: { rotation: { '0': [0, 0, 0], '0.4': [45, 0, 0] } } }, loop: false, animation_length: 0.4 };
   const unrelatedClass = new TextEncoder().encode('net/example/Unrelated.class isSprinting');
-  const registeredClass = new TextEncoder().encode('net/example/WalkingAnimation.class walking isSprinting');
+  const registeredClass = new TextEncoder().encode('net/example/WalkingAnimation.class walking isMoving');
   const unrelatedTrigger = translatePlayerTriggers({
     clips: { 'animation.walking': syntheticClip },
     archiveEntries: [{ path: 'net/example/Unrelated.class', data: unrelatedClass }],
