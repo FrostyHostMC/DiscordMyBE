@@ -41,3 +41,12 @@ jobs:
         run: pnpm build
       - name: Run player Molang baseline regression
         run: node scripts/run-player-baseline-regression.mjs
+      - name: Convert the original Pierced fixture through the current animation engine
+        run: node scripts/run-pierced-animation-regression.mjs
+      - name: Upload current Pierced conversion diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: javabe-pierced-current-engine
+          path: fixture-analysis/pierced-current-engine.json
+          if-no-files-found: warn
