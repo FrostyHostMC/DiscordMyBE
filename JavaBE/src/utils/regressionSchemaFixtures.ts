@@ -71,6 +71,11 @@ function parse(files: Record<string, PackFile>, path: string): Record<string, an
     return null;
   }
 }
+function fixtureText(path: string, text: string): ExtractedZipEntry {
+  const data = new TextEncoder().encode(text);
+  return { path, data, isDirectory: false, uncompressedSize: data.byteLength };
+}
+
 function build(id: string, label: string, category: string, checks: RegressionAssertion[], findings: string[], unavailable: string[], started: number): RegressionFixtureResult {
   const failures = checks.filter(check => !check.passed);
   return {
