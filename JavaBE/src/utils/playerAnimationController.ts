@@ -131,15 +131,19 @@ export function synthesizePlayerAnimationController(options: {
       triggers: overlayTriggers,
       _singleLayer: true,
     });
-    const results = [baseResult, overlayResult].filter(
-      (result): result is PlayerControllerSynthesis => Boolean(result && result.controllerIds.length > 0),
+    const activeLayers = [
+      { layer: 'base' as const, result: baseResult },
+      { layer: 'overlay' as const, result: overlayResult },
+    ].filter(
+      (entry): entry is { layer: 'base' | 'overlay'; result: PlayerControllerSynthesis } =>
+        Boolean(entry.result && entry.result.controllerIds.length > 0),
     );
-    if (results.length === 0) return empty('No source-backed player animation layer carried a translatable trigger.');
-    const files = Object.assign({}, ...results.map((result) => result.files));
-    const controllerIds = results.flatMap((result) => result.controllerIds);
-    const controllerDrivenClips = results.flatMap((result) => result.controllerDrivenClips);
-    const note = results.map((result, index) =>
-      `${index === 0 && baseResult ? 'Base layer' : 'Overlay layer'}: ${result.report.note}`,
+    if (activeLayers.length === 0) return empty('No source-backed player animation layer carried a translatable trigger.');
+    const files = Object.assign({}, ...activeLayers.map(({ result }) => result.files));
+    const controllerIds = activeLayers.flatMap(({ result }) => result.controllerIds);
+    const controllerDrivenClips = activeLayers.flatMap(({ result }) => result.controllerDrivenClips);
+    const note = activeLayers.map(({ layer, result }) =>
+      `${layer === 'base' ? 'Base' : 'Overlay'} layer: ${result.report.note}`,
     ).join(' ');
     log(`[ANIM:CONTROLLER] Compiled ${controllerIds.length} independent player animation layer controller(s); overlay clips can now blend with locomotion.`);
     return {
@@ -149,16 +153,16 @@ export function synthesizePlayerAnimationController(options: {
       report: {
         controllerId: baseResult?.report.controllerId ?? overlayResult.report.controllerId,
         filePath: baseResult?.report.filePath ?? overlayResult.report.filePath,
-        overlayControllerId: baseResult ? overlayResult.report.controllerId : null,
-        overlayFilePath: baseResult ? overlayResult.report.filePath : null,
-        states: results.flatMap((result, index) =>
-          result.report.states.map((state) => `${index === 0 && baseResult ? 'base' : 'overlay'}:${state}`),
+        overlayControllerId: overlayResult.report.controllerId,
+        overlayFilePath: overlayResult.report.filePath,
+        states: activeLayers.flatMap(({ layer, result }) =>
+          result.report.states.map((state) => `${layer}:${state}`),
         ),
         controllerDrivenClips,
-        clipsLeftInAnimate: results.flatMap((result) => result.report.clipsLeftInAnimate),
-        conditionRepairs: results.flatMap((result) => result.report.conditionRepairs),
-        unresolved: results.flatMap((result) => result.report.unresolved),
-        sharedConditions: results.flatMap((result) => result.report.sharedConditions),
+        clipsLeftInAnimate: activeLayers.flatMap(({ result }) => result.report.clipsLeftInAnimate),
+        conditionRepairs: activeLayers.flatMap(({ result }) => result.report.conditionRepairs),
+        unresolved: activeLayers.flatMap(({ result }) => result.report.unresolved),
+        sharedConditions: activeLayers.flatMap(({ result }) => result.report.sharedConditions),
         note,
       },
     };
