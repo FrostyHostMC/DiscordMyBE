@@ -45,4 +45,45 @@ jr=read_archive(JAVA.read_bytes(),"JAVA");ar=read_archive(ADDON.read_bytes(),"BE
 (OUT/"bedrock-port.md").write_text(summarize("Generated Bedrock port",ar),encoding="utf-8")
 def inv(rows):return [{"archive":s,"path":n,"bytes":len(b),"json":parse_json(b)is not None} for s,n,b in rows]
 (OUT/"inventory.json").write_text(json.dumps({"java":inv(jr),"bedrock":inv(ar)},indent=2),encoding="utf-8")
-print("Analyzed "+str(len(jr))+" Java files and "+str(len(ar))+" generated Bedrock files.")
+
+def structured(rows):
+ out={}
+ for src,name,raw in rows:
+  obj=parse_json(raw)
+  if obj is not None: out[name]=obj
+ return out
+jdocs=structured(jr); bdocs=structured(ar)
+source_animations={}
+for name,obj in jdocs.items():
+ if "/player_animation/" in name:
+  for aid,anim in obj.get("animations",{}).items():
+   source_animations[aid]=sorted(anim.get("bones",{}).keys())
+bedrock_animations={}
+for name,obj in bdocs.items():
+ if name.startswith("animations/"):
+  for aid,anim in obj.get("animations",{}).items():
+   bedrock_animations[aid]=sorted(anim.get("bones",{}).keys())
+entity=bdocs.get("entity/player.entity.json",{}).get("minecraft:client_entity",{}).get("description",{})
+geo=bdocs.get("models/entity/player.geo.json",{}).get("minecraft:geometry",[{}])[0]
+controllers={}
+for name,obj in bdocs.items():
+ if name.startswith("animation_controllers/"):
+  for cid,controller in obj.get("animation_controllers",{}).items():
+   states=controller.get("states",{})
+   controllers[cid]={"initial_state":controller.get("initial_state"),"states":{state:{"animations":value.get("animations",[]),"transitions":value.get("transitions",[])} for state,value in states.items()}}
+diag={
+ "source_animation_files":list(source_animations),
+ "source_animation_bones":source_animations,
+ "bedrock_animation_ids":list(bedrock_animations),
+ "bedrock_animation_bones":bedrock_animations,
+ "player_geometry_id":geo.get("description",{}).get("identifier"),
+ "player_geometry_bones":[bone.get("name") for bone in geo.get("bones",[])],
+ "entity_identifier":entity.get("identifier"),
+ "entity_geometry":entity.get("geometry"),
+ "entity_animation_aliases":entity.get("animations",{}),
+ "entity_animate_script":entity.get("scripts",{}).get("animate",[]),
+ "controllers":controllers,
+ "script_main_js":next((raw.decode("utf-8","replace") for src,name,raw in ar if name=="scripts/main.js"),""),
+}
+(OUT/"diagnostics.json").write_text(json.dumps(diag,indent=2,ensure_ascii=False),encoding="utf-8")
+print("Analyzed "+str(len(jr))+" Java files and "+str(len(ar))+" generated Bedrock files; emitted complete animation and entity diagnostics.")
