@@ -1,3 +1,10 @@
+## 2026-11-14 — Native nested RPF archive inventory
+- Routed `.rpf` files through RageKit's dedicated `rk rpf ls` command instead of the unsupported loose-resource `rk roundtrip` path.
+- Added a bounded TSV parser that validates entry paths, rejects traversal/absolute/Windows paths and duplicates, validates size fields, and limits inventory to 10,000 entries.
+- Added nested archive inventory, resource counts, encryption flags, extension counts and a browsable workbench view with a downloadable full report.
+- Kept archive inspection separate from extraction, rewriting and PS4 packaging; encrypted retail archives still need keys from the user's own game installation.
+- Added regression tests for nested entries, path traversal, duplicates, malformed sizes and entry-count limits.
+
 ## 2026-11-14 — Local 7z archive intake
 - Added bundled `7zip-bin` command-line tooling and a local Vite middleware endpoint to inspect and extract `.7z` archives without asking users to unpack them manually.
 - Added pre-extraction listing checks for unsafe paths, links, encrypted entries, duplicate paths, entry counts and declared expanded size; extracted files are rechecked before returning to the browser.
