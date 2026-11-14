@@ -1,3 +1,10 @@
+## 2026-11-14 — GoldHEN AFR overlay planning
+- Researched the official GoldHEN Application File Redirector (AFR) mapping documented by GoldHEN: game `/app0/...` paths map under `/data/GoldHEN/AFR/<title-id>/...`.
+- Added a guarded planner that accepts only explicit PS4 `/app0` mappings, validates CUSA title IDs, rejects traversal/encoded separators/Windows paths and duplicate destinations, and produces review-only staging paths.
+- Added a mergeable per-title `plugins.ini` snippet generator; it does not install `afr.prx` or modify a user's existing config.
+- Kept deployment disabled because exact CUSA00411 / GTA V 1.73 path access and AFR behavior on the user's console are not yet validated.
+- Added regression tests and a deployment research note.
+
 ## 2026-11-14 — Native nested RPF archive inventory
 - Routed `.rpf` files through RageKit's dedicated `rk rpf ls` command instead of the unsupported loose-resource `rk roundtrip` path.
 - Added a bounded TSV parser that validates entry paths, rejects traversal/absolute/Windows paths and duplicates, validates size fields, and limits inventory to 10,000 entries.
