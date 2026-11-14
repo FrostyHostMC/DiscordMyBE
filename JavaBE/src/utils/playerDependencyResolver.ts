@@ -7,7 +7,7 @@ import {
   VANILLA_PLAYER_ANIMATIONS,
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
-  VANILLA_PLAYER_VARIABLE_EXPRESSIONS,
+  PLAYER_SCOPE_VARIABLE_EXPRESSIONS,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
   isVanillaPlayerDocumentPath,
@@ -551,11 +551,25 @@ export function resolvePlayerDependencies(input: {
     if (typeof rawDocument === 'string') playerDocuments.push(rawDocument);
   }
   const readVars = countReads(playerDocuments);
-  // A custom player entity also replaces vanilla script scope. Restore these two vanilla player
-  // variables even when their only consumers live in engine-owned controllers that are not
-  // physically present in the imported archive.
-  for (const name of Object.keys(VANILLA_PLAYER_VARIABLE_EXPRESSIONS)) {
-    if (!readVars.has(name)) readVars.set(name, 0);
+  // A custom player entity also replaces vanilla script scope. Restore always-required engine
+  // variables, then close over dependencies used by source-derived expressions.
+  for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
+    if (baseline.always && !readVars.has(name)) readVars.set(name, 0);
+  }
+  let dependenciesAdded = true;
+  while (dependenciesAdded) {
+    dependenciesAdded = false;
+    for (const name of [...readVars.keys()]) {
+      const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+      if (!baseline) continue;
+      for (const match of baseline.expression.matchAll(VARIABLE_READ)) {
+        const dependency = String(match[1]);
+        if (!readVars.has(dependency)) {
+          readVars.set(dependency, 0);
+          dependenciesAdded = true;
+        }
+      }
+    }
   }
   const itemIds = collectPackItemIdentifiers({ ...files, ...(input.behaviorPackFiles ?? {}) });
   const preAnimation: string[] = Array.isArray(scripts.pre_animation)
@@ -563,6 +577,40 @@ export function resolvePlayerDependencies(input: {
     : typeof scripts.pre_animation === 'string'
       ? [scripts.pre_animation]
       : [];
+  const initialize: string[] = Array.isArray(scripts.initialize)
+    ? scripts.initialize.filter((entry): entry is string => typeof entry === 'string')
+    : typeof scripts.initialize === 'string'
+      ? [scripts.initialize]
+      : [];
+  const baselineInjectedVariables = new Set<string>();
+  const baselineInjectedStatements = new Map<string, string[]>();
+  // Install source-backed expressions before scope analysis so dependencies declared in
+  // initialize/pre_animation are treated as real player-scope assignments by the resolver.
+  for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
+    if (!readVars.has(name)) continue;
+    const statements: string[] = [];
+    if (baseline.initializeExpression) {
+      const statement = `variable.${name} = ${baseline.initializeExpression};`;
+      if (!initialize.some((entry) => entry.includes(`variable.${name} =`))) {
+        initialize.push(statement);
+        statements.push(statement);
+      }
+    }
+    if (baseline.expression) {
+      const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
+      if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
+        const statement = `${translation.expression.trim().replace(/;$/, '')};`;
+        if (!preAnimation.some((entry) => entry.includes(`variable.${name} =`))) {
+          preAnimation.push(statement);
+          statements.push(statement);
+        }
+      }
+    }
+    if (statements.length > 0) {
+      baselineInjectedVariables.add(name);
+      baselineInjectedStatements.set(name, statements);
+    }
+  }
 
   // A Molang variable exists only inside the script scope that declares it. An assignment shipped
   // somewhere else in the archive — another entity, an attachable, a clip document — leaves the
@@ -570,7 +618,7 @@ export function resolvePlayerDependencies(input: {
   // `variable.tcos0` failure: the archive assigned them, in a scope the player never evaluates.
   // Only this entity's own script statements count as a declaration here.
   const declaredInPlayerScope = new Set<string>();
-  for (const match of JSON.stringify([preAnimation, animate]).matchAll(VARIABLE_ASSIGN)) {
+  for (const match of JSON.stringify([initialize, preAnimation, animate]).matchAll(VARIABLE_ASSIGN)) {
     declaredInPlayerScope.add(String(match[1]));
   }
   /** A whole `variable.x = <expr>` the archive already contains, reused as the declaration. */
@@ -594,6 +642,10 @@ export function resolvePlayerDependencies(input: {
   for (const [name, referenceCount] of readVars) {
     if (declaredInPlayerScope.has(name)) {
       report.variables.declared += 1;
+      if (baselineInjectedVariables.has(name)) {
+        report.variables.reconstructed += 1;
+        report.variables.injected.push(...(baselineInjectedStatements.get(name) ?? []));
+      }
       continue;
     }
     // 1. Equipment visibility: the armour-layer flag has a known destination form.
@@ -711,6 +763,7 @@ export function resolvePlayerDependencies(input: {
   // 6. Write the resolved definition back only when something really changed.
   description.animations = animations;
   scripts.pre_animation = preAnimation.filter((entry) => entry.trim().length > 0);
+  if (initialize.length > 0) scripts.initialize = initialize.filter((entry) => entry.trim().length > 0);
   scripts.animate = animate;
   description.scripts = scripts;
   const nextJson = JSON.stringify(doc, null, 2);
