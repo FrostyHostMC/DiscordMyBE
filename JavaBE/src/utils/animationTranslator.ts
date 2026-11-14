@@ -67,6 +67,17 @@ const CLIP_MEMBERS = new Set([
   'override_previous_animation',
   'sound_effects',
   'particle_effects',
+  // Player Animation Library / Emotecraft wrapper metadata.
+  'emote',
+  'animators',
+  'parts',
+  'timeline',
+  'geckoResource',
+  'name',
+  'author',
+  'description',
+  'version',
+  'settings',
 ]);
 
 function emptyStats(): AnimationTranslationStats {
@@ -89,12 +100,25 @@ function collectClipMap(document: unknown): Record<string, unknown> {
   for (const container of containers) {
     if (isPlainObject(container) && Object.keys(container).length > 0) return container;
   }
+  // Emotecraft's legacy JSON wraps one animation in `emote`; PAL's Blockbench/Blender
+  // exports may use the same wrapper while carrying GeckoLib-style animation tracks.
+  // Treat it as one clip only when it actually contains a recognised rig-track container.
+  if (isPlainObject(document.emote)) {
+    const emote = document.emote;
+    if (isPlainObject(emote.bones) || isPlainObject(emote.bone) || isPlainObject(emote.animators) || isPlainObject(emote.parts)) {
+      const id = typeof document.name === 'string' && document.name.trim() ? document.name : 'emote';
+      return { [id]: emote };
+    }
+  }
   // Some Java exporters place the clip map directly at the document root.
   const rootClips = Object.entries(document).filter(
     ([key, value]) =>
       !CLIP_MEMBERS.has(key) &&
       isPlainObject(value) &&
-      (isPlainObject((value as Record<string, unknown>).bones) || isPlainObject((value as Record<string, unknown>).bone)),
+      (isPlainObject((value as Record<string, unknown>).bones) ||
+        isPlainObject((value as Record<string, unknown>).bone) ||
+        isPlainObject((value as Record<string, unknown>).animators) ||
+        isPlainObject((value as Record<string, unknown>).parts)),
   );
   return Object.fromEntries(rootClips);
 }
@@ -177,7 +201,11 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
     ? rawClip.bones
     : isPlainObject(rawClip.bone)
       ? rawClip.bone
-      : null;
+      : isPlainObject(rawClip.animators)
+        ? rawClip.animators
+        : isPlainObject(rawClip.parts)
+          ? rawClip.parts
+          : null;
   if (!rawBones) {
     issues.push({
       clip: clipId,
