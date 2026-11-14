@@ -32,6 +32,25 @@ try {
     maxEntryBytes: 128 * 1024 * 1024,
     maxTotalBytes: 256 * 1024 * 1024,
   });
+  const dependencyJarPath = process.env.SERIOUS_PLAYER_ANIMATIONS_JAR;
+  if (!dependencyJarPath || !fs.existsSync(dependencyJarPath)) {
+    throw new Error('The verified Serious Player Animations 1.1.0 Java mod JAR is required for the full source-trigger regression.');
+  }
+  const dependencyEntries = await readZipArchive(new Uint8Array(fs.readFileSync(dependencyJarPath)), {
+    maxEntries: 10000,
+    maxEntryBytes: 128 * 1024 * 1024,
+    maxTotalBytes: 256 * 1024 * 1024,
+  });
+  const sourceEvidenceEntries = dependencyEntries.filter((entry) => {
+    const normalized = entry.path.replace(/\\/g, '/').toLowerCase();
+    return normalized === 'fabric.mod.json' ||
+      normalized.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class');
+  });
+  if (!sourceEvidenceEntries.some((entry) => entry.path.toLowerCase().endsWith('fabric.mod.json')) ||
+      !sourceEvidenceEntries.some((entry) => entry.path.toLowerCase().endsWith('seriousplayeranimationsmixin.class'))) {
+    throw new Error('The built dependency JAR is missing its Fabric metadata or state-machine class.');
+  }
+  const archiveEntries = [...entries, ...sourceEvidenceEntries];
 
   const decoder = new TextDecoder();
   const sourceClipIds = [];
@@ -54,7 +73,7 @@ try {
     'pierced_fixture',
     'Pierced Animations fixture',
     [],
-    entries,
+    archiveEntries,
     (line) => logs.push(line),
     new Map(),
     undefined,
@@ -132,11 +151,13 @@ try {
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
     { id: 'player-animation-bridge-inspected-every-java-loaded-clip', expected: expectedPlayerClipIds.length, actual: playerPort?.clipsInspected ?? 0, passed: Boolean(playerPort && playerPort.clipsInspected === expectedPlayerClipIds.length) },
     { id: 'all-java-loaded-clips-registered-on-player', expected: expectedPlayerClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === expectedPlayerClipIds.length) },
-    { id: 'resource-only-pack-reports-the-missing-base-mod-dependency', expected: 'Serious Player Animations 1.1.0 (base Java mod JAR required)', actual: triggers?.sourceProfileCandidate ?? 'missing dependency not identified', passed: !triggers?.sourceProfile && triggers?.sourceProfileCandidate?.includes('base Java mod JAR required') === true },
-    { id: 'resource-only-pack-does-not-invent-playback-triggers', expected: 0, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 0 && triggers?.unresolved === triggers?.clipsInspected) },
-    { id: 'resource-only-pack-leaves-all-nine-clips-unresolved-without-source-code', expected: 9, actual: triggers?.unresolved ?? -1, passed: triggers?.unresolved === 9 && triggers?.mapped === 0 && triggers?.approximated === 0 },
-    { id: 'no-player-controller-is-synthesized-without-source-trigger-evidence', expected: 0, actual: controllerFiles.length, passed: controllerFiles.length === 0 && baseControllerClips.length === 0 && overlayControllerClips.length === 0 },
-    { id: 'no-source-specific-movement-variables-are-injected-without-the-adapter', expected: 0, actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).length, passed: sourceMovementVariables.every((name) => !assignments.some((line) => line.startsWith(`variable.${name} =`))) },
+    { id: 'verified-serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.0', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.0' },
+    { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
+    { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
+    { id: 'unused-animation-running-definition-remains-unbound', expected: 1, actual: triggers?.unresolved ?? -1, passed: triggers?.unresolved === 1 && triggers?.triggers?.some((trigger) => trigger.clipId === 'animation.running' && trigger.status === 'unresolved') },
+    { id: 'eight-source-used-clips-have-activation-paths', expected: 8, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 8 && wiring.controllerDrivenClips?.length === 8) },
+    { id: 'base-and-overlay-player-controllers-are-separated', expected: '2 controller files; shield only in overlay', actual: `${controllerFiles.length} file(s), base=${baseControllerClips.length}, overlay=${overlayControllerClips.length}`, passed: controllerFiles.length === 2 && baseControllerClips.length === 6 && overlayControllerClips.length === 2 && overlayControllerClips.every((id) => id.includes('shield')) && !baseControllerClips.some((id) => id.includes('shield')) },
+    { id: 'source movement state variables are reconstructed in player scope', expected: sourceMovementVariables.join(', '), actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).join(', '), passed: sourceMovementVariables.every((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))) && initialize.some((line) => line.startsWith('variable.spa_previous_body_yaw = 0.0')) },
     { id: 'all-nine-source-clip-definitions-emitted', expected: 'at least 9', actual: emittedClipIds.length, passed: emittedClipIds.length >= sourceClipIds.length },
     { id: 'no-duplicate-animation-identifiers', expected: 0, actual: duplicateDefinitions.length, passed: duplicateDefinitions.length === 0 },
     { id: 'vanilla-tcos0-variable-restored-from-source-baseline', expected: 'live Mojang movement expression', actual: tcos0 ?? 'missing', passed: Boolean(tcos0 && tcos0.includes('query.modified_distance_moved') && tcos0.includes('query.modified_move_speed')) },
@@ -147,7 +168,8 @@ try {
 
   const report = {
     source: path.basename(sourcePath),
-    archiveEntries: entries.filter((entry) => !entry.isDirectory).length,
+    archiveEntries: archiveEntries.filter((entry) => !entry.isDirectory).length,
+    dependencyJar: path.basename(dependencyJarPath),
     sourceClipIds,
     emittedClipIds,
     playerEntity: playerPath ?? null,
