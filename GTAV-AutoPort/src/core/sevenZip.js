@@ -18,16 +18,16 @@ function decodeBase64(value) {
 }
 
 function safePath(value) {
-  if (typeof value !== "string" || !value || value.includes("\\0")) throw new Error("The extracted archive returned an invalid path.");
-  const normalized = value.replace(/\\\\/g, "/");
+  if (typeof value !== "string" || !value || value.includes("\0")) throw new Error("The extracted archive returned an invalid path.");
+  const normalized = value.replace(/\\/g, "/");
   if (normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized) || normalized.split("/").some((part) => !part || part === "." || part === "..")) {
-    throw new Error(`Unsafe extracted path rejected: ${value}`);
+    throw new Error("Unsafe extracted path rejected: " + value);
   }
   return normalized;
 }
 
 export async function inspect7zArchive(file) {
-  if (!file || !/\\.7z$/i.test(file.name || "")) throw new Error("Choose a .7z archive.");
+  if (!file || !/\.7z$/i.test(file.name || "")) throw new Error("Choose a .7z archive.");
   if (!file.size || file.size > MAX_COMPRESSED_BYTES) throw new Error("7z archive must be between 1 byte and 160 MiB.");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const response = await fetch("/__autoport/extract-7z", {
@@ -43,7 +43,7 @@ export async function inspect7zArchive(file) {
   const files = result.files.map((item) => {
     const path = safePath(item.path);
     const key = path.toLowerCase();
-    if (seen.has(key)) throw new Error(`Duplicate extracted path: ${path}`);
+    if (seen.has(key)) throw new Error("Duplicate extracted path: " + path);
     seen.add(key);
     const data = decodeBase64(item.data || "");
     total += data.byteLength;
