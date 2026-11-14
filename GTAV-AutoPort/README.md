@@ -1,5 +1,7 @@
 # GTAV AutoPort
 
+**2026-11-14 — OpenIV OIV intake:** AutoPort now opens `.oiv` packages directly using the ZIP container reader, detects `assembly.xml`, and reports whether the OpenIV manifest is present. It does not execute OIV install instructions or assume PC install paths are valid on PS4.
+
 **2026-11-14 — Guided workflow update:** the workbench now includes an in-app step-by-step porting guide, contextual next-step prompts, and first-run native-tool setup. `START-AUTOPORT.bat` installs web dependencies and attempts to fetch/build the pinned RageKit backend automatically when the local CMake/C++ toolchain is present. PS4 1.73 output remains unvalidated.
 
 **2026-11-14 — Upstream integration audit:** RageKit v0.3.1 is already fetched and built as the primary native RAGE engine; the latest CI failure was traced to a malformed newline escape in the browser intake module and has been corrected. See [upstream integration register](docs/UPSTREAM-TOOL-INTEGRATION.md) for which external projects are wired in versus reference-only. PS4 1.73 output is still not validated.
