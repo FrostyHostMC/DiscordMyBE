@@ -34,7 +34,7 @@ try {
   });
   const dependencyJarPath = process.env.SERIOUS_PLAYER_ANIMATIONS_JAR;
   if (!dependencyJarPath || !fs.existsSync(dependencyJarPath)) {
-    throw new Error('The verified Serious Player Animations 1.1.0 Java mod JAR is required for the full source-trigger regression.');
+    throw new Error('The verified Serious Player Animations 1.1.1 source JAR is required (the upstream Gradle artifact may still be named 1.1.0) for the full source-trigger regression.');
   }
   const dependencyEntries = await readZipArchive(new Uint8Array(fs.readFileSync(dependencyJarPath)), {
     maxEntries: 10000,
@@ -151,7 +151,7 @@ try {
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
     { id: 'player-animation-bridge-inspected-every-java-loaded-clip', expected: expectedPlayerClipIds.length, actual: playerPort?.clipsInspected ?? 0, passed: Boolean(playerPort && playerPort.clipsInspected === expectedPlayerClipIds.length) },
     { id: 'all-java-loaded-clips-registered-on-player', expected: expectedPlayerClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === expectedPlayerClipIds.length) },
-    { id: 'verified-serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.0', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.0' },
+    { id: 'verified-serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.1', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
     { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
     { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
     { id: 'unused-animation-running-definition-remains-unbound', expected: 1, actual: triggers?.unresolved ?? -1, passed: triggers?.unresolved === 1 && triggers?.triggers?.some((trigger) => trigger.clipId === 'animation.running' && trigger.status === 'unresolved') },
