@@ -92,27 +92,35 @@ export function heldItemCondition(itemId: string): string {
 }
 
 /** Scans compiled classes for the Java APIs a player-animation mod gates its tracks on. */
-function scanJavaSignals(entries: ExtractedZipEntry[]): { classesScanned: number; hits: Map<string, string> } {
+interface JavaClassSignalEvidence { path: string; text: string; concepts: Set<string>; }
+
+/** Keep API hits scoped to the class that contains them; unrelated class hits are not trigger proof. */
+function scanJavaSignals(entries: ExtractedZipEntry[]): { classesScanned: number; hits: Map<string, string>; classEvidence: JavaClassSignalEvidence[] } {
   const hits = new Map<string, string>();
+  const classEvidence: JavaClassSignalEvidence[] = [];
   let classesScanned = 0;
   for (const entry of entries) {
     if (classesScanned >= MAX_CLASSES_SCANNED) break;
-    const path = entry.path.replace(/\\/g, '/');
-    if (!path.toLowerCase().endsWith('.class')) continue;
-    if (entry.data.length > MAX_CLASS_BYTES) continue;
+    const path = entry.path.replace(/\\\\/g, '/');
+    if (!path.toLowerCase().endsWith('.class') || entry.data.length > MAX_CLASS_BYTES) continue;
     classesScanned += 1;
     let text = '';
-    try {
-      text = decoder.decode(entry.data);
-    } catch {
-      continue;
-    }
+    try { text = decoder.decode(entry.data); } catch { continue; }
+    const concepts = new Set<string>();
     for (const rule of CONCEPTS) {
-      if (hits.has(rule.concept)) continue;
-      if (rule.java.test(text)) hits.set(rule.concept, path);
+      if (!rule.java.test(text)) continue;
+      concepts.add(rule.concept);
+      if (!hits.has(rule.concept)) hits.set(rule.concept, path);
     }
+    if (concepts.size > 0 || text.length > 0) classEvidence.push({ path, text, concepts });
   }
-  return { classesScanned, hits };
+  return { classesScanned, hits, classEvidence };
+}
+
+function classEvidenceForClip(evidence: JavaClassSignalEvidence[], sourceClipId: string, clipId: string): JavaClassSignalEvidence[] {
+  const candidates = [...new Set([sourceClipId, clipId])].map((value) => value.trim().toLowerCase()).filter((value) => value.length >= 4);
+  if (candidates.length === 0) return [];
+  return evidence.filter((entry) => candidates.some((candidate) => entry.text.toLowerCase().includes(candidate)));
 }
 
 /**
@@ -312,7 +320,7 @@ export function translatePlayerTriggers(options: {
 }): PlayerTriggerReport {
   const log = (line: string) => options.onLog?.(line);
   const archiveEntries = options.archiveEntries ?? [];
-  const { classesScanned, hits } = scanJavaSignals(archiveEntries);
+  const { classesScanned, hits, classEvidence } = scanJavaSignals(archiveEntries);
   const seriousPlayerProfile = hasSeriousPlayerAnimationsProfile(archiveEntries);
   const seriousPlayerNamespace = hasSeriousPlayerAnimationsNamespace(archiveEntries);
   const usedShortNames = new Set<string>();
@@ -361,7 +369,9 @@ export function translatePlayerTriggers(options: {
       continue;
     }
 
-    const evidencePath = hits.get(concept.concept);
+    const clipClasses = classEvidenceForClip(classEvidence, sourceClipId, clipId);
+    const clipEvidence = clipClasses.find((entry) => entry.concepts.has(concept.concept));
+    const evidencePath = clipEvidence?.path;
     if (concept.script) {
       if (!evidencePath) {
         triggers.push({
