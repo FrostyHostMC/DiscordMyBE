@@ -1,3 +1,9 @@
+## 2026-11-14 — Read-only PS4 PKG reference inspection
+- Added local browser-side PS4 PKG header and metadata-table inspection for the user's original base-game and GTA V 1.73 update packages.
+- Reads title/content ID, package entry table and readable PARAM.SFO fields; classifies update candidates from package category metadata.
+- Uses bounded file slices and limits metadata-table/PARAM.SFO sizes; does not upload, decrypt, extract, rewrite, rebuild or install package payloads.
+- Added a workbench panel and regression tests. Reports explicitly remain evidence collection only and do not unlock PS4 conversion.
+
 ## 2026-11-14 — PS4 source-build guide assessment
 - Reviewed the supplied community PS4 source-build guide and recorded its actual scope: full ORBIS game/update rebuild, not a general PC mod converter.
 - Flagged the explicit target mismatch (guide: firmware 9–11, 12 not recommended; GTA V 1.46; legacy ORBIS/VS2017 toolchain vs user target firmware 14.00 / CUSA00411 / GTA V 1.73).
