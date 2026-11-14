@@ -1,3 +1,11 @@
+## 2026-11-14 — Local 7z archive intake
+- Added bundled `7zip-bin` command-line tooling and a local Vite middleware endpoint to inspect and extract `.7z` archives without asking users to unpack them manually.
+- Added pre-extraction listing checks for unsafe paths, links, encrypted entries, duplicate paths, entry counts and declared expanded size; extracted files are rechecked before returning to the browser.
+- Added 160 MiB compressed-input, 512 MiB expanded-output, 5,000-file and 2-minute processing limits, with temporary files removed after each request.
+- Added `.7z` to the import control and routed its inventory through the same automatic classification, planning and source inspection pipeline as ZIP/OIV imports.
+- Added intake tests for local extraction response handling, path traversal, duplicates, size limits and encrypted-archive errors.
+- Extraction is local-workbench functionality only; it does not execute mod installers or establish PS4 resource compatibility.
+
 # Changelog
 
 ## 2026-11-14 — OpenIV OIV package intake
