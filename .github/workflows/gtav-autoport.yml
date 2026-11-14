@@ -61,4 +61,4 @@ jobs:
         run: cmake --build build/ragekit --config Release --target rk --parallel 2
       - name: Exercise nested RPF archive listing and extraction
         working-directory: GTAV-AutoPort
-        run: node scripts/test-rpf-cli.mjs build/ragekit/rk
+        run: node scripts/rpf-cli-integration.mjs build/ragekit/rk
