@@ -177,7 +177,7 @@ export function detectModExperimentNeeds(
     filePaths.some((p) => /projectile|spell|bullet|magic|shoot|weapon/.test(p));
 
   const hasBossesOrCutscenes =
-    /boss|cutscene|cinematic|camera|intro|phase|dragon|titan|wither|golem|stalker/.test(text) ||
+    /cutscene|cinematic|camera|intro/.test(text) ||
     filePaths.some((p) => /boss|cutscene|cinematic/.test(p));
 
   const hasCustomBlocks =
