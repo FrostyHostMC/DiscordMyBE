@@ -13,8 +13,8 @@ import { safeFileId } from '@/utils/bedrockIds';
  * actually exists in the player client-entity context and records the evidence it used.
  *
  * Rules it enforces:
- *  - a condition is only emitted when the archive's own code/data references the matching
- *    Java concept; a matching clip name is a candidate, not proof of playback intent;
+ *  - a condition is emitted only from archive code/data evidence or a versioned built-in
+ *    adapter selected by matching mod metadata and Java class evidence; clip names alone are not proof;
  *  - mob-only queries (`query.has_target`, `query.target_distance`, …) are never emitted
  *    for a player, because they do not exist in that context;
  *  - one-shot Java logic (attack / combo / special moves) becomes a script-driven clip,
@@ -25,6 +25,8 @@ export type PlayerTriggerStatus = 'mapped' | 'approximated' | 'script-driven' | 
 
 export interface PlayerClipTrigger {
   clipId: string;
+  /** Exact source-document key before canonical Bedrock identifier normalization. */
+  sourceClipId?: string;
   /** Short name registered in the player client entity's `animations` map. */
   shortName: string;
   /** Java-side concept the trigger was recovered from. */
@@ -35,6 +37,8 @@ export interface PlayerClipTrigger {
   status: PlayerTriggerStatus;
   scriptDriven: boolean;
   perspective: 'first' | 'third';
+  /** Overlay clips run in a separate controller so they can blend with locomotion. */
+  layer?: 'base' | 'overlay';
   note: string;
 }
 
@@ -46,6 +50,8 @@ export interface PlayerTriggerReport {
   unresolved: number;
   classesScanned: number;
   javaSignals: string[];
+  sourceProfile?: string;
+  sourceProfileCandidate?: string;
   triggers: PlayerClipTrigger[];
   summary: string;
 }
@@ -122,6 +128,175 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
     : 'third';
 }
 
+/** Require the actual Java mod identity and mixin class; an asset-only pack is not proof of its state machine. */
+function hasSeriousPlayerAnimationsNamespace(entries: ExtractedZipEntry[]): boolean {
+  return entries.some((entry) =>
+    entry.path.replace(/\\/g, '/').toLowerCase().includes('assets/seriousplayeranimations/player_animation/'),
+  );
+}
+
+function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolean {
+  const sourceEntry = entries.find((entry) => {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    return path.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class') ||
+      path.endsWith('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.java');
+  });
+  if (!sourceEntry) return false;
+
+  let classText = '';
+  try {
+    classText = decoder.decode(sourceEntry.data);
+  } catch {
+    return false;
+  }
+  const sourceMarkers = [
+    'reloadAnimationVariables',
+    'moveSpeed',
+    'isMovingBackwards',
+    'prevbyaw',
+    'walking_sneak',
+  ];
+  if (!sourceMarkers.every((marker) => classText.includes(marker))) return false;
+
+  let modIdFound = false;
+  let versionFound = false;
+  for (const entry of entries) {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    let content = '';
+    try {
+      content = decoder.decode(entry.data);
+    } catch {
+      continue;
+    }
+    if (path.endsWith('fabric.mod.json')) {
+      try {
+        const metadata = JSON.parse(content) as { id?: string; version?: string };
+        if (metadata.id === 'seriousplayeranimations') {
+          modIdFound = true;
+          versionFound = ['1.1.0', '1.1.1'].includes(metadata.version ?? '');
+        }
+      } catch {
+        // Continue to Forge metadata if this is not a valid Fabric descriptor.
+      }
+    } else if (path.endsWith('meta-inf/mods.toml')) {
+      modIdFound = /modId\s*=\s*["']seriousplayeranimations["']/i.test(content);
+      versionFound = versionFound || /version\s*=\s*["']1\.1\.[01]["']/i.test(content);
+    } else if (path.endsWith('meta-inf/manifest.mf')) {
+      versionFound = versionFound || /^Implementation-Version:\s*1\.1\.[01]\s*$/im.test(content);
+    }
+  }
+  return modIdFound && versionFound;
+}
+
+/**
+ * Source-backed adapter for Serious Player Animations 1.1.1 (pinned upstream source revision).
+ *
+ * The upstream mixin selects locomotion clips from per-tick position deltas, body-yaw deltas,
+ * sneaking and sprinting state. Shield clips are a second animation layer, not locomotion states.
+ * The extra animation.running Blender-rig definition is not loaded by the Java state machine:
+ * reloadAnimationVariables() requests the resource key running.
+ */
+function seriousPlayerAnimationTrigger(
+  clipId: string,
+  shortName: string,
+  sourceClipId: string,
+): PlayerClipTrigger | null {
+  const sourceLower = sourceClipId.toLowerCase();
+  const tail = sourceLower.split(/[.:/]+/).pop() ?? sourceLower;
+  const evidence = 'McVader34/Serious-Player-Animations 1.1.1 upstream source (JAR metadata version 1.1.0): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
+  const move = 'variable.spa_move_speed';
+  const backwards = 'variable.spa_moving_backwards';
+  const notSneaking = '!query.is_sneaking';
+  const shieldHeld = "(query.is_item_name_any('slot.weapon.mainhand', 'minecraft:shield') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:shield'))";
+  const base = {
+    clipId,
+    sourceClipId,
+    shortName,
+    javaEvidence: evidence,
+    scriptDriven: false,
+    perspective: 'third' as const,
+  };
+
+  if (sourceLower === 'animation.running' || sourceLower.endsWith('.animation.running')) {
+    return {
+      ...base,
+      concept: 'unreferenced-source-definition',
+      status: 'unresolved',
+      note: 'The upstream Java state machine loads the running resource key; this separate animation.running Blender-rig definition is not referenced by reloadAnimationVariables() and has no runtime start path.',
+    };
+  }
+  switch (tail) {
+    case 'idle_standing':
+      return {
+        ...base,
+        concept: 'idle',
+        condition: move + ' == 0.0 && ' + notSneaking + ' && variable.spa_turn_delta == 0.0',
+        status: 'mapped',
+        note: 'Exact source state: zero horizontal movement, not sneaking, and no body-yaw delta.',
+      };
+    case 'walking':
+      return {
+        ...base,
+        concept: 'moving',
+        condition: move + ' > 0.0 && ' + move + ' < 0.23 && !' + backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: horizontal speed below 0.23 blocks/tick, moving forward, and not sneaking.',
+      };
+    case 'walking_backwards':
+      return {
+        ...base,
+        concept: 'moving',
+        condition: backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: movement-vector dot look-vector is negative and the player is not sneaking.',
+      };
+    case 'running':
+      return {
+        ...base,
+        concept: 'sprinting',
+        condition: move + ' > 0.23 && query.is_sprinting && !' + backwards + ' && ' + notSneaking,
+        status: 'mapped',
+        note: 'Exact source state: speed above 0.23 blocks/tick, sprinting, moving forward, and not sneaking.',
+      };
+    case 'idle_sneak':
+      return {
+        ...base,
+        concept: 'sneaking',
+        condition: 'query.is_sneaking && ' + move + ' == 0.0 && !' + backwards,
+        status: 'mapped',
+        note: 'Exact source state: sneaking with no horizontal movement.',
+      };
+    case 'walking_sneak':
+      return {
+        ...base,
+        concept: 'sneaking',
+        condition: 'query.is_sneaking && ' + move + ' > 0.0 && !' + backwards,
+        status: 'mapped',
+        note: 'Exact source state: sneaking while moving forward.',
+      };
+    case 'shield':
+      return {
+        ...base,
+        concept: 'using-item',
+        condition: 'query.is_using_item && ' + shieldHeld + ' && !query.is_sneaking',
+        layer: 'overlay',
+        status: 'approximated',
+        note: 'Source shield pose is an independent overlay layer. Bedrock preserves that layer; offhand mirroring from the Java MirrorModifier remains approximate.',
+      };
+    case 'shield_sneak':
+      return {
+        ...base,
+        concept: 'using-item',
+        condition: 'query.is_using_item && ' + shieldHeld + ' && query.is_sneaking',
+        layer: 'overlay',
+        status: 'approximated',
+        note: 'Source crouching-shield pose is an independent overlay layer. Bedrock preserves that layer; offhand mirroring from the Java MirrorModifier remains approximate.',
+      };
+    default:
+      return null;
+  }
+}
+
 /**
  * Translates every imported player clip's Java trigger into a Bedrock-evaluable condition.
  * Nothing is invented: a clip whose Java condition cannot be recovered is reported as
@@ -130,16 +305,22 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
 export function translatePlayerTriggers(options: {
   clips: Record<string, BedrockAnimationClip>;
   archiveEntries?: ExtractedZipEntry[];
+  /** Exact imported clip id -> original key in the source animation document. */
+  sourceClipIdsByClipId?: Record<string, string>;
   mainhandItemIds?: string[];
   onLog?: (line: string) => void;
 }): PlayerTriggerReport {
   const log = (line: string) => options.onLog?.(line);
-  const { classesScanned, hits } = scanJavaSignals(options.archiveEntries ?? []);
+  const archiveEntries = options.archiveEntries ?? [];
+  const { classesScanned, hits } = scanJavaSignals(archiveEntries);
+  const seriousPlayerProfile = hasSeriousPlayerAnimationsProfile(archiveEntries);
+  const seriousPlayerNamespace = hasSeriousPlayerAnimationsNamespace(archiveEntries);
   const usedShortNames = new Set<string>();
   const triggers: PlayerClipTrigger[] = [];
   const itemIds = options.mainhandItemIds ?? [];
 
   for (const [clipId, clip] of Object.entries(options.clips)) {
+    const sourceClipId = options.sourceClipIdsByClipId?.[clipId] ?? clipId;
     const tail = clipId.split(/[.:/]+/).pop() ?? clipId;
     const base = safeFileId(tail) || 'clip';
     let shortName = `ported_${base}`;
@@ -157,9 +338,18 @@ export function translatePlayerTriggers(options: {
     });
     const perspective = perspectiveOf(clipId);
 
+    if (seriousPlayerProfile) {
+      const sourceTrigger = seriousPlayerAnimationTrigger(clipId, shortName, sourceClipId);
+      if (sourceTrigger) {
+        triggers.push(sourceTrigger);
+        continue;
+      }
+    }
+
     if (!concept) {
       triggers.push({
         clipId,
+        sourceClipId,
         shortName,
         concept: 'unclassified',
         javaEvidence: 'no Java condition correlated with this clip',
@@ -176,6 +366,7 @@ export function translatePlayerTriggers(options: {
       if (!evidencePath) {
         triggers.push({
           clipId,
+          sourceClipId,
           shortName,
           concept: concept.concept,
           javaEvidence: `${concept.java.source} not found in archive bytecode; clip name alone is insufficient`,
@@ -188,6 +379,7 @@ export function translatePlayerTriggers(options: {
       }
       triggers.push({
         clipId,
+        sourceClipId,
         shortName,
         concept: concept.concept,
         javaEvidence: evidencePath,
@@ -206,6 +398,7 @@ export function translatePlayerTriggers(options: {
     const correlatedOnly = !evidencePath;
     triggers.push({
       clipId,
+      sourceClipId,
       shortName,
       concept: concept.concept,
       condition,
@@ -232,12 +425,19 @@ export function translatePlayerTriggers(options: {
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
     javaSignals: [...hits.keys()],
+    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
+    sourceProfileCandidate: !seriousPlayerProfile && seriousPlayerNamespace ? 'Serious Player Animations 1.1.1 (base Java mod JAR required)' : undefined,
     triggers,
     summary: '',
   };
-  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from Java evidence, ${report.approximated} approximated from clip correlation, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved.`;
+  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from source evidence, ${report.approximated} approximated, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved${report.sourceProfile ? `; source profile ${report.sourceProfile}` : report.sourceProfileCandidate ? `; ${report.sourceProfileCandidate}` : ''}.`;
   if (report.clipsInspected > 0) {
     log(`[TRIGGER-BRIDGE] ${report.summary}`);
+    if (report.sourceProfile) {
+      log(`[TRIGGER-BRIDGE] Recognized versioned source profile ${report.sourceProfile} from matching Java class and mod metadata.`);
+    } else if (report.sourceProfileCandidate) {
+      log('[TRIGGER-BRIDGE] Found the Serious Player Animations resource namespace, but the verified base Java mod JAR is missing; no playback conditions were guessed.');
+    }
     if (report.javaSignals.length > 0) {
       log(`[TRIGGER-BRIDGE] Java player states found in ${classesScanned} scanned class(es): ${report.javaSignals.join(', ')}.`);
     }

@@ -80,6 +80,7 @@ export interface AnimationRuntimeReport {
     definitionsWithMotion: number;
     clipsRegistered: number;
     clipsActivated: number;
+    clipsDeliberatelyInactive: number;
     boneTracksChecked: number;
     boneTracksUnresolved: number;
     controllersDefined: number;
@@ -461,10 +462,12 @@ export function validateAnimationRuntime(input: {
     (skeletonReport?.bonesRenamed ?? 0) + (skeletonReport?.bonesInjected.length ?? 0) + (skeletonReport?.bonesCollapsed.length ?? 0) > 0;
   const geometryUnresolved = (refs?.geometryRefsUnresolved.length ?? 0) + (input.integration?.entities.danglingGeometryRefs.length ?? 0);
   const expectedClipSet = new Set(input.expectedClips ?? []);
+  const deliberatelyInactive = new Set(registry.metrics.deliberatelyInactiveClips ?? []);
+  const playableRegisteredClips = Math.max(0, clipsRegistered - deliberatelyInactive.size);
   const missingExpectedDefinitions = [...expectedClipSet].filter((clipId) => !registry.clips.has(clipId));
   const expectedOrphans = registry.metrics.orphanedClips.filter((clipId) => expectedClipSet.has(clipId));
   const expectedUnactivated = [...expectedClipSet].filter(
-    (clipId) => registry.clips.has(clipId) && !registry.metrics.activatedClipIds.includes(clipId),
+    (clipId) => !deliberatelyInactive.has(clipId) && registry.clips.has(clipId) && !registry.metrics.activatedClipIds.includes(clipId),
   );
   const unregisteredControllers = input.integration?.controllers.unregistered.length ?? 0;
 
@@ -576,7 +579,7 @@ export function validateAnimationRuntime(input: {
     detail:
       clipsRegistered === 0
         ? 'No registered final clip exists, so activation is not measured.'
-        : `${clipsActivated}/${clipsRegistered} unique registered clip id(s) have a runtime start path — ${registry.metrics.clipsActivatedByAnimate} animate, ${registry.metrics.clipsActivatedByController} controller, ${registry.metrics.clipsActivatedByScript} verified script call(s); ${unactivatedRegistrations.length} have no path, ${expectedUnactivated.length} expected id(s) lack a path. A script path may be event-driven rather than continuously evaluated.`,
+        : `${clipsActivated}/${playableRegisteredClips} playable registered clip id(s) have a runtime start path — ${deliberatelyInactive.size} source-proven unused definition(s) are intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} animate, ${registry.metrics.clipsActivatedByController} controller, ${registry.metrics.clipsActivatedByScript} verified script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path, ${expectedUnactivated.length} expected playable id(s) lack a path. A script path may be event-driven rather than continuously evaluated.`,
     },
     {
       index: 9,
@@ -674,8 +677,8 @@ export function validateAnimationRuntime(input: {
     {
       id: 'activation-validity',
       label: 'Activation validity',
-      percent: percentOf(clipsActivated, clipsRegistered),
-      basis: 'registered clips with any structurally evidenced start path; behaviour-script paths may be event-driven',
+      percent: percentOf(clipsActivated, playableRegisteredClips),
+      basis: 'playable registered clips with any structurally evidenced start path; source-proven unused definitions are excluded and reported separately',
       status:
         clipsRegistered === 0
           ? 'not-measured'
@@ -684,7 +687,7 @@ export function validateAnimationRuntime(input: {
               ? 'fail'
               : 'partial'
             : 'pass',
-      detail: `${clipsActivated}/${clipsRegistered} registered clip(s) reachable — ${registry.metrics.clipsActivatedByAnimate} scripts.animate, ${registry.metrics.clipsActivatedByController} activated controller state(s), ${registry.metrics.clipsActivatedByScript} script call(s); ${unactivatedRegistrations.length} have no path; ${registry.metrics.controllersDangling.length} controller state(s) select a clip that does not exist.`,
+      detail: `${clipsActivated}/${playableRegisteredClips} playable registered clip(s) reachable — ${deliberatelyInactive.size} source-proven unused definition(s) intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} scripts.animate, ${registry.metrics.clipsActivatedByController} activated controller state(s), ${registry.metrics.clipsActivatedByScript} script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path; ${registry.metrics.controllersDangling.length} controller state(s) select a clip that does not exist.`,
     },
     {
       id: 'molang-compatibility',
@@ -751,6 +754,7 @@ export function validateAnimationRuntime(input: {
       definitionsWithMotion: registry.metrics.clipsWithMotion,
       clipsRegistered,
       clipsActivated,
+      clipsDeliberatelyInactive: deliberatelyInactive.size,
       boneTracksChecked,
       boneTracksUnresolved,
       controllersDefined: registry.metrics.controllersDefined,
@@ -774,7 +778,7 @@ export function validateAnimationRuntime(input: {
   report.summary =
     `Animation runtime validation: ${report.passed ? 'PASS' : 'FAIL'} — ${checks.length - unresolvedChecks.length}/${checks.length} check(s) clean, ` +
     `${unresolvedChecks.length} unresolved${unresolvedChecks.length > 0 ? ` (${unresolvedChecks.map((check) => check.id).join(', ')})` : ''}; ` +
-    `${definitions.size} definition(s), ${clipsRegistered} registered identifier(s), ${clipsActivated} activated, ` +
+    `${definitions.size} definition(s), ${clipsRegistered} registered identifier(s), ${clipsActivated} activated, ${deliberatelyInactive.size} intentionally inactive, ` +
     `${boneTracksChecked - boneTracksUnresolved}/${boneTracksChecked} bone binding(s) resolved, ${registry.metrics.controllersDefined} animation-controller definition(s), ` +
     `${firstPersonStates} first-person and ${thirdPersonStates} third-person state(s). ` +
     `Pipeline stages: ${pipelineStages.map((stage) => `${stage.index}.${stage.id}=${stage.status}`).join(' · ')}. ` +

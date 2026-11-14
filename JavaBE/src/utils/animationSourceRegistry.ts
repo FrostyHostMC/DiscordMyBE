@@ -43,6 +43,8 @@ export interface ExtraAnimationStats {
 
 export interface ExtraAnimationImport {
   clipsByOwner: Record<string, Record<string, BedrockAnimationClip>>;
+  /** Exact source-document key for each translated clip, grouped by owner. */
+  sourceClipIdsByOwner?: Record<string, Record<string, string>>;
   owners: string[];
   sourcePathsByOwner: Record<string, string[]>;
   stats: ExtraAnimationStats;
@@ -85,6 +87,7 @@ export function importAdditionalAnimationSources(
     sourceFormats: [],
   };
   const clipsByOwner: Record<string, Record<string, BedrockAnimationClip>> = {};
+  const sourceClipIdsByOwner: Record<string, Record<string, string>> = {};
   const owners: string[] = [];
   const sourcePathsByOwner: Record<string, string[]> = {};
   const formats = new Set<string>();
@@ -94,12 +97,16 @@ export function importAdditionalAnimationSources(
     clipId: string,
     clip: BedrockAnimationClip,
     sourcePath: string,
+    sourceClipId = clipId,
   ) => {
     if (!clipsByOwner[owner]) {
       clipsByOwner[owner] = {};
       owners.push(owner);
     }
     clipsByOwner[owner][clipId] = clip;
+    const ownerSourceIds = sourceClipIdsByOwner[owner] ?? {};
+    ownerSourceIds[clipId] = sourceClipId;
+    sourceClipIdsByOwner[owner] = ownerSourceIds;
     const paths = sourcePathsByOwner[owner] ?? [];
     if (!paths.includes(sourcePath)) paths.push(sourcePath);
     sourcePathsByOwner[owner] = paths;
@@ -204,6 +211,9 @@ export function importAdditionalAnimationSources(
     }
 
     const translation = translateJavaAnimationSet(parsed, { fileHint: fileOwnerOf(path) || 'clip' });
+    const sourceIdByTranslatedId = new Map(
+      Object.entries(translation.idMap).map(([sourceId, translatedId]) => [translatedId, sourceId]),
+    );
     stats.channels += translation.stats.channels;
     stats.keyframes += translation.stats.keyframes;
     stats.unsupported += translation.stats.unsupported;
@@ -222,7 +232,7 @@ export function importAdditionalAnimationSources(
     let attributed = 0;
     for (const [clipId, clip] of Object.entries(translation.animations)) {
       const owner = ownerFromClipId(clipId, fileOwner, modId) || fileOwner || normaliseOwnerKey(modId);
-      remember(owner, clipId, clip, path);
+      remember(owner, clipId, clip, path, sourceIdByTranslatedId.get(clipId) ?? clipId);
       attributed += 1;
     }
     logLine(
@@ -243,5 +253,5 @@ export function importAdditionalAnimationSources(
     );
   }
 
-  return { clipsByOwner, owners, sourcePathsByOwner, stats, discoveryReport, log };
+  return { clipsByOwner, sourceClipIdsByOwner, owners, sourcePathsByOwner, stats, discoveryReport, log };
 }

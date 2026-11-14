@@ -17,6 +17,14 @@ import { classifyItemModels } from '@/utils/itemModelNormalizer';
 import { inspectAnimationControllerGraphs, normalizeEmptyControllerArrays } from '@/utils/animationControllerValidation';
 import { reconstructAnimationDependencies } from '@/utils/animationDependencyReconstructor';
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
+import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
+import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
+import { translateMolangExpression } from '@/utils/molangCompatibility';
+import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
+import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
+import { translatePlayerTriggers } from '@/utils/playerAnimationTriggers';
+import { synthesizePlayerAnimationController } from '@/utils/playerAnimationController';
 import { buildAnimationResourceRegistry } from '@/utils/animationResourceRegistry';
 import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
@@ -66,6 +74,11 @@ function parse(files: Record<string, PackFile>, path: string): Record<string, an
     return null;
   }
 }
+function fixtureText(path: string, text: string): ExtractedZipEntry {
+  const data = new TextEncoder().encode(text);
+  return { path, data, isDirectory: false, uncompressedSize: data.byteLength };
+}
+
 function build(id: string, label: string, category: string, checks: RegressionAssertion[], findings: string[], unavailable: string[], started: number): RegressionFixtureResult {
   const failures = checks.filter(check => !check.passed);
   return {
@@ -1005,7 +1018,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
             humanoid_base_pose: 'animation.humanoid.base_pose',
             look_at_target: 'animation.humanoid.look_at_target',
             cape: 'animation.player.cape',
-            first_person_base_pose: 'animation.player.first_person_base_pose',
+            first_person_base_pose: 'animation.player.first_person.base_pose',
             first_person_attack_controller: 'controller.animation.player.first_person_attack',
             ported_swing: 'animation.player.swing',
             missing: 'animation.player.missing'
@@ -1040,7 +1053,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
     label: 'the built-in first-person hand pose and attack controller survive cleanup',
     expected: 'first-person pose + attack controller retained',
     actual: `${String(animations.first_person_base_pose ?? 'ABSENT')} / ${String(animations.first_person_attack_controller ?? 'ABSENT')}`,
-    passed: animations.first_person_base_pose === 'animation.player.first_person_base_pose' && animations.first_person_attack_controller === 'controller.animation.player.first_person_attack'
+    passed: animations.first_person_base_pose === 'animation.player.first_person.base_pose' && animations.first_person_attack_controller === 'controller.animation.player.first_person_attack'
   }, {
     label: 'a source player clip stays bound while an unresolved clip remains visible for the final gate',
     expected: 'source swing retained, missing reference retained',
@@ -1973,6 +1986,9 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
         description: {
           identifier: 'minecraft:player',
           animations: {
+            base_pose: 'animation.player.base_pose',
+            look_at_target: 'animation.humanoid.look_at_target',
+            first_person_base_pose: 'animation.player.first_person.base_pose',
             ported_clip: 'animation.sample.equipment_pose',
             ported_controller: controllerId
           },
@@ -1987,6 +2003,53 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     resourcePackFiles: files,
     behaviorPackFiles: {}
   });
+  const playerDependencyReport = resolvePlayerDependencies({
+    modId: 'regress',
+    resourcePackFiles: files,
+    behaviorPackFiles: {}
+  });
+  const engineVariableFiles: Record<string, PackFile> = {
+    'entity/player.entity.json': JSON.stringify({
+      format_version: '1.10.0',
+      'minecraft:client_entity': {
+        description: { identifier: 'minecraft:player', animations: {}, scripts: {} }
+      }
+    }),
+    'animations/player_firstperson.animation.json': JSON.stringify({
+      format_version: '1.8.0',
+      animations: {
+        'animation.sample.vanilla_first_person': {
+          bones: {
+            leftarm: { position: ['0.0', 'variable.short_arm_offset_left', '0.0'] },
+            rightarm: { position: ['0.0', 'variable.short_arm_offset_right', '0.0'] }
+          }
+        }
+      }
+    })
+  };
+  const engineVariableReport = resolvePlayerDependencies({
+    modId: 'regress',
+    resourcePackFiles: engineVariableFiles,
+    behaviorPackFiles: {}
+  });
+  const resolverPlayerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const resolverAnimations = resolverPlayerEntity?.animations ?? {};
+  const resolverCorrectedVanillaAliases =
+    resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
+    resolverAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
+  // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
+  resolverAnimations.look_at_target = 'controller.animation.humanoid.look_at_target';
+  resolverAnimations.first_person_base_pose = 'animation.player.first_person.base_pose';
+  files['entity/player.entity.json'] = JSON.stringify({
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: { ...resolverPlayerEntity, animations: resolverAnimations }
+    }
+  });
+  const playerBaselineGuardReport = guaranteePlayerBaselineWiring({
+    resourcePackFiles: files
+  });
   const preAnimation = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description?.scripts?.pre_animation ?? [];
   const assignments = Array.isArray(preAnimation) ? preAnimation : [];
   const required = ['variable.helmet_layer_visible', 'variable.chest_layer_visible', 'variable.leg_layer_visible', 'variable.boot_layer_visible'];
@@ -1994,15 +2057,41 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   // at least one item name, so "is this slot worn" uses the slot-occupancy form of
   // `get_equipped_item_name(slot, index)`. It stays live — never a constant — and the arity of every
   // emitted item query is asserted below.
-  const dynamicEquipmentQuery = (statement: string): boolean =>
-    /=\s*\(?\s*query\.(is_item_name_any|get_equipped_item_name)\(/.test(statement);
+  const vanillaLayerExpressions: Record<string, string> = {
+    'variable.helmet_layer_visible': '!query.has_head_gear',
+    'variable.chest_layer_visible': '1.0',
+    'variable.leg_layer_visible': '1.0',
+    'variable.boot_layer_visible': '1.0',
+  };
   const singleArgumentItemQuery = (statement: string): boolean =>
     /query\.is_item_name_any\(\s*'[^']*'\s*(?:,\s*\d+\s*)?\)/.test(statement);
   const initialized = required.filter((name) =>
-    assignments.some((statement: string) => statement.startsWith(`${name} =`) && dynamicEquipmentQuery(statement)),
+    assignments.some((statement: string) => statement.startsWith(`${name} = `) && statement.slice(statement.indexOf('=') + 1).trim().replace(/;$/, '') === vanillaLayerExpressions[name]),
   );
+  const playerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const playerScripts = playerEntity?.scripts ?? {};
+  const playerAnimate = Array.isArray(playerScripts.animate) ? playerScripts.animate as Array<string | Record<string, string>> : [];
+  const playerPreAnimation = Array.isArray(playerScripts.pre_animation) ? playerScripts.pre_animation as string[] : [];
+  const vanillaRootOnly = playerAnimate.some(entry => entry === 'root') &&
+    !playerAnimate.some(entry => typeof entry === 'string' && ['base_pose', 'humanoid_base_pose', 'look_at_target', 'cape', 'first_person_base_pose', 'first_person_attack_controller'].includes(entry));
+  const vanillaTcos = playerPreAnimation.find(statement => /^variable\.tcos0\s*=/.test(statement));
+  const vanillaSpear = playerPreAnimation.find(statement => /^variable\.melee_spear_equipped\s*=/.test(statement));
+  const baselineByAlias = new Map(PLAYER_BASELINE_ENTRIES.map(entry => [entry.alias, entry]));
+  const finalPlayerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const finalAnimations = finalPlayerEntity?.animations ?? {};
+  const correctVanillaAliases =
+    resolverCorrectedVanillaAliases &&
+    finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
+    finalAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
+    baselineByAlias.get('look_at_target')?.kind === 'animation';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
+    label: 'all vanilla player baseline aliases resolve to recognized Bedrock engine identifiers',
+    expected: 'every baseline identifier is in the engine-provided player animation/controller registry',
+    actual: PLAYER_BASELINE_ENTRIES.filter((entry) => !isKnownVanillaPlayerAnimationReference(entry.identifier)).map((entry) => `${entry.alias} -> ${entry.identifier}`).join(', ') || 'all recognized',
+    passed: PLAYER_BASELINE_ENTRIES.every((entry) => isKnownVanillaPlayerAnimationReference(entry.identifier)),
+  }, {
     label: 'player-owned clips are identified by entity registration rather than filenames',
     expected: 'all 4 equipment variables classified in player context',
     actual: `${initialized.length} initialized, ${report.playerWiringRepairs.variablesInitialized.length} reported`,
@@ -2013,15 +2102,263 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     actual: `${assignments.filter((statement: string) => singleArgumentItemQuery(statement)).length} offending statement(s)`,
     passed: assignments.every((statement: string) => !singleArgumentItemQuery(statement))
   }, {
-    label: 'equipment visibility is derived from the matching armor slot query, not a constant',
-    expected: '4 dynamic query assignments',
-    actual: `${initialized.length} dynamic assignment(s)`,
-    passed: initialized.length === 4 && assignments.every((statement: string) => !required.some(name => statement.startsWith(`${name} = 0`)))
+    label: 'the four vanilla armour-layer variables match Mojang’s player baseline expressions',
+    expected: 'helmet uses !query.has_head_gear; chest, leg and boot use 1.0',
+    actual: `${initialized.length} exact vanilla assignments`,
+    passed: initialized.length === 4
   }, {
-    label: 'the player entity keeps all four variable initializers after the resolver pass',
-    expected: 'helmet, chest, leg and boot visibility variables initialized',
+    label: 'the player entity keeps all four source-backed vanilla layer declarations',
+    expected: 'all four Mojang baseline expressions injected in player scope',
     actual: initialized.join(', ') || 'none',
     passed: initialized.length === 4 && report.flaggedCount === 0
+  }, {
+    label: 'the vanilla player movement variable is restored with Mojang’s live expression',
+    expected: 'variable.tcos0 assigned from modified movement speed and distance',
+    actual: vanillaTcos ?? 'missing',
+    passed: Boolean(vanillaTcos && vanillaTcos.includes('query.modified_distance_moved') && vanillaTcos.includes('query.modified_move_speed'))
+  }, {
+    label: 'the vanilla spear-equipment variable is live rather than a constant default',
+    expected: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
+    actual: vanillaSpear ?? 'missing',
+    passed: Boolean(vanillaSpear && vanillaSpear.includes("query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')"))
+  }, {
+    label: 'vanilla player aliases use the correct definition type and identifiers',
+    expected: 'base pose animation, look-at controller, first-person base pose animation',
+    actual: correctVanillaAliases ? 'all three mappings correct' : 'one or more mappings incorrect',
+    passed: correctVanillaAliases
+  }, {
+    label: 'the vanilla player starts its root controller instead of independently replaying each baseline animation',
+    expected: 'root is directly animated; child aliases remain controller-owned',
+    actual: vanillaRootOnly ? 'root-only baseline wiring' : JSON.stringify(playerAnimate),
+    passed: vanillaRootOnly
+  }, {
+    label: 'the final player baseline guard preserves root-only activation',
+    expected: 'the guard restores no child aliases to scripts.animate',
+    actual: `${playerBaselineGuardReport.animateEntriesRestored} direct activation(s) restored; ${vanillaRootOnly ? 'root-only' : 'child aliases also activated'}`,
+    passed: playerBaselineGuardReport.animateEntriesRestored === 0 && vanillaRootOnly
+  }, {
+    label: 'vanilla first-person arm offsets are recognized as engine-provided variables',
+    expected: 'both Mojang arm-offset variables resolve without pack defaults',
+    actual: engineVariableReport.variables.unresolved.map((entry) => entry.variable).join(', ') || 'no unresolved variables',
+    passed: ENGINE_PROVIDED_MOLANG_VARIABLES.has('short_arm_offset_left') &&
+      ENGINE_PROVIDED_MOLANG_VARIABLES.has('short_arm_offset_right') &&
+      !engineVariableReport.variables.injected.some((statement) => statement.includes('short_arm_offset_')) &&
+      !engineVariableReport.variables.unresolved.some((entry) => entry.variable.startsWith('short_arm_offset_'))
+  }, {
+    label: 'baseline dependency restoration reports no unresolved player variables',
+    expected: 'zero unresolved vanilla player variables',
+    actual: playerDependencyReport.variables.unresolved.map(entry => entry.variable).join(', ') || 'none',
+    passed: playerDependencyReport.variables.unresolved.length === 0 && Boolean(vanillaTcos && vanillaSpear)
   }];
   return build('player-molang-variable-initialization', 'Player Molang variables (semantic resource ownership, equipment visibility)', 'Animation', checks, [], ['Live Minecraft Molang evaluation is not measured by this structural fixture.'], started);
+}
+
+/** Source-backed fixture for the Serious Player Animations resource namespace and state machine. */
+export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureResult {
+  const started = performance.now();
+  const clipNames = [
+    'idle_standing',
+    'walking',
+    'walking_backwards',
+    'running',
+    'idle_sneak',
+    'walking_sneak',
+    'shield',
+    'shield_sneak',
+  ];
+  const clipIds = [
+    ...clipNames.map((name) => 'animation.seriousplayeranimations.' + name),
+    'animation.running',
+  ];
+  const clips = Object.fromEntries(clipIds.map((id) => [id, {
+    animation_length: 2.0,
+    loop: true,
+    bones: {},
+  }])) as any;
+  const sourceClipIdsByClipId = Object.fromEntries(clipIds.map((id) => [
+    id,
+    id === 'animation.running' ? 'animation.running' :
+      id === 'animation.seriousplayeranimations.running' ? 'running' :
+        (id.split(/[.:/]+/).pop() ?? id),
+  ]));
+  const assetOnlyEntries = [
+    fixtureText('assets/seriousplayeranimations/player_animation/idle_standing.json', '{}'),
+  ];
+  const assetOnlyReport = translatePlayerTriggers({ clips, archiveEntries: assetOnlyEntries, sourceClipIdsByClipId });
+  const archiveEntries = [
+    ...assetOnlyEntries,
+    fixtureText('fabric.mod.json', JSON.stringify({ id: 'seriousplayeranimations', version: '1.1.0' })),
+    fixtureText(
+      'net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.class',
+      'reloadAnimationVariables moveSpeed isMovingBackwards prevbyaw ShieldItem walking_sneak',
+    ),
+  ];
+  const triggerReport = translatePlayerTriggers({ clips, archiveEntries, sourceClipIdsByClipId });
+  const triggerFor = (name: string) => triggerReport.triggers.find(
+    (trigger) => trigger.clipId === `animation.seriousplayeranimations.${name}`,
+  );
+  const shieldTrigger = triggerFor('shield');
+  const shieldSneakTrigger = triggerFor('shield_sneak');
+  const unusedRunningTrigger = triggerReport.triggers.find((trigger) => trigger.sourceClipId === 'animation.running');
+  const javaRunningTrigger = triggerReport.triggers.find((trigger) => trigger.sourceClipId === 'running');
+  const controller = synthesizePlayerAnimationController({
+    modId: 'seriousplayeranimations',
+    clips,
+    triggers: triggerReport.triggers,
+  });
+  const controllerDocs = Object.entries(controller.files).map(([path, raw]) => ({
+    path,
+    doc: JSON.parse(raw),
+  }));
+  const baseDoc = controllerDocs.find((entry) => entry.path.includes('seriousplayeranimations.player.animation_controllers.json'));
+  const overlayDoc = controllerDocs.find((entry) => entry.path.includes('seriousplayeranimations_overlay.player.animation_controllers.json'));
+  const baseId = controller.controllerIds.find((id) => id.includes('seriousplayeranimations.player_ported'));
+  const overlayId = controller.controllerIds.find((id) => id.includes('seriousplayeranimations_overlay.player_ported'));
+  const clipIdsIn = (doc: any, id: string | undefined): string[] => {
+    const states = id ? doc?.animation_controllers?.[id]?.states ?? {} : {};
+    return Object.values(states).flatMap((state: any) => Array.isArray(state.animations) ? state.animations : []);
+  };
+  const baseStateClips = clipIdsIn(baseDoc?.doc, baseId);
+  const overlayStateClips = clipIdsIn(overlayDoc?.doc, overlayId);
+
+  const playerEntity = {
+    format_version: '1.10.0',
+    'minecraft:client_entity': {
+      description: {
+        identifier: 'minecraft:player',
+        animations: {
+          root: 'controller.animation.player.root',
+          serious_base: baseId,
+          serious_overlay: overlayId,
+        },
+        scripts: {
+          animate: ['root', 'serious_base', 'serious_overlay'],
+        },
+      },
+    },
+  };
+  const files: Record<string, PackFile> = {
+    ...controller.files,
+    'animations/seriousplayeranimations.animation.json': JSON.stringify({
+      format_version: '1.8.0',
+      animations: Object.fromEntries(clipIds.map((id) => [id, {
+        animation_length: 2.0,
+        loop: true,
+        bones: {},
+      }])),
+    }),
+    'entity/player.entity.json': JSON.stringify(playerEntity),
+  };
+  const dependencyReport = resolvePlayerDependencies({
+    modId: 'seriousplayeranimations',
+    resourcePackFiles: files,
+    behaviorPackFiles: {},
+    sourceProfiles: triggerReport.sourceProfile ? [triggerReport.sourceProfile] : [],
+  });
+  const finalEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const scripts = finalEntity?.scripts ?? {};
+  const preAnimation = Array.isArray(scripts.pre_animation) ? scripts.pre_animation as string[] : [];
+  const initialize = Array.isArray(scripts.initialize) ? scripts.initialize as string[] : [];
+  const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(`variable.${name} =`));
+  const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
+  const sourceMovementVariables = [
+    'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
+    'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw',
+  ] as const;
+  const sourceVariableTranslations = sourceMovementVariables.map((name) => {
+    const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+    const translated = translateMolangExpression(
+      `variable.${name} = ${baseline?.expression ?? ''}`,
+      'player_entity',
+    );
+    return { name, unresolved: translated.unresolved, rejected: translated.rejected };
+  });
+  const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
+  const shieldIds = [
+    'animation.seriousplayeranimations.shield',
+    'animation.seriousplayeranimations.shield_sneak',
+  ];
+  const checks: RegressionAssertion[] = [{
+    label: 'the Serious Player Animations resource namespace selects its known source profile',
+    expected: 'Serious Player Animations 1.1.1',
+    actual: triggerReport.sourceProfile ?? 'no source profile',
+    passed: triggerReport.sourceProfile === 'Serious Player Animations 1.1.1'
+  }, {
+    label: 'an animation resource pack alone cannot activate a Java source adapter',
+    expected: 'missing base Java JAR is identified; all clips remain unresolved',
+    actual: assetOnlyReport.sourceProfileCandidate ?? `${assetOnlyReport.unresolved} unresolved clip(s)`,
+    passed: !assetOnlyReport.sourceProfile && assetOnlyReport.sourceProfileCandidate?.includes('base Java mod JAR required') === true && assetOnlyReport.unresolved === assetOnlyReport.clipsInspected
+  }, {
+    label: 'all six supplied locomotion clips receive source-derived conditions',
+    expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
+    actual: `${locomotion.length} mapped locomotion trigger(s)`,
+    passed: locomotion.length === 6 && locomotion.every((trigger) => Boolean(trigger.condition))
+  }, {
+    label: 'the extra animation.running definition is not falsely activated',
+    expected: 'unreferenced source definition remains unresolved',
+    actual: `unused=${unusedRunningTrigger?.status ?? 'missing'}; java-running=${javaRunningTrigger?.status ?? 'missing'}`,
+    passed: unusedRunningTrigger?.status === 'unresolved' && javaRunningTrigger?.status === 'mapped'
+  }, {
+    label: 'shield clips retain their separate overlay layer',
+    expected: 'shield and shield_sneak are overlay triggers',
+    actual: shieldTrigger?.layer === 'overlay' && shieldSneakTrigger?.layer === 'overlay' ? 'both overlay' : 'layer missing',
+    passed: shieldTrigger?.layer === 'overlay' && shieldSneakTrigger?.layer === 'overlay'
+  }, {
+    label: 'the player controller generator emits independent base and overlay controllers',
+    expected: 'two controller IDs and two controller files',
+    actual: `${controller.controllerIds.length} controller(s), ${controllerDocs.length} file(s)`,
+    passed: controller.controllerIds.length === 2 && controllerDocs.length === 2 && Boolean(baseId && overlayId)
+  }, {
+    label: 'locomotion and shield states do not compete in the same controller',
+    expected: 'six locomotion clips in base; two shield clips in overlay',
+    actual: `base=${baseStateClips.length}, overlay=${overlayStateClips.length}`,
+    passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(`animation.seriousplayeranimations.${name}`)) &&
+      shieldIds.every((id) => overlayStateClips.includes(id)) &&
+      shieldIds.every((id) => !baseStateClips.includes(id)) &&
+      Boolean(javaRunningTrigger && baseStateClips.includes(javaRunningTrigger.clipId)) &&
+      Boolean(unusedRunningTrigger && !baseStateClips.includes(unusedRunningTrigger.clipId))
+  }, {
+    label: 'all source-derived movement expressions are accepted in Bedrock player Molang scope',
+    expected: 'all eight expressions have no unresolved or rejected query references',
+    actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
+    passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
+  }, {
+    label: 'the source movement and direction calculations are restored in player Molang scope',
+    expected: 'move speed, backward direction and turn delta expressions injected',
+    actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
+    passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+  }, {
+    label: 'the per-tick position and speed equations match the Java source state machine',
+    expected: 'dx/dz from current position minus prior position; speed is sqrt(dx² + dz²)',
+    actual: [statementFor('spa_dx'), statementFor('spa_dz'), statementFor('spa_move_speed')].filter(Boolean).join(' | ') || 'missing',
+    passed: statementFor('spa_dx').includes('query.position(0) - variable.spa_last_x') &&
+      statementFor('spa_dz').includes('query.position(2) - variable.spa_last_z') &&
+      statementFor('spa_move_speed').includes('math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0)')
+  }, {
+    label: 'backward movement and turning equations match the Java source state machine',
+    expected: 'movement dot look direction < 0; body yaw minus previous body yaw',
+    actual: [statementFor('spa_moving_backwards'), statementFor('spa_turn_delta')].filter(Boolean).join(' | ') || 'missing',
+    passed: statementFor('spa_moving_backwards').includes('math.cos((query.body_y_rotation + 90.0)') &&
+      statementFor('spa_moving_backwards').includes('math.sin((query.body_y_rotation + 90.0)') &&
+      statementFor('spa_turn_delta').includes('query.body_y_rotation - variable.spa_previous_body_yaw')
+  }, {
+    label: 'the previous position and body-yaw variables start from source initial values',
+    expected: 'spa_last_x, spa_last_z and spa_previous_body_yaw initialize to 0.0',
+    actual: initialize.filter((statement) => ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].some((name) => statement.startsWith('variable.' + name + ' ='))).join(', ') || 'missing',
+    passed: ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((statement) => statement.startsWith('variable.' + name + ' = 0.0')))
+  }, {
+    label: 'all reconstructed source variables pass the player dependency audit',
+    expected: 'zero unresolved player variables',
+    actual: JSON.stringify({ sourceProfile: triggerReport.sourceProfile, injected: dependencyReport.variables.injected.map((statement) => statement.match(/variable\\.([a-z0-9_]+)\\s*=/i)?.[1]).filter(Boolean), unresolved: dependencyReport.variables.unresolved.map((entry) => entry.variable) }),
+    passed: dependencyReport.variables.unresolved.length === 0
+  }];
+  return build(
+    'serious-player-animation-source-adapter',
+    'Serious Player Animations (source-derived locomotion, overlays and Molang scope)',
+    'Animation',
+    checks,
+    [],
+    ['Offhand shield mirroring remains an explicit approximation; live Bedrock playback is not measured by this structural fixture.'],
+    started,
+  );
 }

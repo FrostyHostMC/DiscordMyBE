@@ -39,3 +39,22 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Build Activity
         run: pnpm build
+      - name: Checkout pinned Serious Player Animations 1.1.1 source
+        uses: actions/checkout@v4
+        with:
+          repository: McVader34/Serious-Player-Animations
+          ref: 2dc73ceb744a4fb861437b51f1fe6c95ca4ac902
+          path: source-serious-player-animations
+      - name: Export the pinned Java source path
+        run: echo "SERIOUS_PLAYER_ANIMATIONS_SOURCE=$GITHUB_WORKSPACE/source-serious-player-animations/fabric/src/main/java/net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.java" >> "$GITHUB_ENV"
+      - name: Run player Molang baseline regression
+        run: node scripts/run-player-baseline-regression.mjs
+      - name: Convert the original Pierced fixture through the current animation engine
+        run: node scripts/run-pierced-animation-regression.mjs
+      - name: Upload current Pierced conversion diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: javabe-pierced-current-engine
+          path: fixture-analysis/
+          if-no-files-found: warn

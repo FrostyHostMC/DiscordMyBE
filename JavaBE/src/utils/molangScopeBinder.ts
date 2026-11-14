@@ -7,11 +7,11 @@
  * is "unknown" in every other document that reads it.
  *
  * That is exactly the reported `variable.helmet_layer_visible` / `chest_layer_visible` /
- * `leg_layer_visible` / `boot_layer_visible` failure: the source archive declared its armour-layer
- * flags in the player definition that a pack override replaces, while the converted clips and
- * controllers kept reading them. The meaning of those flags is "this armour layer is worn", and the
- * destination expresses it with the documented armour-slot presence query, so the value is rebuilt
- * rather than frozen to a constant.
+ * `leg_layer_visible` / `boot_layer_visible` failure: the source archive declared these flags in
+ * the vanilla player entity that a pack override replaces. Their actual vanilla meanings are not
+ * generic armour-slot occupancy: Mojang derives the helmet layer from `!query.has_head_gear` and
+ * keeps chest, leg and boot layers at `1.0`. Those source-backed expressions are restored exactly;
+ * arbitrary armour-slot presence remains unresolved when the destination exposes no valid query.
  *
  * This pass walks every shipped document, records what each execution scope really reads — directly
  * and through the animation clips / controllers it references — and what it declares. A read with no
@@ -115,7 +115,32 @@ function splitTokens(name: string): string[] {
  * form of `query.is_item_name_any`; the value stays live, so hiding and re-equipping armour keeps
  * changing the layer instead of latching one constant.
  */
+const VANILLA_ARMOR_LAYER_EXPRESSIONS: Record<string, { slot: string; expression: string; reason: string }> = {
+  helmet_layer_visible: {
+    slot: 'slot.armor.head',
+    expression: '!query.has_head_gear',
+    reason: 'Mojang vanilla player.entity.json defines helmet_layer_visible as the inverse of query.has_head_gear',
+  },
+  chest_layer_visible: {
+    slot: 'slot.armor.chest',
+    expression: '1.0',
+    reason: 'Mojang vanilla player.entity.json keeps chest_layer_visible at 1.0',
+  },
+  leg_layer_visible: {
+    slot: 'slot.armor.legs',
+    expression: '1.0',
+    reason: 'Mojang vanilla player.entity.json keeps leg_layer_visible at 1.0',
+  },
+  boot_layer_visible: {
+    slot: 'slot.armor.feet',
+    expression: '1.0',
+    reason: 'Mojang vanilla player.entity.json keeps boot_layer_visible at 1.0',
+  },
+};
+
 export function equipmentVisibilityExpression(variableName: string): EquipmentVisibilityResolution | null {
+  const vanilla = VANILLA_ARMOR_LAYER_EXPRESSIONS[variableName];
+  if (vanilla) return { variable: variableName, ...vanilla };
   const tokens = splitTokens(variableName);
   if (tokens.length === 0) return null;
   if (tokens.some((token) => NEGATION_TOKENS.has(token))) return null;
@@ -127,6 +152,7 @@ export function equipmentVisibilityExpression(variableName: string): EquipmentVi
   // least one item name, so an "is this slot occupied" flag is evaluated with the slot-occupancy
   // query instead of a call that throws on every frame.
   const occupancy = slotOccupancyExpression(slot);
+  if (!occupancy) return null;
   return {
     variable: variableName,
     slot,
@@ -361,7 +387,7 @@ export const ARMOR_LAYER_VISIBILITY_MAP: Record<string, { query: string; default
   const map: Record<string, { query: string; defaultVal: number }> = {};
   for (const name of VANILLA_ARMOR_LAYER_VARIABLES) {
     const resolution = equipmentVisibilityExpression(name);
-    if (resolution) map[name] = { query: resolution.expression, defaultVal: 0 };
+    if (resolution) map[name] = { query: resolution.expression, defaultVal: resolution.expression === '1.0' ? 1 : 0 };
   }
   return map;
 })();

@@ -1361,6 +1361,10 @@ export async function generateBedrockRemake(
     playerTriggers: animResult.playerTriggerReport ?? null,
     playerAnimationPort: animResult.playerAnimationPort ?? null,
     playerSourceClipIds: animResult.playerSourceClipIds ?? [],
+    playerSourceClipIdToPlayerClipId: animResult.playerSourceClipIdToPlayerClipId ?? {},
+    playerPreRetargetClips: animResult.playerPreRetargetClips ?? {},
+    playerExpectedRetargetedClips: animResult.playerExpectedRetargetedClips ?? {},
+    playerSourceBoneToPlayerBone: animResult.playerSourceBoneToPlayerBone ?? {},
     playerWiringFiles: animResult.playerWiringFiles ?? {},
     playerScriptCode: animResult.playerScriptCode ?? '',
     animationExpectedClips: animResult.animationExpectedClips ?? [],
@@ -2052,6 +2056,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
+    sourceProfiles: remake.playerTriggers?.sourceProfile ? [remake.playerTriggers.sourceProfile] : [],
     onLog: integrityLog,
   });
   remake.playerDependencyResolution = playerDependencyResolution;
@@ -2107,6 +2112,9 @@ export async function convertJavaToBedrockAddon(
         .map((conflict) => conflict.lower),
       ...scriptDrivenClips,
       ...(remake.playerEntityWiring?.scriptedClips ?? []),
+      ...(remake.playerTriggers?.triggers ?? [])
+        .filter((trigger) => trigger.status === 'unresolved' && trigger.concept === 'unreferenced-source-definition')
+        .map((trigger) => trigger.clipId),
     ]),
   ];
   // ── SCOPE-AWARE MOLANG VARIABLE BINDING ───────────────────────────────────────────────────────
@@ -2304,15 +2312,30 @@ export async function convertJavaToBedrockAddon(
   for (const scope of describeRegistryScopes(exportedRegistry.metrics)) {
     integrityLog(`[ANIM:SCOPE] ${scope}`);
   }
+  const sourceClipIdByExportedClipId = Object.fromEntries(
+    (remake.playerTriggers?.triggers ?? []).map((trigger) => [trigger.clipId, trigger.sourceClipId]),
+  );
+  const playerTriggerExportedIdBySourceId = new Map(
+    (remake.playerTriggers?.triggers ?? []).map((trigger) => [trigger.sourceClipId, trigger.clipId]),
+  );
+  const deliberatelyDeactivatedSet = new Set(deliberatelyDeactivated);
+  const expectedExportedClipIds = [...new Set([
+    ...(remake.animationExpectedClips ?? []),
+    ...universalAnimationExport.emittedClips,
+  ])]
+    .map((clipId) => playerTriggerExportedIdBySourceId.get(clipId) ?? clipId)
+    .filter((clipId) => !deliberatelyDeactivatedSet.has(clipId));
   const animationFidelity = validateAnimationFidelity({
     ir: remake.universalAnimationIR,
     discovery: remake.universalAnimationDiscovery,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
-    expectedClips: [
-      ...(remake.animationExpectedClips ?? []),
-      ...universalAnimationExport.emittedClips,
-    ],
+    expectedClips: Object.keys(remake.universalAnimationIR?.clips ?? {}),
+    sourceClipIdByExportedClipId,
+    sourceClipIdToExportedClipId: remake.playerSourceClipIdToPlayerClipId,
+    preRetargetedPlayerClips: remake.playerPreRetargetClips,
+    expectedRetargetedPlayerClips: remake.playerExpectedRetargetedClips,
+    sourceBoneToPlayerBone: remake.playerSourceBoneToPlayerBone,
     registry: exportedRegistry,
     skeleton: skeletonReconciliation,
     onLog: integrityLog,
@@ -2341,10 +2364,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
-    expectedClips: [
-      ...(remake.animationExpectedClips ?? []),
-      ...universalAnimationExport.emittedClips,
-    ],
+    expectedClips: expectedExportedClipIds,
     extractedClipCount: Math.max(discoveredByLayout, interpretedClipCount),
     scriptDrivenClips: [...new Set([...scriptDrivenClips, ...(remake.playerEntityWiring?.scriptedClips ?? [])])],
     registry: exportedRegistry,
@@ -2610,6 +2630,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
+    sourceProfiles: remake.playerTriggers?.sourceProfile ? [remake.playerTriggers.sourceProfile] : [],
     onLog: (line) => integrityLog(`[PLAYER:FINAL] ${line}`),
   });
   if (playerBaselineFinal.baselineWiringAdded.length > 0 || playerBaselineFinal.variables.injected.length > 0) {

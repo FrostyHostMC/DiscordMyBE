@@ -103,10 +103,8 @@ const VANILLA_RENDER_CONTROLLERS = new Set([
 ]);
 const VANILLA_ANIMATIONS = new Set([
   'animation.humanoid.base_pose',
-  'animation.humanoid.look_at_target',
-  'animation.player.base_pose',
   'animation.player.cape',
-  'animation.player.first_person_base_pose',
+  'animation.player.first_person.base_pose',
 ]);
 
 /**
