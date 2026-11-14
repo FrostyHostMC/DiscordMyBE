@@ -1,7 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
-import { Cpu, LoaderCircle, RefreshCw, ShieldAlert, Sparkles } from 'lucide-react';
+import {
+  Cpu,
+  LoaderCircle,
+  RefreshCw,
+  ShieldAlert,
+  Sparkles,
+  LockKeyhole,
+  ShieldCheck,
+  CircleDollarSign,
+} from 'lucide-react';
 import App from '@/App.tsx';
 import './index.css';
 
@@ -14,11 +23,13 @@ type GateState =
   | { status: 'locked'; message: string };
 
 function GateScreen({ state, message, retry }: {
-  state: 'loading' | 'denied';
+  state: 'loading' | 'denied' | 'locked';
   message: string;
   retry: () => void;
 }) {
   const isLoading = state === 'loading';
+  const isLocked = state === 'locked';
+
   return (
     <main className="javabe-launch-screen" role={isLoading ? 'status' : 'alert'} aria-live="polite">
       <div className="javabe-launch-aurora" aria-hidden="true">
@@ -26,6 +37,7 @@ function GateScreen({ state, message, retry }: {
         <span className="javabe-launch-orb javabe-launch-orb-two" />
         <span className="javabe-launch-stars" />
       </div>
+
       <section className="javabe-launch-content">
         <div className="javabe-launch-brand">
           <div className="javabe-launch-logo">
@@ -37,28 +49,63 @@ function GateScreen({ state, message, retry }: {
           <p className="javabe-launch-tagline">Your mods. Rebuilt for Bedrock.</p>
         </div>
 
-        <div className="javabe-launch-progress-card">
-          <div className="javabe-launch-status-icon">
-            {isLoading
-              ? <LoaderCircle className="javabe-launch-spinner" size={25} />
-              : <ShieldAlert size={25} />}
+        {isLocked ? (
+          <div className="javabe-launch-progress-card javabe-access-card">
+            <div className="javabe-lock-icon"><LockKeyhole size={25} /></div>
+            <div className="javabe-launch-status-copy javabe-access-copy">
+              <h2>JavaBE access is locked</h2>
+              <p>{message}</p>
+            </div>
+
+            <div className="javabe-price-panel">
+              <span className="javabe-price-label">REQUIRED SERVER ROLE</span>
+              <strong><CircleDollarSign size={29} aria-hidden="true" /> $5.00</strong>
+              <span className="javabe-price-caption">One-time payment for the JavaBE access role.</span>
+            </div>
+
+            <div className="javabe-access-instructions">
+              <div className="javabe-access-step">
+                <span className="javabe-access-step-icon"><ShieldCheck size={17} /></span>
+                <p><strong>Access is assigned manually</strong><br />The server owner reviews payment and grants the required Discord role.</p>
+              </div>
+              <div className="javabe-access-step">
+                <span className="javabe-access-step-icon"><LockKeyhole size={17} /></span>
+                <p><strong>No role, no access</strong><br />JavaBE stays locked until the required role is present on your Discord account.</p>
+              </div>
+            </div>
+
+            <p className="javabe-access-footer">Required role: <strong>JavaBE Access</strong></p>
           </div>
-          <div className="javabe-launch-status-copy">
-            <h2>{isLoading ? 'Preparing your workspace' : 'Could not connect'}</h2>
-            <p>{message}</p>
+        ) : (
+          <div className="javabe-launch-progress-card">
+            <div className="javabe-launch-status-icon">
+              {isLoading
+                ? <LoaderCircle className="javabe-launch-spinner" size={25} />
+                : <ShieldAlert size={25} />}
+            </div>
+            <div className="javabe-launch-status-copy">
+              <h2>{isLoading ? 'Preparing your workspace' : 'Could not connect'}</h2>
+              <p>{message}</p>
+            </div>
+            {isLoading ? (
+              <div className="javabe-launch-progress" aria-hidden="true"><span /></div>
+            ) : (
+              <button className="javabe-launch-retry" onClick={retry}>
+                <RefreshCw size={16} /> Try again
+              </button>
+            )}
           </div>
-          {isLoading ? (
-            <div className="javabe-launch-progress" aria-hidden="true"><span /></div>
-          ) : (
-            <button className="javabe-launch-retry" onClick={retry}>
-              <RefreshCw size={16} /> Try again
-            </button>
-          )}
-        </div>
+        )}
 
         <div className="javabe-launch-footer">
           <Sparkles size={14} />
-          <span>{isLoading ? 'Getting your conversion studio ready' : 'Your workspace is waiting'}</span>
+          <span>
+            {isLoading
+              ? 'Getting your conversion studio ready'
+              : isLocked
+                ? 'Membership required to enter the conversion studio'
+                : 'Your workspace is waiting'}
+          </span>
         </div>
       </section>
     </main>
@@ -128,8 +175,14 @@ function JavaBEActivity() {
           reason?: string;
           error?: string;
         };
+
         if (accessResponse.status === 403 && !accessData.allowed) {
-          if (!cancelled) setGate({ status: 'locked', message: accessData.reason || 'The JavaBE access role is required.' });
+          if (!cancelled) {
+            setGate({
+              status: 'locked',
+              message: accessData.reason || 'Your Discord account does not have the required JavaBE access role.',
+            });
+          }
           return;
         }
         if (!accessResponse.ok || !accessData.allowed) {
