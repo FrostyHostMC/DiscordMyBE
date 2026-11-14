@@ -111,7 +111,7 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null, animate: false },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
   // The vanilla humanoid look-at pose is an animation, not an animation controller.
-  { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
+  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
@@ -127,19 +127,6 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
     gate: FIRST_PERSON_GATE,
   },
 ];
-
-/**
- * Vanilla player-scope values required by the baseline animation/controller resources.
- * The canonical expressions live in PLAYER_SCOPE_VARIABLE_EXPRESSIONS so dependency
- * reconstruction and baseline wiring cannot drift or disagree about spear detection.
- */
-export const PLAYER_BASELINE_PRE_ANIMATION: string[] = [
-  'tcos0',
-  'melee_spear_equipped',
-].map((name) => {
-  const definition = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
-  return `variable.${name} = ${definition.expression};`;
-});
 
 /** Alias -> identifier map every player definition must declare. */
 export const VANILLA_PLAYER_ANIMATIONS: Record<string, string> = Object.fromEntries(
