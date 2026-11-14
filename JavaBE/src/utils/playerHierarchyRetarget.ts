@@ -14,10 +14,6 @@ const JAVA_TO_BEDROCK: Record<string, string> = {
   right_sleeve: 'rightSleeve', left_sleeve: 'leftSleeve',
   right_pants: 'rightPants', left_pants: 'leftPants', jacket: 'jacket', cloak: 'cape',
 };
-const BEDROCK_LAYER_PARENT: Record<string, string> = {
-  hat: 'head', leftSleeve: 'leftArm', rightSleeve: 'rightArm',
-  leftPants: 'leftLeg', rightPants: 'rightLeg', jacket: 'body', cape: 'body',
-};
 const SOURCE_LAYER_PARENT: Record<string, string> = {
   hat: 'head', leftSleeve: 'leftArm', rightSleeve: 'rightArm',
   leftPants: 'leftLeg', rightPants: 'rightLeg', jacket: 'body', cape: 'body',
