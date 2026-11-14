@@ -61,7 +61,7 @@ export interface MolangCompatibilityReport {
 export const ENTITY_QUERIES = new Set([
   'anim_time', 'life_time', 'modified_move_speed', 'modified_distance_moved', 'is_moving', 'is_sneaking', 'is_sprinting',
   'is_swimming', 'is_on_ground', 'is_riding', 'is_using_item', 'is_delayed_attacking', 'is_alive',
-  'is_first_person', 'is_in_water', 'is_jumping', 'hurt_time', 'health', 'is_item_name_any',
+  'is_first_person', 'is_in_water', 'is_jumping', 'hurt_time', 'health', 'is_item_name_any', 'equipped_item_any_tag', 'equipped_item_all_tags',
   'item_is_charged', 'item_in_use_duration', 'item_remaining_use_duration', 'ground_speed',
   'vertical_speed', 'position', 'rotation', 'time_of_day', 'cardinal_facing_2d',
   'body_y_rotation', 'body_x_rotation', 'head_x_rotation', 'head_y_rotation', 'variant',
