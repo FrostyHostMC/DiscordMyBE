@@ -125,17 +125,63 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
     : 'third';
 }
 
-/** The upstream Serious Player Animations resource namespace identifies its source state machine. */
+/** Require the actual Java mod identity and mixin class; an asset-only pack is not proof of its state machine. */
 function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolean {
-  return entries.some((entry) => {
+  const classEntry = entries.find((entry) =>
+    entry.path.replace(/\\/g, '/').toLowerCase().endsWith(
+      'net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class',
+    ),
+  );
+  if (!classEntry) return false;
+
+  let classText = '';
+  try {
+    classText = decoder.decode(classEntry.data);
+  } catch {
+    return false;
+  }
+  const sourceMarkers = [
+    'reloadAnimationVariables',
+    'moveSpeed',
+    'isMovingBackwards',
+    'prevbyaw',
+    'ShieldItem',
+    'walking_sneak',
+  ];
+  if (!sourceMarkers.every((marker) => classText.includes(marker))) return false;
+
+  let modIdFound = false;
+  let versionFound = false;
+  for (const entry of entries) {
     const path = entry.path.replace(/\\/g, '/').toLowerCase();
-    return path.includes('assets/seriousplayeranimations/player_animation/') ||
-      path.includes('net/mcvader/seriousplayeranimations/mixin/seriousplayeranimationsmixin.class');
-  });
+    let content = '';
+    try {
+      content = decoder.decode(entry.data);
+    } catch {
+      continue;
+    }
+    if (path.endsWith('fabric.mod.json')) {
+      try {
+        const metadata = JSON.parse(content) as { id?: string; version?: string };
+        if (metadata.id === 'seriousplayeranimations') {
+          modIdFound = true;
+          versionFound = metadata.version === '1.1.0';
+        }
+      } catch {
+        // Continue to Forge metadata if this is not a valid Fabric descriptor.
+      }
+    } else if (path.endsWith('meta-inf/mods.toml')) {
+      modIdFound = /modId\\s*=\\s*["']seriousplayeranimations["']/i.test(content);
+      versionFound = versionFound || /version\\s*=\\s*["']1\\.1\\.0["']/i.test(content);
+    } else if (path.endsWith('meta-inf/manifest.mf')) {
+      versionFound = versionFound || /^Implementation-Version:\\s*1\\.1\\.0\\s*$/im.test(content);
+    }
+  }
+  return modIdFound && versionFound;
 }
 
 /**
- * Source-backed adapter for Serious Player Animations 1.1.1.
+ * Source-backed adapter for Serious Player Animations 1.1.0 (pinned upstream source revision).
  *
  * The upstream mixin selects locomotion clips from per-tick position deltas, body-yaw deltas,
  * sneaking and sprinting state. Shield clips are a second animation layer, not locomotion states.
