@@ -47,7 +47,9 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       if (selectedFile.size > budget.maxInputBytes) {
         throw new Error(`This ${budget.profile} device cannot safely process a ${formatArchiveBytes(selectedFile.size)} archive inside Discord. The safe input limit for this device is ${formatArchiveBytes(budget.maxInputBytes)}. Use a desktop browser for this larger mod; JavaBE will not start a conversion that could crash the Activity or the phone.`);
       }
+      setNestedNote(`Opening ${selectedFile.name} (${formatArchiveBytes(selectedFile.size)})…`);
       const sourceBuffer = await selectedFile.arrayBuffer();
+      setNestedNote('Reading the ZIP directory and preparing file entries…');
       const extracted = await readZipArchive(sourceBuffer, {
         maxEntries: budget.maxEntries,
         maxEntryBytes: budget.maxEntryBytes,
@@ -59,6 +61,7 @@ export function InputPanel({ value, file, entries, upscalingEnabled, onChange, o
       });
       // A mod archive is not always flat: modpacks and bundled distributions keep the real mod
       // one level down. Nested jars/zips are expanded so their clips, models and skins are found.
+      setNestedNote(`Read ${extracted.length.toLocaleString('en-US')} archive entries. Checking bundled JAR/ZIP files…`);
       const nested = await expandNestedArchives(extracted, budget);
       // A modpack-sized archive is trimmed to the mobile budget before it is scanned: audio and
       // oversized binaries are left unread instead of inflating hundreds of megabytes at once.
