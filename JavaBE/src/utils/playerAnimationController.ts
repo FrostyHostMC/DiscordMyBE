@@ -87,9 +87,9 @@ export function synthesizePlayerAnimationController(options: {
   onLog?: (line: string) => void;
 }): PlayerControllerSynthesis {
   const log = (line: string) => options.onLog?.(line);
-  const clipsLeftInAnimate = options.triggers
-    .filter((trigger) => !trigger.scriptDriven && !trigger.condition)
-    .map((trigger) => trigger.clipId);
+  // Clips without a recovered condition remain registered on the entity but are not started
+  // continuously. There is no plain-animate fallback: that would make unrelated poses overlap.
+  const clipsLeftInAnimate: string[] = [];
   const empty = (note: string): PlayerControllerSynthesis => ({
     files: {},
     controllerIds: [],
@@ -112,10 +112,10 @@ export function synthesizePlayerAnimationController(options: {
   );
   if (candidates.length === 0) {
     log(
-      '[ANIM:CONTROLLER] No ported player clip carries a translated trigger, so no player animation controller was synthesized. Those clips stay registered and are animated continuously for their own perspective instead of being given an invented state.',
+      '[ANIM:CONTROLLER] No ported player clip carries a safe translated trigger; clips remain registered but inactive until a source state can be reconstructed. No continuous-playback fallback is emitted.',
     );
     return empty(
-      'No ported player clip carries a translatable trigger, so no controller was synthesized; the clips remain registered on the entity and are reported as continuously animated.',
+      'No ported player clip carries a translatable trigger, so no controller was synthesized; clips remain registered but are not auto-played with guessed conditions.',
     );
   }
 
@@ -176,7 +176,7 @@ export function synthesizePlayerAnimationController(options: {
       '[ANIM:CONTROLLER] Every ported trigger uses a query the player client entity cannot evaluate, so no controller state was written. The unresolvable expressions are listed for review instead of shipping a controller that never fires.',
     );
     const result = empty(
-      'No ported trigger could be expressed in the player client-entity context, so no controller state was generated; nothing was replaced with a constant to make validation pass.',
+      'No ported trigger could be expressed in the player client-entity context, so no controller state was generated; clips remain registered without a fabricated activation condition.',
     );
     result.report.conditionRepairs = conditionRepairs;
     result.report.unresolved = unresolved;
