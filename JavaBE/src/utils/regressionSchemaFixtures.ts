@@ -2246,6 +2246,18 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const initialize = Array.isArray(scripts.initialize) ? scripts.initialize as string[] : [];
   const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(`variable.${name} =`));
   const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
+  const sourceMovementVariables = [
+    'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
+    'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw',
+  ] as const;
+  const sourceVariableTranslations = sourceMovementVariables.map((name) => {
+    const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+    const translated = translateMolangExpression(
+      `variable.${name} = ${baseline?.expression ?? ''}`,
+      'player_entity',
+    );
+    return { name, unresolved: translated.unresolved, rejected: translated.rejected };
+  });
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
   const sourceMovementVariables = [
     'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
@@ -2306,6 +2318,11 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
     passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
   }, {
+    label: 'all source-derived movement expressions are accepted in Bedrock player Molang scope',
+    expected: 'all eight expressions have no unresolved or rejected query references',
+    actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
+    passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
+  }, {
     label: 'the source movement and direction calculations are restored in player Molang scope',
     expected: 'move speed, backward direction and turn delta expressions injected',
     actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
@@ -2332,7 +2349,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'all reconstructed source variables pass the player dependency audit',
     expected: 'zero unresolved player variables',
-    actual: dependencyReport.variables.unresolved.map((entry) => entry.variable).join(', ') || 'none',
+    actual: JSON.stringify({ sourceProfile: triggerReport.sourceProfile, injected: dependencyReport.variables.injected.map((statement) => statement.match(/variable\\.([a-z0-9_]+)\\s*=/i)?.[1]).filter(Boolean), unresolved: dependencyReport.variables.unresolved.map((entry) => entry.variable) }),
     passed: dependencyReport.variables.unresolved.length === 0
   }];
   return build(
