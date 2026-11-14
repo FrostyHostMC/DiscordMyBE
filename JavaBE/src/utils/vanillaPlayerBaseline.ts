@@ -21,6 +21,8 @@ export interface PlayerBaselineEntry {
   kind: PlayerBaselineKind;
   /** Molang gate the vanilla file applies to this entry, or null when it always plays. */
   gate: string | null;
+  /** False for compatibility aliases resolved by a controller rather than played directly. */
+  animate?: boolean;
 }
 
 /** Gate Bedrock uses to keep hand/first-person resources out of the third-person body. */
@@ -52,7 +54,7 @@ export const VANILLA_PLAYER_VARIABLE_EXPRESSIONS: Record<string, { expression: s
 export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   // `base_pose` is retained as a compatibility alias for older/generated player
   // controllers, but it resolves to the real vanilla humanoid base-pose animation.
-  { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
+  { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null, animate: false },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
   // The vanilla player maps look_at_target to a controller, not an animation clip.
   { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
@@ -77,10 +79,8 @@ export const VANILLA_PLAYER_ANIMATIONS: Record<string, string> = Object.fromEntr
   PLAYER_BASELINE_ENTRIES.map((entry) => [entry.alias, entry.identifier]),
 );
 
-/** `scripts.animate` entries that keep the vanilla player animated. */
-export const VANILLA_PLAYER_ANIMATE: Array<string | Record<string, string>> = PLAYER_BASELINE_ENTRIES.map(
-  (entry) => (entry.gate ? { [entry.alias]: entry.gate } : entry.alias),
-);
+/** The vanilla player runs its root controller; that controller layers the remaining aliases. */
+export const VANILLA_PLAYER_ANIMATE: Array<string | Record<string, string>> = ['root'];
 
 /** Animation identifiers the base game defines for the player/humanoid rig. */
 export const VANILLA_PLAYER_ANIMATION_IDS = new Set<string>(
