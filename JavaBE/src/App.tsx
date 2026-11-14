@@ -132,7 +132,7 @@ export default function App() {
         const jvm = inspection.stats.jvmAnalysis;
         if (jvm) {
           appendLog(`[JVM-IR] Parsed ${jvm.totals.parsedClasses}/${jvm.totals.classFiles} class files; ${jvm.totals.methods} methods (${jvm.totals.methodsWithCode} with bodies), ${jvm.totals.instructions} instructions, ${jvm.totals.basicBlocks} control-flow blocks.`);
-          appendLog(`[JVM-IR] Recovered ${jvm.totals.methodCalls} method-call references, ${jvm.totals.fieldAccesses} field accesses and ${jvm.totals.exceptionHandlers} exception handlers; ${jvm.totals.malformedClasses} malformed class files.`);
+          appendLog(`[JVM-IR] Recovered ${jvm.totals.methodCalls} method-call references, ${jvm.totals.fieldAccesses} field accesses, ${jvm.totals.exceptionHandlers} exception handlers and ${jvm.totals.bootstrapMethods} invokedynamic bootstrap methods; ${jvm.totals.malformedClasses} malformed class files.`);
           if (!jvm.complete) appendLog(`[JVM-IR] Diagnostics: ${jvm.warnings.length} warning(s), ${jvm.unresolvedClassFiles.length} unreadable class file(s). Conversion continues with available evidence.`);
         }
         // Second frame hand-back before the conversion engine starts its own long passes.
