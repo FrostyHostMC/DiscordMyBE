@@ -2,7 +2,6 @@ import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import type { PlayerClipTrigger } from '@/utils/playerAnimationTriggers';
 import type { PlayerModEvidence } from '@/utils/playerModEvidence';
 import type { PlayerOwnerDecision } from '@/utils/playerRigClassifier';
-import { injectPlayerRigBones, type GeometryCandidate } from '@/utils/playerBoneInjector';
 import { planOffhandPlayback } from '@/utils/playerOffhandResolver';
 import { planViewModels } from '@/utils/playerViewModelMapper';
 
@@ -52,44 +51,22 @@ export interface PlayerAnimationPortResult {
   report: PlayerAnimationPortReport;
 }
 
-function collectBones(clips: Record<string, BedrockAnimationClip>): string[] {
-  const names = new Set<string>();
-  for (const clip of Object.values(clips)) {
-    const bones = (clip as { bones?: Record<string, unknown> }).bones;
-    if (!bones) continue;
-    for (const bone of Object.keys(bones)) names.add(bone);
-  }
-  return [...names];
-}
-
 export function buildPlayerAnimationPort(options: {
   modId: string;
   clips: Record<string, BedrockAnimationClip>;
   triggers: PlayerClipTrigger[];
   decisions: PlayerOwnerDecision[];
   evidence: PlayerModEvidence;
-  geometryCandidates: GeometryCandidate[];
   onLog?: (line: string) => void;
 }): PlayerAnimationPortResult {
   const log = (line: string) => options.onLog?.(line);
   const viewModels = planViewModels(options.clips, options.evidence);
-  const injection = injectPlayerRigBones({
-    candidates: options.geometryCandidates,
-    clipBones: collectBones(options.clips),
-    modId: options.modId,
-  });
   const offhand = planOffhandPlayback({ clips: options.clips, evidence: options.evidence });
   const gatedClips = options.triggers.filter((trigger) => Boolean(trigger.condition) || trigger.scriptDriven).length;
 
   for (const note of viewModels.notes) log(`[PLAYER-VIEW] ${note}`);
   if (viewModels.perspectiveConflicts.length > 0) {
     log(`[PLAYER-VIEW] Perspective check: ${viewModels.perspectiveConflicts.slice(0, 4).join(' | ')}.`);
-  }
-  log(`[PLAYER-BONES] ${injection.note}`);
-  if (injection.injectedBones.length > 0) {
-    log(
-      `[PLAYER-BONES] Injected: ${injection.injectedBones.slice(0, 8).join(', ')}${injection.injectedBones.length > 8 ? ' …' : ''}${injection.approximatedBones.length > 0 ? `; ${injection.approximatedBones.length} parent(s) approximated from part tokens` : ''}.`,
-    );
   }
   for (const note of offhand.notes) log(`[PLAYER-OFFHAND] ${note}`);
 
@@ -98,20 +75,16 @@ export function buildPlayerAnimationPort(options: {
   const summary = [
     `${Object.keys(options.clips).length} player clip(s) inspected; ${viewModels.armClips.length} first-person arm track(s), ${viewModels.bodyClips.length} third-person body track(s)`,
     `${gatedClips} clip(s) carry a translated trigger`,
-    injection.injectedBones.length > 0
-      ? `${injection.injectedBones.length} custom bone node(s) injected into the mod's own player model`
-      : injection.unresolvedBones.length > 0
-        ? `${injection.unresolvedBones.length} unsupported custom bone track(s) withheld to protect the native player mesh`
-        : 'all detected bone tracks use the native player skeleton',
+    'all emitted player tracks are retargeted onto the native Bedrock player skeleton; unsupported custom joints are explicitly approximated or reported',
     offhand.offhandClips.length > 0
       ? `${offhand.offhandClips.length} off-hand clip(s) wired to the behaviour pack`
       : 'no off-hand clip found',
   ].join('; ');
 
   return {
-    files: injection.files,
+    files: {},
     scriptCode: offhand.script,
-    geometryIdentifier: injection.geometryIdentifier,
+    geometryIdentifier: null,
     report: {
       owners: options.decisions,
       clipsInspected: Object.keys(options.clips).length,
@@ -125,8 +98,8 @@ export function buildPlayerAnimationPort(options: {
       offhandEvidence: offhand.evidence,
       offhandClips: offhand.offhandClips,
       mainhandClips: offhand.mainhandClips,
-      injectedBones: injection.injectedBones,
-      injectedGeometryIdentifier: injection.geometryIdentifier,
+      injectedBones: [],
+      injectedGeometryIdentifier: null,
       gatedClips,
       scriptActions,
       notes,
