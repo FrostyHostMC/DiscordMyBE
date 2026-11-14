@@ -347,7 +347,7 @@ export function normalizeEquippedItemQueries(expression: string): {
   // 3. Hand slots are normalised to the documented single-argument signature.
   // Java-derived calls sometimes append an inventory index. That is not a valid second
   // parameter to get_equipped_item_name, so resolve the slot alias and remove extra arguments.
-  out = out.replace(/query\.get_equipped_item_name\\s*\\(\\s*([^()]*)\\s*\\)/gi, (match, rawArguments: string) => {
+  out = out.replace(/query\\.get_equipped_item_name\\s*\\(\\s*([^()]*)\\s*\\)/gi, (match, rawArguments: string) => {
     const parts = rawArguments.split(',');
     const rawArgument = String(parts[0] ?? '').trim();
     const hand = canonicalHandSlot(rawArgument);
