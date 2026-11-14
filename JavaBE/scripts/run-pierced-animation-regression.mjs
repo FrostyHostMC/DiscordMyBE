@@ -24,6 +24,9 @@ try {
   const { setPlayableMode } = await server.ssrLoadModule('/src/utils/provenance.ts');
   const { resolvePlayerDependencies } = await server.ssrLoadModule('/src/utils/playerDependencyResolver.ts');
   const { guaranteePlayerBaselineWiring } = await server.ssrLoadModule('/src/utils/playerBaselineGuard.ts');
+  const { decompileAndInspectJarAsync } = await server.ssrLoadModule('/src/utils/javaDecompiler.ts');
+  const { autoConfigureExperimentsForMod } = await server.ssrLoadModule('/src/utils/bedrockCapabilityQuery.ts');
+  const { convertJavaToBedrockAddon } = await server.ssrLoadModule('/src/utils/bedrockGenerator.ts');
 
   setPlayableMode(false);
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
@@ -191,6 +194,85 @@ try {
     passed: assertions.every((assertion) => assertion.passed),
     recentLogs: logs.slice(-80),
   };
+  if (report.passed) {
+    const fullLogs = [];
+    const brief = 'Port Serious Player Animations 1.1.1 to Bedrock. Preserve the supplied player animation definitions and Java-derived playback conditions. Do not invent triggers for unused clips.';
+    const fileName = 'seriousplayeranimations-1.1.1.jar';
+    const inspection = await decompileAndInspectJarAsync(archiveEntries, fileName, {
+      onProgress: (done, total) => {
+        if (total > 0) fullLogs.push(`Java source inspection: ${done}/${total} classes`);
+      },
+    });
+    const automatic = autoConfigureExperimentsForMod(brief, archiveEntries, '1.26.63');
+    const fullResult = await convertJavaToBedrockAddon({
+      brief,
+      fileName,
+      entries: archiveEntries,
+      decompileData: inspection,
+      enableUpscaling: false,
+      targetVersion: automatic.targetVersion,
+      experimentConfig: automatic.config,
+      enableGeyser: false,
+      geyserVersion: '2.6.0',
+      onLog: (line) => {
+        fullLogs.push(line);
+        if (fullLogs.length > 300) fullLogs.shift();
+      },
+      onAutoRepairTrigger: () => fullLogs.push('Automatic repair requested by the converter'),
+    });
+    if (!fullResult.zipBytes || fullResult.zipBytes.byteLength === 0) {
+      throw new Error('The full JavaBE converter returned an empty .mcaddon archive.');
+    }
+    const addonBytes = fullResult.zipBytes instanceof Uint8Array
+      ? fullResult.zipBytes
+      : new Uint8Array(fullResult.zipBytes);
+    const addonPath = path.join(reportDir, 'SeriousPlayerAnimations-1.1.1.mcaddon');
+    fs.writeFileSync(addonPath, Buffer.from(addonBytes));
+    const bundleEntries = await readZipArchive(addonBytes, {
+      maxEntries: 5000,
+      maxEntryBytes: 128 * 1024 * 1024,
+      maxTotalBytes: 256 * 1024 * 1024,
+    });
+    const mcpackEntries = bundleEntries.filter((entry) => !entry.isDirectory && /\.mcpack$/i.test(entry.path));
+    const resourceManifest = fullResult.resourcePackFiles?.['manifest.json'];
+    const behaviorManifest = fullResult.behaviorPackFiles?.['manifest.json'];
+    const unresolvedPlayerVariables = fullResult.playerDependencyResolution?.variables?.unresolved ?? [];
+    const fullAssertions = [
+      { id: 'full-converter-emits-nonempty-mcaddon', expected: 'non-empty .mcaddon', actual: addonBytes.byteLength, passed: addonBytes.byteLength > 0 },
+      { id: 'full-converter-emits-resource-pack-manifest', expected: true, actual: Boolean(resourceManifest), passed: Boolean(resourceManifest) },
+      { id: 'full-converter-emits-behavior-pack-manifest', expected: true, actual: Boolean(behaviorManifest), passed: Boolean(behaviorManifest) },
+      { id: 'full-converter-preserves-serious-player-source-profile', expected: 'Serious Player Animations 1.1.1', actual: fullResult.playerTriggers?.sourceProfile ?? 'missing', passed: fullResult.playerTriggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
+      { id: 'full-converter-registers-all-nine-supplied-player-clips', expected: 9, actual: fullResult.playerEntityWiring?.clipsRegistered ?? -1, passed: fullResult.playerEntityWiring?.clipsRegistered === 9 },
+      { id: 'full-converter-activates-eight-java-used-player-clips', expected: 8, actual: fullResult.playerEntityWiring?.clipsActivated ?? -1, passed: fullResult.playerEntityWiring?.clipsActivated === 8 },
+      { id: 'full-converter-player-variable-audit-is-clean', expected: 0, actual: unresolvedPlayerVariables.length, passed: unresolvedPlayerVariables.length === 0 },
+      { id: 'full-converter-player-baseline-guard-passes', expected: true, actual: fullResult.playerBaselineGuard?.passed ?? false, passed: fullResult.playerBaselineGuard?.passed === true },
+      { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
+    ];
+    report.fullConversion = {
+      passed: fullAssertions.every((assertion) => assertion.passed),
+      addonPath: path.basename(addonPath),
+      addonBytes: addonBytes.byteLength,
+      outputFileName: fullResult.fileName,
+      targetVersion: automatic.targetVersion,
+      sourceInspection: {
+        classes: inspection.stats?.classes?.length ?? 0,
+        jvmClasses: inspection.jvm?.totals?.classes ?? inspection.jvm?.totals?.classFiles ?? 0,
+      },
+      resourcePackFileCount: Object.keys(fullResult.resourcePackFiles ?? {}).length,
+      behaviorPackFileCount: Object.keys(fullResult.behaviorPackFiles ?? {}).length,
+      mcpackEntries: mcpackEntries.map((entry) => entry.path),
+      playerWiring: fullResult.playerEntityWiring ?? null,
+      playerTriggers: fullResult.playerTriggers ?? null,
+      playerAnimationPort: fullResult.playerAnimationPort ?? null,
+      playerDependencyResolution: fullResult.playerDependencyResolution ?? null,
+      playerBaselineGuard: fullResult.playerBaselineGuard ?? null,
+      animationIntegration: fullResult.animationIntegration ?? null,
+      animationRuntime: fullResult.animationRuntime ?? null,
+      assertions: fullAssertions,
+      recentLogs: fullLogs.slice(-100),
+    };
+    if (!report.fullConversion.passed) process.exitCode = 1;
+  }
   fs.writeFileSync(path.join(reportDir, 'pierced-current-engine.json'), JSON.stringify(report, null, 2));
   process.stdout.write(`${JSON.stringify({ passed: report.passed, assertions, sourceClipIds, emittedClipCount: emittedClipIds.length, playerWiring: wiring, triggers: triggers ? { inspected: triggers.clipsInspected, unresolved: triggers.unresolved, mapped: triggers.mapped, scriptDriven: triggers.scriptDriven } : null }, null, 2)}\n`);
   if (!report.passed) process.exitCode = 1;
