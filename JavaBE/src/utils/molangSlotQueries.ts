@@ -54,12 +54,11 @@ export function slotOccupancyExpression(slot: string): { expression: string; rea
     };
   }
 
-  // Non-hand slots cannot be queried through get_equipped_item_name. Keep the slot
-  // explicit and use the item-name query's documented slot/index/name signature only
-  // when a concrete item name is known; do not fabricate one for a generic occupancy test.
+  // No generic occupancy query exists for armour slots. Do not fabricate an
+  // item-name test or invert an air test; callers must report this as unresolved.
   return {
-    expression: `query.is_item_name_any('${id}', 0, 'minecraft:air') == false`,
-    reason: `the ${id} occupancy check uses the slot/index/item-name signature rather than the hand-only equipped-item query`,
+    expression: `query.get_equipped_item_name('${id}', 0)`,
+    reason: `the ${id} slot is not a supported hand argument and cannot be safely translated`,
   };
 }
 
@@ -142,10 +141,19 @@ export function repairItemNameQueryArity(expression: string): {
     const args = splitArguments(expression.slice(open + 1, close));
     const needsRepair = args.length > 0 && itemNameArguments(args).length === 0;
     if (needsRepair) {
-      const occupancy = slotOccupancyExpression(args[0]);
-      out += expression.slice(cursor, match.index) + occupancy.expression;
-      cursor = close + 1;
-      repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+      const slot = documentedSlotId(args[0]);
+      const isHand = slot === 'slot.weapon.mainhand' || slot === 'slot.weapon.offhand';
+      if (!isHand) {
+        rejected.push({
+          call,
+          reason: `the ${slot} occupancy test has no equivalent without a concrete item name; it is preserved rather than guessed`,
+        });
+      } else {
+        const occupancy = slotOccupancyExpression(slot);
+        out += expression.slice(cursor, match.index) + occupancy.expression;
+        cursor = close + 1;
+        repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+      }
     }
     pattern.lastIndex = close + 1;
     match = pattern.exec(expression);
