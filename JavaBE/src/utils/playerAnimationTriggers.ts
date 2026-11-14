@@ -65,7 +65,7 @@ interface ConceptRule {
 
 /** Java concept ↔ Bedrock query table. Concepts are engine-level, never mod-specific. */
 const CONCEPTS: ConceptRule[] = [
-  { concept: 'attacking', java: /isAttacking|attackAnim|swingArm|isDelayedAttacking|playerAttack|AttackStrength/, clip: /attack|swing|slash|strike|combo|hit/i, script: true },
+  { concept: 'attacking', java: /isAttacking|attackAnim|swingArm|isDelayedAttacking|playerAttack|AttackStrength/, clip: /attack|swing|slash|strike|combo|hit/i, molang: 'variable.attack_time > 0.05' },
   { concept: 'sneaking', java: /isShiftKeyDown|isCrouching|isSneaking|setShiftKeyDown/, clip: /sneak|crouch/i, molang: 'query.is_sneaking' },
   { concept: 'sprinting', java: /isSprinting|setSprinting/, clip: /sprint|sprint/i, molang: 'query.is_sprinting' },
   { concept: 'swimming', java: /isSwimming|setSwimming|isInWater/, clip: /swim|dive/i, molang: 'query.is_swimming' },
