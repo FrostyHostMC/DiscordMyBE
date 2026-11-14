@@ -1360,6 +1360,7 @@ export async function generateBedrockRemake(
     playerEntityWiring: animResult.playerEntityWiring ?? null,
     playerTriggers: animResult.playerTriggerReport ?? null,
     playerAnimationPort: animResult.playerAnimationPort ?? null,
+    playerSourceClipIds: animResult.playerSourceClipIds ?? [],
     playerWiringFiles: animResult.playerWiringFiles ?? {},
     playerScriptCode: animResult.playerScriptCode ?? '',
     animationExpectedClips: animResult.animationExpectedClips ?? [],
@@ -1936,6 +1937,9 @@ export async function convertJavaToBedrockAddon(
     scriptDrivenClips: [
       ...new Set([...scriptDrivenClips, ...(remake.playerEntityWiring?.scriptedClips ?? [])]),
     ],
+    // A player source clip already retargeted into player_ported.animation.json must not also
+    // be emitted under its unretargeted source identifier by the universal writer.
+    handledSourceClipIds: remake.playerSourceClipIds ?? [],
     onLog: integrityLog,
   });
   animationTrace.stage(
