@@ -56,8 +56,6 @@ export interface PlayerWiringResult {
   report: PlayerEntityWiringReport;
 }
 
-/** Names the runtime playback self-test responds to (`/<id>:animation_test`). */
-export const PLAYER_ANIMATION_TEST_EVENT = 'animation_test';
 
 /**
  * The vanilla player entries a pack override must keep, or the player loses its animation.
@@ -394,7 +392,7 @@ export function buildPlayerClientEntity(options: {
  * Behaviour-pack activation script for clips whose Java trigger is one-shot logic.
  *
  * Nothing here is silent: a missing API, a failed registration and a failed playback attempt
- * each produce a content-log line, and `/<namespace>:animation_test` replays every ported clip
+ * each produce a content-log line; native Bedrock controllers handle normal clip playback
  * on the executing player so playback can be verified in game instead of assumed.
  */
 function buildPlayerScript(triggers: PlayerClipTrigger[]): string {
@@ -405,7 +403,7 @@ function buildPlayerScript(triggers: PlayerClipTrigger[]): string {
   if (scriptTriggers.length === 0) return '';
   const entries = scriptTriggers
     .map((trigger) => `  { clip: ${JSON.stringify(trigger.clipId)}, concept: ${JSON.stringify(trigger.concept)} },`)
-    .join('\\n');
+    .join('\n');
 
   return `
 import { world } from '@minecraft/server';
