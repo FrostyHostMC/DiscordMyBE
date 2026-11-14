@@ -199,7 +199,14 @@ export function synthesizePlayerAnimationController(options: {
   };
   for (const group of orderedGroups) {
     group.forEach((state, index) => {
-      const transitions: Array<Record<string, string>> = [{ base: `!(${state.condition})` }];
+      // A higher-priority action must be able to interrupt a lower-priority locomotion state.
+      // Bedrock evaluates transition entries in order, so higher-priority conditions come first.
+      const transitions: Array<Record<string, string>> = [];
+      for (let higherIndex = 0; higherIndex < orderedGroups.indexOf(group); higherIndex += 1) {
+        const higher = orderedGroups[higherIndex][0];
+        transitions.push({ [higher.key]: higher.condition });
+      }
+      transitions.push({ base: `!(${state.condition})` });
       const next = group[(index + 1) % group.length];
       if (group.length > 1) {
         // Multiple source clips can legitimately share a coarse Bedrock query (e.g. several
