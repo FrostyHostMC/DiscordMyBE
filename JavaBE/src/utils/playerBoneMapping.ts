@@ -176,6 +176,6 @@ export function mapClipsToPlayerSkeleton(
     auxiliaryBones: pass.auxiliary,
     aliasSuggestions,
     learnedAliases,
-    rigAudit: auditPlayerRigBones(Object.keys(clips).flatMap((clipId) => Object.keys(clips[clipId].bones ?? {})), sourceParents),
+    rigAudit: auditPlayerRigBones(Object.keys(clips).flatMap((clipId) => Object.keys(clips[clipId].bones ?? {})), sourceParents, Object.fromEntries([...pass.mappings].map(([source, mapping]) => [source, mapping.bone]))),
   };
 }
