@@ -71,7 +71,7 @@ export function buildPlayerAnimationPort(options: {
   for (const note of offhand.notes) log(`[PLAYER-OFFHAND] ${note}`);
 
   const scriptActions = offhand.script ? 2 : 0;
-  const notes = [...viewModels.notes, injection.note, ...offhand.notes];
+  const notes = [...viewModels.notes, ...offhand.notes];
   const summary = [
     `${Object.keys(options.clips).length} player clip(s) inspected; ${viewModels.armClips.length} first-person arm track(s), ${viewModels.bodyClips.length} third-person body track(s)`,
     `${gatedClips} clip(s) carry a translated trigger`,
