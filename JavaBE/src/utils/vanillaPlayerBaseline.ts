@@ -60,23 +60,41 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
     evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
     always: true,
   },
-  // Serious Player Animations 1.1.1 derives these from per-tick position and body-yaw deltas.
+  // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
+  spa_dx: {
+    expression: 'query.position(0) - variable.spa_last_x',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): vx = pos.x - lastPos.x',
+  },
+  spa_dz: {
+    expression: 'query.position(2) - variable.spa_last_z',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): vz = pos.z - lastPos.z',
+  },
   spa_move_speed: {
-    expression: 'math.sqrt(math.pow(query.position_delta(0), 2.0) + math.pow(query.position_delta(2), 2.0))',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz), with vx/vz from current minus previous player position',
+    expression: 'math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0))',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz)',
   },
   spa_moving_backwards: {
-    expression: '(variable.spa_move_speed > 0.0) && ((query.position_delta(0) * math.cos((query.body_y_rotation + 90.0) * 0.01745329252) + query.position_delta(2) * math.sin((query.body_y_rotation + 90.0) * 0.01745329252)) < 0.0)',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): movementVector.dot(lookVector) < 0',
+    expression: '(variable.spa_move_speed > 0.0) && ((variable.spa_dx * math.cos((query.body_y_rotation + 90.0) * 0.01745329252) + variable.spa_dz * math.sin((query.body_y_rotation + 90.0) * 0.01745329252)) < 0.0)',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): movementVector.length() > 0 && movementVector.dot(lookVector) < 0',
   },
   spa_turn_delta: {
     expression: 'query.body_y_rotation - variable.spa_previous_body_yaw',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = bodyYaw - prevbyaw',
+    evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = byaw - prevbyaw',
+  },
+  spa_last_x: {
+    expression: 'query.position(0)',
+    initializeExpression: '0.0',
+    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.x to 0 and updates it to pos.x after each tick',
+  },
+  spa_last_z: {
+    expression: 'query.position(2)',
+    initializeExpression: '0.0',
+    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.z to 0 and updates it to pos.z after each tick',
   },
   spa_previous_body_yaw: {
     expression: 'query.body_y_rotation',
     initializeExpression: '0.0',
-    evidence: 'SeriousPlayerAnimationsMixin initializes prevbyaw to 0 and updates it to bodyYaw after each tick',
+    evidence: 'SeriousPlayerAnimationsMixin initializes prevbyaw to 0 and updates it to byaw after each tick',
   },
 };
 
