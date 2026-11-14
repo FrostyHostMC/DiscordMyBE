@@ -323,8 +323,16 @@ export function normalizeEquippedItemQueries(expression: string): {
       const name = cleanSlotArgument(literal);
       // An empty name is a PRESENCE test: it is expressed with the slot-occupancy form, because
       // `query.is_item_name_any` without an item name is rejected by the engine outright.
+      const occupancy = name === '' ? slotOccupancyExpression(slot) : null;
+      if (name === '' && !occupancy) {
+        rejected.push({
+          call: match,
+          reason: `slot “${slot}” has no supported generic occupancy query; the source expression is preserved rather than emitting an invalid hand-only query`,
+        });
+        return match;
+      }
       const call = name === ''
-        ? slotOccupancyExpression(slot).expression
+        ? (occupancy as { expression: string }).expression
         : `query.is_item_name_any('${slot}', 0, '${name}')`;
       // The comparison itself decides the polarity: `name != ''` means the slot is OCCUPIED, while
       // `name == ''` means it is empty. With a concrete item name the mapping is the other way round.
