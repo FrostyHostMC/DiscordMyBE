@@ -1,6 +1,7 @@
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
 import { safeFileId } from '@/utils/bedrockIds';
 import { translateMolangExpression } from '@/utils/molangCompatibility';
+import { findPlayerClientEntityPath } from '@/utils/vanillaPlayerBaseline';
 
 /**
  * Active player wiring enforcement.
@@ -214,7 +215,8 @@ export function enforcePlayerWiring(input: {
     summary: '',
   };
 
-  const entityPath = Object.keys(files).find((path) => path.toLowerCase() === PLAYER_ENTITY_PATH);
+  // Prefer the entity declaring minecraft:player; merged archives may retain nested pack paths.
+  const entityPath = findPlayerClientEntityPath(files) ?? Object.keys(files).find((path) => path.toLowerCase() === PLAYER_ENTITY_PATH);
   const rawEntity = entityPath ? files[entityPath] : undefined;
   const doc = parseJson(rawEntity);
   const clientEntity = doc?.['minecraft:client_entity'];
