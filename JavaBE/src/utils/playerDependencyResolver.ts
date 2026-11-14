@@ -324,11 +324,14 @@ export function resolvePlayerDependencies(input: {
       animations[entry.alias] = entry.identifier;
       report.baselineWiringAdded.push(entry.alias);
     }
+    const shouldAnimateDirectly = VANILLA_PLAYER_ANIMATE.some((item) =>
+      typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
+    );
     const bound = animate.some((item) =>
       typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
     );
-    if (!bound) {
-      animate.push(entry.gate ? { [entry.alias]: entry.gate } : entry.alias);
+    if (shouldAnimateDirectly && !bound) {
+      animate.push(entry.alias);
       report.baselineWiringAdded.push(`${entry.alias}:animate`);
     }
   }
@@ -677,17 +680,18 @@ export function resolvePlayerDependencies(input: {
   const firstPersonAttackAlias = PLAYER_BASELINE_ENTRIES.find(
     (entry) => entry.identifier === 'controller.animation.player.first_person_attack',
   )?.alias;
-  const aliasGate = (alias: string | undefined): boolean => {
-    if (!alias) return false;
-    return animate.some((entry) => isRecord(entry) && typeof entry[alias] === 'string' && (entry[alias] as string).includes(FIRST_PERSON_GATE));
-  };
+  // Vanilla's player entity runs only the root controller from scripts.animate. The root
+  // controller itself gates first-person aliases by state; they must not be started directly.
+  const rootControllerBound = animate.some((entry) =>
+    typeof entry === 'string' ? entry === 'root' : isRecord(entry) && 'root' in entry,
+  );
   report.firstPerson.basePosePresent =
     Boolean(firstPersonBasePoseAlias) && typeof animations[firstPersonBasePoseAlias as string] === 'string';
   report.firstPerson.basePoseResolves =
     report.firstPerson.basePosePresent &&
     isVanillaPlayerBaselineIdentifier(String(animations[firstPersonBasePoseAlias as string]));
-  report.firstPerson.basePoseGated = aliasGate(firstPersonBasePoseAlias);
-  report.firstPerson.attackControllerGated = aliasGate(firstPersonAttackAlias);
+  report.firstPerson.basePoseGated = rootControllerBound;
+  report.firstPerson.attackControllerGated = rootControllerBound;
   report.firstPerson.ready =
     report.firstPerson.basePoseResolves && report.firstPerson.basePoseGated && report.firstPerson.attackControllerGated;
   if (!report.firstPerson.ready) {
