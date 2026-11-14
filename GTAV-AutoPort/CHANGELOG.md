@@ -2,6 +2,8 @@
 - Routed `.rpf` files through RageKit's dedicated `rk rpf ls` command instead of the unsupported loose-resource `rk roundtrip` path.
 - Added a bounded TSV parser that validates entry paths, rejects traversal/absolute/Windows paths and duplicates, validates size fields, and limits inventory to 10,000 entries.
 - Added nested archive inventory, resource counts, encryption flags, extension counts and a browsable workbench view with a downloadable full report.
+- For supported unencrypted resource entries, uses `rk rpf cat` to read nested resources into temporary storage and run the native parser/round-trip validator; caps work at 100 resources, 80 MiB extracted data and a three-minute archive window.
+- Added native process timeout and 32 MiB stdout/stderr limits so malformed or unusually large archives cannot run unbounded.
 - Kept archive inspection separate from extraction, rewriting and PS4 packaging; encrypted retail archives still need keys from the user's own game installation.
 - Added regression tests for nested entries, path traversal, duplicates, malformed sizes and entry-count limits.
 
