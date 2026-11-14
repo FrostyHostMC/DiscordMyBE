@@ -216,6 +216,11 @@ export default function App() {
       {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>}
       {!busy && <div className="privacy-note">{nativeStatus}</div>}
 
+      {archive?.packageMetadata && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">OPENIV PACKAGE INSPECTION</div><h3>{archive.packageMetadata.type} manifest</h3><p>{archive.packageMetadata.assemblyDetected ? "Assembly manifest found and parsed without executing its instructions." : "No assembly.xml manifest found; contents are treated as an ordinary archive."}</p></div><span className="tag warning"><AlertTriangle size={13}/> REVIEW ONLY</span></div>
+        {archive.packageMetadata.assemblies?.map((assembly) => <div className="file-row" key={assembly.path}><FileText size={15}/><span className="file-name"><b>{assembly.name || assembly.path}</b><small>{[assembly.version && `Version ${assembly.version}`, assembly.author && `By ${assembly.author}`].filter(Boolean).join(" · ") || (assembly.validXml ? "Manifest parsed" : assembly.error)}</small></span><span className="file-ext">{assembly.validXml ? `${assembly.operationCount} actions` : "INVALID XML"}</span></div>)}
+        <div className="notice"><ShieldCheck size={19}/><div><b>Install instructions are not executed</b><p>AutoPort can inspect the declared source/destination operations, but PC OpenIV paths must be mapped to the PS4 title and update before any deployment is allowed.</p></div></div>
+      </section>}
       {archive && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total · automatic mod audit complete</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
         <div className="file-toolbar"><span>FILE INVENTORY</span><select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All file types</option>{[...new Set(archive.inventory.map((f) => f.extension).filter(Boolean))].sort().map((ext) => <option key={ext} value={ext}>{ext}</option>)}</select></div>
