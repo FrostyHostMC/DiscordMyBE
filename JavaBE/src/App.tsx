@@ -162,6 +162,8 @@ export default function App() {
         setRemake(current => current ? {
           ...current,
           zipBytes: new Uint8Array(0),
+          behaviorPackFiles: {},
+          resourcePackFiles: {},
           geyserBundle: current.geyserBundle
             ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
             : undefined,
