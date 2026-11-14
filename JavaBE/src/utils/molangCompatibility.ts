@@ -59,7 +59,7 @@ export interface MolangCompatibilityReport {
 
 /** Queries available in animation documents, animation controllers and client entities. */
 export const ENTITY_QUERIES = new Set([
-  'anim_time', 'life_time', 'modified_move_speed', 'is_moving', 'is_sneaking', 'is_sprinting',
+  'anim_time', 'life_time', 'modified_move_speed', 'modified_distance_moved', 'is_moving', 'is_sneaking', 'is_sprinting',
   'is_swimming', 'is_on_ground', 'is_riding', 'is_using_item', 'is_delayed_attacking', 'is_alive',
   'is_first_person', 'is_in_water', 'is_jumping', 'hurt_time', 'health', 'is_item_name_any',
   'item_is_charged', 'item_in_use_duration', 'item_remaining_use_duration', 'ground_speed',
