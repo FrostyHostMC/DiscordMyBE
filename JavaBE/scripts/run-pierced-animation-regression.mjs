@@ -104,8 +104,22 @@ try {
   const playerDescription = playerDocument?.['minecraft:client_entity']?.description;
   const preAnimation = playerDescription?.scripts?.pre_animation;
   const assignments = Array.isArray(preAnimation) ? preAnimation : typeof preAnimation === 'string' ? [preAnimation] : [];
+  const initializeRaw = playerDescription?.scripts?.initialize;
+  const initialize = Array.isArray(initializeRaw) ? initializeRaw : typeof initializeRaw === 'string' ? [initializeRaw] : [];
   const tcos0 = assignments.find((line) => /^variable\.tcos0\s*=/.test(line));
   const spear = assignments.find((line) => /^variable\.melee_spear_equipped\s*=/.test(line));
+  const sourceMovementVariables = ['spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'];
+  const controllerFiles = Object.entries(result.resourcePackFiles)
+    .filter(([file, raw]) => typeof raw === 'string' && /^animation_controllers\/pierced_fixture(?:_overlay)?\.player\.animation_controllers\.json$/i.test(file))
+    .map(([file, raw]) => ({ file, doc: JSON.parse(raw) }));
+  const controllerStateClips = controllerFiles.map(({ file, doc }) => ({
+    file,
+    clips: Object.values(doc.animation_controllers ?? {}).flatMap((controller) =>
+      Object.values(controller.states ?? {}).flatMap((state) => Array.isArray(state.animations) ? state.animations : []),
+    ),
+  }));
+  const baseControllerClips = controllerStateClips.find((entry) => !entry.file.includes('_overlay'))?.clips ?? [];
+  const overlayControllerClips = controllerStateClips.find((entry) => entry.file.includes('_overlay'))?.clips ?? [];
   const invalidArmorQueries = Object.entries(result.resourcePackFiles)
     .filter(([, raw]) => typeof raw === 'string')
     .flatMap(([file, raw]) => [...raw.matchAll(/query\.get_equipped_item_name\(\s*['"]slot\.armor[^)]*\)/gi)].map((match) => ({ file, call: match[0] })));
@@ -117,7 +131,13 @@ try {
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
     { id: 'player-animation-bridge-inspected-every-source-clip', expected: sourceClipIds.length, actual: playerPort?.clipsInspected ?? 0, passed: Boolean(playerPort && playerPort.clipsInspected === sourceClipIds.length) },
     { id: 'all-source-clips-registered-on-player', expected: sourceClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === sourceClipIds.length) },
-    { id: 'no-playback-trigger-invented-without-java-source-evidence', expected: 0, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 0 && triggers?.unresolved === triggers?.clipsInspected) },
+    { id: 'serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.1', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
+    { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
+    { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
+    { id: 'unused-animation-running-definition-remains-unbound', expected: 1, actual: triggers?.unresolved ?? -1, passed: triggers?.unresolved === 1 && triggers?.triggers?.some((trigger) => trigger.clipId === 'animation.running' && trigger.status === 'unresolved') },
+    { id: 'eight-source-used-clips-have-activation-paths', expected: 8, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 8 && wiring.controllerDrivenClips?.length === 8) },
+    { id: 'base-and-overlay-player-controllers-are-separated', expected: '2 controller files; shield only in overlay', actual: `${controllerFiles.length} file(s), base=${baseControllerClips.length}, overlay=${overlayControllerClips.length}`, passed: controllerFiles.length === 2 && baseControllerClips.length === 6 && overlayControllerClips.length === 2 && overlayControllerClips.every((id) => id.includes('shield')) && !baseControllerClips.some((id) => id.includes('shield')) },
+    { id: 'source movement state variables are reconstructed in player scope', expected: sourceMovementVariables.join(', '), actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).join(', '), passed: sourceMovementVariables.every((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))) && initialize.some((line) => line.startsWith('variable.spa_previous_body_yaw = 0.0')) },
     { id: 'all-nine-source-clip-definitions-emitted', expected: 'at least 9', actual: emittedClipIds.length, passed: emittedClipIds.length >= sourceClipIds.length },
     { id: 'no-duplicate-animation-identifiers', expected: 0, actual: duplicateDefinitions.length, passed: duplicateDefinitions.length === 0 },
     { id: 'vanilla-tcos0-variable-restored-from-source-baseline', expected: 'live Mojang movement expression', actual: tcos0 ?? 'missing', passed: Boolean(tcos0 && tcos0.includes('query.modified_distance_moved') && tcos0.includes('query.modified_move_speed')) },
