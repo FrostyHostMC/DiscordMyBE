@@ -1,13 +1,13 @@
 import type { DecompileClassSummary } from '@/types/remaker';
 
 /**
- * Bytecode-to-JSON animation controller synthesis.
+ * Conservative boundary for bytecode-only animation-controller reconstruction.
  *
- * The decompiler reports which Java classes carry animation-controller or
- * state-machine opcode signatures. Those detected names are the ONLY input: no
- * controller is invented for a class the archive never contained. Every emitted
- * state has a bounded exit so a looping clip can never latch the machine (RG-17),
- * and every trigger reads an engine-written query (RG-16).
+ * Java class names and opcode-signature hits can identify likely controller-related classes, but
+ * they do not recover the state graph, transition order, guards, or clip bindings. This function
+ * intentionally preserves its public result shape while emitting no guessed controller. Source
+ * controllers discovered in actual resource files are handled by the resource-pack import path.
+ * This can be replaced once the decompiler produces structured state-machine evidence.
  */
 
 export interface ControllerSignals {
