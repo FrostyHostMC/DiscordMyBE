@@ -39,3 +39,5 @@ jobs:
         run: pnpm install --no-frozen-lockfile
       - name: Build Activity
         run: pnpm build
+      - name: Run player Molang baseline regression
+        run: node scripts/run-player-baseline-regression.mjs
