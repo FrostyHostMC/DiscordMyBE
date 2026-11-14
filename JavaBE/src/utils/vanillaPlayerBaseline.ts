@@ -35,6 +35,11 @@ export const FIRST_PERSON_GATE = 'query.is_first_person';
  * restored into the player entity because a custom player.entity.json replaces the vanilla
  * script scope along with its animation map.
  */
+/** Player-scope values supplied by the Bedrock engine rather than declared by the entity. */
+export const VANILLA_PLAYER_ENGINE_VARIABLES = new Set<string>([
+  'gliding_speed_value',
+]);
+
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
   expression: string;
   evidence: string;
