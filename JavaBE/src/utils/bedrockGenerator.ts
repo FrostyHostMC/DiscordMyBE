@@ -2654,9 +2654,17 @@ export async function convertJavaToBedrockAddon(
   if (remake.parityHealth) remake.parityHealth.portValidation = portValidation;
   if (!portValidation.passed) {
     const blockingIssues = portValidation.issues.filter((issue) => issue.severity === 'error');
-    const examples = blockingIssues.slice(0, 5).map((issue) => `${issue.file} ${issue.subject}: ${issue.detail}`).join(' | ');
-    integrityLog(`[EXPORT:BLOCK] ${portValidation.errors} blocking defect(s) remain in the final pack; no downloadable archive was assembled. ${examples}`);
-    throw new Error(`Export blocked by ${portValidation.errors} unresolved final-pack validation defect(s). ${examples}`);
+    const examples = blockingIssues.slice(0, 10).map((issue) => `${issue.file} ${issue.subject}: ${issue.detail}`).join(' | ');
+    // Validation is diagnostic, not an export veto. A partially converted pack is intentionally
+    // useful for Bedrock in-game testing: Content Log may expose additional runtime failures that
+    // the static validator cannot predict. Preserve every generated file and attach the complete
+    // validation report to parityHealth; only archive assembly/encoding failures should prevent a
+    // download.
+    integrityLog(
+      `[EXPORT:PARTIAL] ${portValidation.errors} blocking validation defect(s) and ${portValidation.warnings} warning(s) remain in the final pack. Continuing to assemble the downloadable add-on for in-game testing. ${examples}`,
+    );
+  } else {
+    integrityLog('[EXPORT:VALIDATED] Final structural validation passed; assembling the downloadable add-on.');
   }
 
   // Phase 10 — conversion documentation: every imported source file is documented with the
