@@ -241,8 +241,10 @@ function cleanSlotArgument(raw: string): string {
 
 function canonicalSlotId(raw: string): string | null {
   const key = cleanSlotArgument(raw);
-  if (key in HAND_SLOT_ALIASES) return null;
+  // is_item_name_any uses inventory slot identifiers, including mainhand/offhand. The separate
+  // get_equipped_item_name normaliser uses canonicalHandSlot() and must not reject these here.
   if (DOCUMENTED_SLOT_IDS.has(key)) return key;
+  if (key in HAND_SLOT_ALIASES) return null;
   if (key in ARMOR_WORD_SLOTS) return ARMOR_WORD_SLOTS[key];
   if (/^slot\.[a-z0-9_.]+$/.test(key)) return key;
   return null;
