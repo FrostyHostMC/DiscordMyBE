@@ -649,19 +649,27 @@ export function portMobAndPlayerAnimations(
   // duplicated ghost mob, so the resolver is told which files are already taken.
   const claimedSkins = new Set<string>();
   for (const owner of geckolib.owners) {
-    if (mobCandidates.has(owner)) continue;
+    if (mobCandidates.has(owner) || rigClassification.playerOwners.includes(owner) || isGhostEntityName(owner)) continue;
     const ownerClipIds = Object.keys(geckolib.clipsByOwner[owner] ?? {});
     if (ownerClipIds.length === 0) continue;
+    // Animation ownership is evidence of an entity even when its model or skin failed
+    // discovery. Keep the owner in the behavior pass so its AI can still be translated,
+    // and let the standalone animation pass preserve its source clips and controller.
+    mobCandidates.add(owner);
     const ownerGeo = findGeoForMob(entityGeometries, owner);
-    if (!ownerGeo || ownerGeo.source === 'rigged_template') continue;
-    const skinPath = findArchiveSkinFor(archiveEntries, owner, claimedSkins);
-    if (!skinPath) {
+    if (!ownerGeo || ownerGeo.source === 'rigged_template') {
       log(
-        `[GECKOLIB] Owner "${owner}" -> ${ownerClipIds.length} clip(s) and a recovered model, but the archive ships no skin sheet for it; clips are emitted with a controller and the entity stays WITHOUT a client entity (no skin invented).`,
+        `[GECKOLIB] Owner "${owner}" -> ${ownerClipIds.length} source clip(s) found, but no authentic model was recovered; behavior analysis continues and clips are preserved as standalone source data without an invented client entity.`,
       );
       continue;
     }
-    mobCandidates.add(owner);
+    const skinPath = findArchiveSkinFor(archiveEntries, owner, claimedSkins);
+    if (!skinPath) {
+      log(
+        `[GECKOLIB] Owner "${owner}" -> ${ownerClipIds.length} source clip(s) and an authentic model recovered, but no matching skin exists; behavior analysis continues and clips remain standalone (no skin invented).`,
+      );
+      continue;
+    }
     claimedSkins.add(skinPath.toLowerCase());
     geckolibBoundOwners.push(owner);
     log(
@@ -804,11 +812,15 @@ export function portMobAndPlayerAnimations(
         authenticGeo.source !== 'rigged_template',
     );
     const authenticSkinPath = findArchiveSkinFor(archiveEntries, mobId, claimedSkins);
-    if (!hasAuthenticModel || !authenticSkinPath) {
-      log(`[OWNERSHIP] Entity "${mobId}" remains unbound — ${!hasAuthenticModel ? 'no source geometry was recovered' : 'no source skin was recovered'}; clips stay standalone and no generic rig, skin, or entity definition is created.`);
-      continue;
+    const hasClientEntity = hasAuthenticModel && Boolean(authenticSkinPath);
+    if (authenticSkinPath) claimedSkins.add(authenticSkinPath.toLowerCase());
+    if (!hasClientEntity) {
+      const missing = [
+        !hasAuthenticModel ? 'authentic source geometry' : '',
+        !authenticSkinPath ? 'matching source skin' : '',
+      ].filter(Boolean).join(' and ');
+      log(`[OWNERSHIP] Entity "${mobId}" has source behavior/registration evidence but is missing ${missing}; behavior translation continues, while its source animation clips are kept in the standalone-owner pass and no client entity is fabricated.`);
     }
-    claimedSkins.add(authenticSkinPath.toLowerCase());
 
     // The body plan comes from the recovered skeleton only — bones decide biped,
     // quadruped, flying or amorphous. Name keywords are never consulted, so a ground
@@ -874,8 +886,8 @@ export function portMobAndPlayerAnimations(
     const modClipIds = [...new Set([...imported.ids, ...Object.keys(existingMap)])];
     const shippedModClipIds = modClipIds.filter((clipId) => shippedClipIds.includes(clipId));
     const sourceClipTotal = shippedModClipIds.length;
-    if (shippedModClipIds.length > 0) sourceClipIdsByMob[mobId] = shippedModClipIds;
-    sourceClipCount += sourceClipTotal;
+    if (shippedModClipIds.length > 0 && hasClientEntity) sourceClipIdsByMob[mobId] = shippedModClipIds;
+    if (hasClientEntity) sourceClipCount += sourceClipTotal;
     const controllerJson = generateMobAnimationControllers(mobId, isFlying, imported.aliases, shippedClipIds);
     const hasGeneralController = Boolean(controllerJson);
     if (imported.ids.length > 0) {
@@ -888,29 +900,30 @@ export function portMobAndPlayerAnimations(
     const synthesizedForMob = controllerSynthesis.controllerIdsByOwner[mobId] ?? [];
 
     // Connect controller into client entity (native Bedrock engine handles lighting)
-    const clientEntityJson = generateMobClientEntity(
-      modId,
-      mobId,
-      isFlying,
-      false,
-      authenticGeo?.id,
-      synthesizedForMob,
-      imported.ids,
-      shippedClipIds,
-      hasGeneralController,
-    );
-
-    if (shippedClipIds.length > 0) {
-      resourcePackFiles[`animations/${mobId}.animation.json`] = JSON.stringify(
-        { format_version: '1.8.0', animations: mergedAnims },
-        null,
-        2,
+    if (hasClientEntity) {
+      const clientEntityJson = generateMobClientEntity(
+        modId,
+        mobId,
+        isFlying,
+        false,
+        authenticGeo?.id,
+        synthesizedForMob,
+        imported.ids,
+        shippedClipIds,
+        hasGeneralController,
       );
+      if (shippedClipIds.length > 0) {
+        resourcePackFiles[`animations/${mobId}.animation.json`] = JSON.stringify(
+          { format_version: '1.8.0', animations: mergedAnims },
+          null,
+          2,
+        );
+      }
+      if (hasGeneralController) {
+        resourcePackFiles[`animation_controllers/${mobId}.animation_controllers.json`] = controllerJson;
+      }
+      resourcePackFiles[`entity/${mobId}.entity.json`] = clientEntityJson;
     }
-    if (hasGeneralController) {
-      resourcePackFiles[`animation_controllers/${mobId}.animation_controllers.json`] = controllerJson;
-    }
-    resourcePackFiles[`entity/${mobId}.entity.json`] = clientEntityJson;
 
     if (authenticGeo) {
       resourcePackFiles[`models/entity/${mobId}.geo.json`] = authenticGeo.json;
@@ -1082,14 +1095,22 @@ export function portMobAndPlayerAnimations(
       log(`[BEHAVIOR] Mob "${mobId}" detected ${unresolvedActions.join(' and ')} signatures; source-specific targets are not available, so those actions remain flagged for review.`);
     }
 
-    mobAnimCount += shippedClipIds.length;
-    if (hasGeneralController) mobControllerCount += 1;
-    portedMobList.push(mobId);
+    if (hasClientEntity) {
+      mobAnimCount += shippedClipIds.length;
+      if (hasGeneralController) mobControllerCount += 1;
+      portedMobList.push(mobId);
+    }
 
     const typeDesc = locomotionLabel(rig);
-    log(
-      `[ANIMATION] Mob "${mobId}" -> ${shippedClipIds.length} clip(s) shipped (${sourceClipTotal} from the mod, ${shippedClipIds.length - sourceClipTotal} invented)${hasGeneralController ? ` + ${typeDesc} state controller` : ' with no controller because no clip shipped'}.`,
-    );
+    if (hasClientEntity) {
+      log(
+        `[ANIMATION] Mob "${mobId}" -> ${shippedClipIds.length} clip(s) shipped (${sourceClipTotal} from the mod, ${shippedClipIds.length - sourceClipTotal} invented)${hasGeneralController ? ` + ${typeDesc} state controller` : ' with no controller because no clip shipped'}.`,
+      );
+    } else if (sourceClipTotal > 0) {
+      log(
+        `[ANIMATION] Mob "${mobId}" -> ${sourceClipTotal} source clip(s) retained for standalone export; no client entity exists to activate them in game yet.`,
+      );
+    }
   }
 
   // 3b. GeckoLib clips whose owner is not a spawn-egg entity still ship as real Bedrock
@@ -1134,6 +1155,7 @@ export function portMobAndPlayerAnimations(
       mobControllerCount += 1;
     }
     mobAnimCount += shippedOwnerClips.length;
+    sourceClipCount += shippedOwnerClips.length;
     geckolibUnboundOwners.push(owner);
     log(
       `[GECKOLIB] Owner "${owner}" -> ${shippedOwnerClips.length} source clip(s) written to animations/${owner}.animation.json${ownerController ? ' with a state controller' : ''}; no recovered model plus archive skin pair exists for this owner, so it ships as a standalone clip set and is reported as having NO client entity (none invented).`,
