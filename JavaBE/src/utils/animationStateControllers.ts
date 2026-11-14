@@ -166,8 +166,10 @@ export function synthesizeStateController(input: {
     if (group.length > 1) {
       const next = group[(groupIndex + 1) % group.length];
       const period = Math.max(0.05, clipLength(input.clipDocs?.[state.clipId]));
+      const activeCondition = (state.condition ?? '').trim() || ALWAYS;
       outgoing.push({
-        [stateNameOf.get(next.clipId) as string]: `query.anim_time >= ${period.toFixed(2)}`,
+        [stateNameOf.get(next.clipId) as string]:
+          `(${activeCondition}) && query.anim_time >= ${period.toFixed(2)}`,
       });
       if (!staggered.includes(next.clipId)) staggered.push(next.clipId);
     }
