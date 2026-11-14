@@ -316,9 +316,12 @@ function collectEntities(
 ): RegistryEntity[] {
   const entities: RegistryEntity[] = [];
   for (const [path, doc] of json) {
-    if (!/^entity\/[^/]+\.entity\.json$/i.test(path)) continue;
     const description = doc['minecraft:client_entity']?.description;
     if (!description || typeof description !== 'object') continue;
+    const isPlayerDocument = (description as Record<string, unknown>).identifier === 'minecraft:player';
+    // Mod archives and pack mergers can preserve extra directory prefixes around entity files.
+    // Identify the player by its declared engine identifier, not only by the canonical path.
+    if (!/^entity\\/[^/]+\\.entity\\.json$/i.test(path) && !isPlayerDocument) continue;
     const animations: Record<string, string> = {};
     if (description.animations && typeof description.animations === 'object') {
       for (const [key, value] of Object.entries(description.animations as Record<string, unknown>)) {
