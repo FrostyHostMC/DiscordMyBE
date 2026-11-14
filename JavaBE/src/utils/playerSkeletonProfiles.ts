@@ -58,7 +58,7 @@ const bedrockClassic: PlayerRigBoneProfile[] = [
   { name: 'rightLeg', parent: 'root', pivot: [-1.9, 12, 0], size: [4, 12, 4], role: 'deform' },
   { name: 'rightPants', parent: 'rightLeg', pivot: [-1.9, 12, 0], size: [4, 12, 4], role: 'overlay' },
   { name: 'jacket', parent: 'body', pivot: [0, 24, 0], size: [8, 12, 4], role: 'overlay' },
-  { name: 'cape', parent: 'body', pivot: [0, 24, 3], size: null, role: 'overlay' },
+  { name: 'cape', parent: 'body', pivot: [0, 24, -3], size: null, role: 'overlay' },
 ];
 const bedrockSlim = bedrockClassic.map((bone) => {
   if (bone.name === 'leftArm' || bone.name === 'leftSleeve') return { ...bone, pivot: [5, 21.5, 0] as const, size: bone.size ? [3, 12, 4] as const : null };
