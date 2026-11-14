@@ -1,3 +1,9 @@
+## 2026-11-14 — Project V / GoldHEN modding route research
+- Documented Project V as an existing community PS4 GTA V plugin path supporting a subset of PC mods, based on the Modded Warfare demonstration and listed example mods.
+- Clarified GoldHEN PRX plugin loading versus AFR file redirection and distinguished both from PC ASI/DLL execution and RPF asset conversion.
+- Added a two-track output strategy: Project V-supported mod data and separately validated AFR overlays, with native PS4 PRX adapters for runtime behavior.
+- Recorded that the linked MediaFire Project V v1.2 ZIP has not yet been inspected and that CUSA00411 GTA V 1.73 compatibility remains unverified.
+
 ## 2026-11-14 — Read-only PS4 PKG reference inspection
 - Added local browser-side PS4 PKG header and metadata-table inspection for the user's original base-game and GTA V 1.73 update packages.
 - Reads title/content ID, package entry table and readable PARAM.SFO fields; classifies update candidates from package category metadata.
