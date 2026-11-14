@@ -2,7 +2,7 @@ import assetsData from "@/config/assets";
 import type { DecompileClassSummary, DecompileStats } from '@/types/remaker';
 import type { ExtractedZipEntry } from '@/utils/zip';
 import { isGhostEntityName } from '@/utils/ghostEntityFilter';
-import { CLASS_SCAN_BYTE_BUDGET, yieldToUi } from '@/utils/archiveScale';
+import { yieldToUi } from '@/utils/archiveScale';\nimport { analyzeJvmArchive } from '@/utils/jvmBytecodeIR';
 export interface SourceTextureEntry {
   name: string;
   data: Uint8Array;
@@ -971,15 +971,15 @@ export function decompileJavaMod(
     }
   }).filter(Boolean);
   const iconBytes = foundIconEntry ? foundIconEntry.data : null;
-  const classSummaries: DecompileClassSummary[] = parsedClasses.slice(0, 350).map(c => ({
+  const classSummaries: DecompileClassSummary[] = parsedClasses.map(c => ({
     className: c.className.split('.').pop() ?? c.className,
     // Inheritance and the namespaced identifiers a class declares are the evidence the item
     // semantics engine reads. Neither is a name-based guess: both come from the class file.
     superName: c.superName,
     registryIds: c.strings,
     role: c.role,
-    methods: [...c.methods.filter((method) => /projectile|shoot|launch|fire|cast|spell|attack|hit|arrow|bullet|reload|charge|cooldown|throw/i.test(method)), ...c.methods].slice(0, 12),
-    signals: c.signals.slice(0, 12),
+    methods: Array.from(new Set(c.methods)),
+    signals: Array.from(new Set(c.signals)),
   }));
   const iconDataUrl = iconBytes ? bytesToDataUrl(iconBytes, 'image/png') : undefined;
   const stats: DecompileStats = {
@@ -1045,7 +1045,7 @@ export function decompileAndInspectJar(entries: ExtractedZipEntry[], fallbackNam
 }
 
 /** Class count a single conversion inspects, matching the long-standing archive scan budget. */
-export const CLASS_SCAN_LIMIT = 350;
+export const CLASS_SCAN_LIMIT = Number.MAX_SAFE_INTEGER;
 
 /**
  * The class entries a conversion actually reads. A modpack can ship far more bytecode than a phone
@@ -1053,16 +1053,10 @@ export const CLASS_SCAN_LIMIT = 350;
  * whichever comes first — instead of pushing hundreds of megabytes through the parser at once.
  */
 export function classEntriesForScan(classEntries: ExtractedZipEntry[]): ExtractedZipEntry[] {
-  const selected: ExtractedZipEntry[] = [];
-  let bytes = 0;
-  for (const entry of classEntries) {
-    if (selected.length >= CLASS_SCAN_LIMIT) break;
-    const size = entry.data?.length ?? 0;
-    if (bytes + size > CLASS_SCAN_BYTE_BUDGET) break;
-    selected.push(entry);
-    bytes += size;
-  }
-  return selected;
+  // Never silently omit source classes: a class beyond an arbitrary count/byte threshold may
+  // contain a registry, static initializer, method body or dependency used by the mod.
+  // The asynchronous caller yields between chunks to keep the Discord Activity responsive.
+  return classEntries;
 }
 
 /** Parses every class entry handed in, skipping a malformed class instead of the whole archive. */
@@ -1112,6 +1106,35 @@ export async function decompileAndInspectJarAsync(
     if (end < classEntries.length) await yieldToUi();
   }
   const result = decompileJavaMod(entries, fallbackName, parsed);
+  // Run the full instruction-level analysis over every class, not just the lightweight
+  // signature scanner. Enrich the existing semantic inputs so downstream generic translators
+  // can see real method calls, field accesses and registry references.
+  const jvm = await analyzeJvmArchive(entries, {
+    chunkSize,
+    onProgress: (done, total) => options?.onProgress?.(done, total),
+  });
+  const byClass = new Map(jvm.classes.map((item) => [item.name.split('.').pop() ?? item.name, item]));
+  result.stats.classes = result.stats.classes.map((summary) => {
+    const detail = byClass.get(summary.className);
+    if (!detail) return summary;
+    const methodNames = detail.methods.map((method) => method.name);
+    const callEvidence = detail.methods.flatMap((method) => method.calls.map((call) =>
+      call.owner && call.name ? `${call.owner}.${call.name}` : call.name ?? call.kind
+    ));
+    const fieldEvidence = detail.methods.flatMap((method) => method.fieldAccesses.map((field) =>
+      field.owner && field.name ? `${field.owner}.${field.name}` : field.name ?? field.kind
+    ));
+    const registryIds = detail.references
+      .filter((reference) => typeof reference.value === 'string' && /^[a-z0-9_.-]+:[a-z0-9_./-]+$/i.test(reference.value))
+      .map((reference) => String(reference.value));
+    return {
+      ...summary,
+      methods: Array.from(new Set([...summary.methods, ...methodNames])),
+      registryIds: Array.from(new Set([...(summary.registryIds ?? []), ...registryIds])),
+      signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
+    };
+  });
+  (result.stats as DecompileStats & { jvmAnalysis?: typeof jvm }).jvmAnalysis = jvm;
   inspectionCache.set(entries, { key, result });
   return result;
 }
