@@ -208,8 +208,7 @@ export function retargetJavaPlayerHierarchy(
         targetWorld.set(bone.name, source);
 
         const originalTrack = original[bone.name] ?? {};
-        const needsTrack = Boolean(original[bone.name]) || !isIdentity(local) ||
-          false;
+        const needsTrack = Boolean(original[bone.name]) || !isIdentity(local);
         if (!needsTrack) continue;
         const track = rewritten[bone.name] ?? { ...originalTrack };
         const existingFrames = (rewritten[bone.name] as Record<string, unknown> | undefined) ?? {};
