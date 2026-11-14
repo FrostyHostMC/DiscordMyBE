@@ -64,7 +64,7 @@ export async function deliverJavaBEAddon(
       try {
         const result = await requestJson<{ partNumber: number; etag: string }>(
           `/api/download?action=part&key=${encodeURIComponent(created.key)}&uploadId=${encodeURIComponent(created.uploadId)}&size=${size}&partNumber=${index + 1}`,
-          { method: 'PUT', headers: { 'x-upload-token': created.uploadToken, 'content-type': 'application/octet-stream' }, body: chunk },
+          { method: 'PUT', headers: { 'x-upload-token': created.uploadToken, 'content-type': 'application/octet-stream' }, body: new Blob([chunk.slice().buffer as ArrayBuffer]) },
         );
         parts[index] = { partNumber: result.partNumber, etag: result.etag };
         uploaded += chunk.byteLength;
