@@ -258,7 +258,7 @@ export function queryBedrockCapabilities(
   const detected = detectModExperimentNeeds(brief, entries);
 
   const is121OrNewer = version[0] > 1 || (version[0] === 1 && version[1] >= 21);
-  const isPreview = version[1] >= 21 && version[2] >= 60;
+  const isPreview = (version[1] === 21 && version[2] >= 60) || (version[1] >= 26 && version[2] >= 70);
 
   const capabilities: CapabilityStatus[] = [];
 
