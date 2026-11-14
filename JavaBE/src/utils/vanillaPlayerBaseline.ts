@@ -60,7 +60,7 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
     evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
     always: true,
   },
-  // Serious Player Animations 1.1.0 derives these from per-tick position and body-yaw deltas.
+  // Serious Player Animations 1.1.1 derives these from per-tick position and body-yaw deltas.
   spa_move_speed: {
     expression: 'math.sqrt(math.pow(query.position_delta(0), 2.0) + math.pow(query.position_delta(2), 2.0))',
     evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz), with vx/vz from current minus previous player position',
