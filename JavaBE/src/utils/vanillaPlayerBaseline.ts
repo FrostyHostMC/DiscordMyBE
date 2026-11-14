@@ -41,8 +41,8 @@ export const VANILLA_PLAYER_VARIABLE_EXPRESSIONS: Record<string, { expression: s
     evidence: 'Mojang bedrock-samples resource_pack/entity/player.entity.json pre_animation expression',
   },
   melee_spear_equipped: {
-    expression: "query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')",
-    evidence: 'reconstructed from the vanilla player controller gate and the Bedrock item-name query; keeps spear-equipped state live instead of forcing false',
+    expression: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
+    evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
   },
 };
 
