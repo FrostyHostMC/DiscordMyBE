@@ -237,6 +237,10 @@ try {
     const resourceManifest = fullResult.resourcePackFiles?.['manifest.json'];
     const behaviorManifest = fullResult.behaviorPackFiles?.['manifest.json'];
     const unresolvedPlayerVariables = fullResult.playerDependencyResolution?.variables?.unresolved ?? [];
+    const playerDependencyClean = fullResult.playerDependencyResolution?.staticValidationPassed === true
+      && (fullResult.playerDependencyResolution?.blocking?.length ?? 0) === 0
+      && fullResult.playerDependencyResolution?.firstPerson?.ready === true;
+    const deliberatelyInactive = fullResult.animationIntegration?.metrics?.deliberatelyInactiveClips ?? [];
     const fullAssertions = [
       { id: 'full-converter-emits-nonempty-mcaddon', expected: 'non-empty .mcaddon', actual: addonBytes.byteLength, passed: addonBytes.byteLength > 0 },
       { id: 'full-converter-emits-resource-pack-manifest', expected: true, actual: Boolean(resourceManifest), passed: Boolean(resourceManifest) },
@@ -244,8 +248,12 @@ try {
       { id: 'full-converter-preserves-serious-player-source-profile', expected: 'Serious Player Animations 1.1.1', actual: fullResult.playerTriggers?.sourceProfile ?? 'missing', passed: fullResult.playerTriggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
       { id: 'full-converter-registers-all-nine-supplied-player-clips', expected: 9, actual: fullResult.playerEntityWiring?.clipsRegistered ?? -1, passed: fullResult.playerEntityWiring?.clipsRegistered === 9 },
       { id: 'full-converter-activates-eight-java-used-player-clips', expected: 8, actual: fullResult.playerEntityWiring?.clipsActivated ?? -1, passed: fullResult.playerEntityWiring?.clipsActivated === 8 },
+      { id: 'full-converter-classifies-the-unused-source-definition', expected: 1, actual: deliberatelyInactive.length, passed: deliberatelyInactive.length === 1 },
       { id: 'full-converter-player-variable-audit-is-clean', expected: 0, actual: unresolvedPlayerVariables.length, passed: unresolvedPlayerVariables.length === 0 },
-      { id: 'full-converter-player-baseline-guard-passes', expected: true, actual: fullResult.playerBaselineGuard?.passed ?? false, passed: fullResult.playerBaselineGuard?.passed === true },
+      { id: 'full-converter-player-baseline-and-first-person-contract-pass', expected: true, actual: playerDependencyClean, passed: playerDependencyClean },
+      { id: 'full-converter-animation-integration-audit-passes', expected: true, actual: fullResult.animationIntegration?.passed ?? false, passed: fullResult.animationIntegration?.passed === true },
+      { id: 'full-converter-fidelity-matches-all-nine-source-definitions', expected: { shipped: 9, missing: 0 }, actual: { shipped: fullResult.animationFidelity?.clipsShipped ?? -1, missing: fullResult.animationFidelity?.clipsMissing ?? -1 }, passed: fullResult.animationFidelity?.clipsShipped === 9 && fullResult.animationFidelity?.clipsMissing === 0 },
+      { id: 'full-converter-runtime-structure-audit-passes', expected: true, actual: fullResult.animationRuntime?.passed ?? false, passed: fullResult.animationRuntime?.passed === true },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
     ];
     report.fullConversion = {
