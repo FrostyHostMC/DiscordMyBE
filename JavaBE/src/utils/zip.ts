@@ -315,24 +315,38 @@ async function decompressDeflateRaw(
   const decompress = async (format: 'deflate-raw' | 'deflate'): Promise<Uint8Array> => {
     const stream = new DecompressionStream(format);
     const writer = stream.writable.getWriter();
-    await writer.write(compressed as unknown as BufferSource);
-    await writer.close();
     const reader = stream.readable.getReader();
     const output = expectedLength > 0 ? new Uint8Array(expectedLength) : null;
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      if (!value) continue;
-      if (total + value.byteLength > maxEntryBytes || (output && total + value.byteLength > output.byteLength)) {
-        await reader.cancel();
-        throw new Error('Expanded ZIP entry exceeds the configured memory safety limit.');
+
+    // Drain decompressed bytes while feeding input. If write/close is awaited first,
+    // WebKit can fill the readable queue and block the writer forever on backpressure.
+    const writeInput = (async () => {
+      await writer.write(compressed as unknown as BufferSource);
+      await writer.close();
+    })();
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        if (total + value.byteLength > maxEntryBytes || (output && total + value.byteLength > output.byteLength)) {
+          throw new Error('Expanded ZIP entry exceeds the configured memory safety limit.');
+        }
+        if (output) output.set(value, total);
+        else chunks.push(value);
+        total += value.byteLength;
       }
-      if (output) output.set(value, total);
-      else chunks.push(value);
-      total += value.byteLength;
+      await writeInput;
+    } catch (error) {
+      await reader.cancel(error).catch(() => undefined);
+      await writer.abort(error).catch(() => undefined);
+      await writeInput.catch(() => undefined);
+      throw error;
     }
+
     if (output) {
       if (total !== expectedLength) throw new Error('Expanded ZIP entry did not match its declared size.');
       return output;
@@ -562,7 +576,7 @@ export async function readZipArchive(
     } else if (descriptor.compressionMethod === 8) {
       decompressed = await decompressDeflateRaw(rawData, descriptor.uncompressedSize, maxEntryBytes);
     } else {
-      decompressed = rawData;
+      throw new Error(`ZIP entry "${descriptor.path}" uses unsupported compression method ${descriptor.compressionMethod}. JavaBE supports stored and DEFLATE-compressed JAR/ZIP entries.`);
     }
 
     entries.push({
