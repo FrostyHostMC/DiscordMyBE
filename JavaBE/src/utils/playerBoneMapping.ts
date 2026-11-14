@@ -154,6 +154,7 @@ export function mapClipsToPlayerSkeleton(
   clips: Record<string, BedrockAnimationClip>,
   scope = 'player-animation-bridge',
   minimumMappedBones = 2,
+  sourceParents: Record<string, string> = {},
 ): PlayerRigMappingResult | null {
   let pass = applyMapping(clips);
   let aliasSuggestions: UnmappedBoneSuggestion[] = [];
@@ -175,6 +176,6 @@ export function mapClipsToPlayerSkeleton(
     auxiliaryBones: pass.auxiliary,
     aliasSuggestions,
     learnedAliases,
-    rigAudit: auditPlayerRigBones(Object.keys(clips).flatMap((clipId) => Object.keys(clips[clipId].bones ?? {}))),
+    rigAudit: auditPlayerRigBones(Object.keys(clips).flatMap((clipId) => Object.keys(clips[clipId].bones ?? {})), sourceParents),
   };
 }
