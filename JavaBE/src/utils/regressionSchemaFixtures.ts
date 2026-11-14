@@ -2210,6 +2210,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const preAnimation = Array.isArray(scripts.pre_animation) ? scripts.pre_animation as string[] : [];
   const initialize = Array.isArray(scripts.initialize) ? scripts.initialize as string[] : [];
   const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(`variable.${name} =`));
+  const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
   const shieldIds = [
     'animation.seriousplayeranimations.shield',
@@ -2257,6 +2258,20 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     expected: 'move speed, backward direction and turn delta expressions injected',
     actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
     passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+  }, {
+    label: 'the per-tick position and speed equations match the Java source state machine',
+    expected: 'dx/dz from current position minus prior position; speed is sqrt(dx² + dz²)',
+    actual: [statementFor('spa_dx'), statementFor('spa_dz'), statementFor('spa_move_speed')].filter(Boolean).join(' | ') || 'missing',
+    passed: statementFor('spa_dx').includes('query.position(0) - variable.spa_last_x') &&
+      statementFor('spa_dz').includes('query.position(2) - variable.spa_last_z') &&
+      statementFor('spa_move_speed').includes('math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0)')
+  }, {
+    label: 'backward movement and turning equations match the Java source state machine',
+    expected: 'movement dot look direction < 0; body yaw minus previous body yaw',
+    actual: [statementFor('spa_moving_backwards'), statementFor('spa_turn_delta')].filter(Boolean).join(' | ') || 'missing',
+    passed: statementFor('spa_moving_backwards').includes('math.cos((query.body_y_rotation + 90.0)') &&
+      statementFor('spa_moving_backwards').includes('math.sin((query.body_y_rotation + 90.0)') &&
+      statementFor('spa_turn_delta').includes('query.body_y_rotation - variable.spa_previous_body_yaw')
   }, {
     label: 'the previous position and body-yaw variables start from source initial values',
     expected: 'spa_last_x, spa_last_z and spa_previous_body_yaw initialize to 0.0',
