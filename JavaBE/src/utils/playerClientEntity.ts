@@ -260,17 +260,13 @@ export function buildPlayerClientEntity(options: {
     }
     const condition = conditionTranslation?.expression;
     if (!condition || (conditionTranslation?.unresolved.length ?? 0) > 0) {
-      // A registered clip with a condition the player context cannot evaluate is otherwise dead
-      // JSON: Bedrock quietly leaves the vanilla pose in place. Keep the clip reachable through
-      // its perspective gate as a clearly reported continuous fallback instead of silently
-      // dropping its only activation path. This is intentionally a degraded approximation; the
-      // source-state condition remains in the report so it can be repaired with better evidence.
-      unconditionalClips.push(trigger.clipId);
-      animate.push({ [short]: viewGate });
-      activatedClips.push(trigger.clipId);
+      // Do not run an unknown state continuously: that makes every idle/attack/emote clip
+      // fight over the same player bones and can erase the entire pose. Keep the animation
+      // registered in the entity map and report it as awaiting a recovered source-state trigger.
+      // The controller owns all clips for which a valid trigger or structural inference exists.
       if (!unresolvedClips.includes(trigger.clipId)) unresolvedClips.push(trigger.clipId);
-      const reason = conditionTranslation?.unresolved.map((entry) => entry.reason).join('; ') || 'no translated condition was available';
-      molangRepairs.push(`${trigger.clipId}: CONDITION FALLBACK — continuous playback behind ${viewGate}; ${reason}`);
+      const reason = conditionTranslation?.unresolved.map((entry) => entry.reason).join('; ') || 'no translated source-state condition was available';
+      molangRepairs.push(`${trigger.clipId}: REGISTERED BUT NOT AUTO-PLAYED — no safe activation condition; continuous playback was deliberately withheld to prevent pose conflicts. ${reason}`);
       continue;
     }
     animate.push({
@@ -292,7 +288,7 @@ export function buildPlayerClientEntity(options: {
     if (usedShortNames.has(clipId)) continue;
     register(clipId, safeFileId(clipId.split(/[.:/]+/).pop() ?? clipId) || 'clip');
     // A clip missing from the trigger report has no source-state or perspective evidence.
-    // Keep it registered and report the gap; do not guess an activation path.
+    // Keep it registered, but never start it continuously without a valid state condition.
     unresolvedClips.push(clipId);
   }
 
