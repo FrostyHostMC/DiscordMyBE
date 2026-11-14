@@ -1018,7 +1018,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
             humanoid_base_pose: 'animation.humanoid.base_pose',
             look_at_target: 'animation.humanoid.look_at_target',
             cape: 'animation.player.cape',
-            first_person_base_pose: 'animation.player.first_person_base_pose',
+            first_person_base_pose: 'animation.player.first_person.base_pose',
             first_person_attack_controller: 'controller.animation.player.first_person_attack',
             ported_swing: 'animation.player.swing',
             missing: 'animation.player.missing'
@@ -1053,7 +1053,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
     label: 'the built-in first-person hand pose and attack controller survive cleanup',
     expected: 'first-person pose + attack controller retained',
     actual: `${String(animations.first_person_base_pose ?? 'ABSENT')} / ${String(animations.first_person_attack_controller ?? 'ABSENT')}`,
-    passed: animations.first_person_base_pose === 'animation.player.first_person_base_pose' && animations.first_person_attack_controller === 'controller.animation.player.first_person_attack'
+    passed: animations.first_person_base_pose === 'animation.player.first_person.base_pose' && animations.first_person_attack_controller === 'controller.animation.player.first_person_attack'
   }, {
     label: 'a source player clip stays bound while an unresolved clip remains visible for the final gate',
     expected: 'source swing retained, missing reference retained',
@@ -1988,7 +1988,7 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
           animations: {
             base_pose: 'animation.player.base_pose',
             look_at_target: 'animation.humanoid.look_at_target',
-            first_person_base_pose: 'animation.player.first_person_base_pose',
+            first_person_base_pose: 'animation.player.first_person.base_pose',
             ported_clip: 'animation.sample.equipment_pose',
             ported_controller: controllerId
           },
@@ -2037,7 +2037,7 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const resolverCorrectedVanillaAliases =
     resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
     resolverAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
-    resolverAnimations.first_person_base_pose === 'animation.player.first_person_base_pose';
+    resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
   // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
   resolverAnimations.look_at_target = 'controller.animation.humanoid.look_at_target';
   resolverAnimations.first_person_base_pose = 'animation.player.first_person.base_pose';
@@ -2083,7 +2083,7 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     resolverCorrectedVanillaAliases &&
     finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
     finalAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
-    finalAnimations.first_person_base_pose === 'animation.player.first_person_base_pose' &&
+    finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
     baselineByAlias.get('look_at_target')?.kind === 'animation';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
