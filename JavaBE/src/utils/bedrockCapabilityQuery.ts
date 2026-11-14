@@ -138,7 +138,8 @@ const ALWAYS_SUPPORTED_CAPABILITIES: Record<string, string> = {
 
 /** @minecraft/server module versions and the minimum engine that accepts them. */
 const SCRIPT_API_TABLE: Array<{ min: VersionTriple; version: string }> = [
-  { min: [1, 26, 70], version: '2.13.0-beta' },\n  { min: [1, 26, 63], version: '2.11.0' },
+  { min: [1, 26, 70], version: '2.13.0-beta' },
+  { min: [1, 26, 63], version: '2.11.0' },
   { min: [1, 21, 50], version: '1.16.0' },
   { min: [1, 21, 20], version: '1.15.0' },
   { min: [1, 21, 0], version: '1.14.0' },
