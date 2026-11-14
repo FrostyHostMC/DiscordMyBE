@@ -597,7 +597,14 @@ export function resolvePlayerDependencies(input: {
       statement = `variable.${name} = ${visibility.expression};`;
       evidence = visibility.reason;
     }
-    // 2. A declaration the archive already ships is re-bound into the scope that evaluates it.
+    // 2. Vanilla player movement uses this exact expression in Mojang's current
+    // player.entity.json. Rebind it into the player scope when a carried player animation
+    // reads it; otherwise move/leg clips fail with an unknown variable at runtime.
+    if (!statement && name === 'tcos0') {
+      statement = 'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;';
+      evidence = "Mojang's vanilla player.entity.json pre_animation expression for variable.tcos0";
+    }
+    // 3. A declaration the archive already ships is re-bound into the scope that evaluates it.
     if (!statement) {
       const relocated = shippedAssignment(name);
       if (relocated) {
@@ -609,7 +616,7 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 3. Equipped-item detection rebuilt from the items the pack really registers.
+    // 4. Equipped-item detection rebuilt from the items the pack really registers.
     if (!statement) {
       const reconstruction = reconstructEquipmentExpression(name, itemIds);
       if (reconstruction) {
@@ -620,7 +627,7 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 4. Nothing in the archive reproduces the value: the source computed it in code this pack
+    // 5. Nothing in the archive reproduces the value: the source computed it in code this pack
     // cannot run. The declaration keeps the clips evaluating instead of failing on every frame,
     // and the limitation is named per variable instead of being hidden behind a quiet log.
     const withoutRecovery = !statement;
