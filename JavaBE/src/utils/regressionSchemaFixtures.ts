@@ -2078,9 +2078,9 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     passed: Boolean(vanillaTcos && vanillaTcos.includes('query.modified_distance_moved') && vanillaTcos.includes('query.modified_move_speed'))
   }, {
     label: 'the vanilla spear-equipment variable is live rather than a constant default',
-    expected: "query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')",
+    expected: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
     actual: vanillaSpear ?? 'missing',
-    passed: Boolean(vanillaSpear && vanillaSpear.includes("query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')"))
+    passed: Boolean(vanillaSpear && vanillaSpear.includes("query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')"))
   }, {
     label: 'vanilla player aliases use the correct definition type and identifiers',
     expected: 'base pose animation, look-at controller, first-person base pose animation',
