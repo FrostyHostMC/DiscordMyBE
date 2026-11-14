@@ -18,7 +18,7 @@
  */
 
 export const PLAYER_SKELETON_BONES = [
-  'head', 'hat', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg',
+  'root', 'waist', 'head', 'hat', 'body', 'leftArm', 'rightArm', 'leftLeg', 'rightLeg',
   'leftSleeve', 'rightSleeve', 'leftPants', 'rightPants', 'jacket', 'cape', 'leftItem', 'rightItem',
 ] as const;
 
@@ -141,7 +141,7 @@ const IRREGULAR_ALIASES: Array<[string, PlayerSkeletonBone]> = [
   ['skull', 'head'], ['face', 'head'], ['cranium', 'head'], ['headbone', 'head'],
   ['helmet', 'hat'], ['helm', 'hat'], ['cap', 'hat'], ['headlayer', 'hat'], ['outerhead', 'hat'],
   ['torso', 'body'], ['chest', 'body'], ['spine', 'body'], ['upperbody', 'body'],
-  ['lowerbody', 'body'], ['root', 'body'], ['waist', 'body'], ['hips', 'body'], ['hip', 'body'],
+  ['lowerbody', 'body'], ['hips', 'body'], ['hip', 'body'],
   ['pelvis', 'body'], ['trunk', 'body'], ['abdomen', 'body'],
   ['cloak', 'cape'], ['mantle', 'cape'], ['backcape', 'cape'], ['caplayer', 'cape'],
   ['coat', 'jacket'], ['vest', 'jacket'], ['bodylayer', 'jacket'],
