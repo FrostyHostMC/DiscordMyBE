@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-14 — OpenIV OIV package intake
+- Added direct `.oiv` import using the existing ZIP parser and safety checks.
+- Detects `assembly.xml` and records manifest presence and package status without executing package instructions.
+- Updated import controls and guide wording to accept ZIP and OIV packages.
+- Kept OpenIV PC install paths separate from unverified PS4 deployment paths.
+
+
 ## 2026-11-14 — Guided porting workflow and automatic native-tool setup
 - Added an in-app walkthrough with five stages, progress state, contextual next-step prompts, and expandable setup/capability guidance.
 - Updated the Windows launcher to install web dependencies and attempt an automatic pinned RageKit native build through CMake FetchContent when a compatible C++ toolchain is available.
