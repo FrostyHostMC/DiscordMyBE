@@ -40,6 +40,15 @@ export const VANILLA_PLAYER_ENGINE_VARIABLES = new Set<string>([
   'gliding_speed_value',
 ]);
 
+/**
+ * Variables supplied by the Bedrock engine itself. Mojang's published entity resources
+ * read these without declaring them in entity scripts, so the resolver must not synthesize
+ * a constant or report them as missing player-scope assignments.
+ */
+export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
+  'gliding_speed_value',
+]);
+
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
   expression: string;
   evidence: string;
