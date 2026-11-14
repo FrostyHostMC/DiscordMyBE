@@ -161,7 +161,7 @@ function translateEffectTrack(
   }
   const track: Record<string, unknown> = {};
   for (const [time, entry] of Object.entries(raw)) {
-    if (!/^\\s*-?\\d+(?:\\.\\d+)?\\s*$/.test(time)) {
+    if (!/^\s*-?\d+(?:\.\d+)?\s*$/.test(time)) {
       issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `event key "${time}" is not a numeric timestamp; event was not carried` });
       continue;
     }
