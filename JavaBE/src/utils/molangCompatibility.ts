@@ -354,8 +354,12 @@ export function normalizeEquippedItemQueries(expression: string): {
     },
   );
 
-  // 3. Hand slots are normalised to the two documented values.
-  out = out.replace(/query\.get_equipped_item_name\s*\(\s*([^()]*?)\s*\)/gi, (match, rawArgument: string) => {
+  // 3. Hand slots are normalised to the documented single-argument signature.
+  // Java-derived calls sometimes append an inventory index. That is not a valid second
+  // parameter to get_equipped_item_name, so resolve the slot alias and remove extra arguments.
+  out = out.replace(/query\\.get_equipped_item_name\\s*\\(\\s*([^()]*)\\s*\\)/gi, (match, rawArguments: string) => {
+    const parts = rawArguments.split(',');
+    const rawArgument = String(parts[0] ?? '').trim();
     const hand = canonicalHandSlot(rawArgument);
     if (!hand) return match;
     const replacement = `query.get_equipped_item_name('${hand}')`;
@@ -364,7 +368,9 @@ export function normalizeEquippedItemQueries(expression: string): {
         from: match,
         to: replacement,
         fidelity: 'exact',
-        reason: `hand slot argument \u201c${rawArgument.trim()}\u201d normalised to the documented value \u201c${hand}\u201d`,
+        reason: parts.length > 1
+          ? `invalid extra slot/index argument(s) removed; ${rawArgument} resolves to the documented ${hand} argument`
+          : `hand slot argument ${rawArgument} normalised to the documented ${hand} argument`,
         kind: 'hand-slot',
       });
     }
