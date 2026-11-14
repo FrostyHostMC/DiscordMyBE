@@ -36,7 +36,7 @@ function readSfo(bytes) {
     if (!key) continue;
     if (format === 0x0404 && length >= 4) result[key] = view.getUint32(valueAt, true);
     else if (format === 0x0204 && length >= 2) result[key] = view.getUint16(valueAt, true);
-    else if (format === 0x0004) result[key] = new TextDecoder().decode(bytes.subarray(valueAt, valueAt + length)).replace(/\0+$/, "");
+    else if (format === 0x0204 || format === 0x0004) result[key] = new TextDecoder().decode(bytes.subarray(valueAt, valueAt + length)).replace(/\0+$/, "");
     else result[key] = { format: `0x${format.toString(16)}`, length };
   }
   return result;
