@@ -31,8 +31,8 @@ function isValidDisplayName(name: string): boolean {
   // Validate encoding/format only. Do not reject real source content because its name
   // resembles a known item, mechanic, material, mob or another mod's identifier.
   if (!name || name.length > 128) return false;
-  if (/[\\u0000-\\u001f\\u007f]/.test(name)) return false;
-  if (/%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|\\n|\\r/i.test(name)) return false;
+  if (/[\u0000-\u001f\u007f]/.test(name)) return false;
+  if (/%[sdf0-9]|§|\u00a7|<-|->|:\s*%|\n|\r/i.test(name)) return false;
   return true;
 }
 
