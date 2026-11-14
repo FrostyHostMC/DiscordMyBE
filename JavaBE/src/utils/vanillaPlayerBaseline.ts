@@ -34,12 +34,12 @@ export const FIRST_PERSON_GATE = 'query.is_first_person';
 export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   { alias: 'base_pose', identifier: 'animation.player.base_pose', kind: 'animation', gate: null },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
-  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
+  { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
     alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person_base_pose',
+    identifier: 'animation.player.first_person.base_pose',
     kind: 'animation',
     gate: FIRST_PERSON_GATE,
   },
