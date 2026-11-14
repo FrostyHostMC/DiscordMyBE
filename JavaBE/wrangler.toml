@@ -8,3 +8,13 @@ DISCORD_CLIENT_ID = "1374571021889310821"
 JAVABE_DISCORD_CLIENT_ID = "1374571021889310821"
 JAVABE_DISCORD_GUILD_ID = "1561951163065180251"
 JAVABE_DISCORD_REQUIRED_ROLE_ID = "1567798397786918993"
+
+# JavaBE uses the existing AutoBE R2 bucket only for short-lived download handoffs.
+# Files are stored under javabe-temp/ and are deleted after a successful transfer.
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks"
+
+[[env.preview.r2_buckets]]
+binding = "BUCKET"
+bucket_name = "autobe-modpacks-preview"
