@@ -724,8 +724,6 @@ export function describeRegistryScopes(metrics: AnimationRegistryMetrics): strin
     `final bone bindings: ${metrics.bones.resolved}/${metrics.bones.checked} unique entity-file/clip/bone bindings match the owning entity's final rendered skeleton; ${metrics.bones.unresolved.length} do not, and ${metrics.bones.skeletonsUnresolved.length} owner skeleton(s) could not be measured.`,
     `view conditions: ${metrics.firstPersonStates} first-person, ${metrics.thirdPersonStates} explicit !first-person, ${metrics.otherConditionalStates} other conditional, ${metrics.unconditionalStates} unconditional animate key(s) (${metrics.conditionalStates} conditional total); ${metrics.firstPersonClipIds.length} unique clips directly gated to first person.`,
   ];
-}, 'i')).test(path) && !isPlayerDocument) continue;
-    const animations: Record<string, string> = {};
     if (description.animations && typeof description.animations === 'object') {
       for (const [key, value] of Object.entries(description.animations as Record<string, unknown>)) {
         if (typeof value === 'string') animations[key] = value;
