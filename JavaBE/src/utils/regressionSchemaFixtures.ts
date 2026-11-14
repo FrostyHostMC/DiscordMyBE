@@ -21,6 +21,7 @@ import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
 import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
 import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
 import { translateMolangExpression } from '@/utils/molangCompatibility';
+import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
 import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
 import { translatePlayerTriggers } from '@/utils/playerAnimationTriggers';
 import { synthesizePlayerAnimationController } from '@/utils/playerAnimationController';
@@ -2035,10 +2036,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const resolverAnimations = resolverPlayerEntity?.animations ?? {};
   const resolverCorrectedVanillaAliases =
     resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    resolverAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
-    resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
+    resolverAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    resolverAnimations.first_person_base_pose === 'animation.player.first_person_base_pose';
   // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
-  resolverAnimations.look_at_target = 'animation.humanoid.look_at_target';
+  resolverAnimations.look_at_target = 'controller.animation.humanoid.look_at_target';
+  resolverAnimations.first_person_base_pose = 'animation.player.first_person.base_pose';
   files['entity/player.entity.json'] = JSON.stringify({
     format_version: '1.10.0',
     'minecraft:client_entity': {
@@ -2080,11 +2082,16 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const correctVanillaAliases =
     resolverCorrectedVanillaAliases &&
     finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    finalAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
-    finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
-    baselineByAlias.get('look_at_target')?.kind === 'controller';
+    finalAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    finalAnimations.first_person_base_pose === 'animation.player.first_person_base_pose' &&
+    baselineByAlias.get('look_at_target')?.kind === 'animation';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
+    label: 'all vanilla player baseline aliases resolve to recognized Bedrock engine identifiers',
+    expected: 'every baseline identifier is in the engine-provided player animation/controller registry',
+    actual: PLAYER_BASELINE_ENTRIES.filter((entry) => !isKnownVanillaPlayerAnimationReference(entry.identifier)).map((entry) => `${entry.alias} -> ${entry.identifier}`).join(', ') || 'all recognized',
+    passed: PLAYER_BASELINE_ENTRIES.every((entry) => isKnownVanillaPlayerAnimationReference(entry.identifier)),
+  }, {
     label: 'player-owned clips are identified by entity registration rather than filenames',
     expected: 'all 4 equipment variables classified in player context',
     actual: `${initialized.length} initialized, ${report.playerWiringRepairs.variablesInitialized.length} reported`,
