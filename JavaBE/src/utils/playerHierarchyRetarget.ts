@@ -120,6 +120,8 @@ function sourceRotationToBedrock(value: Vec3): Vec3 {
  * solved against the parent's world transform at that SAME time; this is essential when a body
  * animation and an independently animated head/arm overlap.
  *
+ * Slim arms use Bedrock's built-in short_arm_offset variables to apply the 0.5-pixel pivot delta
+ * at runtime, so the same clip works with classic and slim Bedrock skins.
  * Layer parts follow the corresponding Java body part when they have no explicit source track,
  * matching PlayerEntityModel's copyTransform behavior. Explicit layer tracks are preserved as
  * independent world poses and converted into Bedrock child-local transforms.
