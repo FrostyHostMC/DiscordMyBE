@@ -116,7 +116,7 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
     alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person_base_pose',
+    identifier: 'animation.player.first_person.base_pose',
     kind: 'animation',
     gate: FIRST_PERSON_GATE,
   },
