@@ -38,57 +38,19 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
   min-height: 100dvh;
   overflow-x: clip;
   overflow-y: visible;
-  background: #08070d;
+  background: transparent;
 }
-.javabe-cosmic-backdrop {
+.javabe-app-shell::before {
+  content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
-  overflow: hidden;
   pointer-events: none;
-  isolation: isolate;
-  background:
-    radial-gradient(ellipse at 50% 110%, rgba(75, 25, 130, .68) 0%, rgba(24, 10, 42, .9) 42%, #08070d 82%);
-  contain: paint;
-}
-.javabe-cosmic-cloud {
-  position: absolute;
-  display: block;
-  inset: -28%;
-  filter: blur(clamp(34px, 7vw, 100px));
-  opacity: .7;
-  will-change: transform;
-}
-.javabe-cosmic-cloud--one {
-  background: conic-gradient(from 30deg at 48% 50%, transparent 0 12%, rgba(80,20,180,.05) 18%, rgba(119,28,255,.52) 27%, rgba(35,8,85,.12) 36%, transparent 44%, rgba(108,30,210,.38) 58%, transparent 72%);
-  animation: javabe-drift-one 42s ease-in-out infinite alternate;
-}
-.javabe-cosmic-cloud--two {
-  inset: -38%;
-  opacity: .45;
-  background: radial-gradient(ellipse at 24% 35%,rgba(89,25,180,.75),transparent 36%),radial-gradient(ellipse at 77% 68%,rgba(72,18,155,.7),transparent 34%),radial-gradient(ellipse at 62% 12%,rgba(134,35,255,.42),transparent 28%);
-  animation: javabe-drift-two 54s ease-in-out infinite alternate;
-}
-.javabe-cosmic-stars {
-  position: absolute;
-  inset: 0;
-  opacity: .45;
-  background-image:
-    radial-gradient(1px 1px at 12% 21%,#fff 99%,transparent),
-    radial-gradient(1px 1px at 31% 74%,#d9baff 99%,transparent),
-    radial-gradient(2px 2px at 73% 28%,#fff 99%,transparent),
-    radial-gradient(1px 1px at 84% 83%,#c89aff 99%,transparent),
-    radial-gradient(1px 1px at 57% 58%,#fff 99%,transparent),
-    radial-gradient(1px 1px at 9% 88%,#c89aff 99%,transparent);
-  background-size: 230px 210px,280px 260px,360px 300px,310px 280px,190px 230px,250px 270px;
-  animation: javabe-twinkle 9s ease-in-out infinite alternate;
-}
-.javabe-cosmic-horizon {
-  position: absolute;
-  inset: auto -10% -38% -10%;
-  height: 68%;
-  background: radial-gradient(ellipse at 50% 0%,rgba(125,32,255,.24),transparent 58%);
-  filter: blur(34px);
+  background-image: url("/assets/IMG_8629.GIF");
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+  background-color: #08070d;
 }
 .javabe-app-content {
   position: relative;
@@ -264,7 +226,7 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
 }
 
 
-/* JavaBE startup experience: a branded, lightweight loading screen before the workspace mounts. */
+/* JavaBE startup and verification screen using the original animated brand GIF. */
 .javabe-launch-screen {
   position: relative;
   display: grid;
@@ -273,38 +235,58 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
   place-items: center;
   overflow: hidden;
   isolation: isolate;
-  padding: max(2rem, env(safe-area-inset-top)) 1.25rem max(2rem, env(safe-area-inset-bottom));
-  background: radial-gradient(ellipse at 50% 115%, #32105c 0%, #160b2c 42%, #08070d 82%);
+  padding: max(1.25rem, env(safe-area-inset-top)) 1rem max(1.25rem, env(safe-area-inset-bottom));
+  background: #08070d url("/assets/IMG_8629.GIF") center / cover no-repeat;
   color: #f8f5ff;
 }
-.javabe-launch-aurora { position:absolute; inset:0; z-index:-1; overflow:hidden; pointer-events:none; }
-.javabe-launch-orb { position:absolute; display:block; width:min(78vw,34rem); aspect-ratio:1; border-radius:50%; filter:blur(75px); opacity:.22; }
-.javabe-launch-orb-one { top:-32%; left:-20%; background:#8738ed; animation:javabe-launch-float 8s ease-in-out infinite alternate; }
-.javabe-launch-orb-two { right:-25%; bottom:-38%; background:#4c29bb; animation:javabe-launch-float 10s ease-in-out infinite alternate-reverse; }
-.javabe-launch-stars { position:absolute; inset:0; opacity:.42; background-image:radial-gradient(1.5px 1.5px at 15% 22%,#fff 98%,transparent),radial-gradient(1px 1px at 76% 18%,#d9baff 98%,transparent),radial-gradient(2px 2px at 84% 67%,#fff 98%,transparent),radial-gradient(1px 1px at 28% 78%,#d9baff 98%,transparent),radial-gradient(1px 1px at 58% 43%,#fff 98%,transparent); background-size:290px 260px,330px 300px,370px 340px,250px 280px,310px 270px; }
-.javabe-launch-content { width:min(100%,29rem); text-align:center; }
-.javabe-launch-brand { padding:1.25rem 1rem 2rem; }
-.javabe-launch-logo { position:relative; display:grid; width:4.75rem; height:4.75rem; place-items:center; margin:0 auto 1.5rem; overflow:hidden; border:1px solid rgba(202,166,255,.4); border-radius:1.5rem; background:linear-gradient(145deg,rgba(168,85,247,.28),rgba(48,24,87,.58)); color:#dfc6ff; box-shadow:0 12px 50px rgba(126,34,206,.24),inset 0 1px rgba(255,255,255,.12); }
-.javabe-launch-logo-glint { position:absolute; inset:-80% 40%; transform:rotate(35deg); background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent); animation:javabe-launch-glint 4s ease-in-out infinite; }
-.javabe-launch-kicker { margin:0 0 .55rem; color:#c7a5f4; font-size:.68rem; font-weight:800; letter-spacing:.28em; }
-.javabe-launch-brand h1 { margin:0; color:#fff; font-size:clamp(3.2rem,15vw,4.5rem); font-weight:950; letter-spacing:-.075em; line-height:1; }
-.javabe-launch-brand h1 span { color:#bd8cff; }
-.javabe-launch-tagline { margin:.8rem 0 0; color:#aaa0bd; font-size:.94rem; }
-.javabe-launch-progress-card { position:relative; display:grid; grid-template-columns:2.75rem minmax(0,1fr); align-items:center; gap:.9rem; padding:1.15rem; border:1px solid rgba(183,135,242,.23); border-radius:1.25rem; background:rgba(15,11,27,.76); text-align:left; box-shadow:0 24px 70px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.045); backdrop-filter:blur(18px); }
+.javabe-launch-content { width: min(100%, 29rem); text-align: center; }
+.javabe-launch-brand { display: grid; place-items: center; padding: .25rem 0 1.25rem; }
+.javabe-launch-brand-gif {
+  display: block;
+  width: min(78vw, 24rem);
+  max-width: 100%;
+  height: auto;
+  max-height: min(48svh, 24rem);
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 14px 38px rgba(0,0,0,.38));
+}
+.javabe-launch-progress-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 2.75rem minmax(0,1fr);
+  align-items: center;
+  gap: .9rem;
+  padding: 1.15rem;
+  border: 1px solid rgba(183,135,242,.23);
+  border-radius: 1.25rem;
+  background: rgba(15,11,27,.82);
+  text-align: left;
+  box-shadow: 0 24px 70px rgba(0,0,0,.35), inset 0 1px rgba(255,255,255,.045);
+  backdrop-filter: blur(18px);
+}
 .javabe-launch-status-icon { display:grid; width:2.75rem; height:2.75rem; place-items:center; border:1px solid rgba(192,132,252,.25); border-radius:.9rem; background:rgba(168,85,247,.12); color:#d7b8ff; }
-.javabe-launch-spinner { animation:javabe-launch-spin 1.15s linear infinite; }
+.javabe-launch-spinner { animation: javabe-launch-spin 1.15s linear infinite; }
 .javabe-launch-status-copy { min-width:0; }
 .javabe-launch-status-copy h2 { margin:0 0 .25rem; color:#f8f5ff; font-size:.92rem; font-weight:750; }
-.javabe-launch-status-copy p { margin:0; color:#a99eb9; font-size:.78rem; line-height:1.5; overflow-wrap:anywhere; }
-.javabe-launch-progress { grid-column:1/-1; height:3px; margin-top:.35rem; overflow:hidden; border-radius:99px; background:rgba(180,145,220,.13); }
+.javabe-launch-status-copy p { margin:0; color:#c0b5d0; font-size:.78rem; line-height:1.5; overflow-wrap:anywhere; }
+.javabe-launch-progress { grid-column:1/-1; height:3px; margin-top:.35rem; overflow:hidden; border-radius:99px; background:rgba(180,145,220,.18); }
 .javabe-launch-progress span { display:block; width:38%; height:100%; border-radius:inherit; background:linear-gradient(90deg,#7c3aed,#d8b4fe,#8b5cf6); box-shadow:0 0 14px rgba(168,85,247,.7); animation:javabe-launch-progress 1.8s ease-in-out infinite; }
 .javabe-launch-retry { grid-column:1/-1; display:flex; min-height:2.8rem; align-items:center; justify-content:center; gap:.55rem; margin-top:.35rem; border:1px solid rgba(216,180,254,.24); border-radius:.85rem; background:linear-gradient(110deg,#782bd5,#5420a2); color:#fff; font-size:.85rem; font-weight:750; }
-.javabe-launch-footer { display:flex; align-items:center; justify-content:center; gap:.5rem; margin-top:1.5rem; color:#817493; font-size:.7rem; }
+.javabe-launch-footer { display:flex; align-items:center; justify-content:center; gap:.5rem; margin-top:1.5rem; color:#eee6fa; font-size:.7rem; text-shadow:0 1px 8px rgba(0,0,0,.8); }
 @keyframes javabe-launch-spin { to { transform:rotate(360deg); } }
 @keyframes javabe-launch-progress { 0% { transform:translateX(-120%); } 100% { transform:translateX(290%); } }
-@keyframes javabe-launch-float { to { transform:translate3d(8%,12%,0) scale(1.12); } }
-@keyframes javabe-launch-glint { 0%,65% { transform:translateX(-120%) rotate(35deg); } 100% { transform:translateX(180%) rotate(35deg); } }
-@media (prefers-reduced-motion:reduce) { .javabe-launch-spinner,.javabe-launch-progress span,.javabe-launch-orb,.javabe-launch-logo-glint { animation:none; } }
+@media (max-width: 480px) {
+  .javabe-launch-brand-gif { width: min(82vw, 21rem); max-height: 42svh; }
+  .javabe-launch-content { width: min(100%, 25rem); }
+  .javabe-launch-progress-card { padding: 1rem; gap: .75rem; }
+}
+@media (min-width: 768px) {
+  .javabe-launch-brand-gif { width: min(62vw, 26rem); max-height: 52svh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .javabe-launch-spinner, .javabe-launch-progress span { animation: none; }
+}
 
 
 /* JavaBE paid-role lock screen, following AutoBE's clear access-gate pattern. */
