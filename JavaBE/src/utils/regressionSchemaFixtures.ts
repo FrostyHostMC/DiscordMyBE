@@ -19,6 +19,7 @@ import { reconstructAnimationDependencies } from '@/utils/animationDependencyRec
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
 import { PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
 import { buildAnimationResourceRegistry } from '@/utils/animationResourceRegistry';
 import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
@@ -1994,6 +1995,9 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     resourcePackFiles: files,
     behaviorPackFiles: {}
   });
+  const playerBaselineGuardReport = guaranteePlayerBaselineWiring({
+    resourcePackFiles: files
+  });
   const preAnimation = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description?.scripts?.pre_animation ?? [];
   const assignments = Array.isArray(preAnimation) ? preAnimation : [];
   const required = ['variable.helmet_layer_visible', 'variable.chest_layer_visible', 'variable.leg_layer_visible', 'variable.boot_layer_visible'];
@@ -2063,6 +2067,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     expected: 'root is directly animated; child aliases remain controller-owned',
     actual: vanillaRootOnly ? 'root-only baseline wiring' : JSON.stringify(playerAnimate),
     passed: vanillaRootOnly
+  }, {
+    label: 'the final player baseline guard preserves root-only activation',
+    expected: 'the guard restores no child aliases to scripts.animate',
+    actual: `${playerBaselineGuardReport.animateEntriesRestored} direct activation(s) restored; ${vanillaRootOnly ? 'root-only' : 'child aliases also activated'}`,
+    passed: playerBaselineGuardReport.animateEntriesRestored === 0 && vanillaRootOnly
   }, {
     label: 'baseline dependency restoration reports no unresolved player variables',
     expected: 'zero unresolved vanilla player variables',
