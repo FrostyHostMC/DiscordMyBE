@@ -46,7 +46,10 @@ export type AnimationFidelityIssueCounts = Record<AnimationFidelityIssueScope, {
 }>;
 
 export interface ClipFidelity {
+  /** Original source identifier from the Java/resource animation input. */
   clipId: string;
+  /** Final Bedrock identifier selected through the source-to-export lineage map. */
+  shippedClipId: string;
   owner: string;
   perspective: string;
   shipped: boolean;
@@ -337,6 +340,8 @@ export function validateAnimationFidelity(input: {
   resourcePackFiles: Record<string, string | Uint8Array>;
   behaviorPackFiles?: Record<string, string | Uint8Array>;
   expectedClips?: string[];
+  /** Final Bedrock animation id -> original source animation id, preserving retargeted player lineage. */
+  sourceClipIdByExportedClipId?: Record<string, string>;
   /** Registry of the exported pack; every count below is read from it so no two stages disagree. */
   registry?: AnimationResourceRegistry;
   /** Skeleton reconciliation, so composed tracks are reported as pose approximations. */
@@ -412,6 +417,10 @@ export function validateAnimationFidelity(input: {
   const sounds = collectDefinedIdentifiers(resourcePackFiles, 'sounds/', 'sound_definitions');
   const particles = collectDefinedIdentifiers(resourcePackFiles, 'particles/', 'particle_effect');
   const expected = new Set(input.expectedClips ?? []);
+  const exportedClipIdBySourceId = new Map(
+    Object.entries(input.sourceClipIdByExportedClipId ?? {}).map(([exportedId, sourceId]) => [sourceId, exportedId]),
+  );
+  const deliberatelyInactive = new Set(registry.metrics.deliberatelyInactiveClips);
 
   for (const { id: clipId, definitions } of registry.metrics.duplicateAnimationIds) {
     issues.push({
@@ -429,12 +438,13 @@ export function validateAnimationFidelity(input: {
 
   for (const clip of Object.values(ir.clips)) {
     report.clipsInterpreted += 1;
-    const shippedClip = shipped[clip.id];
+    const shippedClipId = exportedClipIdBySourceId.get(clip.id) ?? clip.id;
+    const shippedClip = shipped[shippedClipId];
     // Bones the rendered skeleton genuinely lacks come from the registry's single bone audit:
     // pack geometry plus the engine player rig the entity really renders. Re-deriving the
     // skeleton here measured pack geometry only, which is what turned the player rig's own
     // joints into false "missing bone" errors.
-    const missingBones = registry.metrics.bones.missingByClip[clip.id] ?? [];
+    const missingBones = registry.metrics.bones.missingByClip[shippedClipId] ?? [];
 
     const comparison = compareClip(clip, shippedClip);
     const drift = Math.min(1, comparison.maxDrift);
@@ -445,11 +455,12 @@ export function validateAnimationFidelity(input: {
     );
     const entry: ClipFidelity = {
       clipId: clip.id,
+      shippedClipId,
       owner: clip.owner,
       perspective: clip.perspective,
       shipped: Boolean(shippedClip),
-      registered: registryRegistered.has(clip.id),
-      activated: registryActivated.has(clip.id),
+      registered: registryRegistered.has(shippedClipId),
+      activated: registryActivated.has(shippedClipId),
       fidelity: shippedClip && comparison.channelsCompared > 0 ? Math.round(100 * (1 - drift)) : 0,
       bonesSource: Object.keys(clip.bones).length,
       bonesShipped: comparison.bonesShipped,
@@ -537,7 +548,7 @@ export function validateAnimationFidelity(input: {
         subject: clip.id,
         detail: 'The clip ships as a definition but no client entity registers it, so it can never be selected.',
       });
-    } else if (!entry.activated) {
+    } else if (!entry.activated && !deliberatelyInactive.has(shippedClipId)) {
       issues.push({
         severity: 'error',
         rule: 'registered-not-activated',
