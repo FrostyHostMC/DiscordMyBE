@@ -451,6 +451,7 @@ export async function readZipArchive(
   const max = options?.maxEntries ?? 50000;
 
   for (let i = 0; i < max && currentOffset + 46 <= eocdOffset; i++) {
+    if (i > 0 && i % 400 === 0) await yieldToUi();
     if (view.getUint32(currentOffset, true) !== 0x02014b50) break;
 
     const compressionMethod = view.getUint16(currentOffset + 10, true);
@@ -543,7 +544,9 @@ export async function readZipArchive(
 
   // Pass 3 — inflate the kept entries in their original archive order.
   const entries: ExtractedZipEntry[] = [];
-  for (const descriptor of descriptors) {
+  for (let descriptorIndex = 0; descriptorIndex < descriptors.length; descriptorIndex += 1) {
+    const descriptor = descriptors[descriptorIndex];
+    if (descriptorIndex > 0 && descriptorIndex % 24 === 0) await yieldToUi();
     if (descriptor.isDirectory) {
       entries.push({
         path: descriptor.path,
