@@ -320,7 +320,7 @@ function collectEntities(
     if (!description || typeof description !== 'object') continue;
     const isPlayerDocument = (description as Record<string, unknown>).identifier === 'minecraft:player';
     // Merged archives can retain extra directories; identify the player by its engine identifier.
-    if (!/^entity\\/[^/]+\\.entity\\.json$/i.test(path) && !isPlayerDocument) continue;
+    if (!new RegExp('^entity/[^/]+[.]entity[.]json$', 'i').test(path) && !isPlayerDocument) continue;
     const animations: Record<string, string> = {};
     if (description.animations && typeof description.animations === 'object') {
       for (const [key, value] of Object.entries(description.animations as Record<string, unknown>)) {
