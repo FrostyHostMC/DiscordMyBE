@@ -378,15 +378,12 @@ export function normalizeEquippedItemQueries(expression: string): {
     });
   }
 
-  // 5. Whatever is left cannot be expressed in this context. The slot-occupancy form this module
-  // emits itself — `get_equipped_item_name('<documented slot>', 0)` — is accepted here, so a repaired
-  // expression is never rejected again by the next pass that scans it.
+  // 5. Only the documented hand arguments are valid; a numeric second parameter is never accepted.
   for (const match of out.matchAll(/query\.get_equipped_item_name\s*\(([^)]*)\)?/gi)) {
     const parts = String(match[1]).split(',');
     const rawArgument = String(parts[0] ?? '');
-    if (canonicalHandSlot(rawArgument)) continue;
+    if (canonicalHandSlot(rawArgument) && parts.length === 1) continue;
     const slot = canonicalSlotId(rawArgument);
-    if (slot && parts.slice(1).every((entry) => /^\s*\d+\s*$/.test(entry))) continue;
     rejected.push({
       call: match[0].trim(),
       reason: slot
