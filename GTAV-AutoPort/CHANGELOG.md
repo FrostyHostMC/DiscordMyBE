@@ -1,6 +1,7 @@
 # Changelog
 
 ## 2026-11-14 — OpenIV OIV package intake
+- Parses `assembly.xml` metadata and inventories declared add/replace/delete/copy/move operations for review; package instructions are never executed automatically.
 - Added direct `.oiv` import using the existing ZIP parser and safety checks.
 - Detects `assembly.xml` and records manifest presence and package status without executing package instructions.
 - Updated import controls and guide wording to accept ZIP and OIV packages.
