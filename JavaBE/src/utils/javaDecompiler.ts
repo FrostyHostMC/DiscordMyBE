@@ -1098,7 +1098,8 @@ export async function decompileAndInspectJarAsync(
   if (cached && cached.key === key) return cached.result;
   const allClassEntries = entries.filter((entry) => !entry.isDirectory && entry.path.toLowerCase().endsWith('.class'));
   const classEntries = classEntriesForScan(allClassEntries);
-  if (classEntries.length < allClassEntries.length) {
+  const omittedClasses = allClassEntries.filter(entry => !classEntries.includes(entry));
+  if (omittedClasses.length > 0) {
     options?.onProgress?.(classEntries.length, allClassEntries.length);
   }
   const chunkSize = Math.max(1, options?.chunkSize ?? 32);
@@ -1124,6 +1125,12 @@ export async function decompileAndInspectJarAsync(
     chunkSize,
     onProgress: (done, total) => options?.onProgress?.(done, total),
   });
+  if (omittedClasses.length > 0) {
+    jvm.complete = false;
+    jvm.totals.classFiles = allClassEntries.length;
+    jvm.unresolvedClassFiles.push(...omittedClasses.slice(0, 2000).map(entry => entry.path));
+    jvm.warnings.unshift(`[MEMORY] ${omittedClasses.length} class file(s) were left unparsed by the ${getArchiveBudget().profile} device bytecode budget. Use desktop to inspect the complete bytecode set.`);
+  }
   const byClass = new Map(jvm.classes.map((item) => [item.name, item]));
   result.stats.classes = result.stats.classes.map((summary) => {
     const detail = byClass.get(summary.qualifiedClassName ?? summary.className);
