@@ -2052,6 +2052,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
+    sourceProfiles: remake.playerTriggers?.sourceProfile ? [remake.playerTriggers.sourceProfile] : [],
     onLog: integrityLog,
   });
   remake.playerDependencyResolution = playerDependencyResolution;
@@ -2610,6 +2611,7 @@ export async function convertJavaToBedrockAddon(
     modId: remake.id,
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
+    sourceProfiles: remake.playerTriggers?.sourceProfile ? [remake.playerTriggers.sourceProfile] : [],
     onLog: (line) => integrityLog(`[PLAYER:FINAL] ${line}`),
   });
   if (playerBaselineFinal.baselineWiringAdded.length > 0 || playerBaselineFinal.variables.injected.length > 0) {

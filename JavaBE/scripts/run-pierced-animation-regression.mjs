@@ -84,6 +84,7 @@ try {
     modId: 'pierced_fixture',
     resourcePackFiles: result.resourcePackFiles,
     behaviorPackFiles: result.behaviorPackFiles,
+    sourceProfiles: result.playerTriggerReport?.sourceProfile ? [result.playerTriggerReport.sourceProfile] : [],
     onLog: (line) => logs.push(line),
   });
   const baselineGuard = guaranteePlayerBaselineWiring({

@@ -250,10 +250,18 @@ export function resolvePlayerDependencies(input: {
   modId: string;
   resourcePackFiles: PackFiles;
   behaviorPackFiles?: PackFiles;
+  /** Versioned source adapters whose Java logic was verified for this import. */
+  sourceProfiles?: string[];
   onLog?: (line: string) => void;
 }): PlayerDependencyResolverReport {
   const log = (line: string) => input.onLog?.(line);
   const files = input.resourcePackFiles;
+  const sourceProfiles = new Set(input.sourceProfiles ?? []);
+  const hasSeriousPlayerAnimationsSource = sourceProfiles.has('Serious Player Animations 1.1.1');
+  const baselineForVariable = (name: string) =>
+    name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource
+      ? undefined
+      : PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
   const notes: string[] = [];
 
   const report: PlayerDependencyResolverReport = {
@@ -558,13 +566,14 @@ export function resolvePlayerDependencies(input: {
   // A custom player entity also replaces vanilla script scope. Restore always-required engine
   // variables, then close over dependencies used by source-derived expressions.
   for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
+    if (name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource) continue;
     if (baseline.always && !readVars.has(name)) readVars.set(name, 0);
   }
   let dependenciesAdded = true;
   while (dependenciesAdded) {
     dependenciesAdded = false;
     for (const name of [...readVars.keys()]) {
-      const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+      const baseline = baselineForVariable(name);
       if (!baseline) continue;
       for (const match of baseline.expression.matchAll(VARIABLE_READ)) {
         const dependency = String(match[1]);
@@ -592,7 +601,7 @@ export function resolvePlayerDependencies(input: {
   // Install source-backed expressions before scope analysis so dependencies declared in
   // initialize/pre_animation are treated as real player-scope assignments by the resolver.
   for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
-    if (!readVars.has(name)) continue;
+    if (!readVars.has(name) || (name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource)) continue;
     const statements: string[] = [];
     if (baseline.initializeExpression) {
       const statement = `variable.${name} = ${baseline.initializeExpression};`;
@@ -665,7 +674,7 @@ export function resolvePlayerDependencies(input: {
     // contract before looking for mod-specific assignments. These are live expressions, not
     // constant defaults, and are needed because this pack replaces the vanilla player entity.
     if (!statement) {
-      const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
+      const baseline = baselineForVariable(name);
       if (baseline) {
         const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
         if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
