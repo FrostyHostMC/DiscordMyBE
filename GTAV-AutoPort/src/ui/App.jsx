@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDownToLine, BookOpen, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
+import { inspect7zArchive } from "../core/sevenZip.js";
 import { inspectVehicleMetadata, listVehicleModels } from "../core/metadata.js";
 import { buildVehicleDependencyGraph } from "../core/dependencyGraph.js";
 import { inspectRsc7 } from "../core/rsc7.js";
@@ -14,7 +15,7 @@ import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
 
 const stages = [
-  ["01", "Import PC mod", "ZIP / OpenIV OIV package or extracted folder"],
+  ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
   ["02", "Classify mod", "Assets, scripts, plugins and dependencies"],
   ["03", "Inspect resources", "Automatic format-specific reports"],
   ["04", "Adapt resources", "Target-specific conversion adapters"],
@@ -113,7 +114,9 @@ export default function App() {
   }
 
   function importZip(file) {
-    if (file) loadImport(() => inspectZipArchive(file));
+    if (!file) return;
+    const inspect = /\.7z$/i.test(file.name) ? inspect7zArchive : inspectZipArchive;
+    loadImport(() => inspect(file));
   }
 
   function importFolder(files) {
@@ -177,11 +180,11 @@ export default function App() {
       <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Universal mod conversion</h1><p>Import a PC GTA V mod. AutoPort inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
       <section className="hero" id="workspace">
-        <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
-          <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,application/zip,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
+        <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
+          <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,.7z,application/zip,application/x-7z-compressed,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <div className="import-actions">
-            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP / OIV mod"}</button>
+            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP / OIV / 7Z mod"}</button>
             <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
@@ -193,9 +196,9 @@ export default function App() {
         <div className="panel-head"><div><div className="eyebrow">IN-APP WALKTHROUGH</div><h3>Guided porting assistant</h3><p>AutoPort explains each stage and tells you what to do next. Your current stage is <b>{guideStep} of 5</b>.</p></div><button className="secondary-button guide-toggle" onClick={() => setGuideOpen((value) => !value)}>{guideOpen ? "Hide guide" : "Show guide"}</button></div>
         {guideOpen && <>
           <div className="guide-progress"><span style={{width: `${guideStep * 20}%`}}/></div>
-          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP file or its extracted folder. AutoPort will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00411 / 1.73 resource writer and deployment checks must pass before packaging."}</p></div>
+          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP, OIV, 7z file or its extracted folder. AutoPort will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00411 / 1.73 resource writer and deployment checks must pass before packaging."}</p></div>
           <div className="guide-steps">
-            <div className={guideStep >= 1 ? "guide-step current" : "guide-step"}><b>01 · Import</b><p>Import ZIP or extracted folder. Files remain local.</p></div>
+            <div className={guideStep >= 1 ? "guide-step current" : "guide-step"}><b>01 · Import</b><p>Import ZIP, OIV, 7z archive or extracted folder. Files remain local.</p></div>
             <div className={guideStep >= 2 ? "guide-step current" : "guide-step"}><b>02 · Identify</b><p>Automatic inventory, mod-family classification, and PC-only plugin warnings.</p></div>
             <div className={guideStep >= 3 ? "guide-step current" : "guide-step"}><b>03 · Plan</b><p>Group resources by format and show missing adapters and dependencies.</p></div>
             <div className={guideStep >= 4 ? "guide-step current" : "guide-step"}><b>04 · Inspect</b><p>RageKit and native inspector validate supported source formats; no PS4 conversion is implied.</p></div>
