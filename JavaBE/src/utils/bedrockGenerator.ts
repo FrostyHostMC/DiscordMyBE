@@ -1712,6 +1712,25 @@ export async function convertJavaToBedrockAddon(
   } else {
     integrityLog('[WIRE] No player animation clip shipped, so no player client entity was merged.');
   }
+  // Resolve variable dependencies only after every entity, animation, attachable and player
+  // wiring document has been merged. Running this earlier misses readers introduced by later
+  // writers and leaves source variables disconnected from the scopes that actually evaluate them.
+  try {
+    const sourceVariableEvidence = collectSourceVariableEvidence(options.entries ?? []);
+    const variableGraph = buildMolangDependencyGraph({
+      resourcePackFiles: remake.resourcePackFiles,
+      behaviorPackFiles: remake.behaviorPackFiles,
+      sourceVariables: sourceVariableEvidence,
+      onLog: integrityLog,
+    });
+    if (remake.parityHealth) remake.parityHealth.molangDependencyGraph = variableGraph;
+    integrityLog(`[MOLANG:GRAPH] Export audit: ${variableGraph.declaredCount} existing, ${variableGraph.reconstructedCount} reconstructed, ${variableGraph.unresolved.length} unresolved variable(s); ${variableGraph.scopeDeclarationsAdded} scope declaration(s) injected.`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    integrityLog(`[MOLANG:GRAPH:ERROR] Variable dependency linking did not complete: ${detail}. Variable wiring is NOT MEASURED.`);
+    if (remake.parityHealth) remake.parityHealth.stageFailed = true;
+  }
+
   if (remake.parityHealth) {
     remake.parityHealth.playerEntityWiring = remake.playerEntityWiring ?? null;
     remake.parityHealth.playerTriggers = remake.playerTriggers ?? null;
