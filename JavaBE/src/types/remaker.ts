@@ -233,6 +233,8 @@ export interface DependencyResolution {
 
 export interface DecompileClassSummary {
   className: string;
+  /** Fully-qualified class identity; className remains the display-friendly simple name. */
+  qualifiedClassName?: string;
   /** Fully qualified superclass recovered from the class file, used as inheritance evidence. */
   superName?: string;
   /** Namespaced identifiers (e.g. `mod:rune_blade`) the class itself declares. */
@@ -243,6 +245,8 @@ export interface DecompileClassSummary {
 }
 
 export interface DecompileStats {
+  /** Full instruction-level JVM analysis; present when the asynchronous archive scan ran. */
+  jvmAnalysis?: import('@/utils/jvmBytecodeIR').JvmArchiveAnalysisReport;
   modId: string;
   modName: string;
   version: string;
