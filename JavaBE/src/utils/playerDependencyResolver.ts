@@ -257,7 +257,7 @@ export function resolvePlayerDependencies(input: {
   const log = (line: string) => input.onLog?.(line);
   const files = input.resourcePackFiles;
   const sourceProfiles = new Set(input.sourceProfiles ?? []);
-  const hasSeriousPlayerAnimationsSource = sourceProfiles.has('Serious Player Animations 1.1.1');
+  const hasSeriousPlayerAnimationsSource = sourceProfiles.has('Serious Player Animations 1.1.0') || sourceProfiles.has('Serious Player Animations 1.1.1');
   const baselineForVariable = (name: string) =>
     name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource
       ? undefined
