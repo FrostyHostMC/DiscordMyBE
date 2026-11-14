@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-14 — Upstream engine integration audit and intake regression fix
+- Fixed a malformed newline escape in the browser-side RageKit candidate module that caused the latest JavaScript test run to fail before Vite could build.
+- Confirmed the pinned RageKit v0.3.1 dependency configures and builds successfully in CI; it remains the primary native parser/writer for its documented GTA V Legacy/Enhanced formats.
+- Added an upstream integration register distinguishing dependencies that are actually wired into AutoPort from reference-only PS4 projects and optional supplemental tooling.
+- Recorded GoldSantos and InsulinGTAV as PS4 research references only: their documented game targets are 1.56 and 1.57 respectively, not the user's 1.73 target.
+- Kept PS4 resource conversion, runtime compatibility, and deployment blocked until exact-build reference assets and console validation exist.
+
 ## 2026-11-13 — RPF archive validation added
 - Added `.rpf` to the native RAGE engine validation intake so archives are parsed and round-tripped in temporary local storage when the backend is configured.
 - Updated automatic workbench selection to include RPF archives instead of skipping them.
