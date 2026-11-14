@@ -149,20 +149,41 @@ function normaliseLoop(raw: unknown): boolean | 'hold_on_last_frame' | undefined
 }
 
 /** GeckoLib sound/particle keyframes → Bedrock `{ "effect": "id" }` effect keyframes. */
-function translateEffectTrack(raw: unknown): Record<string, unknown> | null {
-  if (!isPlainObject(raw)) return null;
+function translateEffectTrack(
+  raw: unknown,
+  clipId: string,
+  channel: 'sound_effects' | 'particle_effects',
+  issues: AnimationTranslationIssue[],
+): Record<string, unknown> | null {
+  if (!isPlainObject(raw)) {
+    if (raw !== undefined && raw !== null) issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `${channel} must be a timestamp-keyed object; source event data was not carried` });
+    return null;
+  }
   const track: Record<string, unknown> = {};
   for (const [time, entry] of Object.entries(raw)) {
-    if (!/^\s*-?\d+(?:\.\d+)?\s*$/.test(time)) continue;
-    if (typeof entry === 'string') {
-      track[time] = { effect: entry };
+    if (!/^\\s*-?\\d+(?:\\.\\d+)?\\s*$/.test(time)) {
+      issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `event key "${time}" is not a numeric timestamp; event was not carried` });
       continue;
     }
-    if (!isPlainObject(entry)) continue;
-    const effect = entry.effect ?? entry.sound ?? entry.particle ?? entry.name ?? entry.id;
-    if (typeof effect === 'string' && effect.trim()) {
-      track[time] = { effect: effect.trim() };
+    if (typeof entry === 'string') { track[time] = { effect: entry }; continue; }
+    if (!isPlainObject(entry)) {
+      issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `event at ${time}s is not a string or object; event was not carried` });
+      continue;
     }
+    const effect = entry.effect ?? entry.sound ?? entry.particle ?? entry.name ?? entry.id;
+    if (typeof effect !== 'string' || !effect.trim()) {
+      issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: `event at ${time}s has no effect/sound/particle identifier; source event was not carried` });
+      continue;
+    }
+    const event: Record<string, unknown> = { effect: effect.trim() };
+    for (const key of ['locator', 'pre_effect_script', 'bind_to_actor']) {
+      if (entry[key] !== undefined) event[key] = entry[key];
+    }
+    const known = new Set(['effect', 'sound', 'particle', 'name', 'id', 'locator', 'pre_effect_script', 'bind_to_actor']);
+    for (const key of Object.keys(entry)) {
+      if (!known.has(key)) issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: `event at ${time}s contains unsupported field "${key}"; identifier and supported locator/script fields were retained` });
+    }
+    track[time] = event;
   }
   return Object.keys(track).length > 0 ? track : null;
 }
@@ -296,9 +317,9 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
     result.durationDerived = true;
   }
 
-  const sounds = translateEffectTrack(rawClip.sound_effects);
+  const sounds = translateEffectTrack(rawClip.sound_effects, clipId, 'sound_effects', issues);
   if (sounds) clip.sound_effects = sounds;
-  const particles = translateEffectTrack(rawClip.particle_effects);
+  const particles = translateEffectTrack(rawClip.particle_effects, clipId, 'particle_effects', issues);
   if (particles) clip.particle_effects = particles;
 
   result.clip = clip;
