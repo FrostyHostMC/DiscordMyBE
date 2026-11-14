@@ -377,3 +377,98 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
+
+
+/* November mobile visual refresh: let the cloud background carry the brand. */
+.javabe-app-content > header.javabe-topbar {
+  border-color: rgba(211, 183, 255, .2);
+  background: rgba(18, 12, 34, .48);
+  box-shadow: 0 8px 28px rgba(5, 2, 14, .16), inset 0 1px rgba(255,255,255,.045);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.javabe-cloud-mark {
+  display: block;
+  width: 2.9rem;
+  height: 2.9rem;
+  flex: 0 0 auto;
+  object-fit: cover;
+  object-position: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  filter: drop-shadow(0 3px 12px rgba(185, 139, 255, .25));
+}
+.javabe-reset-button {
+  border: 1px solid rgba(218, 193, 255, .2);
+  background: rgba(255,255,255,.055);
+  color: #e9dcff;
+}
+.javabe-launch-brand {
+  gap: .28rem;
+  padding: .25rem 0 1.6rem;
+}
+.javabe-launch-wordmark {
+  display: block;
+  color: #fff;
+  font-size: clamp(3.25rem, 13vw, 5.2rem);
+  font-weight: 950;
+  letter-spacing: -.075em;
+  line-height: .98;
+  text-shadow: 0 5px 0 rgba(38, 20, 70, .72), 0 12px 34px rgba(12, 3, 27, .38);
+}
+.javabe-launch-tagline {
+  color: rgba(236, 219, 255, .88);
+  font-size: .62rem;
+  font-weight: 850;
+  letter-spacing: .34em;
+  text-indent: .34em;
+}
+.javabe-launch-progress-card {
+  border-color: rgba(211, 183, 255, .2);
+  background: rgba(17, 10, 31, .58);
+  box-shadow: 0 18px 48px rgba(5, 2, 14, .2), inset 0 1px rgba(255,255,255,.055);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+}
+.javabe-app-content > nav,
+.javabe-app-content > section,
+.javabe-app-content > details,
+.javabe-app-content > label {
+  border-color: rgba(211, 183, 255, .18);
+  background-color: rgba(19, 13, 35, .48);
+  box-shadow: 0 10px 30px rgba(5, 2, 14, .12), inset 0 1px rgba(255,255,255,.035);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+.javabe-workspace-tab {
+  border-color: rgba(211, 183, 255, .18);
+  background: rgba(15, 10, 29, .38);
+  color: rgba(239, 231, 255, .76);
+}
+.javabe-workspace-tab.is-active {
+  border-color: rgba(202, 167, 255, .48);
+  background: rgba(123, 76, 190, .25);
+  box-shadow: inset 0 1px rgba(255,255,255,.08), 0 5px 20px rgba(10,4,24,.12);
+}
+.javabe-workspace-tab-icon {
+  border-color: rgba(211, 183, 255, .22);
+  background: rgba(175, 130, 255, .12);
+}
+.javabe-app-content > section.rounded-2xl,
+.javabe-app-content > section.rounded-xl {
+  border-radius: 1.15rem;
+}
+.javabe-app-shell.is-processing .javabe-app-content > header,
+.javabe-app-shell.is-processing .javabe-app-content > nav,
+.javabe-app-shell.is-processing .javabe-app-content > section,
+.javabe-app-shell.is-processing .javabe-app-content > details,
+.javabe-app-shell.is-processing .javabe-app-content > label {
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+@media (max-width: 600px) {
+  .javabe-app-content { gap: .7rem; }
+  .javabe-cloud-mark { width: 2.65rem; height: 2.65rem; }
+  .javabe-app-content > header.javabe-topbar { border-radius: 1.1rem; }
+}
