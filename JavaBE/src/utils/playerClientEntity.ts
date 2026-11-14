@@ -385,7 +385,7 @@ export function buildPlayerClientEntity(options: {
 
   return {
     files: { 'entity/player.entity.json': json },
-    scriptCode: buildPlayerScript(triggers, options.modId ?? 'aippy'),
+    scriptCode: buildPlayerScript(triggers),
     report,
   };
 }
