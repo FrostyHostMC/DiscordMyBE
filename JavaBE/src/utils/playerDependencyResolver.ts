@@ -7,6 +7,7 @@ import {
   VANILLA_PLAYER_ANIMATIONS,
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
+  VANILLA_PLAYER_VARIABLE_EXPRESSIONS,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
   isVanillaPlayerDocumentPath,
@@ -547,6 +548,12 @@ export function resolvePlayerDependencies(input: {
     if (typeof rawDocument === 'string') playerDocuments.push(rawDocument);
   }
   const readVars = countReads(playerDocuments);
+  // A custom player entity also replaces vanilla script scope. Restore these two vanilla player
+  // variables even when their only consumers live in engine-owned controllers that are not
+  // physically present in the imported archive.
+  for ( (const name of Object.keys(VANILLA_PLAYER_VARIABLE_EXPRESSIONS)) ) {
+    if (!readVars.has(name)) readVars.set(name, 0);
+  }
   const itemIds = collectPackItemIdentifiers({ ...files, ...(input.behaviorPackFiles ?? {}) });
   const preAnimation: string[] = Array.isArray(scripts.pre_animation)
     ? scripts.pre_animation.filter((entry): entry is string => typeof entry === 'string')
@@ -594,7 +601,20 @@ export function resolvePlayerDependencies(input: {
       statement = `variable.${name} = ${visibility.expression};`;
       evidence = visibility.reason;
     }
-    // 2. A declaration the archive already ships is re-bound into the scope that evaluates it.
+    // 2. Restore known vanilla player-scope expressions from the destination's own resource
+    // contract before looking for mod-specific assignments. These are live expressions, not
+    // constant defaults, and are needed because this pack replaces the vanilla player entity.
+    if (!statement) {
+      const baseline = VANILLA_PLAYER_VARIABLE_EXPRESSIONS[name];
+      if (baseline) {
+        const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
+        if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
+          statement = `${translation.expression.trim().replace(/;$/, '')};`;
+          evidence = baseline.evidence;
+        }
+      }
+    }
+    // 3. A declaration the archive already ships is re-bound into the scope that evaluates it.
     if (!statement) {
       const relocated = shippedAssignment(name);
       if (relocated) {
@@ -606,7 +626,7 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 3. Equipped-item detection rebuilt from the items the pack really registers.
+    // 4. Equipped-item detection rebuilt from the items the pack really registers.
     if (!statement) {
       const reconstruction = reconstructEquipmentExpression(name, itemIds);
       if (reconstruction) {
@@ -617,7 +637,7 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 4. If the source value cannot be recovered, do NOT initialize it to zero. A zero
+    // 5. If the source value cannot be recovered, do NOT initialize it to zero. A zero
     // assignment silences the engine warning while silently disabling the source behaviour.
     // Keep the unresolved edge explicit so the port cannot be mistaken for a faithful conversion.
     const withoutRecovery = !statement;
@@ -646,7 +666,7 @@ export function resolvePlayerDependencies(input: {
       `${report.variables.unresolved.length} Molang variable(s) are read by player-scoped content with no recoverable source value: ` +
         `${report.variables.unresolved.slice(0, 6).map((entry) => `variable.${entry.variable}`).join(', ')}${
           report.variables.unresolved.length > 6 ? ' …' : ''
-        }. Each one is declared in the player scope so the clips evaluate, and each one is reported as NOT REPRODUCED rather than claimed as converted.`,
+        }. Each unresolved dependency remains unmodified and is reported as NOT REPRODUCED rather than claimed as converted.`,
     );
   }
 
@@ -698,7 +718,7 @@ export function resolvePlayerDependencies(input: {
     `${report.shippedDefinition} resolve to a shipped definition, ${report.vanillaEngineDefinition} to the vanilla player resource set, ` +
     `${report.identifiersRepaired.length} altered identifier(s) repaired, ${report.missingDefinitions.length} unresolved. ` +
     `${report.documentsPreserved.length} generated document(s) relocated off vanilla resource paths so the engine definitions survive. ` +
-    `Variables: ${report.variables.referenced} read in player scope, ${report.variables.declared} already declared there, ` +
+    `Variables: ${report.variables.referenced} referenced or required by the vanilla player contract, ${report.variables.declared} already declared there, ` +
     `${report.variables.reconstructed} declared by this pass (${report.variables.initialisedWithoutRecovery.length} of them initialised ` +
     'because no archive scope could supply the value, reported as NOT REPRODUCED). ' +
     `First person: ${report.firstPerson.ready ? 'wiring complete' : 'NOT complete'}. ` +
