@@ -4,7 +4,7 @@ interface Env {
   JAVABE_DISCORD_BOT_TOKEN: string;
   JAVABE_DISCORD_GUILD_ID: string;
   JAVABE_DISCORD_REQUIRED_ROLE_ID: string;
-  JAVABE_DOWNLOAD_SECRET: string;
+  JAVABE_DISCORD_CLIENT_SECRET: string;
 }
 
 const PART_BYTES = 8 * 1024 * 1024;
@@ -21,7 +21,7 @@ function safeName(value: string): string {
 }
 
 async function signature(env: Env, value: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.JAVABE_DOWNLOAD_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign','verify']);
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.JAVABE_DISCORD_CLIENT_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign','verify']);
   const signed = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(value));
   return btoa(String.fromCharCode(...new Uint8Array(signed))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
@@ -82,7 +82,7 @@ async function streamAndDelete(object: R2ObjectBody, key: string, bucket: R2Buck
 }
 
 export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
-  if (!env.BUCKET || !env.JAVABE_DOWNLOAD_SECRET) return json({ error: 'Temporary download delivery is not configured.' }, 503);
+  if (!env.BUCKET || !env.JAVABE_DISCORD_CLIENT_SECRET) return json({ error: 'Temporary download delivery is not configured.' }, 503);
   const url = new URL(request.url);
   try {
     if (request.method === 'POST' && url.searchParams.get('action') === 'create') {
@@ -141,7 +141,11 @@ export const onRequest: PagesFunction<Env> = async ({ request, env }) => {
       const body = await readJson<{ key?: string; uploadId?: string; uploadToken?: string; size?: number }>(request, 4096);
       if (body?.key?.startsWith('javabe-temp/') && body.uploadId &&
           body.uploadToken === await signature(env, `${body.key}|${body.uploadId}|${body.size}`)) {
-        await env.BUCKET.resumeMultipartUpload(body.key, body.uploadId).abort().catch(() => {});
+        // If completion already succeeded but opening the external link failed, delete
+        // the finished temporary object too; otherwise abort the unfinished multipart upload.
+        const finished = await env.BUCKET.head(body.key);
+        if (finished) await env.BUCKET.delete(body.key);
+        else await env.BUCKET.resumeMultipartUpload(body.key, body.uploadId).abort().catch(() => {});
       }
       return json({ ok: true });
     }
