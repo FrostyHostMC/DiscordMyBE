@@ -235,13 +235,23 @@ export async function generateBedrockRemake(
       }
       stages.ok('decompile', 'Archive decompile & classification', `${result.stats.classesCount} classes, ${result.stats.texturesCount} textures`);
     } catch (decompileError) {
-      console.warn('[Aippy] Decompilation fallback:', decompileError);
-      stages.fail(
-        'decompile',
-        'Archive decompile & classification',
-        decompileError instanceof Error ? decompileError.message : String(decompileError),
-      );
-      log('[ERROR] Decompilation partially failed — continuing with rule-based engine; dependent categories are reported as FAILED.');
+      console.warn('[JavaBE] Decompilation fallback:', decompileError);
+      const detail = decompileError instanceof Error ? decompileError.message : String(decompileError);
+      if (statsOverride) {
+        // The UI already inspected this exact archive before generation. Keep that proven
+        // snapshot if the generator's second pass fails; dropping it here erased registered
+        // items/entities/classes and disconnected every later evidence-driven stage.
+        decompileStats = statsOverride;
+        log(`[DECOMPILE:RECOVERY] Reusing the successful inspection snapshot for ${statsOverride.modName}: ${statsOverride.classesCount} classes, ${statsOverride.registeredItems.length} registered items, ${statsOverride.registeredEntities?.length ?? 0} registered entities.`);
+        stages.ok('decompile', 'Archive decompile & classification', `reused prior inspection snapshot after repeat-pass error: ${detail}`);
+      } else {
+        stages.fail(
+          'decompile',
+          'Archive decompile & classification',
+          detail,
+        );
+        log('[ERROR] Decompilation failed and no successful inspection snapshot exists; dependent categories are reported as FAILED, not empty or successful.');
+      }
     }
   } else if (statsOverride) {
     decompileStats = statsOverride;
@@ -1712,6 +1722,25 @@ export async function convertJavaToBedrockAddon(
   } else {
     integrityLog('[WIRE] No player animation clip shipped, so no player client entity was merged.');
   }
+  // Resolve variable dependencies only after every entity, animation, attachable and player
+  // wiring document has been merged. Running this earlier misses readers introduced by later
+  // writers and leaves source variables disconnected from the scopes that actually evaluate them.
+  try {
+    const sourceVariableEvidence = collectSourceVariableEvidence(options.entries ?? []);
+    const variableGraph = buildMolangDependencyGraph({
+      resourcePackFiles: remake.resourcePackFiles,
+      behaviorPackFiles: remake.behaviorPackFiles,
+      sourceVariables: sourceVariableEvidence,
+      onLog: integrityLog,
+    });
+    if (remake.parityHealth) remake.parityHealth.molangDependencyGraph = variableGraph;
+    integrityLog(`[MOLANG:GRAPH] Export audit: ${variableGraph.declaredCount} existing, ${variableGraph.reconstructedCount} reconstructed, ${variableGraph.unresolved.length} unresolved variable(s); ${variableGraph.scopeDeclarationsAdded} scope declaration(s) injected.`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    integrityLog(`[MOLANG:GRAPH:ERROR] Variable dependency linking did not complete: ${detail}. Variable wiring is NOT MEASURED.`);
+    if (remake.parityHealth) remake.parityHealth.stageFailed = true;
+  }
+
   if (remake.parityHealth) {
     remake.parityHealth.playerEntityWiring = remake.playerEntityWiring ?? null;
     remake.parityHealth.playerTriggers = remake.playerTriggers ?? null;

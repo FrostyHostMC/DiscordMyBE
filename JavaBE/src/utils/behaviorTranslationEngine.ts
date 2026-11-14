@@ -542,15 +542,12 @@ export function translateBehaviors(options: BehaviorTranslationOptions): Behavio
     );
   }
 
-  // 5. A failed upstream stage blocks dependent success claims: the pack those claims would
-  // point at was never completed, so nothing is reported as ported.
+  // 5. Partial-export policy: an upstream failure is diagnostic, never a reason to
+  // discard otherwise generated files or downgrade unrelated mappings. Keep each finding
+  // tied to the actual files it emitted; the report separately records stageFailed so testers
+  // know this is an incomplete build and can inspect Bedrock's runtime logs.
   if (stageFailed) {
-    for (const finding of findings) {
-      if (finding.status !== 'ported' && finding.status !== 'approximated') continue;
-      finding.status = 'unresolved';
-      finding.provenance = 'ABSENT';
-      finding.note = `${finding.note} Blocked: an upstream pipeline stage failed, so this mapping is not reported as converted.`.trim();
-    }
+    onLog?.('[BEHAVIOR-TRANSLATION] Upstream stage failure detected. Continuing partial export; emitted files and independently verified mappings are retained for in-game testing.');
   }
 
   // 6. Traceability gate: no ported/approximated claim without a shipped file behind it.

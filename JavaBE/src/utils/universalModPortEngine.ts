@@ -415,7 +415,9 @@ world.afterEvents.entityHitEntity.subscribe((event) => {
     mechanics,
     shapes,
     palettes,
-    scriptCustomLogic: '',
+    // Keep the generated runtime only when source-backed item behavior needs it.
+    // Returning an empty string here silently discarded the handlers built above.
+    scriptCustomLogic: hasActiveCombatItems ? scriptCustomLogic : '',
     totalDetectedDefinitions,
     omittedDefinitionCount,
   };
