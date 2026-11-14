@@ -33,58 +33,58 @@ function run(args, timeout = TIMEOUT_MS) {
       if (settled) return;
       settled = true;
       if (code === 0) resolve(stdout);
-      else reject(new Error(stderr.trim() || stdout.trim() || `7-Zip exited with code ${code}.`));
+      else reject(new Error(stderr.trim() || stdout.trim() || \`7-Zip exited with code \${code}.\`));
     });
   });
 }
 
 function safeRelativePath(value) {
-  if (!value || value.includes("\\0")) throw new Error("The 7z archive contains an invalid file path.");
-  const normalized = value.replace(/\\\\/g, "/").replace(/\\/$/, "");
-  if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) throw new Error(`Absolute archive path rejected: ${value}`);
+  if (!value || value.includes("\0")) throw new Error("The 7z archive contains an invalid file path.");
+  const normalized = value.replace(/\\/g, "/").replace(/\/$/, "");
+  if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:/.test(normalized)) throw new Error(\`Absolute archive path rejected: \${value}\`);
   const parts = normalized.split("/");
-  if (parts.some((part) => !part || part === "." || part === "..")) throw new Error(`Unsafe archive path rejected: ${value}`);
+  if (parts.some((part) => !part || part === "." || part === "..")) throw new Error(\`Unsafe archive path rejected: \${value}\`);
   return normalized;
 }
 
 function parseListing(text) {
-  const records = text.split(/\\r?\\n\\s*\\r?\\n/).map((block) => {
+  const records = text.split(/\r?\n\s*\r?\n/).map((block) => {
     const fields = {};
-    for (const line of block.split(/\\r?\\n/)) {
+    for (const line of block.split(/\r?\n/)) {
       const index = line.indexOf(" = ");
       if (index > 0) fields[line.slice(0, index)] = line.slice(index + 3);
     }
     return fields;
   }).filter((entry) => entry.Path && (entry.Size !== undefined || entry.Folder === "+"));
-  if (records.length > ENTRY_LIMIT) throw new Error(`Archive contains too many entries (limit ${ENTRY_LIMIT}).`);
+  if (records.length > ENTRY_LIMIT) throw new Error(\`Archive contains too many entries (limit \${ENTRY_LIMIT}).\`);
   const seen = new Set();
   let declaredTotal = 0;
   for (const entry of records) {
     const relative = safeRelativePath(entry.Path);
-    if (entry["Symbolic Link"] || entry["Hard Link"]) throw new Error(`Links are not accepted in 7z archives: ${relative}`);
-    if (entry.Encrypted === "+") throw new Error(`Encrypted 7z entry cannot be inspected without a password: ${relative}`);
+    if (entry["Symbolic Link"] || entry["Hard Link"]) throw new Error(\`Links are not accepted in 7z archives: \${relative}\`);
+    if (entry.Encrypted === "+") throw new Error(\`Encrypted 7z entry cannot be inspected without a password: \${relative}\`);
     if (entry.Folder !== "+") {
       const size = Number(entry.Size);
-      if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Could not verify the uncompressed size of ${relative}.`);
+      if (!Number.isSafeInteger(size) || size < 0) throw new Error(\`Could not verify the uncompressed size of \${relative}.\`);
       declaredTotal += size;
       if (declaredTotal > OUTPUT_LIMIT) throw new Error("Archive exceeds the 512 MiB uncompressed safety limit.");
       const key = relative.toLowerCase();
-      if (seen.has(key)) throw new Error(`Duplicate archive path (case-insensitive): ${relative}`);
+      if (seen.has(key)) throw new Error(\`Duplicate archive path (case-insensitive): \${relative}\`);
       seen.add(key);
     }
   }
   return records;
 }
 
-async function collectFiles(directory, prefix = "") {
+async function collectFiles(directory) {
   const output = [];
   let total = 0;
   async function walk(current, relative) {
     for (const entry of await readdir(current, { withFileTypes: true })) {
       const absolute = path.join(current, entry.name);
-      const childRelative = relative ? `${relative}/${entry.name}` : entry.name;
+      const childRelative = relative ? \`\${relative}/\${entry.name}\` : entry.name;
       const info = await lstat(absolute);
-      if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory())) throw new Error(`Unsupported extracted filesystem entry: ${childRelative}`);
+      if (info.isSymbolicLink() || (!info.isFile() && !info.isDirectory())) throw new Error(\`Unsupported extracted filesystem entry: \${childRelative}\`);
       if (info.isDirectory()) await walk(absolute, childRelative);
       else {
         const safePath = safeRelativePath(childRelative);
@@ -95,7 +95,7 @@ async function collectFiles(directory, prefix = "") {
       }
     }
   }
-  await walk(directory, prefix);
+  await walk(directory, "");
   return output;
 }
 
@@ -115,7 +115,7 @@ export function sevenZipPlugin() {
             chunks.push(chunk);
           }
           const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-          if (typeof payload.name !== "string" || !/\\.7z$/i.test(payload.name)) throw new Error("Choose a .7z archive.");
+          if (typeof payload.name !== "string" || !/\.7z$/i.test(payload.name)) throw new Error("Choose a .7z archive.");
           const archiveBytes = Buffer.from(payload.data || "", "base64");
           if (!archiveBytes.length || archiveBytes.length > INPUT_LIMIT) throw new Error("7z archive must be between 1 byte and 160 MiB.");
           temp = await mkdtemp(path.join(os.tmpdir(), "gtav-autoport-7z-"));
@@ -126,7 +126,7 @@ export function sevenZipPlugin() {
           const listing = await run(["l", "-slt", "-ba", archivePath]);
           const entries = parseListing(listing);
           if (!entries.some((entry) => entry.Folder !== "+")) throw new Error("The 7z archive contains no files.");
-          await run(["x", "-y", "-bd", "-bb0", `-o${outputPath}`, archivePath]);
+          await run(["x", "-y", "-bd", "-bb0", \`-o\${outputPath}\`, archivePath]);
           const files = await collectFiles(outputPath);
           if (!files.length) throw new Error("7-Zip completed but no files were extracted.");
           const listedFiles = entries.filter((entry) => entry.Folder !== "+").length;
