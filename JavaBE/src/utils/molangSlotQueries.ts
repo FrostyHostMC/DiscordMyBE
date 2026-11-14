@@ -54,11 +54,13 @@ export function slotOccupancyExpression(slot: string): { expression: string; rea
     };
   }
 
-  // No generic occupancy query exists for armour slots. Do not fabricate an
-  // item-name test or invert an air test; callers must report this as unresolved.
+  // get_equipped_item_name only accepts a hand selector (0/main_hand or
+  // 1/off_hand). Passing an armor slot here is a runtime Molang error. There is
+  // no generic armor-occupancy query without concrete item identifiers, so return
+  // an empty expression and let callers report the dependency as unresolved.
   return {
-    expression: `query.get_equipped_item_name('${id}', 0)`,
-    reason: `the ${id} slot is not a supported hand argument and cannot be safely translated`,
+    expression: '',
+    reason: `the ${id} armor slot has no safe generic occupancy query; a concrete item identifier is required`,
   };
 }
 
