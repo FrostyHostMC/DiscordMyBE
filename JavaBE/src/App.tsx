@@ -44,8 +44,8 @@ export default function App() {
   const hapticsEnabled = false;
   const configuredUpscaling = true;
   const [upscalingEnabled, setUpscalingEnabled] = useState(() => configuredUpscaling && getAutoUpscaleLegacyTextures());
-  const [targetVersion, setTargetVersion] = useState<BedrockVersionTarget>('1.21.50');
-  const [experimentConfig, setExperimentConfig] = useState<BedrockExperimentConfig>({ targetVersion: '1.21.50', enableBetaApis: true, enableCameras: true, enableCustomUi: true, enableVoxelShapes: true, enableUpcomingCreatorFeatures: true, enablePbr: false, enableScriptEval: false });
+  const [targetVersion, setTargetVersion] = useState<BedrockVersionTarget>('1.26.63');
+  const [experimentConfig, setExperimentConfig] = useState<BedrockExperimentConfig>({ targetVersion: '1.26.63', enableBetaApis: true, enableCameras: true, enableCustomUi: true, enableVoxelShapes: true, enableUpcomingCreatorFeatures: true, enablePbr: false, enableScriptEval: false });
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>('convert');
   const [activeTab, setActiveTab] = useState<AppTab>('deterministic');
   const [brief, setBrief] = useState('');
