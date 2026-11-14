@@ -1,5 +1,5 @@
 import { readZipArchive, type ExtractedZipEntry } from '@/utils/zip';
-import { ARCHIVE_BYTE_LIMIT, ARCHIVE_ENTRY_LIMIT } from '@/utils/archiveScale';
+import { getArchiveBudget, type ArchiveBudget } from '@/utils/archiveScale';
 
 /**
  * Expands bounded nested Java archives while keeping the original archive path in
@@ -10,11 +10,7 @@ import { ARCHIVE_BYTE_LIMIT, ARCHIVE_ENTRY_LIMIT } from '@/utils/archiveScale';
  * a dozen jars, or one jar that bundles another, can no longer inflate past the mobile budget.
  */
 const NESTED_ARCHIVE = /\.(jar|zip)$/i;
-const MAX_NESTED = 12;
-const MAX_NESTED_DEPTH = 4;
-const MAX_NESTED_BYTES = 32 * 1024 * 1024;
-const MAX_TOTAL_ENTRIES = ARCHIVE_ENTRY_LIMIT;
-const MAX_TOTAL_BYTES = ARCHIVE_BYTE_LIMIT;
+const DEFAULT_BUDGET = getArchiveBudget();
 
 interface ArchiveCandidate {
   entry: ExtractedZipEntry;
@@ -23,6 +19,7 @@ interface ArchiveCandidate {
 
 export async function expandNestedArchives(
   entries: ExtractedZipEntry[],
+  budget: ArchiveBudget = DEFAULT_BUDGET,
 ): Promise<{ entries: ExtractedZipEntry[]; expanded: string[]; skipped: string[] }> {
   const out: ExtractedZipEntry[] = [...entries];
   const expanded: string[] = [];
@@ -34,41 +31,42 @@ export async function expandNestedArchives(
   let usedBytes = entries.reduce((sum, entry) => sum + (entry.data?.length ?? 0), 0);
 
   for (let cursor = 0; cursor < queue.length; cursor += 1) {
-    if (out.length >= MAX_TOTAL_ENTRIES || expanded.length >= MAX_NESTED) break;
+    if (out.length >= budget.maxEntries || expanded.length >= budget.maxNestedArchives) break;
     const candidate = queue[cursor];
     const path = candidate.entry.path.replace(/\\/g, '/');
     if (seen.has(path)) continue;
     seen.add(path);
 
-    if (candidate.depth > MAX_NESTED_DEPTH) {
+    if (candidate.depth > budget.maxNestedDepth) {
       skipped.push(`${path} (nested archive depth limit)`);
       continue;
     }
     const bytes = candidate.entry.data;
-    if (bytes.length === 0 || bytes.length > MAX_NESTED_BYTES) {
+    if (bytes.length === 0 || bytes.length > budget.maxNestedArchiveBytes) {
       skipped.push(`${path} (${Math.round(bytes.length / 1024)} KB — too large to expand)`);
       continue;
     }
 
     try {
-      const remaining = Math.max(0, MAX_TOTAL_BYTES - usedBytes);
+      const remaining = Math.max(0, budget.maxTotalBytes - usedBytes);
       if (remaining <= 0) {
         skipped.push(`${path} (archive budget already used by earlier content)`);
         break;
       }
       const nested = await readZipArchive(bytes, {
-        maxEntries: 20000,
+        maxEntries: Math.min(budget.maxEntries - out.length, 20000),
+        maxEntryBytes: budget.maxEntryBytes,
         maxTotalBytes: remaining,
       });
       const prefix = path.replace(NESTED_ARCHIVE, '');
       let added = 0;
       for (const item of nested) {
-        if (item.isDirectory || item.data.length === 0 || out.length >= MAX_TOTAL_ENTRIES) continue;
+        if (item.isDirectory || item.data.length === 0 || out.length >= budget.maxEntries || usedBytes + item.data.length > budget.maxTotalBytes) continue;
         const expandedEntry = { ...item, path: `${prefix}/${item.path}` };
         out.push(expandedEntry);
         usedBytes += item.data.length;
         added += 1;
-        if (candidate.depth < MAX_NESTED_DEPTH && NESTED_ARCHIVE.test(item.path)) {
+        if (candidate.depth < budget.maxNestedDepth && NESTED_ARCHIVE.test(item.path)) {
           queue.push({ entry: expandedEntry, depth: candidate.depth + 1 });
         }
       }
