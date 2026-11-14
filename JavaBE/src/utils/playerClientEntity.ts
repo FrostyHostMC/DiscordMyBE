@@ -389,7 +389,7 @@ export function buildPlayerClientEntity(options: {
 
   return {
     files: { 'entity/player.entity.json': json },
-    scriptCode: buildPlayerScript(triggers, options.modId ?? 'aippy'),
+    scriptCode: buildPlayerScript(triggers, options.modId ?? 'aippy', Object.keys(options.portedClips)),
     report,
   };
 }
@@ -401,11 +401,18 @@ export function buildPlayerClientEntity(options: {
  * each produce a content-log line, and `/<namespace>:animation_test` replays every ported clip
  * on the executing player so playback can be verified in game instead of assumed.
  */
-function buildPlayerScript(triggers: PlayerClipTrigger[], modId: string): string {
-  if (triggers.length === 0) return '';
+function buildPlayerScript(triggers: PlayerClipTrigger[], modId: string, portedClipIds: string[]): string {
+  // Diagnostics must not depend on source trigger recovery. Many player-animation mods
+  // contain animation assets without bytecode/event hooks; returning '' here silently removed
+  // the only direct playback test from precisely those conversions.
+  if (portedClipIds.length === 0) return '';
   const namespace = safeFileId(modId) || 'aippy';
-  const entries = triggers
-    .map((trigger) => `  { clip: ${JSON.stringify(trigger.clipId)}, concept: ${JSON.stringify(trigger.concept)}, scriptDriven: ${trigger.scriptDriven ? 'true' : 'false'} },`)
+  const triggerByClip = new Map(triggers.map((trigger) => [trigger.clipId, trigger]));
+  const entries = [...new Set(portedClipIds)]
+    .map((clipId) => {
+      const trigger = triggerByClip.get(clipId);
+      return `  { clip: ${JSON.stringify(clipId)}, concept: ${JSON.stringify(trigger?.concept ?? 'unclassified')}, scriptDriven: ${trigger?.scriptDriven ? 'true' : 'false'} },`;
+    })
     .join('\n');
 
   return `
