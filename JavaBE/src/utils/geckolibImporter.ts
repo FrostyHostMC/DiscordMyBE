@@ -143,7 +143,7 @@ export function isAnimationJsonPath(path: string): boolean {
   if (!/\.json5?$/i.test(p)) return false;
   if (/\.geo\.json5?$/i.test(p) || p.includes('/geo/') || p.includes('/models/')) return false;
   if (p.includes('_lighting.animation.json') || p.includes('biome_lighting')) return false;
-  if (p.includes('/animations/') || p.includes('/animation/') || p.includes('/anim/') || p.includes('/geckolib/')) {
+  if (p.includes('/animations/') || p.includes('/animation/') || p.includes('/anim/') || p.includes('/player_animation/') || p.includes('/player-animations/') || p.includes('/player_animations/') || p.includes('/geckolib/')) {
     return true;
   }
   if (p.endsWith('.animation.json') || p.endsWith('.animation.json5')) return true;
