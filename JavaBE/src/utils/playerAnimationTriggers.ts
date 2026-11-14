@@ -152,7 +152,6 @@ function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolea
     'moveSpeed',
     'isMovingBackwards',
     'prevbyaw',
-    'ShieldItem',
     'walking_sneak',
   ];
   if (!sourceMarkers.every((marker) => classText.includes(marker))) return false;
