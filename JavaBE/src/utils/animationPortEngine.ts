@@ -165,6 +165,7 @@ function clipsWithMotion(
 function bridgePlayerRigClips(
   clipsByOwner: Record<string, Record<string, BedrockAnimationClip>>,
   log: (line: string) => void,
+  sourceSkeletons: UniversalAnimationDiscoveryReport['skeletons'] = [],
 ): {
   clips: Record<string, BedrockAnimationClip>;
   clipIds: string[];
@@ -177,7 +178,19 @@ function bridgePlayerRigClips(
   if (Object.keys(merged).length === 0) {
     return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
-  const fit = mapClipsToPlayerSkeleton(merged, 'player-animation-bridge', 1);
+  const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
+  const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
+    const overlap = (skeleton: UniversalAnimationDiscoveryReport['skeletons'][number]) =>
+      skeleton.bones.filter((bone) => sourceBoneNames.has(bone)).length;
+    return overlap(b) - overlap(a);
+  })[0];
+  const sourceParents = sourceSkeleton?.parents ?? {};
+  if (sourceSkeleton) {
+    log(`[PLAYER-RIG-AUDIT] Source hierarchy selected from actual geometry "${sourceSkeleton.owner}" (${sourceSkeleton.bones.length} declared bones, depth ${sourceSkeleton.depth}); parent links are included in the four-profile audit.`);
+  } else {
+    log('[PLAYER-RIG-AUDIT] No source geometry document declares a player skeleton hierarchy; animation channels are audited by name only and are not treated as a fabricated geometry rig.');
+  }
+  const fit = mapClipsToPlayerSkeleton(merged, 'player-animation-bridge', 1, sourceParents);
   if (!fit) {
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
     return { clips: {}, clipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
@@ -491,7 +504,7 @@ export function portMobAndPlayerAnimations(
   // 2a. Granular Java-bone mapping layer: bind the mod's own player-rig clips to verified
   // Bedrock bones. Evidence-gated per-clip bindings drive them; no generic state controller
   // guesses which source clip means idle, move, attack or hurt.
-  const playerRigBridge = bridgePlayerRigClips(rigClassification.playerClipsByOwner, log);
+  const playerRigBridge = bridgePlayerRigClips(rigClassification.playerClipsByOwner, log, additionalAnimations.discoveryReport?.skeletons ?? []);
   if (playerRigBridge.clipIds.length === 0) {
     log(
       '[OWNERSHIP] No clip is mapped onto the Bedrock player skeleton: no player class, player-only API, or explicit player source-rig evidence proved an owner for this clip set.',
