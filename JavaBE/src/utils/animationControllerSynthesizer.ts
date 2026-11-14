@@ -1,5 +1,4 @@
 import type { DecompileClassSummary } from '@/types/remaker';
-import { safeFileId } from '@/utils/bedrockIds';
 
 /**
  * Bytecode-to-JSON animation controller synthesis.
@@ -123,78 +122,18 @@ function buildStates(ownerId: string, inherited: Array<{ state: string; animatio
   return { states, stateNames: Object.keys(states) };
 }
 
+/**
+ * Java class names and opcode-signature hits do not contain a recoverable state graph.
+ * The previous implementation guessed idle/move/attack/hurt states, selected clips by
+ * substring, and attached periodic Molang conditions. Those are not source semantics.
+ *
+ * Until the decompiler supplies actual state nodes, transitions, guards and clip bindings,
+ * this stage deliberately emits nothing. Existing controllers recovered from resource files
+ * are preserved by the normal import/export pipeline.
+ */
 export function synthesizeAnimationControllersFromBytecode(
-  mobIds: string[],
-  signals: ControllerSignals = {},
+  _mobIds: string[],
+  _signals: ControllerSignals = {},
 ): ControllerSynthesis {
-  const animationIds = signals.animationIds ?? [];
-  const sources: Array<{ className: string; kind: SynthesizedController['kind'] }> = [
-    ...(signals.controllerClasses ?? []).map((className) => ({ className, kind: 'animation-controller' as const })),
-    ...(signals.stateMachineClasses ?? []).map((className) => ({ className, kind: 'state-machine' as const })),
-  ];
-
-  const controllers: SynthesizedController[] = [];
-  const files: Record<string, string> = {};
-  const controllerIdsByOwner: Record<string, string[]> = {};
-  const seen = new Set<string>();
-
-  // A controller with no ported mob to drive it would ship as dead JSON referencing
-  // animations that are not on any client entity, so nothing is synthesized.
-  if (mobIds.length === 0) return { controllers, files, controllerIdsByOwner };
-
-  for (const source of sources) {
-    if (controllers.length >= MAX_SYNTHESIZED) break;
-    const className = source.className?.trim();
-    if (!className) continue;
-    const key = `${source.kind}:${className}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const ownerId = ownerFor(className, mobIds);
-    if (!ownerId) continue;
-    const tokens = tokensOf(className);
-    const inherited = tokens
-      .filter((token, index) => STATE_WORDS.includes(token) && tokens.indexOf(token) === index)
-      .slice(0, 3)
-      .map((token) => ({
-        state: token,
-        // Only real animation identifiers already in the pack are referenced.
-        animation: animationIds.find((id) => id.toLowerCase().includes(token)) ?? 'idle',
-      }));
-
-    const controllerSlug = slugOf(tokens.join('_') || className);
-    const controllerId = `controller.animation.${ownerId}.${controllerSlug}`;
-    // Two Java classes can tokenize to the same slug; the second document would
-    // overwrite the first at the same path, so the id is the dedupe key.
-    if (controllers.some((existing) => existing.controllerId === controllerId)) continue;
-    const { states, stateNames } = buildStates(ownerId, inherited);
-    const filePath = `animation_controllers/${ownerId}.${controllerSlug}.animation_controllers.json`;
-
-    const json = JSON.stringify(
-      {
-        format_version: '1.10.0',
-        animation_controllers: {
-          [controllerId]: { initial_state: 'default', states },
-        },
-      },
-      null,
-      2,
-    );
-
-    controllers.push({
-      filePath,
-      controllerId,
-      ownerId,
-      sourceClass: className,
-      kind: source.kind,
-      states: stateNames,
-      json,
-    });
-    files[filePath] = json;
-    const list = controllerIdsByOwner[ownerId] ?? [];
-    if (!list.includes(controllerId)) list.push(controllerId);
-    controllerIdsByOwner[ownerId] = list;
-  }
-
-  return { controllers, files, controllerIdsByOwner };
+  return { controllers: [], files: {}, controllerIdsByOwner: {} };
 }
