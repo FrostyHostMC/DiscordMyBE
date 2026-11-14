@@ -1,150 +1,35 @@
-# 2D Game Canvas Template
+# JavaBE
 
-The general-purpose template for building 2D mini-games and interactive applications with Aippy. Supports both **React DOM** rendering (grid/card/tap games) and **Canvas 2D** rendering (physics/platformer/runner games).
+JavaBE is a Discord Embedded Activity for converting Java Edition mods and assets into Minecraft Bedrock add-ons.
 
-## Features
-
-- **Canvas 2D game loop** — `useGameLoop` with delta-time, HiDPI scaling, and design-resolution scaling (400×600 expand mode)
-- **React DOM rendering** — standard React state + CSS for grid-based and turn-based games
-- **Image loading** — `useGameImages` preloads multiple images in parallel, returns `HTMLImageElement` instances
-- **Drawing helpers** — `drawImageContain` (aspect-ratio-preserving contain), `drawBackground` (cover), `drawImageSafe` (exact rectangle, caller-controlled), `drawImageCentered` (square box)
-- **Device integration** — audio, vibration, and leaderboard APIs via `@aippy/runtime`
-- **Responsive design** — automatic adaptation from iPhone SE (375px) to iPad (744px) with proportional scaling
-
-## Tech Stack
-
-- **React 19** + **TypeScript** — type-safe UI framework
-- **Canvas 2D API** — continuous-motion game rendering
-- **Tailwind CSS** — utility-first styling for DOM games and overlays
-- **@aippy/runtime** — device APIs (audio, vibrate, leaderboard)
-
-## Use Cases
-
-- **Canvas games**: Flappy Bird, Doodle Jump, endless runners, pong, breakout, drawing games
-- **DOM games**: 2048, match-3, minesweeper, memory cards, whack-a-mole, quiz/trivia
-- **Interactive tools**: creative apps, data visualizations, educational content
-- **Social apps**: quiz, voting, personality tests
-
-## Project Structure
-
-```
-src/
-├── main.tsx                    # Application entry point
-├── App.tsx                     # Root component, manages viewport dimensions
-├── components/
-│   └── CanvasDemo.tsx          # Paddle Ball demo — reference implementation for designWidth: 400
-├── hooks/
-│   ├── useGameLoop.ts          # Game loop: rAF + delta-time + HiDPI + design-resolution scaling
-│   ├── useCanvasDPI.ts         # Low-level HiDPI canvas setup (used internally by useGameLoop)
-│   ├── useGameImages.ts        # Parallel image preloader, returns { images, loaded, progress }
-│   ├── useRefState.ts          # useRef wrapper with setState-like API
-│   └── useSFX.ts               # Tone.js SFX synthesis via useAudioContext (stable callbacks)
-├── utils/
-│   └── drawHelpers.ts          # drawImageContain, drawImageSafe, drawImageCentered, drawBackground
-├── index.css                   # Global styles + Tailwind
-└── vite-env.d.ts               # Vite type definitions
-```
-
-## Key APIs
-
-### `useGameLoop(options, update, draw, backgroundImage?)`
-
-The core game loop hook. Returns `{ canvasRef, logicalWidth, logicalHeight, getLogicalCoords }`.
-
-```tsx
-const {
-  canvasRef,
-  logicalWidth: lw,
-  logicalHeight: lh,
-} = useGameLoop(
-  { width, height },
-  ({ width: w, height: h, deltaTime }) => {
-    bird.vy += 800 * deltaTime;
-    bird.y += bird.vy * deltaTime;
-  },
-  (ctx, { width: w, height: h }) => {
-    drawImageContain(ctx, img, w / 2, bird.y, 40, 40);
-  },
-  images.bg
-);
-```
-
-Design scaling (400×600) is automatic. Write `BIRD_SIZE = 40`, `GRAVITY = 800` directly — content scales proportionally on every device.
-
-### `useGameImages(urlMap)`
-
-Preloads images in parallel. Returns `{ images, loaded, progress }`.
-
-```tsx
-const { images, loaded } = useGameImages({
-  bg: 'https://cdn.aippy.ai/asset/xxx.jpg',
-  bird: 'https://cdn.aippy.ai/asset/yyy.png',
-});
-// Canvas: drawImageContain(ctx, images.bird, x, y, w, h)
-// DOM: <img src={images.bird?.src} />
-```
-
-### Drawing Helpers (`@/utils/drawHelpers`)
-
-| Helper | Purpose |
-|---|---|
-| `drawImageContain(ctx, img, cx, cy, boxW, boxH)` | Draw centered, aspect-ratio preserved (object-contain). **Use for all game elements** |
-| `drawBackground(ctx, img, w, h)` | Full-canvas object-cover. Prefer `useGameLoop` 4th arg instead of calling directly |
-| `drawImageSafe(ctx, img, dx, dy, dw, dh)` | 9-param drawImage wrapper, exact rectangle fill — does NOT preserve aspect ratio |
-| `drawImageCentered(ctx, img, cx, cy, size)` | Draw centered in a square box — distorts non-square images |
+The application is deployed independently from AutoBE using the `JavaBE` directory in this repository.
 
 ## Development
 
+Requirements: Node.js 22 and pnpm.
+
 ```bash
 pnpm install
-pnpm run dev
+pnpm dev
 ```
 
-## Build
+Build and lint:
 
 ```bash
-pnpm run build
+pnpm build
+pnpm lint
 ```
 
-## License
+## Cloudflare Pages deployment
 
-Private
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the authoritative Cloudflare Pages configuration, required environment variables, Discord application setup, and role-gate behavior.
 
----
+JavaBE uses a server-side Discord membership check. Access is restricted to members of the configured guild who hold the required role. The current required role ID is `1567798397786918993`.
 
-# JavaBE Discord Activity deployment
+Never place OAuth client secrets or bot tokens in `VITE_*` variables, browser code, source files, or commits. Keep secrets in Cloudflare Pages runtime settings.
 
-JavaBE is deployed as a separate Discord Activity, independent from AutoBE.
+## Conversion fidelity
 
-- Discord Application ID: `1374571021889310821`
-- Embedded SDK: `@discord/embedded-app-sdk`
-- OAuth scope requested: `identify`
+JavaBE distinguishes recovered source behavior from inferred or unsupported behavior. A Java class name or animation clip name alone is not proof of an activation condition. When source state-machine data cannot be recovered, JavaBE must report the missing information rather than fabricate a controller that appears functional.
 
-## Cloudflare Pages
-
-Create/use the separate Pages project `javabe-activity`.
-
-| Setting | Value |
-|---|---|
-| Repository | `FrostyHostMC/DiscordMyBE` |
-| Root directory | `JavaBE` |
-| Production branch | `main` |
-| Build command | `pnpm build` |
-| Output directory | `dist` |
-| Node version | `22` |
-
-Configure:
-- Build variable: `VITE_DISCORD_CLIENT_ID=1374571021889310821`
-- Runtime variable: `DISCORD_CLIENT_ID=1374571021889310821`
-- Runtime secret: `DISCORD_CLIENT_SECRET` — enter a newly rotated client secret.
-
-Never put the bot token or client secret in Vite variables, source code, or GitHub. The current embedded Activity sign-in flow does not need a bot token.
-
-## Discord Developer Portal
-
-1. Enable Activities for the JavaBE application.
-2. Add `https://javabe-activity.pages.dev` as an Activity URL Mapping.
-3. Configure the OAuth redirect URI `https://127.0.0.1/` for the SDK authorization-code exchange if the portal requests it.
-4. Save and launch JavaBE from a Discord voice channel's Activity launcher.
-
-The separate bot user is optional. Create/invite one only if JavaBE later needs bot-driven server actions.
+Animation export validation can verify pack structure and references, but it cannot prove actual playback inside Minecraft Bedrock. Live playback must be verified in a Bedrock client.
