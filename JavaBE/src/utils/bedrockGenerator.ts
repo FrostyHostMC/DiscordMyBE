@@ -2778,7 +2778,7 @@ export async function convertJavaToBedrockAddon(
   // user just ran and compared against their own source evidence, so a conversion
   // regression is measured on every export instead of being discovered in game.
   try {
-    const regression = runRegressionSuite({
+    const regression = await runRegressionSuite({
       modId: remake.id,
       playableMode: isPlayableModeEnabled(),
       onLog: integrityLog,
