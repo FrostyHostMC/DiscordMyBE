@@ -185,14 +185,31 @@ export function inferMobBehaviorProfiles(
     // projectile classes and registration helpers. Four name matches often kept only the
     // entity shell and discarded the actual goal/attack evidence. Keep a wider, bounded set,
     // preferring classes that already carry bytecode-derived semantic signals.
-    const related = classes.map((entry) => ({
-      entry,
-      score: matchScore(mobId, entry.className),
-      hasBytecodeEvidence: (entry.signals ?? []).some((signal) => signal.startsWith('bytecode-signature:')),
-    }))
+    const directMatches = classes.filter((entry) =>
+      matchScore(mobId, entry.className) >= 2 ||
+      matchScore(mobId, entry.qualifiedClassName ?? '') >= 2,
+    );
+    const anchorNames = new Set(directMatches.flatMap((entry) =>
+      [entry.qualifiedClassName, entry.className].filter((name): name is string => Boolean(name)),
+    ));
+    const related = classes.map((entry) => {
+      const directScore = Math.max(
+        matchScore(mobId, entry.className),
+        matchScore(mobId, entry.qualifiedClassName ?? ''),
+      );
+      const qualified = entry.qualifiedClassName ?? '';
+      const nestedOwner = [...anchorNames].some((anchor) =>
+        qualified.startsWith(anchor + '$') || entry.superName === anchor,
+      );
+      return {
+        entry,
+        score: directScore >= 2 ? directScore : nestedOwner ? 2 : 0,
+        hasBytecodeEvidence: (entry.signals ?? []).some((signal) => signal.startsWith('bytecode-signature:')),
+      };
+    })
       .filter((match) => match.score >= 2)
       .sort((a, b) => b.score - a.score || Number(b.hasBytecodeEvidence) - Number(a.hasBytecodeEvidence))
-      .slice(0, 32);
+      .slice(0, 64);
     const signals = related.flatMap(({ entry }) => entry.signals ?? [])
       .filter((signal) => signal.startsWith('bytecode-signature:'));
     const text = related.map(({ entry }) => [entry.className, ...entry.methods, ...(entry.signals ?? [])].join(' ')).join(' ');

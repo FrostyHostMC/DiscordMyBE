@@ -19,6 +19,8 @@ import { findDuplicateIdentifierGroups, normalizeAssetIdentifier, normalizeAsset
 import { countSchemaErrors, runBedrockSchemaGate } from '@/utils/bedrockSchemaGate';
 import { measureAnimationPropertyPolicy, measureClientEntityReferencePruning, measureContentLogConformance, measureEventDeclarationIntegrity, measureGeometryIdentitySync, measureMissingItemIconReporting, measureMissingTextureReporting, measurePerFaceUvAcceptance, measureRenderControllerSchema, measureSoundConversion, measureClientEntityLinking, measureItemModelNormalization, measurePlayerAnimationBindingPreservation, measurePlayerClipActivationFallback, measureAnimationControllerReferenceGraph, measurePlayerMolangVariableInitialization, measureSpawnEggSourceIntegration } from '@/utils/regressionSchemaFixtures';
 
+import { inferMobBehaviorProfiles } from '@/utils/mobBehaviorProfiles';
+
 import { retargetBones } from '@/utils/dynamicBoneRetargeter';
 
 /**
@@ -1004,6 +1006,62 @@ function measureAutomaticBoneReconstruction(): RegressionFixtureResult {
   };
 }
 
+/** Regression: nested Java AI goals must remain associated with their owning mob. */
+function measureNestedMobBehaviorEvidence(): RegressionFixtureResult {
+  const started = performance.now();
+  const owner = 'com.example.entity.StormWarden';
+  const goal = 'com.example.entity.StormWarden$RangedAttackGoal';
+  const profile = inferMobBehaviorProfiles(['storm_warden'], [
+    {
+      className: 'StormWarden',
+      qualifiedClassName: owner,
+      role: 'entity',
+      methods: ['registerGoals', 'getMaxHealth'],
+      signals: ['bytecode-signature:hostile'],
+    },
+    {
+      className: 'RangedAttackGoal',
+      qualifiedClassName: goal,
+      superName: owner,
+      role: 'combat',
+      methods: ['canUse', 'start', 'tick', 'launchProjectile'],
+      signals: ['bytecode-signature:projectile-launch'],
+    },
+  ])['storm_warden'];
+  const checks: RegressionAssertion[] = [
+    {
+      label: 'nested goal class is attributed to its owning entity',
+      expected: goal,
+      actual: profile?.sourceClasses.includes(goal) ? goal : 'missing',
+      passed: Boolean(profile?.sourceClasses.includes(goal)),
+    },
+    {
+      label: 'projectile behavior from nested goal influences mob profile',
+      expected: 'ranged',
+      actual: profile?.attack ?? 'missing',
+      passed: profile?.attack === 'ranged',
+    },
+    {
+      label: 'bytecode evidence raises behavior confidence',
+      expected: 'bytecode-signature',
+      actual: profile?.confidence ?? 'missing',
+      passed: profile?.confidence === 'bytecode-signature',
+    },
+  ];
+  const failures = checks.filter((check) => !check.passed);
+  return {
+    id: 'nested-mob-behavior-evidence',
+    label: 'Nested mob AI goal ownership and behavior evidence',
+    category: 'Behavior',
+    status: failures.length === 0 ? 'passed' : 'failed',
+    metrics: { behaviorPreservation: failures.length === 0 ? 100 : 0 },
+    assertions: checks,
+    findings: failures.map((failure) => `${failure.label}: expected ${failure.expected}, got ${failure.actual}`),
+    unavailable: [],
+    durationMs: Math.round(performance.now() - started),
+  };
+}
+
 /** Runs the whole regression suite. Never throws: a broken fixture is reported as failed. */
 export function runRegressionSuite(options: RegressionRunOptions = {}): RegressionSuiteReport {
   const modId = options.modId ?? DEFAULT_MOD_ID;
@@ -1059,6 +1117,7 @@ export function runRegressionSuite(options: RegressionRunOptions = {}): Regressi
     measureClientEntityLinking(),
     measureSpawnEggSourceIntegration(),
     measureItemModelNormalization(),
+    measureNestedMobBehaviorEvidence(),
   ];
   fixtures.push(...extraFixtures);
   for (const extra of extraFixtures) {
