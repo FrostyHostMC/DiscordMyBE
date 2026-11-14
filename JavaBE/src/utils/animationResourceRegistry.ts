@@ -321,7 +321,8 @@ function collectEntities(
     const isPlayerDocument = (description as Record<string, unknown>).identifier === 'minecraft:player';
     // Mod archives and pack mergers can preserve extra directory prefixes around entity files.
     // Identify the player by its declared engine identifier, not only by the canonical path.
-    if (!(new RegExp('^entity/[^/]+[.]entity[.]json
+    if (!(new RegExp('^entity/[^/]+[.]entity[.]json$', 'i')).test(path) && !isPlayerDocument) continue;
+    const animations: Record<string, string> = {};
     if (description.animations && typeof description.animations === 'object') {
       for (const [key, value] of Object.entries(description.animations as Record<string, unknown>)) {
         if (typeof value === 'string') animations[key] = value;
