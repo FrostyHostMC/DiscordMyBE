@@ -21,7 +21,7 @@ import { MotionSmoothingPanel } from '@/components/MotionSmoothingPanel';
 import { BehaviorTranslationPanel } from '@/components/BehaviorTranslationPanel';
 import { ValidationDashboard } from '@/components/ValidationDashboard';
 import { ModelPortPanel } from '@/components/ModelPortPanel';
-import { exportAddonFile } from '@/utils/iosFileExport';
+import { deliverJavaBEAddon } from '@/utils/downloadDelivery';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
 type Workspace = 'convert' | 'review' | 'tools';
@@ -152,23 +152,20 @@ export default function App() {
     if (!remake) return;
     setExporting(true); setExportStatus(null);
     try {
-      const outcome = await exportAddonFile(remake.zipBytes, remake.fileName);
+      const outcome = await deliverJavaBEAddon(remake.zipBytes, remake.fileName, message => setExportStatus(message));
       setExportStatus(outcome.message);
       appendLog(`[EXPORT] ${outcome.message}`);
-      if (outcome.success) {
-        // The browser/share sheet has accepted the file. Keep the conversion report in
-        // memory, but release the large generated archive so JavaBE does not retain a
-        // second copy for the rest of the session. Nothing is uploaded or persisted.
-        setRemake(current => current ? {
-          ...current,
-          zipBytes: new Uint8Array(0),
-          behaviorPackFiles: {},
-          resourcePackFiles: {},
-          geyserBundle: current.geyserBundle
-            ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
-            : undefined,
-        } : current);
-      }
+      // The completed file now lives only in the short-lived R2 download handoff.
+      // Release the in-memory export and source pack maps after Discord opens the HTTPS download.
+      setRemake(current => current ? {
+        ...current,
+        zipBytes: new Uint8Array(0),
+        behaviorPackFiles: {},
+        resourcePackFiles: {},
+        geyserBundle: current.geyserBundle
+          ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
+          : undefined,
+      } : current);
       playSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
