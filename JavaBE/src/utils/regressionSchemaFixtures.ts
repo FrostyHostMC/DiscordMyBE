@@ -2259,18 +2259,6 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     return { name, unresolved: translated.unresolved, rejected: translated.rejected };
   });
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
-  const sourceMovementVariables = [
-    'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
-    'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw',
-  ] as const;
-  const sourceVariableTranslations = sourceMovementVariables.map((name) => {
-    const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
-    const translated = translateMolangExpression(
-      `variable.${name} = ${baseline?.expression ?? ''}`,
-      'player_entity',
-    );
-    return { name, unresolved: translated.unresolved, rejected: translated.rejected };
-  });
   const shieldIds = [
     'animation.seriousplayeranimations.shield',
     'animation.seriousplayeranimations.shield_sneak',
