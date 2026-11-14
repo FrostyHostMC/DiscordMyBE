@@ -17,6 +17,8 @@ import { classifyItemModels } from '@/utils/itemModelNormalizer';
 import { inspectAnimationControllerGraphs, normalizeEmptyControllerArrays } from '@/utils/animationControllerValidation';
 import { reconstructAnimationDependencies } from '@/utils/animationDependencyReconstructor';
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
+import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
+import { PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
 import { buildAnimationResourceRegistry } from '@/utils/animationResourceRegistry';
 import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
@@ -1987,6 +1989,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     resourcePackFiles: files,
     behaviorPackFiles: {}
   });
+  const playerDependencyReport = resolvePlayerDependencies({
+    modId: 'regress',
+    resourcePackFiles: files,
+    behaviorPackFiles: {}
+  });
   const preAnimation = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description?.scripts?.pre_animation ?? [];
   const assignments = Array.isArray(preAnimation) ? preAnimation : [];
   const required = ['variable.helmet_layer_visible', 'variable.chest_layer_visible', 'variable.leg_layer_visible', 'variable.boot_layer_visible'];
@@ -2001,6 +2008,17 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const initialized = required.filter((name) =>
     assignments.some((statement: string) => statement.startsWith(`${name} =`) && dynamicEquipmentQuery(statement)),
   );
+  const playerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
+  const playerScripts = playerEntity?.scripts ?? {};
+  const playerPreAnimation = Array.isArray(playerScripts.pre_animation) ? playerScripts.pre_animation as string[] : [];
+  const vanillaTcos = playerPreAnimation.find(statement => /^variable\.tcos0\s*=/.test(statement));
+  const vanillaSpear = playerPreAnimation.find(statement => /^variable\.melee_spear_equipped\s*=/.test(statement));
+  const baselineByAlias = new Map(PLAYER_BASELINE_ENTRIES.map(entry => [entry.alias, entry]));
+  const correctVanillaAliases =
+    baselineByAlias.get('base_pose')?.identifier === 'animation.humanoid.base_pose' &&
+    baselineByAlias.get('look_at_target')?.identifier === 'controller.animation.humanoid.look_at_target' &&
+    baselineByAlias.get('look_at_target')?.kind === 'controller' &&
+    baselineByAlias.get('first_person_base_pose')?.identifier === 'animation.player.first_person.base_pose';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
     label: 'player-owned clips are identified by entity registration rather than filenames',
@@ -2022,6 +2040,26 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     expected: 'helmet, chest, leg and boot visibility variables initialized',
     actual: initialized.join(', ') || 'none',
     passed: initialized.length === 4 && report.flaggedCount === 0
+  }, {
+    label: 'the vanilla player movement variable is restored with Mojang’s live expression',
+    expected: 'variable.tcos0 assigned from modified movement speed and distance',
+    actual: vanillaTcos ?? 'missing',
+    passed: Boolean(vanillaTcos && vanillaTcos.includes('query.modified_distance_moved') && vanillaTcos.includes('query.modified_move_speed'))
+  }, {
+    label: 'the vanilla spear-equipment variable is live rather than a constant default',
+    expected: "query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')",
+    actual: vanillaSpear ?? 'missing',
+    passed: Boolean(vanillaSpear && vanillaSpear.includes("query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear')"))
+  }, {
+    label: 'vanilla player aliases use the correct definition type and identifiers',
+    expected: 'base pose animation, look-at controller, first-person base pose animation',
+    actual: correctVanillaAliases ? 'all three mappings correct' : 'one or more mappings incorrect',
+    passed: correctVanillaAliases
+  }, {
+    label: 'baseline dependency restoration reports no unresolved player variables',
+    expected: 'zero unresolved vanilla player variables',
+    actual: playerDependencyReport.variables.unresolved.map(entry => entry.variable).join(', ') || 'none',
+    passed: playerDependencyReport.variables.unresolved.length === 0 && Boolean(vanillaTcos && vanillaSpear)
   }];
   return build('player-molang-variable-initialization', 'Player Molang variables (semantic resource ownership, equipment visibility)', 'Animation', checks, [], ['Live Minecraft Molang evaluation is not measured by this structural fixture.'], started);
 }
