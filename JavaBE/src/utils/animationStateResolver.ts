@@ -1,5 +1,4 @@
 import type { BedrockAnimationClip } from '@/utils/animationTranslator';
-import { inferClipTrigger } from '@/utils/animationTriggerInference';
 import { synthesizeStateController, type StateMachineState } from '@/utils/animationStateControllers';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
 
@@ -310,10 +309,10 @@ export function resolveAnimationStateConflicts(input: {
     const bones = clips[clipId]?.bones;
     return bones && typeof bones === 'object' ? Object.keys(bones as Record<string, unknown>) : [];
   };
-  const priorityOf = (clipId: string): { concept: string; priority: number } => {
-    const inferred = inferClipTrigger(clipId, clips[clipId] as unknown as BedrockAnimationClip);
-    const concept = inferred?.concept ?? 'pose-overlay';
-    return { concept, priority: CONCEPT_PRIORITY[concept] ?? 1 };
+  const priorityOf = (_clipId: string): { concept: string; priority: number } => {
+    // Clip identity and channel shape are not activation evidence. Until a source controller,
+    // state transition, or Java call site establishes semantics, keep a neutral priority.
+    return { concept: 'unresolved', priority: 1 };
   };
 
   const equipment = new Set<string>();
