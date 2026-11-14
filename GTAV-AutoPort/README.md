@@ -1,5 +1,7 @@
 # GTAV AutoPort
 
+**2026-11-14 — Guided workflow update:** the workbench now includes an in-app step-by-step porting guide, contextual next-step prompts, and first-run native-tool setup. `START-AUTOPORT.bat` installs web dependencies and attempts to fetch/build the pinned RageKit backend automatically when the local CMake/C++ toolchain is present. PS4 1.73 output remains unvalidated.
+
 **2026-11-14 — Upstream integration audit:** RageKit v0.3.1 is already fetched and built as the primary native RAGE engine; the latest CI failure was traced to a malformed newline escape in the browser intake module and has been corrected. See [upstream integration register](docs/UPSTREAM-TOOL-INTEGRATION.md) for which external projects are wired in versus reference-only. PS4 1.73 output is still not validated.
 
 **RPF archive validation added:** imported `.rpf` files now enter the native RAGE parser and isolated round-trip check alongside loose resources when the backend is configured. Encrypted archives may still require keys from the user's own game installation; this is validation only, not PS4 conversion.
@@ -19,6 +21,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 > **Development status:** ZIP/folder intake, vehicle metadata analysis, RSC7 inspection, automatic YFT/YTD inspection, and an optional ragekit native read/write round-trip backend are in the project. These are PC-side inspection and round-trip steps; no PS4 resource writer, exact-build validation, or installable package is claimed.
 
 ## Latest update
+
+**2026-11-14 — Guided porting and first-run tool preparation**
+- Added an in-app walkthrough with current-stage progress, contextual next-step prompts, and expandable setup/capability guidance.
+- Updated the Windows launcher to attempt the pinned RageKit CMake FetchContent download/build when CMake and the compiler toolchain are available; it falls back to intake/planning when unavailable.
+- Added native-engine executable auto-detection for standard build output paths, removing manual `GTAV_AUTOPORT_RK` setup in the normal launcher workflow.
+- Kept all PS4 resource conversion and installation gates fail-closed.
+
 
 **2026-11-13 — RPF archive validation added**
 - Added `.rpf` archives to the native RAGE inspection queue, using the same isolated `rk info` and `rk roundtrip` workflow as supported loose resources.
