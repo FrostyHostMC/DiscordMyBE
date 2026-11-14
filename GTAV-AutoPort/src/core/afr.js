@@ -65,6 +65,7 @@ export function buildAfrOverlayPlan({ files = [], mappings = {}, target = PS4_TA
       "Only explicit /app0 destination mappings are accepted; PC mod paths are never guessed.",
       "The AFR plugin must be installed and enabled separately in GoldHEN.",
       "AFR redirection is a candidate deployment mechanism, not proof that a specific GTA V 1.73 file path is read or compatible.",
+      "GTA V may request an RPF container instead of an individual loose asset; redirect the verified container path when the exact build requires it.",
       "Every mapped resource still requires exact CUSA00411 / 1.73 validation before deployment.",
       "This plan does not copy files to the console or modify plugins.ini.",
     ],
