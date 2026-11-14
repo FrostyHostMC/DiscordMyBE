@@ -637,7 +637,7 @@ export function resolvePlayerDependencies(input: {
   }
   /** A whole `variable.x = <expr>` the archive already contains, reused as the declaration. */
   const shippedAssignment = (name: string): string | null => {
-    const pattern = new RegExp(`variable\\.${name}\\s*=\\s*([^;"\n]+)`);
+    const pattern = new RegExp(`variable\\.${name}\\s*=(?!=)\\s*([^;"\n]+)`);
     // Source-side assignments may live in the behavior pack (for example in an item/entity
     // definition) rather than the resource pack. Search both packs before declaring the value lost.
     const sourceFiles = { ...files, ...(input.behaviorPackFiles ?? {}) };
