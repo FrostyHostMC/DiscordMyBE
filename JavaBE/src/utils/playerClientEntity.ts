@@ -5,6 +5,7 @@ import { translateMolangExpression } from '@/utils/molangCompatibility';
 import {
   VANILLA_PLAYER_ANIMATE as PLAYER_BASELINE_ANIMATE,
   VANILLA_PLAYER_ANIMATIONS as PLAYER_BASELINE_ANIMATIONS,
+  VANILLA_PLAYER_GEOMETRY_IDS,
 } from '@/utils/vanillaPlayerBaseline';
 import { ARMOR_LAYER_VISIBILITY_MAP } from '@/utils/molangScopeBinder';
 
@@ -192,6 +193,12 @@ export function buildPlayerClientEntity(options: {
   }
 
   const register = (clipId: string, preferred: string, aliasOnly = false): string => {
+    // The player entity can be rebuilt when bytecode discovery finds a controller late in the
+    // pipeline. Reuse the alias already pointing at this exact identifier; allocating "_2" aliases
+    // on each pass causes duplicate animation layers and contradictory Molang gates.
+    const existingAlias = Object.entries(animations).find(([, target]) => target === clipId)?.[0];
+    if (existingAlias) return existingAlias;
+
     let short = preferred;
     let index = 2;
     while (usedShortNames.has(short)) {
@@ -309,10 +316,19 @@ export function buildPlayerClientEntity(options: {
           identifier: 'minecraft:player',
           materials: { default: 'entity_alphatest', cape: 'entity_alphatest', ...existingMaterials },
           textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible', ...existingTextures },
+          // A source mod's geometry file is not automatically a valid player skin rig.
+          // In the fixture, the imported geometry used snake_case limb names while the converted
+          // clips targeted Bedrock's camelCase player bones, so every limb track missed. Only keep
+          // geometry IDs explicitly present in the vanilla player geometry contract; otherwise
+          // bind to the engine's native player skeleton.
           geometry: {
-            default: options.geometryIdentifier || existingGeometry.default || 'geometry.humanoid.custom',
-            cape: existingGeometry.cape || 'geometry.cape',
             ...existingGeometry,
+            default: options.geometryIdentifier && VANILLA_PLAYER_GEOMETRY_IDS.has(options.geometryIdentifier)
+              ? options.geometryIdentifier
+              : existingGeometry.default && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.default)
+                ? existingGeometry.default
+                : 'geometry.humanoid.custom',
+            cape: existingGeometry.cape === 'geometry.cape' ? existingGeometry.cape : 'geometry.cape',
           },
           scripts: {
             ...existingScripts,
