@@ -707,6 +707,7 @@ export function runUniversalAnimationDiscovery(
   const assetReferences: DiscoveredAssetReference[] = [];
   const dependencies: DiscoveredDependency[] = [];
   const animationGraph: Record<string, DiscoveredAnimationNode> = {};
+  const registeredClipFingerprints = new Set<string>();
 
   const firstPersonClips: string[] = [];
   const thirdPersonClips: string[] = [];
@@ -736,14 +737,25 @@ export function runUniversalAnimationDiscovery(
     sourcePath: string,
     detectedFormat = 'bedrock-anim-json',
   ) => {
-    if (!clipsByOwner[owner]) {
-      clipsByOwner[owner] = {};
-      owners.push(owner);
+    // Player animation packs can expose the same source clip through namespace and filename owners.
+    const canonicalOwner = /(?:^|\\/)player[_-]?animation(?:s)?(?:\\/|$)/i.test(sourcePath) ? 'player' : owner;
+    const canonicalClipId = clipId.trim().toLowerCase().replace(/\\\\/g, '/');
+    const fingerprint = `${canonicalClipId}::${JSON.stringify(clip)}`;
+    if (registeredClipFingerprints.has(fingerprint)) {
+      const existingPaths = sourcePathsByOwner[canonicalOwner] ?? [];
+      if (!existingPaths.includes(sourcePath)) existingPaths.push(sourcePath);
+      sourcePathsByOwner[canonicalOwner] = existingPaths;
+      return;
     }
-    clipsByOwner[owner][clipId] = clip;
-    const paths = sourcePathsByOwner[owner] ?? [];
+    registeredClipFingerprints.add(fingerprint);
+    if (!clipsByOwner[canonicalOwner]) {
+      clipsByOwner[canonicalOwner] = {};
+      owners.push(canonicalOwner);
+    }
+    clipsByOwner[canonicalOwner][clipId] = clip;
+    const paths = sourcePathsByOwner[canonicalOwner] ?? [];
     if (!paths.includes(sourcePath)) paths.push(sourcePath);
-    sourcePathsByOwner[owner] = paths;
+    sourcePathsByOwner[canonicalOwner] = paths;
     totalClipsDiscovered += 1;
 
     // Extract sound and particle references
@@ -821,7 +833,7 @@ export function runUniversalAnimationDiscovery(
     // Build relational node
     animationGraph[clipId] = {
       clipId,
-      owner,
+      owner: canonicalOwner,
       sourcePath,
       format: detectedFormat,
       boneChannels: boneNames,
@@ -914,7 +926,7 @@ export function runUniversalAnimationDiscovery(
       const hasAnimKeyword = /"(animations|minecraft:animations|animation_controllers|controllers|animators|bones|keyframes|state_machine|states|part_animations|poses)"\s*:/i.test(
         text,
       );
-      const hasGeoKeyword = /"(minecraft:geometry|geometry|outliner|bones)"\s*:/i.test(text);
+      const hasGeoKeyword = /"(minecraft:geometry|geometry|outliner)"\s*:/i.test(text);
 
       if (!hasAnimKeyword && !hasGeoKeyword) continue;
 
@@ -1055,46 +1067,8 @@ export function runUniversalAnimationDiscovery(
     });
   }
 
-  // 3. Fallback skeleton synthesis from animation channels when no geometry document was found
-  for (const [owner, clips] of Object.entries(clipsByOwner)) {
-    const hasSkel = skeletons.some((s) => s.owner === owner);
-    if (!hasSkel) {
-      const bones = new Set<string>();
-      for (const clip of Object.values(clips)) {
-        for (const b of Object.keys(clip.bones ?? {})) {
-          bones.add(b.toLowerCase());
-        }
-      }
-      if (bones.size > 0) {
-        const boneList = Array.from(bones);
-        const rootCandidate = boneList.find((b) => b === 'root' || b === 'body' || b === 'torso' || b === 'waist') ?? boneList[0];
-        const hierarchy: Record<string, string[]> = {};
-        const parents: Record<string, string> = {};
-        for (const b of boneList) {
-          if (b !== rootCandidate) {
-            parents[b] = rootCandidate;
-            if (!hierarchy[rootCandidate]) hierarchy[rootCandidate] = [];
-            hierarchy[rootCandidate].push(b);
-          }
-        }
-        const topology = classifySkeletonTopology(boneList, hierarchy);
-        const symmetricPairs = detectSymmetricPairs(boneList);
-        skeletons.push({
-          owner,
-          bones: boneList,
-          rootBones: [rootCandidate],
-          leafBones: boneList.filter((b) => b !== rootCandidate),
-          hierarchy,
-          parents,
-          depth: 2,
-          topology,
-          hasSymmetry: symmetricPairs.length > 0,
-          symmetricPairs,
-          locators: [],
-        });
-      }
-    }
-  }
+  // Animation tracks are not geometry. Never fabricate a hierarchy from the union of clip channels.
+  // Skeletons are registered only from actual geometry/model documents that declare parent relationships.
 
   // 4. Bind animation nodes to skeletons and controllers dynamically
   const knownBonesByOwner = new Map<string, Set<string>>();
