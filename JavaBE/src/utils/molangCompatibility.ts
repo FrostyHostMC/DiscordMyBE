@@ -59,9 +59,9 @@ export interface MolangCompatibilityReport {
 
 /** Queries available in animation documents, animation controllers and client entities. */
 export const ENTITY_QUERIES = new Set([
-  'anim_time', 'life_time', 'modified_move_speed', 'is_moving', 'is_sneaking', 'is_sprinting',
+  'anim_time', 'life_time', 'modified_move_speed', 'modified_distance_moved', 'position_delta', 'is_moving', 'is_sneaking', 'is_sprinting',
   'is_swimming', 'is_on_ground', 'is_riding', 'is_using_item', 'is_delayed_attacking', 'is_alive',
-  'is_first_person', 'is_in_water', 'is_jumping', 'hurt_time', 'health', 'is_item_name_any',
+  'is_first_person', 'is_in_water', 'is_jumping', 'hurt_time', 'health', 'is_item_name_any', 'equipped_item_any_tag', 'equipped_item_all_tags',
   'item_is_charged', 'item_in_use_duration', 'item_remaining_use_duration', 'ground_speed',
   'vertical_speed', 'position', 'rotation', 'time_of_day', 'cardinal_facing_2d',
   'body_y_rotation', 'body_x_rotation', 'head_x_rotation', 'head_y_rotation', 'variant',
@@ -69,7 +69,7 @@ export const ENTITY_QUERIES = new Set([
   'is_sitting', 'is_powered', 'is_charged', 'is_crawling', 'is_eating', 'is_chested',
   'armor_slot_count', 'knockback_resistance', 'scale', 'get_equipped_item_name',
   'get_equipped_item_slot', 'delta_time', 'frame_alpha', 'all_animations_finished',
-  'any_animation_finished', 'is_delayed_attacking_bool',
+  'any_animation_finished', 'is_delayed_attacking_bool', 'has_head_gear', 'equipped_item_any_tag',
 ]);
 
 /**
@@ -241,8 +241,10 @@ function cleanSlotArgument(raw: string): string {
 
 function canonicalSlotId(raw: string): string | null {
   const key = cleanSlotArgument(raw);
-  if (key in HAND_SLOT_ALIASES) return null;
+  // is_item_name_any uses inventory slot identifiers, including mainhand/offhand. The separate
+  // get_equipped_item_name normaliser uses canonicalHandSlot() and must not reject these here.
   if (DOCUMENTED_SLOT_IDS.has(key)) return key;
+  if (key in HAND_SLOT_ALIASES) return null;
   if (key in ARMOR_WORD_SLOTS) return ARMOR_WORD_SLOTS[key];
   if (/^slot\.[a-z0-9_.]+$/.test(key)) return key;
   return null;
@@ -323,8 +325,16 @@ export function normalizeEquippedItemQueries(expression: string): {
       const name = cleanSlotArgument(literal);
       // An empty name is a PRESENCE test: it is expressed with the slot-occupancy form, because
       // `query.is_item_name_any` without an item name is rejected by the engine outright.
+      const occupancy = name === '' ? slotOccupancyExpression(slot) : null;
+      if (name === '' && !occupancy) {
+        rejected.push({
+          call: match,
+          reason: `slot “${slot}” has no supported generic occupancy query; the source expression is preserved rather than emitting an invalid hand-only query`,
+        });
+        return match;
+      }
       const call = name === ''
-        ? slotOccupancyExpression(slot).expression
+        ? (occupancy as { expression: string }).expression
         : `query.is_item_name_any('${slot}', 0, '${name}')`;
       // The comparison itself decides the polarity: `name != ''` means the slot is OCCUPIED, while
       // `name == ''` means it is empty. With a concrete item name the mapping is the other way round.

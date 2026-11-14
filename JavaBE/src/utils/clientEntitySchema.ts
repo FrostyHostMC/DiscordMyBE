@@ -5,7 +5,7 @@ const VANILLA_PLAYER_ANIMATIONS = new Set([
   'animation.humanoid.look_at_target',
   'animation.player.base_pose',
   'animation.player.cape',
-  'animation.player.first_person_base_pose',
+  'animation.player.first_person.base_pose',
 ]);
 
 const VANILLA_PLAYER_CONTROLLERS = new Set([

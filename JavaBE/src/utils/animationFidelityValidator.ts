@@ -46,12 +46,17 @@ export type AnimationFidelityIssueCounts = Record<AnimationFidelityIssueScope, {
 }>;
 
 export interface ClipFidelity {
+  /** Original source identifier from the Java/resource animation input. */
   clipId: string;
+  /** Final Bedrock identifier selected through the source-to-export lineage map. */
+  shippedClipId: string;
   owner: string;
   perspective: string;
   shipped: boolean;
   registered: boolean;
   activated: boolean;
+  /** True when source code proves the definition is not part of the runtime state machine. */
+  intentionallyInactive?: boolean;
   /** 0-100, measured from sampled curve drift (100 = every sampled axis identical). */
   fidelity: number;
   bonesSource: number;
@@ -72,6 +77,8 @@ export interface AnimationFidelityReport {
   clipsInterpreted: number;
   clipsShipped: number;
   clipsMissing: number;
+  /** Shipped definitions proven unused by their source Java state machine. */
+  clipsDeliberatelyInactive: number;
   clipsFaithful: number;
   clipsApproximated: number;
   averageFidelity: number | null;
@@ -268,6 +275,61 @@ function collectDefinedIdentifiers(
   return ids;
 }
 
+function asShippedClip(id: string, clip: { animation_length?: number; bones: Record<string, Record<string, unknown>> }): ShippedClip {
+  return { id, path: '<player-retarget-stage>', bones: clip.bones, length: Number(clip.animation_length) || 0 };
+}
+
+function compareBedrockClips(
+  expected: ShippedClip,
+  actual: ShippedClip,
+): { channelsCompared: number; channelsLost: string[]; bonesLost: string[]; maxDrift: number; keyframesShipped: number; bonesShipped: number } {
+  const result = {
+    channelsCompared: 0,
+    channelsLost: [] as string[],
+    bonesLost: [] as string[],
+    maxDrift: 0,
+    keyframesShipped: 0,
+    bonesShipped: Object.keys(actual.bones).length,
+  };
+  for (const track of Object.values(actual.bones)) {
+    for (const channel of ['rotation', 'position', 'scale']) {
+      const value = track[channel];
+      if (value && typeof value === 'object' && !Array.isArray(value)) result.keyframesShipped += Object.keys(value as Record<string, unknown>).length;
+      else if (value) result.keyframesShipped += 1;
+    }
+  }
+  const duration = Math.max(expected.length, actual.length, 0.001);
+  const actualIndex = buildBoneIndex(Object.keys(actual.bones));
+  for (const [boneName, expectedTrack] of Object.entries(expected.bones)) {
+    const resolved = matchBoneName(boneName, actualIndex).bone;
+    const actualTrack = actual.bones[boneName] ?? (resolved ? actual.bones[resolved] : undefined);
+    if (!actualTrack) {
+      result.bonesLost.push(boneName);
+      continue;
+    }
+    for (const channelName of ['rotation', 'position', 'scale']) {
+      const expectedRaw = expectedTrack[channelName];
+      if (expectedRaw === undefined) continue;
+      const actualRaw = actualTrack[channelName];
+      if (actualRaw === undefined) {
+        result.channelsLost.push(`${boneName}.${channelName}`);
+        continue;
+      }
+      const expectedSamples = numericSamplesFromBedrock(expectedRaw, duration);
+      const actualSamples = numericSamplesFromBedrock(actualRaw, duration);
+      if (!expectedSamples || !actualSamples) continue;
+      result.channelsCompared += 1;
+      for (let index = 0; index < Math.min(expectedSamples.length, actualSamples.length); index += 1) {
+        for (let axis = 0; axis < 3; axis += 1) {
+          const drift = Math.abs(expectedSamples[index][axis] - actualSamples[index][axis]) / Math.max(Math.abs(expectedSamples[index][axis]), 1);
+          result.maxDrift = Math.max(result.maxDrift, drift);
+        }
+      }
+    }
+  }
+  return result;
+}
+
 function compareClip(
   source: IRAnimationClip,
   shipped: ShippedClip | undefined,
@@ -337,6 +399,16 @@ export function validateAnimationFidelity(input: {
   resourcePackFiles: Record<string, string | Uint8Array>;
   behaviorPackFiles?: Record<string, string | Uint8Array>;
   expectedClips?: string[];
+  /** Final Bedrock animation id -> original raw source animation id. */
+  sourceClipIdByExportedClipId?: Record<string, string>;
+  /** Canonical source animation id -> final Bedrock animation id. */
+  sourceClipIdToExportedClipId?: Record<string, string>;
+  /** Bedrock-translated source clips before player skeleton retargeting, keyed by canonical source id. */
+  preRetargetedPlayerClips?: Record<string, { animation_length?: number; bones: Record<string, Record<string, unknown>> }>;
+  /** Expected final player clips after retargeting, keyed by exported id. */
+  expectedRetargetedPlayerClips?: Record<string, { animation_length?: number; bones: Record<string, Record<string, unknown>> }>;
+  /** Source bone name -> Bedrock player bone name. */
+  sourceBoneToPlayerBone?: Record<string, string>;
   /** Registry of the exported pack; every count below is read from it so no two stages disagree. */
   registry?: AnimationResourceRegistry;
   /** Skeleton reconciliation, so composed tracks are reported as pose approximations. */
@@ -363,6 +435,7 @@ export function validateAnimationFidelity(input: {
     clipsInterpreted: 0,
     clipsShipped: 0,
     clipsMissing: 0,
+    clipsDeliberatelyInactive: 0,
     clipsFaithful: 0,
     clipsApproximated: 0,
     averageFidelity: null,
@@ -412,6 +485,10 @@ export function validateAnimationFidelity(input: {
   const sounds = collectDefinedIdentifiers(resourcePackFiles, 'sounds/', 'sound_definitions');
   const particles = collectDefinedIdentifiers(resourcePackFiles, 'particles/', 'particle_effect');
   const expected = new Set(input.expectedClips ?? []);
+  const exportedClipIdBySourceId = new Map(
+    Object.entries(input.sourceClipIdByExportedClipId ?? {}).map(([exportedId, sourceId]) => [sourceId, exportedId]),
+  );
+  const deliberatelyInactive = new Set(registry.metrics.deliberatelyInactiveClips);
 
   for (const { id: clipId, definitions } of registry.metrics.duplicateAnimationIds) {
     issues.push({
@@ -429,14 +506,65 @@ export function validateAnimationFidelity(input: {
 
   for (const clip of Object.values(ir.clips)) {
     report.clipsInterpreted += 1;
-    const shippedClip = shipped[clip.id];
-    // Bones the rendered skeleton genuinely lacks come from the registry's single bone audit:
-    // pack geometry plus the engine player rig the entity really renders. Re-deriving the
-    // skeleton here measured pack geometry only, which is what turned the player rig's own
-    // joints into false "missing bone" errors.
-    const missingBones = registry.metrics.bones.missingByClip[clip.id] ?? [];
-
-    const comparison = compareClip(clip, shippedClip);
+    const shippedClipId = input.sourceClipIdToExportedClipId?.[clip.id] ?? exportedClipIdBySourceId.get(clip.id) ?? clip.id;
+    const shippedClip = shipped[shippedClipId];
+    if (shippedClip && deliberatelyInactive.has(shippedClipId)) {
+      const sourceKeyframes = Object.values(clip.bones).reduce(
+        (total, bone) =>
+          total + (bone.position?.keyframes.length ?? 0) + (bone.rotation?.keyframes.length ?? 0) + (bone.scale?.keyframes.length ?? 0),
+        0,
+      );
+      report.clipsShipped += 1;
+      report.clipsDeliberatelyInactive += 1;
+      sourceBones += Object.keys(clip.bones).length;
+      report.sourceBoneTracks = sourceBones;
+      report.clips.push({
+        clipId: clip.id,
+        shippedClipId,
+        owner: clip.owner,
+        perspective: clip.perspective,
+        shipped: true,
+        registered: registryRegistered.has(shippedClipId),
+        activated: registryActivated.has(shippedClipId),
+        intentionallyInactive: true,
+        fidelity: 0,
+        bonesSource: Object.keys(clip.bones).length,
+        bonesShipped: 0,
+        bonesLost: [],
+        channelsCompared: 0,
+        channelsLost: [],
+        keyframesSource: sourceKeyframes,
+        keyframesShipped: 0,
+        durationSource: clip.timeline?.durationSeconds ?? 0,
+        durationShipped: shippedClip.length,
+        maxDrift: 0,
+      });
+      issues.push({
+        severity: 'info',
+        rule: 'source-clip-deliberately-inactive',
+        subject: clip.id,
+        detail: 'The source Java state machine does not load this definition. It is retained in the exported pack but excluded from player-pose fidelity scoring and automatic activation.',
+      });
+      continue;
+    }
+    const preRetargetRaw = input.preRetargetedPlayerClips?.[clip.id];
+    const preRetargetClip = preRetargetRaw ? asShippedClip(clip.id, preRetargetRaw) : undefined;
+    const expectedRetargetedRaw = input.expectedRetargetedPlayerClips?.[shippedClipId];
+    const expectedRetargetedClip = expectedRetargetedRaw ? asShippedClip(shippedClipId, expectedRetargetedRaw) : undefined;
+    const sourceComparison = compareClip(clip, preRetargetClip ?? shippedClip);
+    const exportComparison = expectedRetargetedClip && shippedClip ? compareBedrockClips(expectedRetargetedClip, shippedClip) : null;
+    const comparison = {
+      channelsCompared: sourceComparison.channelsCompared,
+      channelsLost: [...sourceComparison.channelsLost, ...(exportComparison?.channelsLost ?? [])],
+      bonesLost: [...sourceComparison.bonesLost, ...(exportComparison?.bonesLost ?? [])],
+      maxDrift: Math.max(sourceComparison.maxDrift, exportComparison?.maxDrift ?? 0),
+      keyframesShipped: exportComparison?.keyframesShipped ?? sourceComparison.keyframesShipped,
+      bonesShipped: sourceComparison.bonesShipped,
+    };
+    // The registry's bone audit sees source names; player retarget mappings make those tracks
+    // address a real vanilla player joint even when the final exported name differs.
+    const missingBones = (registry.metrics.bones.missingByClip[shippedClipId] ?? [])
+      .filter((bone) => !input.sourceBoneToPlayerBone?.[bone]);
     const drift = Math.min(1, comparison.maxDrift);
     const sourceKeyframes = Object.values(clip.bones).reduce(
       (total, bone) =>
@@ -445,11 +573,12 @@ export function validateAnimationFidelity(input: {
     );
     const entry: ClipFidelity = {
       clipId: clip.id,
+      shippedClipId,
       owner: clip.owner,
       perspective: clip.perspective,
       shipped: Boolean(shippedClip),
-      registered: registryRegistered.has(clip.id),
-      activated: registryActivated.has(clip.id),
+      registered: registryRegistered.has(shippedClipId),
+      activated: registryActivated.has(shippedClipId),
       fidelity: shippedClip && comparison.channelsCompared > 0 ? Math.round(100 * (1 - drift)) : 0,
       bonesSource: Object.keys(clip.bones).length,
       bonesShipped: comparison.bonesShipped,
@@ -537,7 +666,7 @@ export function validateAnimationFidelity(input: {
         subject: clip.id,
         detail: 'The clip ships as a definition but no client entity registers it, so it can never be selected.',
       });
-    } else if (!entry.activated) {
+    } else if (!entry.activated && !deliberatelyInactive.has(shippedClipId)) {
       issues.push({
         severity: 'error',
         rule: 'registered-not-activated',
@@ -692,7 +821,7 @@ export function validateAnimationFidelity(input: {
     'playback: 0 verified — nothing here runs inside a Bedrock client.',
   ];
   report.summary =
-    `Animation audit: ${report.clipsInterpreted} interpreted → ${report.clipsShipped} shipped (${report.clipsMissing} missing); ` +
+    `Animation audit: ${report.clipsInterpreted} interpreted → ${report.clipsShipped} shipped (${report.clipsMissing} missing, ${report.clipsDeliberatelyInactive} deliberately inactive); ` +
     `${report.channelsCompared} channel(s) sampled at ${SAMPLE_COUNT} points, curve preservation ${curveFidelityLabel} ` +
     `(${report.clipsFaithful} faithful, ${report.clipsApproximated} approximated); source bone tracks ${report.sourceBoneTracksRetained}/${report.sourceBoneTracks} retained (${report.boneTrackCoverage}%), ` +
     `final skeleton bindings ${registry.metrics.bones.checked > 0 ? `${report.skeletonCoverage}% (${registry.metrics.bones.resolved}/${registry.metrics.bones.checked})` : 'not measured'} with ${registry.metrics.bones.unresolved.length} unresolved; ` +

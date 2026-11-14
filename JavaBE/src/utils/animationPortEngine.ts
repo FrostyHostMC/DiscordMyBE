@@ -166,19 +166,37 @@ function bridgePlayerRigClips(
   clipsByOwner: Record<string, Record<string, BedrockAnimationClip>>,
   log: (line: string) => void,
   sourceSkeletons: UniversalAnimationDiscoveryReport['skeletons'] = [],
+  sourceClipIdsByOwner: Record<string, Record<string, string>> = {},
 ): {
   clips: Record<string, BedrockAnimationClip>;
   clipIds: string[];
   /** Original source identifiers represented by the retargeted player clips. */
   sourceClipIds: string[];
+  /** Exact raw source-document key for each retargeted player animation id. */
+  sourceClipIdByPlayerClipId: Record<string, string>;
+  /** Canonical source animation id -> final retargeted player animation id. */
+  sourceClipIdToPlayerClipId: Record<string, string>;
+  /** Bedrock-translated clips before player bone/hierarchy retargeting, keyed by canonical source id. */
+  preRetargetClips: Record<string, BedrockAnimationClip>;
+  /** Expected final player clips after the retargeting stage, keyed by exported id. */
+  expectedRetargetedClips: Record<string, BedrockAnimationClip>;
+  /** Source bone name -> Bedrock player bone name. */
+  sourceBoneToPlayerBone: Record<string, string>;
   mappingCount: number;
   unmappedBones: string[];
   learnedAliases: number;
 } {
   const merged: Record<string, BedrockAnimationClip> = {};
-  for (const ownerClips of Object.values(clipsByOwner)) Object.assign(merged, clipsWithMotion(ownerClips));
+  const sourceClipIdByMergedClipId: Record<string, string> = {};
+  for (const [owner, ownerClips] of Object.entries(clipsByOwner)) {
+    const usable = clipsWithMotion(ownerClips);
+    Object.assign(merged, usable);
+    for (const clipId of Object.keys(usable)) {
+      sourceClipIdByMergedClipId[clipId] = sourceClipIdsByOwner[owner]?.[clipId] ?? clipId;
+    }
+  }
   if (Object.keys(merged).length === 0) {
-    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, sourceClipIdToPlayerClipId: {}, preRetargetClips: {}, expectedRetargetedClips: {}, sourceBoneToPlayerBone: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -195,7 +213,7 @@ function bridgePlayerRigClips(
   const fit = mapClipsToPlayerSkeleton(merged, 'player-animation-bridge', 1, sourceParents);
   if (!fit) {
     log('[ANIMATION-BRIDGE] No clip set in the mod has any bone track that resolves onto the player skeleton; nothing was force-mapped onto the player.');
-    return { clips: {}, clipIds: [], sourceClipIds: [], mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+    return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
   }
   const auditExact = fit.rigAudit.filter((bone) => bone.status === 'exact').length;
   const auditVariant = fit.rigAudit.filter((bone) => bone.status === 'variant-compatible').length;
@@ -213,6 +231,9 @@ function bridgePlayerRigClips(
   for (const warning of hierarchy.warnings.slice(0, 8)) log(`[PLAYER-HIERARCHY] ${warning}`);
   const renamed: Record<string, BedrockAnimationClip> = {};
   const sourceClipIds: string[] = [];
+  const sourceClipIdByPlayerClipId: Record<string, string> = {};
+  const sourceClipIdToPlayerClipId: Record<string, string> = {};
+  const sourceBoneToPlayerBone = Object.fromEntries(fit.mappings.map((mapping) => [mapping.source, mapping.bone]));
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
@@ -230,6 +251,8 @@ function bridgePlayerRigClips(
     }
     renamed[id] = mapped;
     sourceClipIds.push(clipId);
+    sourceClipIdByPlayerClipId[id] = sourceClipIdByMergedClipId[clipId] ?? clipId;
+    sourceClipIdToPlayerClipId[clipId] = id;
   }
   for (const mapping of fit.mappings.slice(0, 10)) {
     log(
@@ -278,6 +301,11 @@ function bridgePlayerRigClips(
     clips: renamed,
     clipIds: Object.keys(renamed),
     sourceClipIds,
+    sourceClipIdByPlayerClipId,
+    sourceClipIdToPlayerClipId,
+    preRetargetClips: merged,
+    expectedRetargetedClips: renamed,
+    sourceBoneToPlayerBone,
     mappingCount: fit.mappings.length,
     unmappedBones: fit.unmapped,
     learnedAliases: fit.learnedAliases,
@@ -352,6 +380,16 @@ export interface AnimationPortResult {
   playerRigClipsBridged?: number;
   /** Source clip identifiers already represented by retargeted player-bridge clips. */
   playerSourceClipIds?: string[];
+  /** Exact raw source-document key for each retargeted player animation id. */
+  playerSourceClipIdByPlayerClipId?: Record<string, string>;
+  /** Canonical source animation id -> final retargeted player animation id. */
+  playerSourceClipIdToPlayerClipId?: Record<string, string>;
+  /** Bedrock-translated player clips before bone/hierarchy retargeting, keyed by canonical source id. */
+  playerPreRetargetClips?: Record<string, BedrockAnimationClip>;
+  /** Expected final player clips after retargeting, keyed by exported id. */
+  playerExpectedRetargetedClips?: Record<string, BedrockAnimationClip>;
+  /** Source bone name -> Bedrock player bone name. */
+  playerSourceBoneToPlayerBone?: Record<string, string>;
   /** Number of source-to-Bedrock bone mappings applied by the player animation bridge. */
   playerRigBoneMappings?: number;
   /** Player bone names the bridge could not resolve (reported, never silently dropped). */
@@ -448,6 +486,11 @@ export function portMobAndPlayerAnimations(
     const bucket = geckolib.clipsByOwner[owner] ?? {};
     Object.assign(bucket, additionalAnimations.clipsByOwner[owner]);
     geckolib.clipsByOwner[owner] = bucket;
+    const sourceIds = geckolib.sourceClipIdsByOwner ?? {};
+    const ownerSourceIds = sourceIds[owner] ?? {};
+    Object.assign(ownerSourceIds, additionalAnimations.sourceClipIdsByOwner?.[owner] ?? {});
+    sourceIds[owner] = ownerSourceIds;
+    geckolib.sourceClipIdsByOwner = sourceIds;
     if (!geckolib.owners.includes(owner)) geckolib.owners.push(owner);
     collectedAnimationIds.push(...Object.keys(additionalAnimations.clipsByOwner[owner]));
   }
@@ -513,7 +556,12 @@ export function portMobAndPlayerAnimations(
   // 2a. Granular Java-bone mapping layer: bind the mod's own player-rig clips to verified
   // Bedrock bones. Evidence-gated per-clip bindings drive them; no generic state controller
   // guesses which source clip means idle, move, attack or hurt.
-  const playerRigBridge = bridgePlayerRigClips(rigClassification.playerClipsByOwner, log, additionalAnimations.discoveryReport?.skeletons ?? []);
+  const playerRigBridge = bridgePlayerRigClips(
+    rigClassification.playerClipsByOwner,
+    log,
+    additionalAnimations.discoveryReport?.skeletons ?? [],
+    geckolib.sourceClipIdsByOwner ?? {},
+  );
   if (playerRigBridge.clipIds.length === 0) {
     log(
       '[OWNERSHIP] No clip is mapped onto the Bedrock player skeleton: no player class, player-only API, or explicit player source-rig evidence proved an owner for this clip set.',
@@ -558,6 +606,7 @@ export function portMobAndPlayerAnimations(
       .map((it) => `${modId}:${it.id}`);
     const triggerReport = translatePlayerTriggers({
       clips: playerRigBridge.clips,
+      sourceClipIdsByClipId: playerRigBridge.sourceClipIdByPlayerClipId,
       archiveEntries,
       mainhandItemIds,
       onLog: log,
@@ -565,10 +614,10 @@ export function portMobAndPlayerAnimations(
     playerTriggers = triggerReport;
     // Activation mechanism. Registering a clip is not activating it: several ported clips whose
     // conditions all evaluate true at once average into one pose over the vanilla locomotion, which
-    // reads in game as "the mod is installed but the player still moves like vanilla". The clips that
-    // carry a translated trigger therefore become mutually exclusive states of ONE generated
-    // controller, declared after the vanilla root controller so an active ported state answers last
-    // and wins while vanilla keeps driving whenever no ported state is true.
+    // reads in game as "the mod is installed but the player still moves like vanilla". Base clips
+    // therefore become mutually exclusive states of the generated locomotion controller. Source
+    // clips explicitly marked as overlays receive a separate concurrent controller so shield poses
+    // can blend over locomotion without competing for its state.
     const playerControllers = synthesizePlayerAnimationController({
       modId,
       clips: playerRigBridge.clips,
@@ -624,7 +673,7 @@ export function portMobAndPlayerAnimations(
       `[WIRE] Player client entity generated: ${playerWiring.report.clipsRegistered} ported clip(s) and ${playerWiring.report.controllersRegistered} controller(s) registered, ${playerWiring.report.animateEntries} scripts.animate entry/entries (${playerWiring.report.firstPersonClips.length} first-person / ${playerWiring.report.thirdPersonClips.length} third-person track(s)).`,
     );
     log(
-      `[WIRE] Activation: ${playerWiring.report.clipsActivated} clip(s) have an activation path — ${playerWiring.report.controllerDrivenClips.length} through the generated player animation controller (declared after the vanilla root controller, so an active ported state answers last and wins), ${playerWiring.report.scriptedClips.length} from the shipped behaviour script, ${playerWiring.report.unconditionalClips.length} with no recoverable condition and therefore animated continuously for their own perspective (registered AND reachable, never silently dropped).`,
+      `[WIRE] Activation: ${playerWiring.report.clipsActivated} clip(s) have an activation path — ${playerWiring.report.controllerDrivenClips.length} through the generated player animation controller(s) (declared after the vanilla root controller, so active ported states answer last and win), ${playerWiring.report.scriptedClips.length} from the shipped behaviour script, ${playerWiring.report.unconditionalClips.length} with no recoverable condition and therefore animated continuously for their own perspective (registered AND reachable, never silently dropped).`,
     );
     if (playerWiring.report.unresolvedClips.length > 0) {
       log(
@@ -1362,6 +1411,11 @@ export function portMobAndPlayerAnimations(
     geckolibBoundOwners,
     playerRigClipsBridged: playerRigBridge.clipIds.length,
     playerSourceClipIds: playerRigBridge.sourceClipIds,
+    playerSourceClipIdByPlayerClipId: playerRigBridge.sourceClipIdByPlayerClipId,
+    playerSourceClipIdToPlayerClipId: playerRigBridge.sourceClipIdToPlayerClipId,
+    playerPreRetargetClips: playerRigBridge.preRetargetClips,
+    playerExpectedRetargetedClips: playerRigBridge.expectedRetargetedClips,
+    playerSourceBoneToPlayerBone: playerRigBridge.sourceBoneToPlayerBone,
     playerRigBoneMappings: playerRigBridge.mappingCount,
     playerRigUnmappedBones: playerRigBridge.unmappedBones,
     playerRigLearnedBoneAliases: playerRigBridge.learnedAliases,

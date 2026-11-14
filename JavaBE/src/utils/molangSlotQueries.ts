@@ -36,7 +36,7 @@ export function documentedSlotId(raw: string): string {
 }
 
 /** "Is this slot occupied?", expressed in a signature the destination accepts. */
-export function slotOccupancyExpression(slot: string): { expression: string; reason: string } {
+export function slotOccupancyExpression(slot: string): { expression: string; reason: string } | null {
   const id = documentedSlotId(slot);
   const handSlot = id === 'slot.weapon.mainhand'
     ? 'main_hand'
@@ -54,12 +54,9 @@ export function slotOccupancyExpression(slot: string): { expression: string; rea
     };
   }
 
-  // No generic occupancy query exists for armour slots. Do not fabricate an
-  // item-name test or invert an air test; callers must report this as unresolved.
-  return {
-    expression: `query.get_equipped_item_name('${id}', 0)`,
-    reason: `the ${id} slot is not a supported hand argument and cannot be safely translated`,
-  };
+  // get_equipped_item_name is hand-only. There is no evidence-backed generic occupancy
+  // expression for an arbitrary armour slot, so return null and let the caller report it.
+  return null;
 }
 
 /** Splits a call's argument list, ignoring commas inside quotes. */
@@ -118,8 +115,9 @@ function itemNameArguments(args: string[]): string[] {
 }
 
 /**
- * Rewrites every `query.is_item_name_any` call that carries no item name into the occupancy form.
- * Calls that test concrete names are left untouched, so an evidence-backed item test keeps working.
+ * Rewrites `query.is_item_name_any` calls that carry no item name only when the slot is a hand.
+ * Generic armour occupancy has no supported expression without a concrete item list, so it is
+ * preserved and reported instead of guessed. Calls that test concrete names are left untouched.
  */
 export function repairItemNameQueryArity(expression: string): {
   expression: string;
@@ -150,9 +148,13 @@ export function repairItemNameQueryArity(expression: string): {
         });
       } else {
         const occupancy = slotOccupancyExpression(slot);
-        out += expression.slice(cursor, match.index) + occupancy.expression;
-        cursor = close + 1;
-        repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+        if (!occupancy) {
+          rejected.push({ call, reason: `the ${slot} occupancy test has no supported destination query` });
+        } else {
+          out += expression.slice(cursor, match.index) + occupancy.expression;
+          cursor = close + 1;
+          repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+        }
       }
     }
     pattern.lastIndex = close + 1;
