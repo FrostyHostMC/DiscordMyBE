@@ -1,3 +1,11 @@
+## 2026-11-14 — Skyline DLC intake and report safety
+- Added a read-only GTA V DLC `content.xml` inspector that extracts declared data-file paths, resource types and disabled-file entries without executing mount instructions.
+- Added a dedicated manifest panel in the workbench so the imported DLC layout can be reviewed alongside the RPF inventory.
+- Classified `.txt` and `.md` readmes/instructions as documentation rather than unknown file types; routes them to a manual instruction-review stage.
+- Added defensive validation for incomplete port-plan and native-engine reports, plus a guarded export action to prevent a null summary from crashing the UI.
+- Added regression tests for documentation classification/planning and DLC manifest parsing.
+- Kept PS4 path mapping and CUSA00411 / GTA V 1.73 compatibility locked pending exact-build reference evidence.
+
 ## 2026-11-14 — Real nested RPF CLI integration test
 - Added a CI integration script that builds a synthetic nested RPF archive with the pinned RageKit CLI, lists root and nested entries through the real TSV command, and extracts a nested file through `rk rpf cat`.
 - Wired the integration test into the RageKit CI job after the native CLI build, complementing pure parser tests with real archive read/write coverage.
