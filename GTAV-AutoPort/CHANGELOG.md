@@ -1,3 +1,7 @@
+## 2026-11-14 — Real nested RPF CLI integration test
+- Added a CI integration script that builds a synthetic nested RPF archive with the pinned RageKit CLI, lists root and nested entries through the real TSV command, and extracts a nested file through `rk rpf cat`.
+- Wired the integration test into the RageKit CI job after the native CLI build, complementing pure parser tests with real archive read/write coverage.
+
 ## 2026-11-14 — GoldHEN AFR overlay planning
 - Researched the official GoldHEN Application File Redirector (AFR) mapping documented by GoldHEN: game `/app0/...` paths map under `/data/GoldHEN/AFR/<title-id>/...`.
 - Added a guarded planner that accepts only explicit PS4 `/app0` mappings, validates CUSA title IDs, rejects traversal/encoded separators/Windows paths and duplicate destinations, and produces review-only staging paths.
