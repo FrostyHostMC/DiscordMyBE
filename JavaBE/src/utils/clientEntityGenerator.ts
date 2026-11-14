@@ -22,7 +22,6 @@ import { resolveEntityMaterial } from '@/utils/entityMaterials';
 export const CLIENT_ENTITY_LINK_RULE =
   'Every behavior entity must have a client entity file that binds a geometry identifier a shipped model declares and a texture path a shipped PNG resolves to; the file is generated from that evidence or the entity is reported UNRESOLVED.';
 
-const MAX_GENERATED = 120;
 
 export interface ClientEntityGenerationReport {
   behaviorEntities: number;
@@ -80,7 +79,7 @@ function collectBehaviorEntities(
   const entities: Array<{ identifier: string; short: string }> = [];
   const seen = new Set<string>();
   for (const path of Object.keys(bp)) {
-    if (!/^entities\/[^/]+\.json$/i.test(path)) continue;
+    if (!/^entities\/.+\.json$/i.test(path)) continue;
     const doc = parseJson(bp[path]);
     const identifier = doc?.['minecraft:entity']?.description?.identifier;
     if (typeof identifier !== 'string' || !identifier.trim()) continue;
@@ -97,7 +96,7 @@ function collectBehaviorEntities(
 function collectClientIdentifiers(rp: Record<string, PackFile>): Set<string> {
   const identifiers = new Set<string>();
   for (const path of Object.keys(rp)) {
-    if (!/^entity\/[^/]+\.entity\.json$/i.test(path)) continue;
+    if (!/^entity\/.+\.entity\.json$/i.test(path)) continue;
     const identifier = parseJson(rp[path])?.['minecraft:client_entity']?.description?.identifier;
     if (typeof identifier === 'string' && identifier.trim()) identifiers.add(identifier.trim());
   }
@@ -139,20 +138,24 @@ function collectEntitySkins(rp: Record<string, PackFile>): SkinEntry[] {
 }
 
 function pickGeometry(entries: GeometryEntry[], wanted: string): GeometryEntry | null {
-  const exact = entries.find((entry) => entry.reduced === wanted);
-  if (exact) return exact;
-  return entries.find((entry) => sameIdentity(entry.reduced, wanted)) ?? null;
+  const exact = entries.filter((entry) => entry.reduced === wanted);
+  if (exact.length === 1) return exact[0];
+  if (exact.length > 1) return null;
+  // Loose suffix matches must be unique; a first-match guess can bind the wrong mob model.
+  const candidates = entries.filter((entry) => sameIdentity(entry.reduced, wanted));
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 function pickSkin(entries: SkinEntry[], wanted: string): SkinEntry | null {
-  const identity = entries.filter((entry) => entry.reduced === wanted);
-  const pool = identity.length > 0 ? identity : entries.filter((entry) => sameIdentity(entry.reduced, wanted));
-  if (pool.length === 0) return null;
-  // The client resolves mob skins from textures/entity first; then the shortest path.
-  return [...pool].sort((a, b) => {
-    if (a.inEntityFolder !== b.inEntityFolder) return a.inEntityFolder ? -1 : 1;
-    return a.path.split('/').length - b.path.split('/').length;
-  })[0];
+  const exact = entries.filter((entry) => entry.reduced === wanted);
+  const matches = exact.length > 0 ? exact : entries.filter((entry) => sameIdentity(entry.reduced, wanted));
+  if (matches.length === 0) return null;
+  // Prefer entity texture folders and then the shortest path, but refuse ambiguous ties.
+  const entitySheets = matches.filter((entry) => entry.inEntityFolder);
+  const preferred = entitySheets.length > 0 ? entitySheets : matches;
+  const minDepth = Math.min(...preferred.map((entry) => entry.path.split('/').length));
+  const best = preferred.filter((entry) => entry.path.split('/').length === minDepth);
+  return best.length === 1 ? best[0] : null;
 }
 
 /**
@@ -186,10 +189,7 @@ export function generateMissingClientEntities(input: {
 
   for (const entity of behavior) {
     if (clients.has(entity.identifier)) continue;
-    if (report.created >= MAX_GENERATED) {
-      report.unresolved.push(`${entity.identifier} (generation budget of ${MAX_GENERATED} files reached)`);
-      continue;
-    }
+
     const wanted = reduced(entity.short);
     const geometry = pickGeometry(geometries, wanted);
     const skin = pickSkin(skins, wanted);
