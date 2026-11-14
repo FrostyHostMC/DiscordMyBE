@@ -181,8 +181,18 @@ export function inferMobBehaviorProfiles(
 
   for (const mobId of mobIds) {
     const profile = baseProfile();
-    const related = classes.map((entry) => ({ entry, score: matchScore(mobId, entry.className) }))
-      .filter((match) => match.score >= 2).sort((a, b) => b.score - a.score).slice(0, 4);
+    // A mob's AI is commonly split across its entity class, nested goal classes,
+    // projectile classes and registration helpers. Four name matches often kept only the
+    // entity shell and discarded the actual goal/attack evidence. Keep a wider, bounded set,
+    // preferring classes that already carry bytecode-derived semantic signals.
+    const related = classes.map((entry) => ({
+      entry,
+      score: matchScore(mobId, entry.className),
+      hasBytecodeEvidence: (entry.signals ?? []).some((signal) => signal.startsWith('bytecode-signature:')),
+    }))
+      .filter((match) => match.score >= 2)
+      .sort((a, b) => b.score - a.score || Number(b.hasBytecodeEvidence) - Number(a.hasBytecodeEvidence))
+      .slice(0, 32);
     const signals = related.flatMap(({ entry }) => entry.signals ?? [])
       .filter((signal) => signal.startsWith('bytecode-signature:'));
     const text = related.map(({ entry }) => [entry.className, ...entry.methods, ...(entry.signals ?? [])].join(' ')).join(' ');
