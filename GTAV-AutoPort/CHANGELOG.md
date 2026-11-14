@@ -1,3 +1,10 @@
+## 2026-11-14 — PS4 source-build guide assessment
+- Reviewed the supplied community PS4 source-build guide and recorded its actual scope: full ORBIS game/update rebuild, not a general PC mod converter.
+- Flagged the explicit target mismatch (guide: firmware 9–11, 12 not recommended; GTA V 1.46; legacy ORBIS/VS2017 toolchain vs user target firmware 14.00 / CUSA00411 / GTA V 1.73).
+- Captured useful architecture implications for PS4-specific executable, shader, script, RPF-container and package stages without treating old instructions as a valid 1.73 recipe.
+- Added provenance/security cautions: do not disable antivirus, run opaque installers, or automate downloads of unverified proprietary source bundles.
+- Kept PS4 resource writers and deployment locked pending exact-build reference evidence.
+
 ## 2026-11-14 — Skyline DLC intake and report safety
 - Added a read-only GTA V DLC `content.xml` inspector that extracts declared data-file paths, resource types and disabled-file entries without executing mount instructions.
 - Added a dedicated manifest panel in the workbench so the imported DLC layout can be reviewed alongside the RPF inventory.
