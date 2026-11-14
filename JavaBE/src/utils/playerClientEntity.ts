@@ -192,6 +192,12 @@ export function buildPlayerClientEntity(options: {
   }
 
   const register = (clipId: string, preferred: string, aliasOnly = false): string => {
+    // The player entity can be rebuilt when bytecode discovery finds a controller late in the
+    // pipeline. Reuse the alias already pointing at this exact identifier; allocating "_2" aliases
+    // on each pass causes duplicate animation layers and contradictory Molang gates.
+    const existingAlias = Object.entries(animations).find(([, target]) => target === clipId)?.[0];
+    if (existingAlias) return existingAlias;
+
     let short = preferred;
     let index = 2;
     while (usedShortNames.has(short)) {
