@@ -119,6 +119,7 @@ export const VANILLA_PLAYER_DOCUMENT_PATHS = new Set<string>([
   'animations/player.animation.json',
   'animations/humanoid.animation.json',
   'animation_controllers/player.animation_controllers.json',
+  'animation_controllers/humanoid.animation_controllers.json',
   'render_controllers/player.render_controllers.json',
 ]);
 
