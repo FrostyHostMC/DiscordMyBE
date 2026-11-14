@@ -18,7 +18,7 @@ import { inspectAnimationControllerGraphs, normalizeEmptyControllerArrays } from
 import { reconstructAnimationDependencies } from '@/utils/animationDependencyReconstructor';
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
-import { PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
 import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
 import { translateMolangExpression } from '@/utils/molangCompatibility';
 import { guaranteePlayerBaselineWiring } from '@/utils/playerBaselineGuard';
@@ -2007,6 +2007,30 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     resourcePackFiles: files,
     behaviorPackFiles: {}
   });
+  const engineVariableFiles: Record<string, PackFile> = {
+    'entity/player.entity.json': JSON.stringify({
+      format_version: '1.10.0',
+      'minecraft:client_entity': {
+        description: { identifier: 'minecraft:player', animations: {}, scripts: {} }
+      }
+    }),
+    'animations/player_firstperson.animation.json': JSON.stringify({
+      format_version: '1.8.0',
+      animations: {
+        'animation.sample.vanilla_first_person': {
+          bones: {
+            leftarm: { position: ['0.0', 'variable.short_arm_offset_left', '0.0'] },
+            rightarm: { position: ['0.0', 'variable.short_arm_offset_right', '0.0'] }
+          }
+        }
+      }
+    })
+  };
+  const engineVariableReport = resolvePlayerDependencies({
+    modId: 'regress',
+    resourcePackFiles: engineVariableFiles,
+    behaviorPackFiles: {}
+  });
   const resolverPlayerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
   const resolverAnimations = resolverPlayerEntity?.animations ?? {};
   const resolverCorrectedVanillaAliases =
@@ -2105,6 +2129,14 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     expected: 'the guard restores no child aliases to scripts.animate',
     actual: `${playerBaselineGuardReport.animateEntriesRestored} direct activation(s) restored; ${vanillaRootOnly ? 'root-only' : 'child aliases also activated'}`,
     passed: playerBaselineGuardReport.animateEntriesRestored === 0 && vanillaRootOnly
+  }, {
+    label: 'vanilla first-person arm offsets are recognized as engine-provided variables',
+    expected: 'both Mojang arm-offset variables resolve without pack defaults',
+    actual: engineVariableReport.variables.unresolved.map((entry) => entry.variable).join(', ') || 'no unresolved variables',
+    passed: ENGINE_PROVIDED_MOLANG_VARIABLES.has('short_arm_offset_left') &&
+      ENGINE_PROVIDED_MOLANG_VARIABLES.has('short_arm_offset_right') &&
+      !engineVariableReport.variables.injected.some((statement) => statement.includes('short_arm_offset_')) &&
+      !engineVariableReport.variables.unresolved.some((entry) => entry.variable.startsWith('short_arm_offset_'))
   }, {
     label: 'baseline dependency restoration reports no unresolved player variables',
     expected: 'zero unresolved vanilla player variables',
