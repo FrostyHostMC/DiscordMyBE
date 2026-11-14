@@ -2022,12 +2022,16 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   // at least one item name, so "is this slot worn" uses the slot-occupancy form of
   // `get_equipped_item_name(slot, index)`. It stays live — never a constant — and the arity of every
   // emitted item query is asserted below.
-  const dynamicEquipmentQuery = (statement: string): boolean =>
-    /=\s*\(?\s*query\.(is_item_name_any|get_equipped_item_name)\(/.test(statement);
+  const vanillaLayerExpressions: Record<string, string> = {
+    'variable.helmet_layer_visible': '!query.has_head_gear',
+    'variable.chest_layer_visible': '1.0',
+    'variable.leg_layer_visible': '1.0',
+    'variable.boot_layer_visible': '1.0',
+  };
   const singleArgumentItemQuery = (statement: string): boolean =>
     /query\.is_item_name_any\(\s*'[^']*'\s*(?:,\s*\d+\s*)?\)/.test(statement);
   const initialized = required.filter((name) =>
-    assignments.some((statement: string) => statement.startsWith(`${name} =`) && dynamicEquipmentQuery(statement)),
+    assignments.some((statement: string) => statement.startsWith(`${name} = `) && statement.slice(statement.indexOf('=') + 1).trim().replace(/;$/, '') === vanillaLayerExpressions[name]),
   );
   const playerEntity = parse(files, 'entity/player.entity.json')?.['minecraft:client_entity']?.description;
   const playerScripts = playerEntity?.scripts ?? {};
@@ -2058,13 +2062,13 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     actual: `${assignments.filter((statement: string) => singleArgumentItemQuery(statement)).length} offending statement(s)`,
     passed: assignments.every((statement: string) => !singleArgumentItemQuery(statement))
   }, {
-    label: 'equipment visibility is derived from the matching armor slot query, not a constant',
-    expected: '4 dynamic query assignments',
-    actual: `${initialized.length} dynamic assignment(s)`,
-    passed: initialized.length === 4 && assignments.every((statement: string) => !required.some(name => statement.startsWith(`${name} = 0`)))
+    label: 'the four vanilla armour-layer variables match Mojang’s player baseline expressions',
+    expected: 'helmet uses !query.has_head_gear; chest, leg and boot use 1.0',
+    actual: `${initialized.length} exact vanilla assignments`,
+    passed: initialized.length === 4
   }, {
-    label: 'the player entity keeps all four variable initializers after the resolver pass',
-    expected: 'helmet, chest, leg and boot visibility variables initialized',
+    label: 'the player entity keeps all four source-backed vanilla layer declarations',
+    expected: 'all four Mojang baseline expressions injected in player scope',
     actual: initialized.join(', ') || 'none',
     passed: initialized.length === 4 && report.flaggedCount === 0
   }, {
