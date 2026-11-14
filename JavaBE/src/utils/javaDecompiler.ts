@@ -25,8 +25,8 @@ export function bytesToDataUrl(bytes: Uint8Array, mimeType = 'image/png'): strin
 }
 /**
  * Animation/audio/pose state suffixes. Texture or registry names ending with these
- * are state variants of an existing mob/item (e.g. kamikazeidle.png, gilbertambient.png,
- * sintaunt.png) — NOT standalone entities. Filtered everywhere registration happens.
+ * are state variants of an existing mob/item, not standalone entities. Filtered wherever
+ * registration evidence is collected.
  */
 const STATE_SUFFIX_RE = /(idle|walk|run|attack|ambient|taunt|scream|execute|reload|death|die|dead|hurt|stun|enraged|enrage|block|phase\d*|shoot|aim|charge\d*|swing|crawl|sit|sleep|open|close|kill|roar|howl|growl)$/i;
 
@@ -699,7 +699,7 @@ export function decompileJavaMod(
   const registeredEntities: string[] = [];
   const spawnableEntities: string[] = [];
   const seenLangIds = new Set<string>();
-  const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|jade|waila|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
+  const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
   // Reject only malformed/control/format-placeholder values. Display wording is
   // intentionally not blacklisted: valid mod content may use any word or phrase.
   const BAD_DISPLAY = /%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|[\\u0000-\\u001f]/i;
@@ -759,7 +759,7 @@ export function decompileJavaMod(
       const itemName = match[2].toLowerCase();
       if (!itemName) continue;
       if (/recipe|screen|menu|container|gui|creative|_tab|advancement|_particle|sound|block_entity|tooltip|desc|info|message|hint|debug|stat|event|action|mode|state|subtitle/i.test(itemName)) continue;
-      if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$|^[a-z]{1,2}$/i.test(itemName)) continue;
+      if (/%[sdf0-9]|§|\u00a7|%s|%d|_s$|_d$/i.test(itemName)) continue;
       // Keep unusual source identifiers; registration structure, not identifier wording, determines type.
       // Source identifiers are preserved regardless of their names.
       // Preserve identifiers of any length and token count.
@@ -777,7 +777,7 @@ export function decompileJavaMod(
         }
       } else {
         if (registeredItems.includes(readable)) continue;
-        if (/(^|_)backpack$/.test(itemName) && registeredItems.some(r => r.replace(/\s+/g, '_') === itemName)) continue;
+
         registeredItems.push(readable);
       }
     }
@@ -826,8 +826,8 @@ export function decompileJavaMod(
     const entityTexMatch = lower.match(/(?:^|\/)textures\/(?:entities|entity)\/(?:[^/]+\/)*([^/]+)\.png$/);
     if (entityTexMatch) {
       const raw = entityTexMatch[1];
-      // State/variant textures (e.g. gilbert/gilbertambient.png, chimera/chimerataunt.png)
-      // live in the mob's own folder — they are NOT separate mobs. Skip when the stem
+      // State/variant textures live in the mob's own folder, not as separate mobs. Skip when the stem
+
       // is prefixed by its parent folder name (mob id) or ends with an animation/audio
       // state suffix, otherwise every animation frame becomes a ghost entity + spawn egg.
       const folderSegs = lower.split('/');
