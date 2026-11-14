@@ -2,7 +2,8 @@ import assetsData from "@/config/assets";
 import type { DecompileClassSummary, DecompileStats } from '@/types/remaker';
 import type { ExtractedZipEntry } from '@/utils/zip';
 import { isGhostEntityName } from '@/utils/ghostEntityFilter';
-import { yieldToUi } from '@/utils/archiveScale';\nimport { analyzeJvmArchive } from '@/utils/jvmBytecodeIR';
+import { yieldToUi } from '@/utils/archiveScale';
+import { analyzeJvmArchive } from '@/utils/jvmBytecodeIR';
 export interface SourceTextureEntry {
   name: string;
   data: Uint8Array;
@@ -27,7 +28,7 @@ export function bytesToDataUrl(bytes: Uint8Array, mimeType = 'image/png'): strin
  * are state variants of an existing mob/item (e.g. kamikazeidle.png, gilbertambient.png,
  * sintaunt.png) — NOT standalone entities. Filtered everywhere registration happens.
  */
-const STATE_SUFFIX_RE = /(idle|walk|run|attack|ambient|taunt|scream|execute|reload|death|die|dead|hurt|stun|enraged|enrage|block|phase\\d*|shoot|aim|charge\\d*|swing|crawl|sit|sleep|open|close|kill|roar|howl|growl)$/i;
+const STATE_SUFFIX_RE = /(idle|walk|run|attack|ambient|taunt|scream|execute|reload|death|die|dead|hurt|stun|enraged|enrage|block|phase\d*|shoot|aim|charge\d*|swing|crawl|sit|sleep|open|close|kill|roar|howl|growl)$/i;
 
 export interface ParsedClass {
   className: string;
