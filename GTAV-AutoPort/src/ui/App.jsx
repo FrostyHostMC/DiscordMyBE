@@ -13,6 +13,7 @@ import { assessPs4Compatibility } from "../core/compatibility.js";
 import { auditModFiles } from "../core/modClassifier.js";
 import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
+import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -49,6 +50,7 @@ export default function App() {
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [dlcManifest, setDlcManifest] = useState(null);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -78,12 +80,17 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setModAudit(auditModFiles(result.files));
-      setPortPlan(buildUniversalPortPlan({ files: result.files }));
+      const generatedPlan = buildUniversalPortPlan({ files: result.files });
+      if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("AutoPort could not build a complete port plan for this import.");
+      setPortPlan(generatedPlan);
+      const contentXml = result.files.filter((file) => file.path.split("/").at(-1).toLowerCase() === "content.xml");
+      if (contentXml.length === 1) setDlcManifest(inspectGtaDlcManifest(contentXml[0].bytes, contentXml[0].path));
+      else if (contentXml.length > 1) setDlcManifest({ validXml: false, error: "Multiple content.xml files found. Separate the DLC packages before selecting a manifest.", entries: [], summary: { entryCount: 0, dataFiles: 0, fileTypes: {}, disabledFiles: 0 } });
       setFilter("all");
       const vehiclesMeta = result.files.find((file) => file.path.split("/").at(-1).toLowerCase() === "vehicles.meta");
       if (vehiclesMeta) {
@@ -103,7 +110,7 @@ export default function App() {
       const ragekitFiles = result.files.filter((file) => /\.(rpf|yft|ydr|ydd|ytd|ybn|ypt|ynv|ynd|ymap|ytyp|ycd|ysc|rel|awc|gxt2|ymf|ymt|yed|yfd|ybd|yvr|ywr|gfx)$/i.test(file.path));
       if (ragekitFiles.length) {
         setRagekitStatus("Running native RAGE read/round-trip validation…");
-        try { const nativeResult = await inspectRagekitAutomatically(result.files); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
+        try { const nativeResult = await inspectRagekitAutomatically(result.files); if (!nativeResult?.summary || !Array.isArray(nativeResult.reports)) throw new Error("The native RAGE helper returned an incomplete report. The source inventory and port plan are still available."); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
         catch (nativeError) { setRagekitStatus(nativeError?.message || "Native RAGE engine is not configured."); }
       } else setRagekitStatus("No ragekit-supported RAGE resources found in this import.");
     } catch (err) {
@@ -232,6 +239,10 @@ export default function App() {
         <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
+      {dlcManifest && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">GTA V DLC MANIFEST</div><h3>content.xml inspection</h3><p>{dlcManifest.validXml ? `${dlcManifest.summary.dataFiles} declared data file(s) across ${Object.keys(dlcManifest.summary.fileTypes).length} resource types` : dlcManifest.error}</p></div><span className="tag warning"><AlertTriangle size={13}/> READ ONLY</span></div>
+        {dlcManifest.validXml && <><div className="audit-grid"><div className="audit-card"><b>{dlcManifest.summary.entryCount}</b><span>manifest entries</span></div><div className="audit-card"><b>{dlcManifest.summary.dataFiles}</b><span>typed data files</span></div><div className="audit-card"><b>{dlcManifest.summary.disabledFiles}</b><span>disabled entries</span></div></div><div className="file-list">{dlcManifest.entries.slice(0,100).map((entry,index)=><div className="file-row" key={entry.filename || index}><FileText size={14}/><span className="file-name"><b>{entry.filename || "Unnamed entry"}</b><small>{entry.fileType || "No resource type declared"}</small></span><span className="file-ext">MANIFEST</span></div>)}</div><p className="native-disclaimer">Manifest paths are PC DLC references. AutoPort does not execute mount instructions or assume these paths exist in your PS4 1.73 game.</p></>}
+      </section>}
       {modAudit && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">AUTOMATIC MOD AUDIT</div><h3>Detected mod contents</h3><p>{modAudit.summary.fileCount} files classified · {Object.keys(modAudit.summary.familyCounts).length} content families · {modAudit.summary.attentionCount} items need review</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-ANALYZED</span></div>
         <div className="audit-grid">{Object.entries(modAudit.summary.familyCounts).sort((a,b)=>b[1]-a[1]).map(([family,count])=><div className="audit-card" key={family}><b>{count}</b><span>{family.replaceAll("-"," ")}</span></div>)}</div>
@@ -241,7 +252,7 @@ export default function App() {
         <p className="native-disclaimer">{modAudit.note}</p>
       </section>}
 
-      {portPlan && <section className="panel">
+      {portPlan?.summary && Array.isArray(portPlan.resources) && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">AUTOMATIC PORT PLAN</div><h3>Family-specific conversion worklist</h3><p>{portPlan.summary.fileCount} resources routed across {portPlan.summary.familyCount} families · {portPlan.summary.blockedCount} require an adapter or manual review</p></div><span className="tag warning"><AlertTriangle size={13}/> PLAN ONLY</span></div>
         <div className="audit-grid">
           {Object.entries(portPlan.summary.statusCounts).map(([status,count])=><div className="audit-card" key={status}><b>{count}</b><span>{status.replaceAll("-"," ")}</span></div>)}
@@ -249,7 +260,7 @@ export default function App() {
         <div className="file-list">{portPlan.pipeline.map((stage)=><div className="file-row" key={stage.stage}><FileText size={15}/><span className="file-name"><b>{stage.stage.replaceAll("-"," ")}</b><small>{stage.files.length} resource(s) · {stage.files.slice(0,3).join(", ")}{stage.files.length>3?" …":""}</small></span><span className="file-ext">PLANNED</span></div>)}</div>
         {portPlan.resources.filter((item)=>item.status!=="analysis-or-authoring-only").slice(0,16).map((item)=><div className="audit-warning" key={item.path}><AlertTriangle size={14}/><span><b>{item.path}</b> — {item.status.replaceAll("-"," ")} · {item.blocker}</span></div>)}
         <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
-        <button className="secondary-button" onClick={()=>downloadJson(portPlan,"gtav-autoport-port-plan.json")}><ArrowDownToLine size={15}/> Export port plan</button>
+        <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest AutoPort update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
       {ragekitResult && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RAGE RESOURCE ENGINE</div><h3>Read and round-trip validation</h3><p>{ragekitResult.summary.parsed} parsed · {ragekitResult.summary.byteExact} byte-exact · {ragekitResult.summary.failed} failed</p></div><span className="tag success"><CheckCircle2 size={13}/> ENGINE RAN</span></div>
