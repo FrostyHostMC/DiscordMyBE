@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, type CSSProperties } from 'react';
-import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench, Sparkles } from 'lucide-react';
+import { Cpu, RotateCcw, Download, Activity, Sliders, Wrench, Sparkles, ScanSearch, PackageCheck } from 'lucide-react';
 import { useRemakerAudio } from '@/hooks/useRemakerAudio';
 import { type ExtractedZipEntry } from '@/utils/zip';
 import { decompileAndInspectJarAsync } from '@/utils/javaDecompiler';
 import { convertJavaToBedrockAddon, type RemakeResult } from '@/utils/bedrockGenerator';
 import { type BedrockVersionTarget, type BedrockExperimentConfig, autoConfigureExperimentsForMod } from '@/utils/bedrockCapabilityQuery';
-import { GEYSER_VERSION_OPTIONS } from '@/utils/geyserVersionTable';
 import { runRegressionSuite } from '@/utils/regressionSuite';
 import { getArchiveBudget, pauseForUi, prioritizeArchiveEntries } from '@/utils/archiveScale';
 import type { DecompileStats, RegressionSuiteReport } from '@/types/remaker';
@@ -20,23 +19,21 @@ import { TexturePreviewComparison } from '@/components/TexturePreviewComparison'
 import { CapabilityQueryPanel } from '@/components/CapabilityQueryPanel';
 import { MotionSmoothingPanel } from '@/components/MotionSmoothingPanel';
 import { BehaviorTranslationPanel } from '@/components/BehaviorTranslationPanel';
-import { GeyserConfigPanel } from '@/components/GeyserConfigPanel';
 import { ValidationDashboard } from '@/components/ValidationDashboard';
 import { ModelPortPanel } from '@/components/ModelPortPanel';
 import { exportAddonFile } from '@/utils/iosFileExport';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
-type Workspace = 'convert' | 'audit' | 'tools' | 'more';
-type AppTab = 'deterministic' | 'auditor' | 'self_healing' | 'smoother' | 'parity' | 'behavior' | 'geyser' | 'validation' | 'models' | 'ai';
+type Workspace = 'convert' | 'review' | 'tools';
+type AppTab = 'deterministic' | 'auditor' | 'self_healing' | 'smoother' | 'parity' | 'behavior' | 'validation' | 'models';
 const workspaceTabs: Record<Workspace, { tab: AppTab; label: string }[]> = {
   convert: [{ tab: 'deterministic', label: 'Convert a mod' }],
-  audit: [{ tab: 'auditor', label: 'Texture audit' }, { tab: 'models', label: 'Models & bones' }, { tab: 'parity', label: 'Parity gaps' }, { tab: 'behavior', label: 'Behavior report' }, { tab: 'validation', label: 'Validation' }],
-  tools: [{ tab: 'self_healing', label: 'Repair overview' }, { tab: 'smoother', label: 'Motion smoothing' }],
-  more: [{ tab: 'geyser', label: 'Geyser output' }],
+  review: [{ tab: 'auditor', label: 'Textures & assets' }, { tab: 'models', label: 'Models & bones' }, { tab: 'behavior', label: 'Behavior porting' }, { tab: 'parity', label: 'Porting gaps' }, { tab: 'validation', label: 'Validation' }],
+  tools: [{ tab: 'self_healing', label: 'Repair & HUD tools' }, { tab: 'smoother', label: 'Animation tools' }],
 };
 const tabWorkspace: Record<AppTab, Workspace> = {
-  deterministic: 'convert', auditor: 'audit', models: 'audit', parity: 'audit', behavior: 'audit', validation: 'audit',
-  self_healing: 'tools', smoother: 'tools', ai: 'more', geyser: 'more',
+  deterministic: 'convert', auditor: 'review', models: 'review', parity: 'review', behavior: 'review', validation: 'review',
+  self_healing: 'tools', smoother: 'tools',
 };
 
 export default function App() {
@@ -46,11 +43,7 @@ export default function App() {
   const bgColor = '#09090D';
   const hapticsEnabled = false;
   const configuredUpscaling = true;
-  const configuredGeyser = false;
-  const configuredGeyserVersion = '2.6.0';
   const [upscalingEnabled, setUpscalingEnabled] = useState(() => configuredUpscaling && getAutoUpscaleLegacyTextures());
-  const [enableGeyser, setEnableGeyser] = useState(configuredGeyser);
-  const [geyserVersion, setGeyserVersion] = useState(configuredGeyserVersion || GEYSER_VERSION_OPTIONS[0]);
   const [targetVersion, setTargetVersion] = useState<BedrockVersionTarget>('1.21.50');
   const [experimentConfig, setExperimentConfig] = useState<BedrockExperimentConfig>({ targetVersion: '1.21.50', enableBetaApis: true, enableCameras: true, enableCustomUi: true, enableVoxelShapes: true, enableUpcomingCreatorFeatures: true, enablePbr: false, enableScriptEval: false });
   const [activeWorkspace, setActiveWorkspace] = useState<Workspace>('convert');
@@ -66,7 +59,6 @@ export default function App() {
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [showMolangSandbox, setShowMolangSandbox] = useState(false);
   const [isAutoHealing, setIsAutoHealing] = useState(false);
-  const [geyserExporting, setGeyserExporting] = useState(false);
   const [regression, setRegression] = useState<RegressionSuiteReport | null>(null);
   const [regressionRunning, setRegressionRunning] = useState(false);
   // Archive scanning results live in state, never in the render body.
@@ -111,7 +103,7 @@ export default function App() {
     setTargetVersion(automatic.targetVersion);
     setStage('analyzing'); setError(null); setExportStatus(null);
     appendLog(`[INIT] Starting Java mod analysis for Bedrock ${automatic.targetVersion}.`);
-    appendLog(`[SETTINGS] Texture resolution: ${upscalingEnabled ? 'legacy upscaling enabled' : 'original resolution preserved'}; Geyser output: ${enableGeyser ? `on (${geyserVersion})` : 'off'}.`);
+    appendLog(`[SETTINGS] Texture resolution: ${upscalingEnabled ? 'legacy upscaling enabled' : 'original resolution preserved'}.`);
     try {
       // Keep a very large archive inside the mobile budget before any scanning starts.
       const archiveBudget = getArchiveBudget();
@@ -141,7 +133,7 @@ export default function App() {
         await pauseForUi(24);
       }
       setStage('generating'); appendLog('[BUILD] Converting supported content and validating the generated add-on...');
-      const result = await convertJavaToBedrockAddon({ brief, fileName: sourceFile?.name || null, entries: workingEntries, decompileData: inspection, enableUpscaling: upscalingEnabled, targetVersion: automatic.targetVersion, experimentConfig: automatic.config, enableGeyser, geyserVersion, onLog: appendLog, onAutoRepairTrigger: () => setIsAutoHealing(true) });
+      const result = await convertJavaToBedrockAddon({ brief, fileName: sourceFile?.name || null, entries: workingEntries, decompileData: inspection, enableUpscaling: upscalingEnabled, targetVersion: automatic.targetVersion, experimentConfig: automatic.config, enableGeyser: false, geyserVersion: '2.6.0', onLog: appendLog, onAutoRepairTrigger: () => setIsAutoHealing(true) });
       setIsAutoHealing(false); setRemake(result); setStage('ready'); playSuccess();
       appendLog('[DONE] Add-on is ready. Review validation and unsupported-content notes before testing in Minecraft.');
     } catch (err) {
@@ -160,15 +152,6 @@ export default function App() {
       const message = err instanceof Error ? err.message : String(err);
       setExportStatus(`Export failed: ${message}`); appendLog(`[EXPORT ERROR] ${message}`); playError();
     } finally { setExporting(false); }
-  };
-  const handleExportGeyser = async () => {
-    if (!remake?.geyserBundle) return;
-    setGeyserExporting(true);
-    try {
-      const outcome = await exportAddonFile(remake.geyserBundle.zipBytes, remake.geyserBundle.fileName);
-      appendLog(`[GEYSER:EXPORT] ${outcome.message}`); playSuccess();
-    } catch (err) { appendLog(`[GEYSER:EXPORT ERROR] ${err instanceof Error ? err.message : String(err)}`); playError(); }
-    finally { setGeyserExporting(false); }
   };
   const handleRunRegression = () => {
     setRegressionRunning(true);
@@ -192,17 +175,24 @@ export default function App() {
   return (
     <div className="javabe-app-shell min-h-screen w-full font-sans text-slate-100" style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
       <div className="javabe-cosmic-backdrop" aria-hidden="true"><span className="javabe-cosmic-cloud javabe-cosmic-cloud--one" /><span className="javabe-cosmic-cloud javabe-cosmic-cloud--two" /><span className="javabe-cosmic-stars" /><span className="javabe-cosmic-horizon" /></div>
-      <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-5xl flex-col gap-3 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
+      <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
         <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/30 bg-violet-400/10"><Cpu className="h-5 w-5" style={{ color: accent }} /></div><div className="min-w-0"><h1 className="truncate text-base font-bold tracking-tight text-white">{appName}</h1><p className="text-xs text-slate-400">Drop a mod archive; JavaBE scans, configures and builds it automatically.</p></div></div>
           <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={handleReset} className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border border-slate-700 text-slate-300 active:bg-slate-800" aria-label="Start over"><RotateCcw className="h-4 w-4" /></button></div>
         </header>
 
-        <nav className="grid grid-cols-4 gap-1.5 rounded-2xl border border-slate-800 bg-slate-900/70 p-1.5" aria-label="Work areas">
-          {([['convert', 'Convert'], ['audit', 'Review'], ['tools', 'Tools'], ['more', 'More']] as const).map(([workspace, label]) => <button key={workspace} type="button" onClick={() => switchWorkspace(workspace)} aria-pressed={activeWorkspace === workspace} className={`flex min-h-[60px] items-center justify-center gap-1.5 rounded-xl px-1.5 text-[11px] font-semibold transition active:scale-[0.98] sm:text-sm ${activeWorkspace === workspace ? 'bg-violet-400/15 text-violet-100 ring-1 ring-violet-300/30' : 'text-slate-400 active:bg-slate-800'}`}>{workspace === 'convert' ? <Cpu className="h-4 w-4 text-violet-300" /> : workspace === 'audit' ? <Activity className="h-4 w-4 text-violet-300" /> : workspace === 'tools' ? <Wrench className="h-4 w-4 text-violet-300" /> : <Sparkles className="h-4 w-4 text-violet-300" />}{label}</button>)}
+        <section className="javabe-studio-hero" aria-label="JavaBE Studio">
+          <div className="javabe-studio-hero-art" aria-hidden="true"><div className="javabe-portal-ring javabe-portal-ring-one"/><div className="javabe-portal-ring javabe-portal-ring-two"/><div className="javabe-portal-core"><span className="javabe-portal-cube"/></div><span className="javabe-portal-particle javabe-portal-particle-one"/><span className="javabe-portal-particle javabe-portal-particle-two"/><span className="javabe-portal-particle javabe-portal-particle-three"/></div>
+          <div className="javabe-studio-hero-copy"><p className="javabe-studio-eyebrow">JAVA TO BEDROCK · MOD PORTING STUDIO</p><h2>Bring your Java mods <span>to Bedrock.</span></h2><p>Import a Java archive, inspect what can be ported, then build a Bedrock add-on.</p><div className="javabe-studio-steps"><span><b>01</b> Import</span><span><b>02</b> Inspect</span><span><b>03</b> Export</span></div></div>
+        </section>
+
+        <nav className="javabe-workspace-nav" aria-label="Work areas">
+          {([['convert', 'Port a mod'], ['review', 'Inspect results'], ['tools', 'Porting tools']] as const).map(([workspace, label]) => <button key={workspace} type="button" onClick={() => switchWorkspace(workspace)} aria-pressed={activeWorkspace === workspace} className={`javabe-workspace-tab ${activeWorkspace === workspace ? 'is-active' : ''}`}>
+            <span className="javabe-workspace-tab-icon">{workspace === 'convert' ? <Cpu /> : workspace === 'review' ? <ScanSearch /> : <Wrench />}</span><span>{label}</span><span className="javabe-workspace-tab-arrow">›</span>
+          </button>)}
         </nav>
 
-        {tabs.length > 1 && <label className="flex min-h-[60px] items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3"><span className="shrink-0 text-xs font-medium text-slate-400">{activeWorkspace === 'audit' ? 'Review' : activeWorkspace === 'tools' ? 'Tools' : 'More'}</span><select value={activeTab} onChange={event => switchTab(event.target.value as AppTab)} className="min-h-[48px] w-full bg-transparent text-sm font-semibold text-slate-100 outline-none">{tabs.map(item => <option key={item.tab} value={item.tab} className="bg-slate-900">{item.label}</option>)}</select></label>}
+        {tabs.length > 1 && <label className="flex min-h-[60px] items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 px-3"><span className="shrink-0 text-xs font-medium text-slate-400">{activeWorkspace === 'review' ? 'Inspect' : 'Porting tools'}</span><select value={activeTab} onChange={event => switchTab(event.target.value as AppTab)} className="min-h-[48px] w-full bg-transparent text-sm font-semibold text-slate-100 outline-none">{tabs.map(item => <option key={item.tab} value={item.tab} className="bg-slate-900">{item.label}</option>)}</select></label>}
 
         {activeWorkspace === 'convert' && <>
           <section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-3.5 sm:p-5"><InputPanel value={brief} file={file} entries={entries} upscalingEnabled={upscalingEnabled} onChange={setBrief} onFileLoaded={(newFile, newEntries) => { setFile(newFile); setEntries(newEntries); setStage('idle'); setRemake(null); setError(null); setExportStatus(null); setInspectionStats(null); if (newFile) appendLog(`[SCAN] ${newFile.name} loaded; conversion options are inferred from its contents.`); if (newFile && newEntries.length > 0) void handleGenerate(newFile, newEntries); }} onGenerate={() => void handleGenerate()} onUpscalingChange={updateUpscaling} generating={stage === 'analyzing' || stage === 'generating'} accent={accent} /></section>
@@ -214,7 +204,7 @@ export default function App() {
         </>}
 
 
-        {activeWorkspace === 'tools' && <button type="button" onClick={() => setShowMolangSandbox(true)} className="flex min-h-[54px] items-center justify-center gap-2 rounded-xl border border-violet-400/25 bg-violet-400/[0.07] px-4 text-sm font-semibold text-violet-100 active:bg-violet-400/15"><Activity className="h-4 w-4" />Open expression lab</button>}
+        {activeWorkspace === 'tools' && <section className="javabe-tool-intro"><div><p className="javabe-studio-eyebrow">PORTING WORKBENCH</p><h2>Fine-tune the conversion</h2><p>Utilities for repairing, previewing, and refining Bedrock output.</p></div><button type="button" onClick={() => setShowMolangSandbox(true)} className="javabe-secondary-action"><Activity className="h-4 w-4" />Expression lab</button></section>}
         {activeTab === 'auditor' && <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><TextureAuditPanel remake={remake} accent={accent} onReport={lines => lines.forEach(appendLog)} playSuccess={playSuccess} playWarning={playWarning} /></div>}
         {activeTab === 'models' && (
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4">
@@ -231,7 +221,7 @@ export default function App() {
         {activeTab === 'validation' && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3 sm:p-4"><ValidationDashboard validation={validationReport} regression={regressionReport} accent={accent} runningRegression={regressionRunning} onRunRegression={handleRunRegression} /></div>}
         {activeTab === 'smoother' && <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><MotionSmoothingPanel motionSmoothing={remake?.motionSmoothing} accent={accent} /></div>}
         {activeTab === 'self_healing' && <div className="flex flex-col gap-3"><section className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><div className="flex items-center gap-2"><Wrench className="h-4 w-4 text-violet-300" /><h2 className="text-sm font-bold">Automatic repair report</h2></div><p className="mt-2 text-xs leading-relaxed text-slate-400">Repairs and unresolved issues found during conversion appear in the conversion report. Content is not treated as verified until tested in-game.</p></section><BedrockHudPreviewOverlay accent={accent} /><HudCustomizerPanel accent={accent} hapticsEnabled={hapticsEnabled} onApplied={appendLog} /><section className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4"><AnalysisPanel stage={stage} error={error} accent={accent2} decompileStats={currentStats || remake?.decompileStats} translationStatus={remake?.translationStatus} logs={logs} parityHealth={remake?.parityHealth} isAutoHealing={isAutoHealing} /></section></div>}
-        {activeTab === 'geyser' && <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-4"><GeyserConfigPanel enabled={enableGeyser} geyserVersion={geyserVersion} versionOptions={GEYSER_VERSION_OPTIONS} targetVersion={targetVersion} report={remake?.geyser} exporting={geyserExporting} hasBundle={Boolean(remake?.geyserBundle)} accent={accent} onToggle={enabled => { setEnableGeyser(enabled); appendLog(enabled ? '[GEYSER] Optional output enabled.' : '[GEYSER] Optional output disabled.'); }} onVersionChange={setGeyserVersion} onExport={() => void handleExportGeyser()} /></div>}
+        
         {showMolangSandbox && <MolangSandbox initialExpression="query.is_moving ? 1.0 : 0.0" onClose={() => setShowMolangSandbox(false)} />}
       </main>
     </div>
