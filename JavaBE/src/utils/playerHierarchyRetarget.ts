@@ -144,6 +144,12 @@ export function retargetJavaPlayerHierarchy(
 
   for (const [clipId, clip] of Object.entries(clips)) {
     const original = clip.bones ?? {};
+    const sourceHierarchyGaps = Object.keys(original).filter((name) =>
+      targetByName.has(name) && !javaSourceForTarget.has(name),
+    );
+    if (sourceHierarchyGaps.length > 0) {
+      warnings.push(`clip ${clipId}: ${sourceHierarchyGaps.join(', ')} has no vanilla Java PlayerEntityModel part/pivot; its source-local channel is preserved rather than assigned a fabricated parent transform`);
+    }
     const times = collectTimes(original);
     const unsupported = Object.entries(original).filter(([, track]) =>
       ['rotation', 'position', 'scale'].some((channel) => track[channel] !== undefined && !readChannel(track[channel])),
