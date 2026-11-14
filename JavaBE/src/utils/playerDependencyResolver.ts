@@ -551,7 +551,7 @@ export function resolvePlayerDependencies(input: {
   // A custom player entity also replaces vanilla script scope. Restore these two vanilla player
   // variables even when their only consumers live in engine-owned controllers that are not
   // physically present in the imported archive.
-  for ( (const name of Object.keys(VANILLA_PLAYER_VARIABLE_EXPRESSIONS)) ) {
+  for (const name of Object.keys(VANILLA_PLAYER_VARIABLE_EXPRESSIONS)) {
     if (!readVars.has(name)) readVars.set(name, 0);
   }
   const itemIds = collectPackItemIdentifiers({ ...files, ...(input.behaviorPackFiles ?? {}) });
