@@ -177,10 +177,10 @@ function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolea
         // Continue to Forge metadata if this is not a valid Fabric descriptor.
       }
     } else if (path.endsWith('meta-inf/mods.toml')) {
-      modIdFound = /modId\\s*=\\s*["']seriousplayeranimations["']/i.test(content);
-      versionFound = versionFound || /version\\s*=\\s*[\"']1\\.1\\.[01][\"']/i.test(content);
+      modIdFound = /modId\s*=\s*["']seriousplayeranimations["']/i.test(content);
+      versionFound = versionFound || /version\s*=\s*["']1\.1\.[01]["']/i.test(content);
     } else if (path.endsWith('meta-inf/manifest.mf')) {
-      versionFound = versionFound || /^Implementation-Version:\\s*1\\.1\\.[01]\\s*$/im.test(content);
+      versionFound = versionFound || /^Implementation-Version:\s*1\.1\.[01]\s*$/im.test(content);
     }
   }
   return modIdFound && versionFound;
