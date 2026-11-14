@@ -2121,7 +2121,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     'shield_sneak',
   ];
   const clipIds = [
-    ...clipNames.map((name) => \`animation.seriousplayeranimations.\${name}\`),
+    ...clipNames.map((name) => \`animation.seriousplayeranimations.${name}\`),
     'animation.running',
   ];
   const clips = Object.fromEntries(clipIds.map((id) => [id, {
@@ -2134,7 +2134,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   ];
   const triggerReport = translatePlayerTriggers({ clips, archiveEntries });
   const triggerFor = (name: string) => triggerReport.triggers.find(
-    (trigger) => trigger.clipId === \`animation.seriousplayeranimations.\${name}\`,
+    (trigger) => trigger.clipId === \`animation.seriousplayeranimations.${name}\`,
   );
   const shieldTrigger = triggerFor('shield');
   const shieldSneakTrigger = triggerFor('shield_sneak');
@@ -2195,7 +2195,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const scripts = finalEntity?.scripts ?? {};
   const preAnimation = Array.isArray(scripts.pre_animation) ? scripts.pre_animation as string[] : [];
   const initialize = Array.isArray(scripts.initialize) ? scripts.initialize as string[] : [];
-  const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(\`variable.\${name} =\`));
+  const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(\`variable.${name} =\`));
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
   const shieldIds = [
     'animation.seriousplayeranimations.shield',
@@ -2209,7 +2209,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'all six supplied locomotion clips receive source-derived conditions',
     expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
-    actual: \`\${locomotion.length} mapped locomotion trigger(s)\`,
+    actual: \`${locomotion.length} mapped locomotion trigger(s)\`,
     passed: locomotion.length === 6 && locomotion.every((trigger) => Boolean(trigger.condition))
   }, {
     label: 'the extra animation.running definition is not falsely activated',
@@ -2224,13 +2224,13 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'the player controller generator emits independent base and overlay controllers',
     expected: 'two controller IDs and two controller files',
-    actual: \`\${controller.controllerIds.length} controller(s), \${controllerDocs.length} file(s)\`,
+    actual: \`${controller.controllerIds.length} controller(s), ${controllerDocs.length} file(s)\`,
     passed: controller.controllerIds.length === 2 && controllerDocs.length === 2 && Boolean(baseId && overlayId)
   }, {
     label: 'locomotion and shield states do not compete in the same controller',
     expected: 'six locomotion clips in base; two shield clips in overlay',
-    actual: \`base=\${baseStateClips.length}, overlay=\${overlayStateClips.length}\`,
-    passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(\`animation.seriousplayeranimations.\${name}\`)) &&
+    actual: \`base=${baseStateClips.length}, overlay=${overlayStateClips.length}\`,
+    passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(\`animation.seriousplayeranimations.${name}\`)) &&
       shieldIds.every((id) => overlayStateClips.includes(id)) &&
       shieldIds.every((id) => !baseStateClips.includes(id))
   }, {
