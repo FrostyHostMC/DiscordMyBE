@@ -32,14 +32,13 @@ export const FIRST_PERSON_GATE = 'query.is_first_person';
  * controller every other pose is layered under.
  */
 export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
-  { alias: 'base_pose', identifier: 'animation.player.base_pose', kind: 'animation', gate: null },
   { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
-  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
+  { alias: 'look_at_target', identifier: 'controller.animation.humanoid.look_at_target', kind: 'controller', gate: null },
   { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
   { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
   {
     alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person_base_pose',
+    identifier: 'animation.player.first_person.base_pose',
     kind: 'animation',
     gate: FIRST_PERSON_GATE,
   },
@@ -49,6 +48,15 @@ export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
     kind: 'controller',
     gate: FIRST_PERSON_GATE,
   },
+];
+
+
+/** Vanilla player-scope values required by the baseline animation/controller resources. */
+export const PLAYER_BASELINE_PRE_ANIMATION: string[] = [
+  // Used by the vanilla player/humanoid locomotion clips (including arm and leg swing).
+  'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;',
+  // The vanilla root controller selects spear-specific clips from this live equipment flag.
+  "variable.melee_spear_equipped = query.is_item_name_any('slot.weapon.mainhand', 'minecraft:spear') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:spear');",
 ];
 
 /** Alias -> identifier map every player definition must declare. */
