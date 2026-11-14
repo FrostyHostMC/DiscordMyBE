@@ -738,8 +738,8 @@ export function runUniversalAnimationDiscovery(
     detectedFormat = 'bedrock-anim-json',
   ) => {
     // Player animation packs can expose the same source clip through namespace and filename owners.
-    const canonicalOwner = /(?:^|\\/)player[_-]?animation(?:s)?(?:\\/|$)/i.test(sourcePath) ? 'player' : owner;
-    const canonicalClipId = clipId.trim().toLowerCase().replace(/\\\\/g, '/');
+    const canonicalOwner = /(?:^|\/)player[_-]?animation(?:s)?(?:\/|$)/i.test(sourcePath) ? 'player' : owner;
+    const canonicalClipId = (clipId.split(/[.:/]+/).pop() ?? clipId).trim().toLowerCase();
     const fingerprint = `${canonicalClipId}::${JSON.stringify(clip)}`;
     if (registeredClipFingerprints.has(fingerprint)) {
       const existingPaths = sourcePathsByOwner[canonicalOwner] ?? [];
