@@ -316,9 +316,11 @@ function collectEntities(
 ): RegistryEntity[] {
   const entities: RegistryEntity[] = [];
   for (const [path, doc] of json) {
-    if (!/^entity\/[^/]+\.entity\.json$/i.test(path)) continue;
     const description = doc['minecraft:client_entity']?.description;
     if (!description || typeof description !== 'object') continue;
+    const isPlayerDocument = (description as Record<string, unknown>).identifier === 'minecraft:player';
+    // Merged archives can retain extra directories; identify the player by its engine identifier.
+    if (!new RegExp('^entity/[^/]+[.]entity[.]json$', 'i').test(path) && !isPlayerDocument) continue;
     const animations: Record<string, string> = {};
     if (description.animations && typeof description.animations === 'object') {
       for (const [key, value] of Object.entries(description.animations as Record<string, unknown>)) {
