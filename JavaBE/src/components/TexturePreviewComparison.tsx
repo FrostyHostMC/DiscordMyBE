@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ImageIcon } from 'lucide-react';
 import { readPngDimensions, isVerticalAnimationStrip } from '@/utils/pngUtils';
 import type { ExtractedZipEntry } from '@/utils/zip';
@@ -19,17 +19,27 @@ const MAX_CANDIDATES = 6;
 const THUMB_SIZE = 64;
 const LEGACY_TARGET = 64;
 
-function findLegacyTextureCandidates(entries: ExtractedZipEntry[]): Candidate[] {
+async function findLegacyTextureCandidates(
+  entries: ExtractedZipEntry[],
+  cancelled: () => boolean,
+): Promise<Candidate[]> {
   const out: Candidate[] = [];
-  for (const entry of entries) {
-    if (entry.isDirectory || !entry.path.toLowerCase().endsWith('.png')) continue;
-    const size = readPngDimensions(entry.data);
-    if (!size) continue;
-    if (isVerticalAnimationStrip(entry.data)) continue;
-    if (Math.min(size.width, size.height) >= LEGACY_TARGET) continue;
-    if (size.width < 4 || size.height < 4) continue;
-    out.push({ path: entry.path, data: entry.data, width: size.width, height: size.height });
-    if (out.length >= MAX_CANDIDATES) break;
+  // Texture previews are decorative, not conversion input. Scan in small slices so
+  // opening a large JAR never blocks touch/scroll while React mounts this panel.
+  for (let start = 0; start < entries.length && out.length < MAX_CANDIDATES; start += 160) {
+    const end = Math.min(start + 160, entries.length);
+    for (let index = start; index < end && out.length < MAX_CANDIDATES; index++) {
+      const entry = entries[index];
+      if (entry.isDirectory || !entry.path.toLowerCase().endsWith('.png')) continue;
+      const size = readPngDimensions(entry.data);
+      if (!size || isVerticalAnimationStrip(entry.data)) continue;
+      if (Math.min(size.width, size.height) >= LEGACY_TARGET || size.width < 4 || size.height < 4) continue;
+      out.push({ path: entry.path, data: entry.data, width: size.width, height: size.height });
+    }
+    if (end < entries.length) {
+      await new Promise<void>(resolve => window.setTimeout(resolve, 0));
+      if (cancelled()) return [];
+    }
   }
   return out;
 }
@@ -58,15 +68,21 @@ function drawThumb(canvas: HTMLCanvasElement | null, bmp: ImageBitmap, nearest: 
 }
 
 export function TexturePreviewComparison({ entries, upscalingEnabled }: Props) {
-  const candidates = useMemo(() => findLegacyTextureCandidates(entries), [entries]);
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selected, setSelected] = useState(0);
   const originalRef = useRef<HTMLCanvasElement>(null);
   const upscaledRef = useRef<HTMLCanvasElement>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    setCandidates([]);
     setSelected(0);
-  }, [candidates]);
+    void findLegacyTextureCandidates(entries, () => cancelled).then(found => {
+      if (!cancelled) setCandidates(found);
+    });
+    return () => { cancelled = true; };
+  }, [entries]);
 
   useEffect(() => {
     let cancelled = false;

@@ -21,7 +21,7 @@ import { MotionSmoothingPanel } from '@/components/MotionSmoothingPanel';
 import { BehaviorTranslationPanel } from '@/components/BehaviorTranslationPanel';
 import { ValidationDashboard } from '@/components/ValidationDashboard';
 import { ModelPortPanel } from '@/components/ModelPortPanel';
-import { exportAddonFile } from '@/utils/iosFileExport';
+import { deliverJavaBEAddon } from '@/utils/downloadDelivery';
 import { getAutoUpscaleLegacyTextures, setAutoUpscaleLegacyTextures } from '@/utils/pngUtils';
 
 type Workspace = 'convert' | 'review' | 'tools';
@@ -152,23 +152,20 @@ export default function App() {
     if (!remake) return;
     setExporting(true); setExportStatus(null);
     try {
-      const outcome = await exportAddonFile(remake.zipBytes, remake.fileName);
+      const outcome = await deliverJavaBEAddon(remake.zipBytes, remake.fileName, message => setExportStatus(message));
       setExportStatus(outcome.message);
       appendLog(`[EXPORT] ${outcome.message}`);
-      if (outcome.success) {
-        // The browser/share sheet has accepted the file. Keep the conversion report in
-        // memory, but release the large generated archive so JavaBE does not retain a
-        // second copy for the rest of the session. Nothing is uploaded or persisted.
-        setRemake(current => current ? {
-          ...current,
-          zipBytes: new Uint8Array(0),
-          behaviorPackFiles: {},
-          resourcePackFiles: {},
-          geyserBundle: current.geyserBundle
-            ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
-            : undefined,
-        } : current);
-      }
+      // The completed file now lives only in the short-lived R2 download handoff.
+      // Release the in-memory export and source pack maps after Discord opens the HTTPS download.
+      setRemake(current => current ? {
+        ...current,
+        zipBytes: new Uint8Array(0),
+        behaviorPackFiles: {},
+        resourcePackFiles: {},
+        geyserBundle: current.geyserBundle
+          ? { ...current.geyserBundle, zipBytes: new Uint8Array(0) }
+          : undefined,
+      } : current);
       playSuccess();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -195,7 +192,7 @@ export default function App() {
   const updateUpscaling = (enabled: boolean) => { setUpscalingEnabled(enabled); setAutoUpscaleLegacyTextures(enabled); };
 
   return (
-    <div className="javabe-app-shell min-h-screen w-full font-sans text-slate-100" style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
+    <div className={`javabe-app-shell min-h-screen w-full font-sans text-slate-100 ${stage === 'analyzing' || stage === 'generating' ? 'is-processing' : ''}`} style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
       <div className="javabe-cosmic-backdrop" aria-hidden="true"><span className="javabe-cosmic-cloud javabe-cosmic-cloud--one" /><span className="javabe-cosmic-cloud javabe-cosmic-cloud--two" /><span className="javabe-cosmic-stars" /><span className="javabe-cosmic-horizon" /></div>
       <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
         <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">

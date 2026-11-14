@@ -250,6 +250,10 @@ export async function createZipArchiveAsync(
   const archive = new Uint8Array(endOffset + 22);
   const archiveView = new DataView(archive.buffer, archive.byteOffset, archive.byteLength);
 
+  // Copy payloads in bounded slices. The allocation above is unavoidable for a single
+  // ZIP buffer, but one giant TypedArray.set() per 100+ MB pack used to lock iOS WebKit
+  // long enough for the Activity to stop accepting scroll and touch events.
+  const copyChunkBytes = Math.max(256 * 1024, Math.min(chunkBytes, 1024 * 1024));
   for (let index = 0; index < prepared.length; index += 1) {
     const entry = prepared[index];
     const cursor = entry.offset;
@@ -265,11 +269,17 @@ export async function createZipArchiveAsync(
     archiveView.setUint16(cursor + 26, entry.nameBytes.length, true);
     archive.set(entry.nameBytes, cursor + 30);
     const payload = packed[index].data;
-    if (payload.length > 0) archive.set(payload, cursor + 30 + entry.nameBytes.length);
+    for (let start = 0; start < payload.length; start += copyChunkBytes) {
+      const end = Math.min(start + copyChunkBytes, payload.length);
+      archive.set(payload.subarray(start, end), cursor + 30 + entry.nameBytes.length + start);
+      await yieldToUi();
+    }
+    if (index > 0 && index % 200 === 0) await yieldToUi();
   }
 
   let cursor = directoryOffset;
-  for (const entry of prepared) {
+  for (let index = 0; index < prepared.length; index += 1) {
+    const entry = prepared[index];
     archiveView.setUint32(cursor, 0x02014b50, true);
     archiveView.setUint16(cursor + 4, 20, true);
     archiveView.setUint16(cursor + 6, 20, true);
@@ -285,6 +295,7 @@ export async function createZipArchiveAsync(
     archiveView.setUint32(cursor + 42, entry.offset, true);
     archive.set(entry.nameBytes, cursor + 46);
     cursor += 46 + entry.nameBytes.length;
+    if (index > 0 && index % 500 === 0) await yieldToUi();
   }
 
   archiveView.setUint32(endOffset, 0x06054b50, true);
@@ -440,6 +451,7 @@ export async function readZipArchive(
   const max = options?.maxEntries ?? 50000;
 
   for (let i = 0; i < max && currentOffset + 46 <= eocdOffset; i++) {
+    if (i > 0 && i % 400 === 0) await yieldToUi();
     if (view.getUint32(currentOffset, true) !== 0x02014b50) break;
 
     const compressionMethod = view.getUint16(currentOffset + 10, true);
@@ -532,7 +544,9 @@ export async function readZipArchive(
 
   // Pass 3 — inflate the kept entries in their original archive order.
   const entries: ExtractedZipEntry[] = [];
-  for (const descriptor of descriptors) {
+  for (let descriptorIndex = 0; descriptorIndex < descriptors.length; descriptorIndex += 1) {
+    const descriptor = descriptors[descriptorIndex];
+    if (descriptorIndex > 0 && descriptorIndex % 24 === 0) await yieldToUi();
     if (descriptor.isDirectory) {
       entries.push({
         path: descriptor.path,
@@ -548,7 +562,10 @@ export async function readZipArchive(
     let decompressed: Uint8Array;
 
     if (descriptor.compressionMethod === 0) {
-      decompressed = rawData.slice(0, descriptor.uncompressedSize || rawData.length);
+      // Stored ZIP entries already live inside the original archive buffer. Keep a
+      // view instead of copying every payload into a second allocation; this matters
+      // on iOS where a 150 MB JAR plus copied entries can exceed the WebView heap.
+      decompressed = rawData.subarray(0, descriptor.uncompressedSize || rawData.length);
     } else if (descriptor.compressionMethod === 8) {
       decompressed = await decompressDeflateRaw(rawData);
     } else {

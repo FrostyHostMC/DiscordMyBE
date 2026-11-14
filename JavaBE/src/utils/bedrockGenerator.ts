@@ -273,7 +273,7 @@ export async function generateBedrockRemake(
 
   // 1c. Universal Texture Engine: decode every texture, preserve dimensions/alpha,
   // interpret Java .mcmeta animation data and plan flipbooks before any file is written.
-  const textureEngine = runUniversalTextureEngine(fileEntries ?? [], assetIndex, log);
+  const textureEngine = await runUniversalTextureEngine(fileEntries ?? [], assetIndex, log);
   stages.ok(
     'textures-engine',
     'Universal texture engine',

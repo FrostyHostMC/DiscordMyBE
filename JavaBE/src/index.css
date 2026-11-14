@@ -36,7 +36,8 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
   position: relative;
   isolation: isolate;
   min-height: 100dvh;
-  overflow: clip;
+  overflow-x: clip;
+  overflow-y: visible;
   background: #08070d;
 }
 .javabe-cosmic-backdrop {
@@ -377,3 +378,20 @@ button, summary, select, input[type="checkbox"] { touch-action: manipulation; }
 @keyframes javabe-ring-spin{to{transform:rotate(325deg)}}@keyframes javabe-core-pulse{0%,100%{filter:brightness(.9);box-shadow:0 0 20px rgba(151,91,255,.42),inset 0 0 18px rgba(69,196,255,.16)}50%{filter:brightness(1.25);box-shadow:0 0 36px rgba(151,91,255,.72),inset 0 0 25px rgba(69,196,255,.35)}}@keyframes javabe-particle-float{0%,100%{transform:translate3d(0,0,0);opacity:.55}50%{transform:translate3d(5px,-9px,0);opacity:1}}
 @media(max-width:600px){.javabe-studio-hero{grid-template-columns:minmax(0,1fr) 6.3rem;gap:.25rem;padding:1.1rem;min-height:12.5rem}.javabe-studio-hero-art{width:6.6rem}.javabe-studio-hero h2{font-size:1.55rem}.javabe-studio-hero-copy>p:not(.javabe-studio-eyebrow){font-size:.72rem}.javabe-studio-steps{gap:.3rem}.javabe-studio-steps span{font-size:.58rem;padding:.35rem .45rem}.javabe-workspace-nav{gap:.4rem}.javabe-workspace-tab{min-height:4rem;flex-direction:column;justify-content:center;gap:.35rem;padding:.55rem .25rem;text-align:center;font-size:.62rem}.javabe-workspace-tab-arrow{display:none}.javabe-tool-intro{align-items:flex-start;flex-direction:column}}
 @media(prefers-reduced-motion:reduce){.javabe-portal-ring,.javabe-portal-core,.javabe-portal-particle{animation:none!important}}
+
+
+/* Keep the Activity interactive while the local JVM/asset pipeline is busy. */
+.javabe-app-shell.is-processing .javabe-cosmic-cloud,
+.javabe-app-shell.is-processing .javabe-cosmic-stars {
+  animation: none !important;
+  filter: none !important;
+  opacity: .12;
+}
+.javabe-app-shell.is-processing .javabe-app-content > header,
+.javabe-app-shell.is-processing .javabe-app-content > nav,
+.javabe-app-shell.is-processing .javabe-app-content > section,
+.javabe-app-shell.is-processing .javabe-app-content > details,
+.javabe-app-shell.is-processing .javabe-app-content > label {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
