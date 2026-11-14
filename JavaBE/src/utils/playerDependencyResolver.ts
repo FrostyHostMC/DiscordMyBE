@@ -148,17 +148,11 @@ function preserveVanillaDocuments(
     if (lower === 'entity/player.entity.json') continue;
     const raw = files[path];
     if (typeof raw !== 'string') continue;
-    if (VANILLA_PLAYER_ANIMATION_IDS.size === 0) continue;
-    const definesBaseline = [...VANILLA_PLAYER_ANIMATION_IDS, ...VANILLA_PLAYER_CONTROLLER_IDS].some((id) =>
-      raw.includes(`"${id}"`),
-    );
-    if (definesBaseline) {
-      notes.push(
-        `${path} overrides a vanilla player document and really defines baseline identifiers; it is kept because the port ships them itself.`,
-      );
-      continue;
-    }
-
+    // Even when this document defines one vanilla identifier, leaving it on a vanilla-owned
+    // path replaces the engine's entire document and hides every other built-in definition in
+    // that document (for example base_pose, look_at_target or first_person_base_pose). Move the
+    // whole document intact to a mod-owned path. Its animation/controller identifiers remain
+    // unchanged and globally resolvable, while the engine's complete vanilla document survives.
     const slash = path.lastIndexOf('/');
     const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
     const name = slash >= 0 ? path.slice(slash + 1) : path;
