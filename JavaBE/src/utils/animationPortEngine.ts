@@ -463,6 +463,11 @@ export function portMobAndPlayerAnimations(
     const bucket = geckolib.clipsByOwner[owner] ?? {};
     Object.assign(bucket, additionalAnimations.clipsByOwner[owner]);
     geckolib.clipsByOwner[owner] = bucket;
+    const sourceIds = geckolib.sourceClipIdsByOwner ?? {};
+    const ownerSourceIds = sourceIds[owner] ?? {};
+    Object.assign(ownerSourceIds, additionalAnimations.sourceClipIdsByOwner?.[owner] ?? {});
+    sourceIds[owner] = ownerSourceIds;
+    geckolib.sourceClipIdsByOwner = sourceIds;
     if (!geckolib.owners.includes(owner)) geckolib.owners.push(owner);
     collectedAnimationIds.push(...Object.keys(additionalAnimations.clipsByOwner[owner]));
   }
