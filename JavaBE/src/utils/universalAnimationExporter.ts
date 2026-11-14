@@ -405,11 +405,26 @@ export function exportUniversalAnimationIR(input: {
     if (treated.has(clip.id)) continue;
     treated.add(clip.id);
     if (handledSourceClipIds.has(clip.id)) {
-      report.skipped.push({
-        clipId: clip.id,
-        reason: 'already represented by a retargeted player-bridge clip; the unretargeted source copy is withheld to prevent duplicate player playback',
-      });
-      continue;
+      // The bridge hand-off is a claim, not proof. A later writer or pack merge can remove
+      // player_ported.animation.json after the bridge recorded its source ids. Only suppress the
+      // source definition when the corresponding retargeted definition is present in the actual
+      // resource-pack map and still carries bone tracks. Otherwise fall through and emit the
+      // source clip so a stale hand-off cannot turn nine recovered clips into zero shipped clips.
+      const sourceTail = safeFileId(clip.id.split(/[.:/]+/).pop() ?? clip.id) || 'clip';
+      const bridgePrefix = `animation.player.player.${sourceTail}`;
+      const bridgeDefinition = [...shipped.entries()].find(([id, entry]) =>
+        (id === bridgePrefix || id.startsWith(`${bridgePrefix}_`)) && entry.bones.length > 0,
+      );
+      if (bridgeDefinition) {
+        report.skipped.push({
+          clipId: clip.id,
+          reason: `represented by verified player-bridge definition ${bridgeDefinition[0]}; source copy withheld to prevent duplicate playback`,
+        });
+        continue;
+      }
+      log(
+        `[ANIM:WRITE:HANDOFF-RECOVERY] ${clip.id} was marked as player-bridged, but no matching non-empty retargeted definition exists in the current pack; emitting the source clip instead of dropping it.`,
+      );
     }
     if (shipped.has(clip.id)) {
       report.alreadyShipped += 1;
