@@ -973,7 +973,8 @@ export function decompileJavaMod(
   }).filter(Boolean);
   const iconBytes = foundIconEntry ? foundIconEntry.data : null;
   const classSummaries: DecompileClassSummary[] = parsedClasses.map(c => ({
-    className: c.className.split('.').pop() ?? c.className,\n    qualifiedClassName: c.className,
+    className: c.className.split('.').pop() ?? c.className,
+    qualifiedClassName: c.className,
     // Inheritance and the namespaced identifiers a class declares are the evidence the item
     // semantics engine reads. Neither is a name-based guess: both come from the class file.
     superName: c.superName,
