@@ -17,13 +17,12 @@ import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySche
  *   • every activation condition is parsed into engine dimensions (locomotion, sprint, sneak,
  *     swim, ride, airborne, attack, use, hurt, perspective …) so two conditions can be proven
  *     mutually exclusive, or proven to be able to hold at the same time;
- *   • clips are ranked by what they are (one-shot action > sprint/sneak/swim > movement > idle >
- *     pose overlay) and by how much of the skeleton they claim;
- *   • overlapping full-body states are made mutually exclusive by guarding the lower-priority
- *     clip with the higher one's condition, so the pose is deterministic;
- *   • states that cannot be separated (identical conditions, nothing to distinguish them) are
- *     shadowed: the higher-priority clip keeps the activation and the other is reported instead
- *     of both playing at once;
+ *   • clips are ordered by the specificity of their recovered activation conditions; clip names
+ *     and bone shapes are not treated as proof of a Java-side state or priority;
+ *   • overlapping full-body states with distinct source conditions are made mutually exclusive
+ *     by adding one negation per distinct higher-priority condition;
+ *   • clips with indistinguishable conditions are moved into a state controller so they do not
+ *     blend over the same joints; any timing-based alternation is reported as an approximation;
  *   • partially overlapping clips (different limbs) are left to blend, and reported as such.
  */
 
@@ -381,9 +380,13 @@ export function resolveAnimationStateConflicts(input: {
       // active in every state (an idle pose, a permanent overlay) must never outrank the state
       // that replaces it, or the guard would disable the specific clip instead of the broad one.
       const specificity = atoms.filter((atom) => atom.dimension !== 'perspective').length;
-      return { entry, bones, priority, concept, atoms, specificity };
+      // Keep the original activation immutable while pairwise conflict analysis runs. Mutating
+      // it inside the nested loop compounds the same guard once for every conflicting pair.
+      return { entry, bones, priority, concept, atoms, specificity, sourceCondition: entry.condition };
     });
     analysis.sort((a, b) => (b.specificity - a.specificity) || (b.priority - a.priority));
+
+    const guardsByEntry = new Map<string, Map<string, string>>();
 
     // Clips whose poses fight and whose conditions cannot separate them are NOT deactivated: they
     // become the states of a synthesised animation controller, which is the destination-native way
@@ -412,25 +415,19 @@ export function resolveAnimationStateConflicts(input: {
           });
           continue;
         }
-        const sameCondition = normalizeCondition(higher.entry.condition) === normalizeCondition(lower.entry.condition);
+        const sameCondition = normalizeCondition(higher.sourceCondition) === normalizeCondition(lower.sourceCondition);
 
         if (
           !sameCondition &&
           higher.specificity > 0 &&
-          higher.entry.condition &&
-          lower.entry.condition &&
+          higher.sourceCondition &&
+          lower.sourceCondition &&
           lower.atoms.length > 0
         ) {
-          const guarded = `(${lower.entry.condition}) && !(${higher.entry.condition})`;
-          lower.entry.condition = guarded;
-          lower.atoms = parseAtoms(guarded);
-          report.guarded.push({
-            entity: identifier,
-            entityPath: path,
-            key: lower.entry.key,
-            clipId: lower.entry.clipId,
-            condition: guarded,
-          });
+          const guards = guardsByEntry.get(lower.entry.key) ?? new Map<string, string>();
+          const guardKey = normalizeCondition(higher.sourceCondition);
+          if (guardKey && !guards.has(guardKey)) guards.set(guardKey, higher.sourceCondition);
+          guardsByEntry.set(lower.entry.key, guards);
           report.conflicts.push({
             entity: identifier,
             higher: higher.entry.clipId,
@@ -453,6 +450,29 @@ export function resolveAnimationStateConflicts(input: {
           resolution: 'controller',
         });
       }
+    }
+
+    // Apply the complete, deduplicated guard set once per clip. This prevents a lower state from
+    // repeatedly wrapping an already-wrapped expression when it overlaps several variants of the
+    // same higher-priority state. The resulting condition remains the original source condition
+    // plus one negation for each distinct higher-priority source condition.
+    for (const candidate of analysis) {
+      const guards = guardsByEntry.get(candidate.entry.key);
+      if (!guards || guards.size === 0) continue;
+      const original = candidate.sourceCondition.trim();
+      const guarded = [
+        ...(original ? [`(${original})`] : []),
+        ...[...guards.values()].map((condition) => `!(${condition})`),
+      ].join(' && ');
+      candidate.entry.condition = guarded;
+      candidate.atoms = parseAtoms(guarded);
+      report.guarded.push({
+        entity: identifier,
+        entityPath: path,
+        key: candidate.entry.key,
+        clipId: candidate.entry.clipId,
+        condition: guarded,
+      });
     }
 
     const rebuilt: unknown[] = [];

@@ -126,62 +126,65 @@ export function synthesizeStateController(input: {
     groups.set(key, list);
   }
 
-  const isAlwaysActive = (condition: string): boolean => (condition ?? '').trim() === '';
-  const gateOf = (target: StateMachineState): string | null => {
-    const own = (target.condition ?? '').trim() || ALWAYS;
-    const parts: string[] = [`(${own})`];
-    for (const higher of ordered) {
-      if (higher === target) continue;
-      if (higher.priority <= target.priority) continue;
-      const higherCondition = normalizeCondition(higher.condition);
-      const sameGroup = higherCondition === normalizeCondition(target.condition);
-      if (sameGroup) continue;
-      // A permanently-active higher state can only be left by a variant of itself.
-      if (isAlwaysActive(higher.condition)) return null;
-      parts.push(`!(${(higher.condition ?? '').trim() || ALWAYS})`);
-    }
-    return parts.join(' && ');
-  };
-
   const staggered: string[] = [];
   const unreachable: Array<{ clipId: string; reason: string }> = [];
   const transitionsByState = new Map<string, Array<Record<string, string>>>();
 
+  // The controller starts in a silent selector state. Bedrock evaluates these guards in order,
+  // so the first matching source condition selects the highest-priority state. Each active state
+  // only needs transitions to states that outrank it; lower-priority states are reconsidered by
+  // returning to the selector when the current condition stops matching.
+  const selectorTransitions: Array<Record<string, string>> = [];
   for (const state of ordered) {
+    const group = groups.get(normalizeCondition(state.condition)) ?? [state];
+    const first = group[0];
+    if (first !== state) continue;
+    const name = stateNameOf.get(state.clipId) as string;
+    const condition = (state.condition ?? '').trim() || ALWAYS;
+    selectorTransitions.push({ [name]: condition });
+  }
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const state = ordered[index];
     const name = stateNameOf.get(state.clipId) as string;
     const group = groups.get(normalizeCondition(state.condition)) ?? [state];
     const outgoing: Array<Record<string, string>> = [];
-    for (const other of ordered) {
-      if (other === state) continue;
-      const otherName = stateNameOf.get(other.clipId) as string;
-      if (group.includes(other)) {
-        // Variants of one state: alternate on this state's own elapsed time so both play.
-        const period = Math.max(0.05, clipLength(input.clipDocs?.[state.clipId]));
-        outgoing.push({ [otherName]: `query.anim_time >= ${period.toFixed(2)}` });
-        if (!staggered.includes(other.clipId)) staggered.push(other.clipId);
-        continue;
-      }
-      const gate = gateOf(other);
-      if (!gate) continue;
-      outgoing.push({ [otherName]: gate });
+
+    // Higher-priority conditions are checked first. This keeps action states able to interrupt
+    // locomotion without repeating every higher-priority guard inside every lower-priority guard.
+    for (let higherIndex = 0; higherIndex < index; higherIndex += 1) {
+      const higher = ordered[higherIndex];
+      const higherGroup = groups.get(normalizeCondition(higher.condition)) ?? [higher];
+      if (higherGroup[0] !== higher) continue;
+      outgoing.push({
+        [stateNameOf.get(higher.clipId) as string]:
+          (higher.condition ?? '').trim() || ALWAYS,
+      });
     }
+
+    const groupIndex = group.indexOf(state);
+    if (group.length > 1) {
+      const next = group[(groupIndex + 1) % group.length];
+      const period = Math.max(0.05, clipLength(input.clipDocs?.[state.clipId]));
+      const activeCondition = (state.condition ?? '').trim() || ALWAYS;
+      outgoing.push({
+        [stateNameOf.get(next.clipId) as string]:
+          `(${activeCondition}) && query.anim_time >= ${period.toFixed(2)}`,
+      });
+      if (!staggered.includes(next.clipId)) staggered.push(next.clipId);
+    }
+
+    // If this state's source condition no longer holds, re-enter the selector. The selector
+    // chooses the highest-priority condition that currently holds, or remains silent if none do.
+    if ((state.condition ?? '').trim()) {
+      outgoing.push({ selector: `!(${state.condition.trim()})` });
+    }
+
     transitionsByState.set(name, outgoing);
   }
 
-  // A state nothing transitions into can never be selected, so it is reported rather than shipped
-  // as if it were playable.
-  const reachableNames = new Set<string>([stateNameOf.get(ordered[0].clipId) as string]);
-  for (const [, outgoing] of transitionsByState) {
-    for (const transition of outgoing) for (const target of Object.keys(transition)) reachableNames.add(target);
-  }
-  for (const state of ordered) {
-    const name = stateNameOf.get(state.clipId) as string;
-    if (reachableNames.has(name)) continue;
-    unreachable.push({
-      clipId: state.clipId,
-      reason: 'every higher-priority state is permanently active, so the machine has no condition that can select this state',
-    });
-  }
+  const selectorName = 'selector';
+
 
   const entityShort = safeId(input.entityIdentifier.split(':').pop() ?? input.entityIdentifier).replace(/\./g, '_');
   const namespace = safeId(input.modId);
@@ -189,9 +192,10 @@ export function synthesizeStateController(input: {
   const filePath = `animation_controllers/${entityShort}.states.animation_controllers.json`;
 
   const machine: Record<string, unknown> = {
-    initial_state: stateNameOf.get(ordered[0].clipId) as string,
-    states: Object.fromEntries(
-      ordered.map((state) => {
+    initial_state: selectorName,
+    states: Object.fromEntries([
+      [selectorName, { transitions: selectorTransitions }],
+      ...ordered.map((state) => {
         const name = stateNameOf.get(state.clipId) as string;
         const outgoing = transitionsByState.get(name) ?? [];
         return [
@@ -202,7 +206,7 @@ export function synthesizeStateController(input: {
           },
         ];
       }),
-    ),
+    ]),
   };
 
   const existing = parseJson(input.resourcePackFiles[filePath]);
