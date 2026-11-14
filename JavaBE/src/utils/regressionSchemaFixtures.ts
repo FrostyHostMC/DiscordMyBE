@@ -2126,7 +2126,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     'shield_sneak',
   ];
   const clipIds = [
-    ...clipNames.map((name) => `animation.seriousplayeranimations.${name}`),
+    ...clipNames.map((name) => 'animation.seriousplayeranimations.' + name),
     'animation.running',
   ];
   const clips = Object.fromEntries(clipIds.map((id) => [id, {
