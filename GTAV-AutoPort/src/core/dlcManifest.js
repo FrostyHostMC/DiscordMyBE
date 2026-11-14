@@ -45,7 +45,7 @@ export function inspectGtaDlcManifest(input, sourcePath = "content.xml") {
     if (entries.length >= MAX_RECORDS) break;
   }
   const disabledNodes = collectNodes(parsed, new Set(["disabledfiles"]));
-  const disabledFiles = disabledNodes.flatMap((node) => Object.values(node || {}).flatMap(asArray).map(text).filter(Boolean));
+  const disabledFiles = disabledNodes.flatMap((node) => typeof node === "string" ? [text(node)].filter(Boolean) : Object.values(node || {}).flatMap(asArray).map(text).filter(Boolean));
   const fileTypes = {};
   for (const entry of entries) if (entry.fileType) fileTypes[entry.fileType] = (fileTypes[entry.fileType] || 0) + 1;
   const roots = parsed && typeof parsed === "object" ? Object.keys(parsed) : [];
