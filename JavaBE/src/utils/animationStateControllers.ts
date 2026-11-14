@@ -152,7 +152,7 @@ export function synthesizeStateController(input: {
 
     // Higher-priority conditions are checked first. This keeps action states able to interrupt
     // locomotion without repeating every higher-priority guard inside every lower-priority guard.
-    for ((let higherIndex = 0; higherIndex < index; higherIndex += 1)) {
+    for (let higherIndex = 0; higherIndex < index; higherIndex += 1) {
       const higher = ordered[higherIndex];
       const higherGroup = groups.get(normalizeCondition(higher.condition)) ?? [higher];
       if (higherGroup[0] !== higher) continue;
