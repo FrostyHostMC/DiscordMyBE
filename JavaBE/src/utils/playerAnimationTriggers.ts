@@ -407,7 +407,7 @@ export function translatePlayerTriggers(options: {
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
     javaSignals: [...hits.keys()],
-    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
+    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.0' : undefined,
     triggers,
     summary: '',
   };
