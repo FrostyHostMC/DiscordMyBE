@@ -14,6 +14,7 @@ import { auditModFiles } from "../core/modClassifier.js";
 import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
 import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
+import { inspectModDocumentation } from "../core/documentation.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -51,6 +52,7 @@ export default function App() {
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
   const [dlcManifest, setDlcManifest] = useState(null);
+  const [documentation, setDocumentation] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -80,11 +82,12 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setModAudit(auditModFiles(result.files));
+      setDocumentation(inspectModDocumentation(result.files));
       const generatedPlan = buildUniversalPortPlan({ files: result.files });
       if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("AutoPort could not build a complete port plan for this import.");
       setPortPlan(generatedPlan);
@@ -239,6 +242,11 @@ export default function App() {
         <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
+      {documentation.length > 0 && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">MOD README & INSTALL NOTES</div><h3>Instruction file review</h3><p>{documentation.length} text file(s) decoded locally · commands are never executed</p></div><span className="tag warning"><ShieldCheck size={13}/> READ ONLY</span></div>
+        {documentation.map((item)=><details className="native-summary" key={item.path}><summary>{item.path} · {item.encoding}{item.truncated ? " · preview truncated" : ""}</summary><div className="audit-grid"><div className="audit-card"><b>{formatBytes(item.bytes)}</b><span>source size</span></div><div className="audit-card"><b>{item.pathHints.length}</b><span>path hints</span></div><div className="audit-card"><b>{item.commandHints.length}</b><span>install keywords</span></div></div>{item.pathHints.length > 0 && <p className="native-disclaimer">Path hints: {item.pathHints.join(" · ")}</p>}{item.commandHints.length > 0 && <p className="native-disclaimer">Keywords: {item.commandHints.join(", ")}</p>}<pre className="text-preview">{item.preview}</pre></details>)}
+        <p className="native-disclaimer">Treat instructions as untrusted text. AutoPort does not run batch files, installers, scripts or commands found in mod documentation.</p>
+      </section>}
       {dlcManifest && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">GTA V DLC MANIFEST</div><h3>content.xml inspection</h3><p>{dlcManifest.validXml ? `${dlcManifest.summary.dataFiles} declared data file(s) across ${Object.keys(dlcManifest.summary.fileTypes).length} resource types` : dlcManifest.error}</p></div><span className="tag warning"><AlertTriangle size={13}/> READ ONLY</span></div>
         {dlcManifest.validXml && <><div className="audit-grid"><div className="audit-card"><b>{dlcManifest.summary.entryCount}</b><span>manifest entries</span></div><div className="audit-card"><b>{dlcManifest.summary.dataFiles}</b><span>typed data files</span></div><div className="audit-card"><b>{dlcManifest.summary.disabledFiles}</b><span>disabled entries</span></div></div><div className="file-list">{dlcManifest.entries.slice(0,100).map((entry,index)=><div className="file-row" key={entry.filename || index}><FileText size={14}/><span className="file-name"><b>{entry.filename || "Unnamed entry"}</b><small>{entry.fileType || "No resource type declared"}</small></span><span className="file-ext">MANIFEST</span></div>)}</div><p className="native-disclaimer">Manifest paths are PC DLC references. AutoPort does not execute mount instructions or assume these paths exist in your PS4 1.73 game.</p></>}
