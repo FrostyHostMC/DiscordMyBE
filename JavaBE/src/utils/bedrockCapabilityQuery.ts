@@ -178,27 +178,37 @@ export function detectModExperimentNeeds(
   entries?: Array<{ path: string }>,
 ): Record<string, { detected: boolean; reason: string }> {
   const text = (brief ?? '').toLowerCase();
-  const filePaths = entries ? entries.map((e) => e.path.toLowerCase()) : [];
+  // Capability detection runs on load, notes edits, and build start. Avoid materialising
+  // a second lower-cased copy of every path in a large mod archive.
+  let pathWeaponsOrSpells = false;
+  let pathBossesOrCutscenes = false;
+  let pathCustomBlocks = false;
+  let pathUiMenus = false;
+  let pathPbrTextures = false;
+  for (const entry of entries ?? []) {
+    const path = entry.path.toLowerCase();
+    if (!pathWeaponsOrSpells && /projectile|spell|bullet|magic|shoot|weapon/.test(path)) pathWeaponsOrSpells = true;
+    if (!pathBossesOrCutscenes && /boss|cutscene|cinematic/.test(path)) pathBossesOrCutscenes = true;
+    if (!pathCustomBlocks && (path.includes('models/block') || path.includes('textures/block') || path.includes('blocks/'))) pathCustomBlocks = true;
+    if (!pathUiMenus && (path.includes('textures/gui') || path.includes('gui/'))) pathUiMenus = true;
+    if (!pathPbrTextures && /_n\.png|_s\.png|_e\.png|_normal|_metallic|_roughness/.test(path)) pathPbrTextures = true;
+    if (pathWeaponsOrSpells && pathBossesOrCutscenes && pathCustomBlocks && pathUiMenus && pathPbrTextures) break;
+  }
 
   const hasWeaponsOrSpells =
     /gun|weapon|wand|spell|bullet|projectile|magic|shoot|fire|attack|bow|laser|rocket|artillery|combat|slash|sword/.test(text) ||
-    filePaths.some((p) => /projectile|spell|bullet|magic|shoot|weapon/.test(p));
-
+    pathWeaponsOrSpells;
   const hasBossesOrCutscenes =
-    /cutscene|cinematic|camera|intro/.test(text) ||
-    filePaths.some((p) => /boss|cutscene|cinematic/.test(p));
-
+    /cutscene|cinematic|camera|intro/.test(text) || pathBossesOrCutscenes;
   const hasCustomBlocks =
     /block|furniture|slab|stair|door|ore|machine|reactor|crate|chest|pipe|voxel|table|chair/.test(text) ||
-    filePaths.some((p) => p.includes('models/block') || p.includes('textures/block') || p.includes('blocks/'));
-
+    pathCustomBlocks;
   const hasUiMenus =
     /ui|hud|gui|menu|form|skill|tree|spellbook|backpack|pouch|stats|inventory/.test(text) ||
-    filePaths.some((p) => p.includes('textures/gui') || p.includes('gui/'));
-
+    pathUiMenus;
   const hasPbrTextures =
     /pbr|normal|roughness|metallic|emissive|glow|deferred|rtx|shader/.test(text) ||
-    filePaths.some((p) => /_n\.png|_s\.png|_e\.png|_normal|_metallic|_roughness/.test(p));
+    pathPbrTextures;
 
   return {
     betaApis: {
