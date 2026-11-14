@@ -572,7 +572,10 @@ export function resolvePlayerDependencies(input: {
   /** A whole `variable.x = <expr>` the archive already contains, reused as the declaration. */
   const shippedAssignment = (name: string): string | null => {
     const pattern = new RegExp(`variable\\.${name}\\s*=\\s*([^;"\n]+)`);
-    for (const raw of Object.values(files)) {
+    // Source-side assignments may live in the behavior pack (for example in an item/entity
+    // definition) rather than the resource pack. Search both packs before declaring the value lost.
+    const sourceFiles = { ...files, ...(input.behaviorPackFiles ?? {}) };
+    for (const raw of Object.values(sourceFiles)) {
       if (typeof raw !== 'string') continue;
       const match = pattern.exec(raw);
       if (!match) continue;
@@ -620,36 +623,29 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 4. Nothing in the archive reproduces the value: the source computed it in code this pack
-    // cannot run. The declaration keeps the clips evaluating instead of failing on every frame,
-    // and the limitation is named per variable instead of being hidden behind a quiet log.
+    // 4. If the source value cannot be recovered, do NOT initialize it to zero. A zero
+    // assignment silences the engine warning while silently disabling the source behaviour.
+    // Keep the unresolved edge explicit so the port cannot be mistaken for a faithful conversion.
     const withoutRecovery = !statement;
-    if (!statement) {
-      statement = `variable.${name} = 0;`;
-      evidence = 'no player-scope declaration, no shipped assignment and no evidence-backed destination equivalent exists';
-    }
-    if (preAnimation.some((entry) => new RegExp(`\\bvariable\\.${name}\\s*=`).test(entry))) continue;
-    preAnimation.push(statement);
-    report.variables.reconstructed += 1;
-    report.variables.injected.push(statement);
     if (withoutRecovery) {
-      report.variables.initialisedWithoutRecovery.push(`variable.${name}`);
       report.variables.unresolved.push({
         variable: name,
         declaredIn: [],
         referencedIn: [`${referenceCount} reference(s) in player-scoped documents`],
         reconstructedExpression: null,
         reason:
-          'read by a document the player entity activates and declared in no player scope; the value was computed by source code ' +
-          'this pack cannot run, so it is initialised to 0 to keep the expression evaluable and the behaviour is reported as NOT REPRODUCED',
+          'read by player-scoped content but no player-scope assignment, source-pack assignment, or evidence-backed Bedrock equivalent was found; no constant is substituted because that would change the animation behaviour',
       });
       log(
-        `[PLAYER:VARIABLE:LIMIT] variable.${name} (${referenceCount} read(s)) — ${evidence}. Declared as ${statement} so the ` +
-          'animations that read it evaluate instead of reporting an unknown variable; the original behaviour is NOT reproduced.',
+        `[PLAYER:VARIABLE:LIMIT] variable.${name} (${referenceCount} read(s)) — no recoverable source expression or destination equivalent was found; it remains unresolved rather than being incorrectly forced to 0.`,
       );
-    } else {
-      log(`[PLAYER:VARIABLE:BIND] ${statement} — ${evidence}.`);
+      continue;
     }
+    if (preAnimation.some((entry) => new RegExp(`\\bvariable\\.${name}\\s*=`).test(entry))) continue;
+    preAnimation.push(statement as string);
+    report.variables.reconstructed += 1;
+    report.variables.injected.push(statement as string);
+    log(`[PLAYER:VARIABLE:BIND] ${statement} — ${evidence}.`);
   }
   if (report.variables.unresolved.length > 0) {
     report.blocking.push(
