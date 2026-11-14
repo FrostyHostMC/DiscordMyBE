@@ -147,9 +147,13 @@ export function repairItemNameQueryArity(expression: string): {
         });
       } else {
         const occupancy = slotOccupancyExpression(slot);
-        out += expression.slice(cursor, match.index) + occupancy.expression;
-        cursor = close + 1;
-        repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+        if (!occupancy) {
+          rejected.push({ call, reason: `the ${slot} occupancy test has no supported destination query` });
+        } else {
+          out += expression.slice(cursor, match.index) + occupancy.expression;
+          cursor = close + 1;
+          repairs.push({ from: call, to: occupancy.expression, reason: occupancy.reason });
+        }
       }
     }
     pattern.lastIndex = close + 1;
