@@ -743,6 +743,12 @@ export function portMobAndPlayerAnimations(
     log('[ANIMATION] No Java animation-controller or state-machine signatures detected — no controller JSON synthesized.');
   }
 
+  // Record the controller count after the initial player wiring pass. Only rebuild the
+  // entity below if this later bytecode/discovery pass actually found a NEW player controller.
+  // playerControllerIds is already populated by the first pass, so testing only .length > 0
+  // rebuilt the same entity on every conversion and appended a second set of clip aliases/gates.
+  const playerControllerCountBeforeLateDiscovery = playerControllerIds.length;
+
   // Register any synthesized or discovered player controllers into player client entity wiring
   for (const controller of controllerSynthesis.controllers) {
     if (
@@ -760,7 +766,7 @@ export function portMobAndPlayerAnimations(
       }
     }
   }
-  if (playerControllerIds.length > 0 || (hasPlayerOwnership && !playerWiring)) {
+  if (playerControllerIds.length > playerControllerCountBeforeLateDiscovery || (hasPlayerOwnership && !playerWiring)) {
     const updatedWiring = buildPlayerClientEntity({
       portedClips: playerRigBridge.clips,
       triggers: playerTriggers?.triggers ?? [],
