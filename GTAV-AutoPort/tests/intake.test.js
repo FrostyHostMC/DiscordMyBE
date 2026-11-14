@@ -25,12 +25,16 @@ test("imports a ZIP and inventories files", async () => {
 
 test("imports an OpenIV OIV package and identifies its assembly manifest", async () => {
   const oiv = new JSZip();
-  oiv.file("assembly.xml", "<package><metadata><name>Example vehicle</name></metadata></package>");
+  oiv.file("assembly.xml", '<package><metadata><name>Example vehicle</name><version>1.2</version><author>Modder</author></metadata><content><add source="vehicle.yft" dest="update/x64/dlcpacks/example/vehicle.yft"/></content></package>');
   oiv.file("content/vehicles/example.yft", "model");
   const result = await inspectZipArchive(await asUpload(oiv, "example.oiv"));
   assert.equal(result.containerFormat, "openiv-oiv");
   assert.equal(result.packageMetadata.assemblyDetected, true);
   assert.deepEqual(result.packageMetadata.assemblyFiles, ["assembly.xml"]);
+  assert.equal(result.packageMetadata.assemblies[0].name, "Example vehicle");
+  assert.equal(result.packageMetadata.assemblies[0].version, "1.2");
+  assert.equal(result.packageMetadata.assemblies[0].operationCount, 1);
+  assert.equal(result.packageMetadata.assemblies[0].operations[0].action, "add");
   assert.equal(result.files.length, 2);
 });
 
