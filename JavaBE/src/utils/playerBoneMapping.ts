@@ -1,5 +1,5 @@
 import type { BedrockAnimationClip } from '@/utils/animationTranslator';
-import { hasCustomBoneTokens, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { resolvePlayerBone } from '@/utils/playerBoneAliases';
 import { isControlBone } from '@/utils/boneAnatomy';
 import { composeTracks } from '@/utils/animationTrackMath';
 import {
@@ -50,8 +50,18 @@ export interface PlayerRigMappingResult {
 export function mapJavaPlayerBone(rawName: string): PlayerBoneMapping | null {
   const hit = resolvePlayerBone(rawName);
   if (!hit) return null;
-  if (hit.via !== 'canonical' && hit.via !== 'alias' && hasCustomBoneTokens(rawName)) return null;
-  return { source: rawName, bone: hit.bone, approximated: hit.approximated, via: hit.via };
+  // The native player rig has no separate wrist/finger/twist joints. When a source bone
+  // contains a recognized anatomical part plus a sub-joint token, retain its transform by
+  // composing it onto the corresponding Bedrock limb instead of silently dropping the track.
+  // This is explicitly marked as an approximation; exact sub-joint motion requires a custom
+  // player geometry and cannot be represented by the vanilla skin skeleton.
+  const customSubJoint = hit.via === 'compound' && /upper|lower|fore|wrist|finger|thumb|twist|roll|elbow|shoulder|knee|ankle|toe|joint|segment/i.test(rawName);
+  return {
+    source: rawName,
+    bone: hit.bone,
+    approximated: hit.approximated || customSubJoint,
+    via: customSubJoint ? 'compound-subjoint-composed' : hit.via,
+  };
 }
 
 interface MappingPass {
