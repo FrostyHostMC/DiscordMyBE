@@ -194,16 +194,11 @@ export default function App() {
   return (
     <div className={`javabe-app-shell min-h-screen w-full font-sans text-slate-100 ${stage === 'analyzing' || stage === 'generating' ? 'is-processing' : ''}`} style={{ '--app-accent': accent, '--app-accent-soft': accent2, '--app-bg': bgColor } as CSSProperties}>
       
-      <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-4 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
-        <header className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/80 p-3 sm:p-4">
-          <div className="flex min-w-0 items-center gap-3"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-violet-400/30 bg-violet-400/10"><Cpu className="h-5 w-5" style={{ color: accent }} /></div><div className="min-w-0"><h1 className="truncate text-base font-bold tracking-tight text-white">{appName}</h1><p className="text-xs text-slate-400">Drop a mod archive; JavaBE scans, configures and builds it automatically.</p></div></div>
-          <div className="flex shrink-0 items-center gap-2"><button type="button" onClick={handleReset} className="flex min-h-[48px] min-w-[48px] items-center justify-center rounded-xl border border-slate-700 text-slate-300 active:bg-slate-800" aria-label="Start over"><RotateCcw className="h-4 w-4" /></button></div>
+      <main className="javabe-app-content mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-3 px-3 pb-8 pt-3 sm:px-6 sm:pt-5">
+        <header className="javabe-topbar flex items-center justify-between gap-3 rounded-2xl border p-2.5 sm:p-3">
+          <div className="flex min-w-0 items-center gap-3"><img className="javabe-cloud-mark" src="/assets/JavaBE_Discord_Icon_Zoomed.gif" alt="" aria-hidden="true" /><div className="min-w-0"><h1 className="truncate text-base font-bold tracking-tight text-white">{appName}</h1><p className="text-xs text-slate-300/75">Java to Bedrock mod porter</p></div></div>
+          <button type="button" onClick={handleReset} className="javabe-reset-button flex min-h-[44px] min-w-[44px] items-center justify-center rounded-xl" aria-label="Start over"><RotateCcw className="h-4 w-4" /></button>
         </header>
-
-        <section className="javabe-studio-hero" aria-label="JavaBE Studio">
-          <div className="javabe-studio-hero-art" aria-hidden="true"><div className="javabe-portal-ring javabe-portal-ring-one"/><div className="javabe-portal-ring javabe-portal-ring-two"/><div className="javabe-portal-core"><span className="javabe-portal-cube"/></div><span className="javabe-portal-particle javabe-portal-particle-one"/><span className="javabe-portal-particle javabe-portal-particle-two"/><span className="javabe-portal-particle javabe-portal-particle-three"/></div>
-          <div className="javabe-studio-hero-copy"><p className="javabe-studio-eyebrow">JAVA TO BEDROCK · MOD PORTING STUDIO</p><h2>Bring your Java mods <span>to Bedrock.</span></h2><p>Import a Java archive, inspect what can be ported, then build a Bedrock add-on.</p><div className="javabe-studio-steps"><span><b>01</b> Import</span><span><b>02</b> Inspect</span><span><b>03</b> Export</span></div></div>
-        </section>
 
         <nav className="javabe-workspace-nav" aria-label="Work areas">
           {([['convert', 'Port a mod'], ['review', 'Inspect results'], ['tools', 'Porting tools']] as const).map(([workspace, label]) => <button key={workspace} type="button" onClick={() => switchWorkspace(workspace)} aria-pressed={activeWorkspace === workspace} className={`javabe-workspace-tab ${activeWorkspace === workspace ? 'is-active' : ''}`}>
