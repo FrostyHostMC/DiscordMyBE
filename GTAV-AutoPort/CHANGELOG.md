@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-14 — Guided porting workflow and automatic native-tool setup
+- Added an in-app walkthrough with five stages, progress state, contextual next-step prompts, and expandable setup/capability guidance.
+- Updated the Windows launcher to install web dependencies and attempt an automatic pinned RageKit native build through CMake FetchContent when a compatible C++ toolchain is available.
+- Added automatic discovery of RageKit in standard build output locations, avoiding manual executable-path configuration for normal launcher builds.
+- Preserved analysis-only fallback when native tooling is unavailable and retained strict PS4 1.73 conversion/deployment gates.
+
+
 ## 2026-11-14 — Upstream engine integration audit and intake regression fix
 - Fixed a malformed newline escape in the browser-side RageKit candidate module that caused the latest JavaScript test run to fail before Vite could build.
 - Confirmed the pinned RageKit v0.3.1 dependency configures and builds successfully in CI; it remains the primary native parser/writer for its documented GTA V Legacy/Enhanced formats.
