@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownToLine, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
+import { ArrowDownToLine, BookOpen, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
 import { inspectVehicleMetadata, listVehicleModels } from "../core/metadata.js";
 import { buildVehicleDependencyGraph } from "../core/dependencyGraph.js";
@@ -55,6 +55,8 @@ export default function App() {
   const [nativeReports, setNativeReports] = useState(null);
   const [nativeStatus, setNativeStatus] = useState("Native reports are generated automatically after import.");
   const [previewUrls, setPreviewUrls] = useState({});
+  const [guideOpen, setGuideOpen] = useState(true);
+  const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
     if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }
@@ -165,7 +167,8 @@ export default function App() {
     <aside className="rail">
       <div className="brand"><span className="brand-mark"><CarFront size={19}/></span><span>AutoPort</span></div>
       <div className="rail-label">WORKSPACE</div>
-      <div className="nav active"><FileArchive size={17}/> Mod Converter</div>
+      <a className="nav active" href="#workspace"><FileArchive size={17}/> Mod Converter</a>
+      <a className="nav" href="#getting-started"><BookOpen size={17}/> Porting guide</a>
       <div className="rail-label">PIPELINE</div>
       <div className="nav"><ShieldCheck size={17}/> Compatibility gates</div>
       <div className="rail-foot">LOCAL WORKSPACE<br/><b>PS4 · STORY MODE</b></div>
@@ -173,7 +176,7 @@ export default function App() {
     <section className="content">
       <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Universal mod conversion</h1><p>Import a PC GTA V mod. AutoPort inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
-      <section className="hero">
+      <section className="hero" id="workspace">
         <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
@@ -184,6 +187,23 @@ export default function App() {
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
         </div>
         <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>UNIVERSAL MOD PIPELINE</span></div>
+      </section>
+
+      <section className="panel guide-panel" id="getting-started">
+        <div className="panel-head"><div><div className="eyebrow">IN-APP WALKTHROUGH</div><h3>Guided porting assistant</h3><p>AutoPort explains each stage and tells you what to do next. Your current stage is <b>{guideStep} of 5</b>.</p></div><button className="secondary-button guide-toggle" onClick={() => setGuideOpen((value) => !value)}>{guideOpen ? "Hide guide" : "Show guide"}</button></div>
+        {guideOpen && <>
+          <div className="guide-progress"><span style={{width: `${guideStep * 20}%`}}/></div>
+          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP file or its extracted folder. AutoPort will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00411 / 1.73 resource writer and deployment checks must pass before packaging."}</p></div>
+          <div className="guide-steps">
+            <div className={guideStep >= 1 ? "guide-step current" : "guide-step"}><b>01 · Import</b><p>Import ZIP or extracted folder. Files remain local.</p></div>
+            <div className={guideStep >= 2 ? "guide-step current" : "guide-step"}><b>02 · Identify</b><p>Automatic inventory, mod-family classification, and PC-only plugin warnings.</p></div>
+            <div className={guideStep >= 3 ? "guide-step current" : "guide-step"}><b>03 · Plan</b><p>Group resources by format and show missing adapters and dependencies.</p></div>
+            <div className={guideStep >= 4 ? "guide-step current" : "guide-step"}><b>04 · Inspect</b><p>RageKit and native inspector validate supported source formats; no PS4 conversion is implied.</p></div>
+            <div className={guideStep >= 5 ? "guide-step current" : "guide-step"}><b>05 · Validate & deploy</b><p>Requires exact-build PS4 conversion, package validation, and reversible deployment.</p></div>
+          </div>
+          <details className="guide-details"><summary>First-run setup: let AutoPort prepare its tools</summary><p>Run <b>START-AUTOPORT.bat</b> from the GTAV-AutoPort folder. It installs web dependencies and attempts to build the pinned RageKit engine when CMake and a C++ build toolchain are available. CMake FetchContent downloads the pinned upstream source during that build. Keep the launcher window open while using the app.</p><p>If the native build cannot run, install Git, CMake 3.20+, and Visual Studio Build Tools with the Desktop development with C++ workload, then launch again. File inventory and planning still work without the native engine.</p></details>
+          <details className="guide-details"><summary>What AutoPort can and cannot do today</summary><p>Available: ZIP/folder intake, broad mod classification, dependency candidates, vehicle metadata analysis, YFT/YTD inspection, and RageKit source-side parsing/round-trip checks. Not yet available: a proven PS4 1.73 resource encoder, universal PC script/plugin translation, verified RPF installation layout, or tested PS4 install package.</p><p>PC ASI/DLL/EXE and ScriptHookV/.NET mods need separate PS4-native implementations where feasible. Never install a PC binary on the console.</p></details>
+        </>}
       </section>
 
       <section className="panel">
