@@ -1,4 +1,5 @@
 import type { AssetIndex, IndexedTexture } from '@/utils/assetIndex';
+import { yieldToUi } from '@/utils/archiveScale';
 import { lookupTextureByRef, normKey } from '@/utils/assetIndex';
 import type { ExtractedZipEntry } from '@/utils/zip';
 import {
@@ -170,14 +171,16 @@ function collectMissingReferences(
  * Discovery + decoding pass. Runs once per conversion, before any pack file is
  * written, so every downstream stage can consult the real texture metadata.
  */
-export function runUniversalTextureEngine(
+export async function runUniversalTextureEngine(
   entries: ExtractedZipEntry[],
   index: AssetIndex | null,
   onLog?: (line: string) => void,
-): UniversalTextureEngineReport {
+): Promise<UniversalTextureEngineReport> {
   const log = (line: string) => onLog?.(line);
   const metadata = new Map<string, JavaTextureAnimation>();
-  for (const entry of entries) {
+  for (let entryIndex = 0; entryIndex < entries.length; entryIndex += 1) {
+    if (entryIndex > 0 && entryIndex % 240 === 0) await yieldToUi();
+    const entry = entries[entryIndex];
     const path = entry.path.replace(/\\/g, '/').toLowerCase();
     if (!path.endsWith('.png.mcmeta') || !entry.data) continue;
     const animation = parseMcmetaAnimation(entry.data);
@@ -194,7 +197,10 @@ export function runUniversalTextureEngine(
   let decoded = 0;
   let alphaTextures = 0;
 
-  for (const texture of index?.textures ?? []) {
+  const textures = index?.textures ?? [];
+  for (let textureIndex = 0; textureIndex < textures.length; textureIndex += 1) {
+    if (textureIndex > 0 && textureIndex % 240 === 0) await yieldToUi();
+    const texture = textures[textureIndex];
     const header = readPngHeader(texture.data);
     if (header) decoded += 1;
     const width = header?.width ?? texture.width;
