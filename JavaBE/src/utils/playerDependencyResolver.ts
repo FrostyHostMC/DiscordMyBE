@@ -3,11 +3,12 @@ import { translateMolangExpression } from '@/utils/molangCompatibility';
 import {
   FIRST_PERSON_GATE,
   PLAYER_BASELINE_ENTRIES,
-  PLAYER_BASELINE_PRE_ANIMATION,
   VANILLA_PLAYER_ANIMATE,
   VANILLA_PLAYER_ANIMATIONS,
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
+  PLAYER_SCOPE_VARIABLE_EXPRESSIONS,
+  ENGINE_PROVIDED_MOLANG_VARIABLES,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
   isVanillaPlayerDocumentPath,
@@ -149,17 +150,11 @@ function preserveVanillaDocuments(
     if (lower === 'entity/player.entity.json') continue;
     const raw = files[path];
     if (typeof raw !== 'string') continue;
-    if (VANILLA_PLAYER_ANIMATION_IDS.size === 0) continue;
-    const definesBaseline = [...VANILLA_PLAYER_ANIMATION_IDS, ...VANILLA_PLAYER_CONTROLLER_IDS].some((id) =>
-      raw.includes(`"${id}"`),
-    );
-    if (definesBaseline) {
-      notes.push(
-        `${path} overrides a vanilla player document and really defines baseline identifiers; it is kept because the port ships them itself.`,
-      );
-      continue;
-    }
-
+    // Even when this document defines one vanilla identifier, leaving it on a vanilla-owned
+    // path replaces the engine's entire document and hides every other built-in definition in
+    // that document (for example base_pose, look_at_target or first_person_base_pose). Move the
+    // whole document intact to a mod-owned path. Its animation/controller identifiers remain
+    // unchanged and globally resolvable, while the engine's complete vanilla document survives.
     const slash = path.lastIndexOf('/');
     const dir = slash >= 0 ? path.slice(0, slash + 1) : '';
     const name = slash >= 0 ? path.slice(slash + 1) : path;
@@ -255,10 +250,18 @@ export function resolvePlayerDependencies(input: {
   modId: string;
   resourcePackFiles: PackFiles;
   behaviorPackFiles?: PackFiles;
+  /** Versioned source adapters whose Java logic was verified for this import. */
+  sourceProfiles?: string[];
   onLog?: (line: string) => void;
 }): PlayerDependencyResolverReport {
   const log = (line: string) => input.onLog?.(line);
   const files = input.resourcePackFiles;
+  const sourceProfiles = new Set(input.sourceProfiles ?? []);
+  const hasSeriousPlayerAnimationsSource = sourceProfiles.has('Serious Player Animations 1.1.0') || sourceProfiles.has('Serious Player Animations 1.1.1');
+  const baselineForVariable = (name: string) =>
+    name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource
+      ? undefined
+      : PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
   const notes: string[] = [];
 
   const report: PlayerDependencyResolverReport = {
@@ -326,15 +329,18 @@ export function resolvePlayerDependencies(input: {
   const animate: unknown[] = Array.isArray(scripts.animate) ? [...scripts.animate] : [];
 
   for (const entry of PLAYER_BASELINE_ENTRIES) {
-    if (typeof animations[entry.alias] !== 'string') {
+    if (animations[entry.alias] !== entry.identifier) {
       animations[entry.alias] = entry.identifier;
       report.baselineWiringAdded.push(entry.alias);
     }
+    const shouldAnimateDirectly = VANILLA_PLAYER_ANIMATE.some((item) =>
+      typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
+    );
     const bound = animate.some((item) =>
       typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
     );
-    if (!bound) {
-      animate.push(entry.gate ? { [entry.alias]: entry.gate } : entry.alias);
+    if (shouldAnimateDirectly && !bound) {
+      animate.push(entry.alias);
       report.baselineWiringAdded.push(`${entry.alias}:animate`);
     }
   }
@@ -554,25 +560,69 @@ export function resolvePlayerDependencies(input: {
     if (typeof rawDocument === 'string') playerDocuments.push(rawDocument);
   }
   const readVars = countReads(playerDocuments);
+  // Mojang's entity resources use these variables as engine-provided inputs; they are not
+  // missing script assignments and must never be replaced with fabricated constants.
+  for (const name of ENGINE_PROVIDED_MOLANG_VARIABLES) readVars.delete(name);
+  // A custom player entity also replaces vanilla script scope. Restore always-required engine
+  // variables, then close over dependencies used by source-derived expressions.
+  for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
+    if (name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource) continue;
+    if (baseline.always && !readVars.has(name)) readVars.set(name, 0);
+  }
+  let dependenciesAdded = true;
+  while (dependenciesAdded) {
+    dependenciesAdded = false;
+    for (const name of [...readVars.keys()]) {
+      const baseline = baselineForVariable(name);
+      if (!baseline) continue;
+      for (const match of baseline.expression.matchAll(VARIABLE_READ)) {
+        const dependency = String(match[1]);
+        if (ENGINE_PROVIDED_MOLANG_VARIABLES.has(dependency)) continue;
+        if (!readVars.has(dependency)) {
+          readVars.set(dependency, 0);
+          dependenciesAdded = true;
+        }
+      }
+    }
+  }
   const itemIds = collectPackItemIdentifiers({ ...files, ...(input.behaviorPackFiles ?? {}) });
   const preAnimation: string[] = Array.isArray(scripts.pre_animation)
     ? scripts.pre_animation.filter((entry): entry is string => typeof entry === 'string')
     : typeof scripts.pre_animation === 'string'
       ? [scripts.pre_animation]
       : [];
-
-  // Restore the live vanilla player values required by the baseline clips/controllers.
-  // These are source-derived formulas from the Mojang Bedrock player resource sample, not
-  // zero-valued placeholders: tcos0 drives locomotion and melee_spear_equipped selects
-  // the vanilla spear-specific animation branch.
-  for (const statement of PLAYER_BASELINE_PRE_ANIMATION) {
-    const variable = statement.slice('variable.'.length).split('=')[0]?.trim();
-    if (!variable) continue;
-    const alreadyDeclared = preAnimation.some((entry) => entry.includes(`variable.${variable} =`));
-    if (!alreadyDeclared) {
-      preAnimation.push(statement);
-      report.variables.injected.push(statement);
-      report.variables.reconstructed += 1;
+  const initialize: string[] = Array.isArray(scripts.initialize)
+    ? scripts.initialize.filter((entry): entry is string => typeof entry === 'string')
+    : typeof scripts.initialize === 'string'
+      ? [scripts.initialize]
+      : [];
+  const baselineInjectedVariables = new Set<string>();
+  const baselineInjectedStatements = new Map<string, string[]>();
+  // Install source-backed expressions before scope analysis so dependencies declared in
+  // initialize/pre_animation are treated as real player-scope assignments by the resolver.
+  for (const [name, baseline] of Object.entries(PLAYER_SCOPE_VARIABLE_EXPRESSIONS)) {
+    if (!readVars.has(name) || (name.startsWith('spa_') && !hasSeriousPlayerAnimationsSource)) continue;
+    const statements: string[] = [];
+    if (baseline.initializeExpression) {
+      const statement = `variable.${name} = ${baseline.initializeExpression};`;
+      if (!initialize.some((entry) => entry.includes(`variable.${name} =`))) {
+        initialize.push(statement);
+        statements.push(statement);
+      }
+    }
+    if (baseline.expression) {
+      const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
+      if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
+        const statement = `${translation.expression.trim().replace(/;$/, '')};`;
+        if (!preAnimation.some((entry) => entry.includes(`variable.${name} =`))) {
+          preAnimation.push(statement);
+          statements.push(statement);
+        }
+      }
+    }
+    if (statements.length > 0) {
+      baselineInjectedVariables.add(name);
+      baselineInjectedStatements.set(name, statements);
     }
   }
 
@@ -582,13 +632,16 @@ export function resolvePlayerDependencies(input: {
   // `variable.tcos0` failure: the archive assigned them, in a scope the player never evaluates.
   // Only this entity's own script statements count as a declaration here.
   const declaredInPlayerScope = new Set<string>();
-  for (const match of JSON.stringify([preAnimation, animate]).matchAll(VARIABLE_ASSIGN)) {
+  for (const match of JSON.stringify([initialize, preAnimation, animate]).matchAll(VARIABLE_ASSIGN)) {
     declaredInPlayerScope.add(String(match[1]));
   }
   /** A whole `variable.x = <expr>` the archive already contains, reused as the declaration. */
   const shippedAssignment = (name: string): string | null => {
-    const pattern = new RegExp(`variable\\.${name}\\s*=\\s*([^;"\n]+)`);
-    for (const raw of Object.values(files)) {
+    const pattern = new RegExp(`variable\\.${name}\\s*=(?!=)\\s*([^;"\n]+)`);
+    // Source-side assignments may live in the behavior pack (for example in an item/entity
+    // definition) rather than the resource pack. Search both packs before declaring the value lost.
+    const sourceFiles = { ...files, ...(input.behaviorPackFiles ?? {}) };
+    for (const raw of Object.values(sourceFiles)) {
       if (typeof raw !== 'string') continue;
       const match = pattern.exec(raw);
       if (!match) continue;
@@ -603,6 +656,10 @@ export function resolvePlayerDependencies(input: {
   for (const [name, referenceCount] of readVars) {
     if (declaredInPlayerScope.has(name)) {
       report.variables.declared += 1;
+      if (baselineInjectedVariables.has(name)) {
+        report.variables.reconstructed += 1;
+        report.variables.injected.push(...(baselineInjectedStatements.get(name) ?? []));
+      }
       continue;
     }
     // 1. Equipment visibility: the armour-layer flag has a known destination form.
@@ -613,7 +670,20 @@ export function resolvePlayerDependencies(input: {
       statement = `variable.${name} = ${visibility.expression};`;
       evidence = visibility.reason;
     }
-    // 2. A declaration the archive already ships is re-bound into the scope that evaluates it.
+    // 2. Restore known vanilla player-scope expressions from the destination's own resource
+    // contract before looking for mod-specific assignments. These are live expressions, not
+    // constant defaults, and are needed because this pack replaces the vanilla player entity.
+    if (!statement) {
+      const baseline = baselineForVariable(name);
+      if (baseline) {
+        const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
+        if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
+          statement = `${translation.expression.trim().replace(/;$/, '')};`;
+          evidence = baseline.evidence;
+        }
+      }
+    }
+    // 3. A declaration the archive already ships is re-bound into the scope that evaluates it.
     if (!statement) {
       const relocated = shippedAssignment(name);
       if (relocated) {
@@ -625,7 +695,7 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 3. Equipped-item detection rebuilt from the items the pack really registers.
+    // 4. Equipped-item detection rebuilt from the items the pack really registers.
     if (!statement) {
       const reconstruction = reconstructEquipmentExpression(name, itemIds);
       if (reconstruction) {
@@ -636,64 +706,58 @@ export function resolvePlayerDependencies(input: {
         }
       }
     }
-    // 4. Nothing in the archive reproduces the value: the source computed it in code this pack
-    // cannot run. The declaration keeps the clips evaluating instead of failing on every frame,
-    // and the limitation is named per variable instead of being hidden behind a quiet log.
+    // 5. If the source value cannot be recovered, do NOT initialize it to zero. A zero
+    // assignment silences the engine warning while silently disabling the source behaviour.
+    // Keep the unresolved edge explicit so the port cannot be mistaken for a faithful conversion.
     const withoutRecovery = !statement;
-    if (!statement) {
-      statement = `variable.${name} = 0;`;
-      evidence = 'no player-scope declaration, no shipped assignment and no evidence-backed destination equivalent exists';
-    }
-    if (preAnimation.some((entry) => new RegExp(`\\bvariable\\.${name}\\s*=`).test(entry))) continue;
-    preAnimation.push(statement);
-    report.variables.reconstructed += 1;
-    report.variables.injected.push(statement);
     if (withoutRecovery) {
-      report.variables.initialisedWithoutRecovery.push(`variable.${name}`);
       report.variables.unresolved.push({
         variable: name,
         declaredIn: [],
         referencedIn: [`${referenceCount} reference(s) in player-scoped documents`],
         reconstructedExpression: null,
         reason:
-          'read by a document the player entity activates and declared in no player scope; the value was computed by source code ' +
-          'this pack cannot run, so it is initialised to 0 to keep the expression evaluable and the behaviour is reported as NOT REPRODUCED',
+          'read by player-scoped content but no player-scope assignment, source-pack assignment, or evidence-backed Bedrock equivalent was found; no constant is substituted because that would change the animation behaviour',
       });
       log(
-        `[PLAYER:VARIABLE:LIMIT] variable.${name} (${referenceCount} read(s)) — ${evidence}. Declared as ${statement} so the ` +
-          'animations that read it evaluate instead of reporting an unknown variable; the original behaviour is NOT reproduced.',
+        `[PLAYER:VARIABLE:LIMIT] variable.${name} (${referenceCount} read(s)) — no recoverable source expression or destination equivalent was found; it remains unresolved rather than being incorrectly forced to 0.`,
       );
-    } else {
-      log(`[PLAYER:VARIABLE:BIND] ${statement} — ${evidence}.`);
+      continue;
     }
+    if (preAnimation.some((entry) => new RegExp(`\\bvariable\\.${name}\\s*=`).test(entry))) continue;
+    preAnimation.push(statement as string);
+    report.variables.reconstructed += 1;
+    report.variables.injected.push(statement as string);
+    log(`[PLAYER:VARIABLE:BIND] ${statement} — ${evidence}.`);
   }
   if (report.variables.unresolved.length > 0) {
     report.blocking.push(
       `${report.variables.unresolved.length} Molang variable(s) are read by player-scoped content with no recoverable source value: ` +
         `${report.variables.unresolved.slice(0, 6).map((entry) => `variable.${entry.variable}`).join(', ')}${
           report.variables.unresolved.length > 6 ? ' …' : ''
-        }. Each one is declared in the player scope so the clips evaluate, and each one is reported as NOT REPRODUCED rather than claimed as converted.`,
+        }. Each unresolved dependency remains unmodified and is reported as NOT REPRODUCED rather than claimed as converted.`,
     );
   }
 
   // 5. First-person verification: functional only when the pose resolves AND is gated.
   const firstPersonBasePoseAlias = PLAYER_BASELINE_ENTRIES.find(
-    (entry) => entry.identifier === 'animation.player.first_person_base_pose',
+    (entry) => entry.identifier === 'animation.player.first_person.base_pose',
   )?.alias;
   const firstPersonAttackAlias = PLAYER_BASELINE_ENTRIES.find(
     (entry) => entry.identifier === 'controller.animation.player.first_person_attack',
   )?.alias;
-  const aliasGate = (alias: string | undefined): boolean => {
-    if (!alias) return false;
-    return animate.some((entry) => isRecord(entry) && typeof entry[alias] === 'string' && (entry[alias] as string).includes(FIRST_PERSON_GATE));
-  };
+  // Vanilla's player entity runs only the root controller from scripts.animate. The root
+  // controller itself gates first-person aliases by state; they must not be started directly.
+  const rootControllerBound = animate.some((entry) =>
+    typeof entry === 'string' ? entry === 'root' : isRecord(entry) && 'root' in entry,
+  );
   report.firstPerson.basePosePresent =
     Boolean(firstPersonBasePoseAlias) && typeof animations[firstPersonBasePoseAlias as string] === 'string';
   report.firstPerson.basePoseResolves =
     report.firstPerson.basePosePresent &&
     isVanillaPlayerBaselineIdentifier(String(animations[firstPersonBasePoseAlias as string]));
-  report.firstPerson.basePoseGated = aliasGate(firstPersonBasePoseAlias);
-  report.firstPerson.attackControllerGated = aliasGate(firstPersonAttackAlias);
+  report.firstPerson.basePoseGated = rootControllerBound;
+  report.firstPerson.attackControllerGated = rootControllerBound;
   report.firstPerson.ready =
     report.firstPerson.basePoseResolves && report.firstPerson.basePoseGated && report.firstPerson.attackControllerGated;
   if (!report.firstPerson.ready) {
@@ -713,6 +777,7 @@ export function resolvePlayerDependencies(input: {
   // 6. Write the resolved definition back only when something really changed.
   description.animations = animations;
   scripts.pre_animation = preAnimation.filter((entry) => entry.trim().length > 0);
+  if (initialize.length > 0) scripts.initialize = initialize.filter((entry) => entry.trim().length > 0);
   scripts.animate = animate;
   description.scripts = scripts;
   const nextJson = JSON.stringify(doc, null, 2);
@@ -724,7 +789,7 @@ export function resolvePlayerDependencies(input: {
     `${report.shippedDefinition} resolve to a shipped definition, ${report.vanillaEngineDefinition} to the vanilla player resource set, ` +
     `${report.identifiersRepaired.length} altered identifier(s) repaired, ${report.missingDefinitions.length} unresolved. ` +
     `${report.documentsPreserved.length} generated document(s) relocated off vanilla resource paths so the engine definitions survive. ` +
-    `Variables: ${report.variables.referenced} read in player scope, ${report.variables.declared} already declared there, ` +
+    `Variables: ${report.variables.referenced} referenced or required by the vanilla player contract, ${report.variables.declared} already declared there, ` +
     `${report.variables.reconstructed} declared by this pass (${report.variables.initialisedWithoutRecovery.length} of them initialised ` +
     'because no archive scope could supply the value, reported as NOT REPRODUCED). ' +
     `First person: ${report.firstPerson.ready ? 'wiring complete' : 'NOT complete'}. ` +
