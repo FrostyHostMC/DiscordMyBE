@@ -172,23 +172,23 @@ function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolea
         const metadata = JSON.parse(content) as { id?: string; version?: string };
         if (metadata.id === 'seriousplayeranimations') {
           modIdFound = true;
-          versionFound = metadata.version === '1.1.0';
+          versionFound = ['1.1.0', '1.1.1'].includes(metadata.version ?? '');
         }
       } catch {
         // Continue to Forge metadata if this is not a valid Fabric descriptor.
       }
     } else if (path.endsWith('meta-inf/mods.toml')) {
       modIdFound = /modId\\s*=\\s*["']seriousplayeranimations["']/i.test(content);
-      versionFound = versionFound || /version\\s*=\\s*["']1\\.1\\.0["']/i.test(content);
+      versionFound = versionFound || /version\\s*=\\s*[\"']1\\.1\\.[01][\"']/i.test(content);
     } else if (path.endsWith('meta-inf/manifest.mf')) {
-      versionFound = versionFound || /^Implementation-Version:\\s*1\\.1\\.0\\s*$/im.test(content);
+      versionFound = versionFound || /^Implementation-Version:\\s*1\\.1\\.[01]\\s*$/im.test(content);
     }
   }
   return modIdFound && versionFound;
 }
 
 /**
- * Source-backed adapter for Serious Player Animations 1.1.0 (pinned upstream source revision).
+ * Source-backed adapter for Serious Player Animations 1.1.1 (pinned upstream source revision).
  *
  * The upstream mixin selects locomotion clips from per-tick position deltas, body-yaw deltas,
  * sneaking and sprinting state. Shield clips are a second animation layer, not locomotion states.
@@ -201,7 +201,7 @@ function seriousPlayerAnimationTrigger(
 ): PlayerClipTrigger | null {
   const lower = clipId.toLowerCase();
   const tail = lower.split(/[.:/]+/).pop() ?? lower;
-  const evidence = 'McVader34/Serious-Player-Animations 1.1.0 (upstream revision 2dc73ceb744a): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
+  const evidence = 'McVader34/Serious-Player-Animations 1.1.1 source (upstream revision 2dc73ceb744a): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
   const move = 'variable.spa_move_speed';
   const backwards = 'variable.spa_moving_backwards';
   const notSneaking = '!query.is_sneaking';
@@ -415,8 +415,8 @@ export function translatePlayerTriggers(options: {
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
     javaSignals: [...hits.keys()],
-    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.0' : undefined,
-    sourceProfileCandidate: !seriousPlayerProfile && seriousPlayerNamespace ? 'Serious Player Animations 1.1.0 (base Java mod JAR required)' : undefined,
+    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
+    sourceProfileCandidate: !seriousPlayerProfile && seriousPlayerNamespace ? 'Serious Player Animations 1.1.1 (base Java mod JAR required)' : undefined,
     triggers,
     summary: '',
   };
