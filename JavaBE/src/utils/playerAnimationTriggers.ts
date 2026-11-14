@@ -49,6 +49,7 @@ export interface PlayerTriggerReport {
   classesScanned: number;
   javaSignals: string[];
   sourceProfile?: string;
+  sourceProfileCandidate?: string;
   triggers: PlayerClipTrigger[];
   summary: string;
 }
@@ -126,6 +127,12 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
 }
 
 /** Require the actual Java mod identity and mixin class; an asset-only pack is not proof of its state machine. */
+function hasSeriousPlayerAnimationsNamespace(entries: ExtractedZipEntry[]): boolean {
+  return entries.some((entry) =>
+    entry.path.replace(/\\/g, '/').toLowerCase().includes('assets/seriousplayeranimations/player_animation/'),
+  );
+}
+
 function hasSeriousPlayerAnimationsProfile(entries: ExtractedZipEntry[]): boolean {
   const classEntry = entries.find((entry) =>
     entry.path.replace(/\\/g, '/').toLowerCase().endsWith(
@@ -302,6 +309,7 @@ export function translatePlayerTriggers(options: {
   const archiveEntries = options.archiveEntries ?? [];
   const { classesScanned, hits } = scanJavaSignals(archiveEntries);
   const seriousPlayerProfile = hasSeriousPlayerAnimationsProfile(archiveEntries);
+  const seriousPlayerNamespace = hasSeriousPlayerAnimationsNamespace(archiveEntries);
   const usedShortNames = new Set<string>();
   const triggers: PlayerClipTrigger[] = [];
   const itemIds = options.mainhandItemIds ?? [];
@@ -408,14 +416,17 @@ export function translatePlayerTriggers(options: {
     classesScanned,
     javaSignals: [...hits.keys()],
     sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.0' : undefined,
+    sourceProfileCandidate: !seriousPlayerProfile && seriousPlayerNamespace ? 'Serious Player Animations 1.1.0 (base Java mod JAR required)' : undefined,
     triggers,
     summary: '',
   };
-  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from source evidence, ${report.approximated} approximated, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved${report.sourceProfile ? `; source profile ${report.sourceProfile}` : ''}.`;
+  report.summary = `${report.clipsInspected} player clip(s) inspected: ${report.mapped} mapped from source evidence, ${report.approximated} approximated, ${report.scriptDriven} fired from script, ${report.unresolved} unresolved${report.sourceProfile ? `; source profile ${report.sourceProfile}` : report.sourceProfileCandidate ? `; ${report.sourceProfileCandidate}` : ''}.`;
   if (report.clipsInspected > 0) {
     log(`[TRIGGER-BRIDGE] ${report.summary}`);
     if (report.sourceProfile) {
       log(`[TRIGGER-BRIDGE] Recognized versioned source profile ${report.sourceProfile} from matching Java class and mod metadata.`);
+    } else if (report.sourceProfileCandidate) {
+      log('[TRIGGER-BRIDGE] Found the Serious Player Animations resource namespace, but the verified base Java mod JAR is missing; no playback conditions were guessed.');
     }
     if (report.javaSignals.length > 0) {
       log(`[TRIGGER-BRIDGE] Java player states found in ${classesScanned} scanned class(es): ${report.javaSignals.join(', ')}.`);
