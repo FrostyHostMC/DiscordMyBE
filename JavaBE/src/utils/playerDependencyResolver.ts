@@ -660,7 +660,7 @@ export function resolvePlayerDependencies(input: {
     // contract before looking for mod-specific assignments. These are live expressions, not
     // constant defaults, and are needed because this pack replaces the vanilla player entity.
     if (!statement) {
-      const baseline = VANILLA_PLAYER_VARIABLE_EXPRESSIONS[name];
+      const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
       if (baseline) {
         const translation = translateMolangExpression(`variable.${name} = ${baseline.expression}`, 'player_entity');
         if (translation.unresolved.length === 0 && translation.rejected.length === 0) {
