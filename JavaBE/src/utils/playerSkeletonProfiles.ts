@@ -37,6 +37,7 @@ const java = (armModel: PlayerArmModel): PlayerRigBoneProfile[] => {
     { name: 'right_pants', parent: 'root', pivot: [-1.9, 12, 0], size: [4, 12, 4], role: 'overlay' },
     { name: 'left_pants', parent: 'root', pivot: [1.9, 12, 0], size: [4, 12, 4], role: 'overlay' },
     { name: 'jacket', parent: 'root', pivot: [0, 0, 0], size: [8, 12, 4], role: 'overlay' },
+    { name: 'ear', parent: 'root', pivot: [0, 0, 0], size: null, role: 'overlay' },
     { name: 'cloak', parent: 'root', pivot: [0, 0, 0], size: null, role: 'overlay' },
   ];
 };
@@ -77,6 +78,7 @@ export const PLAYER_SKELETON_PROFILES: Record<PlayerRigPlatform, Record<PlayerAr
   },
 };
 export const BEDROCK_PLAYER_BONE_NAMES = bedrockClassic.map((bone) => bone.name) as readonly string[];
+export const JAVA_PLAYER_BONE_NAMES = java('classic').map((bone) => bone.name) as readonly string[];
 export function getPlayerSkeletonProfile(platform: PlayerRigPlatform, armModel: PlayerArmModel): PlayerSkeletonProfile {
   return PLAYER_SKELETON_PROFILES[platform][armModel];
 }
@@ -113,4 +115,15 @@ export function detectPlayerArmModelFromEvidence(evidence: string[]): PlayerArmM
 /** ModelPart pivots are local to each part; this helper converts the Java rig's Y-down pivot frame to Bedrock's geometry frame. */
 export function javaPivotToBedrockPivot(pivot: readonly [number, number, number], javaModelHeight = 24): [number, number, number] {
   return [pivot[0], javaModelHeight - pivot[1], pivot[2]];
+}
+
+/** Normalize Java ModelPart names and resolve only names present in the vanilla player model. */
+export function isVanillaJavaPlayerBone(rawName: string): boolean {
+  const key = normaliseBoneName(rawName);
+  return JAVA_PLAYER_BONE_NAMES.some((name) => normaliseBoneName(name) === key);
+}
+
+/** Check that a proposed target bone exists on the selected Bedrock player geometry. */
+export function isBedrockPlayerBone(rawName: string, armModel: PlayerArmModel = 'classic'): boolean {
+  return getPlayerSkeletonProfile('bedrock', armModel).bones.some((bone) => bone.name === rawName);
 }
