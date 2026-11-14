@@ -700,8 +700,9 @@ export function decompileJavaMod(
   const spawnableEntities: string[] = [];
   const seenLangIds = new Set<string>();
   const GENERIC_KEY = /recipe|creative_tab|container|screen|gui|unreadable|data_recovery|subtitle|tooltip|advancement|jade|waila|config|keybind|_and_|_with_|\.desc|\.info|\.message|\.jei|\.effec|\.curios|\.help|\.lore|\.action|\.mode|\.state|\.status|\.hint|\.warning|\.command|\.argument|\.narrat|\.debug|\.title|\.text|\.feed|\.heal/i;
-  // Reject UI/format strings that are not real item display names
-  const BAD_DISPLAY = /%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|\\n|\\r|%s|%d|_s\\b|_d\\b|\\+|\\bcommands?\\b|\\bargument\\b|^name:|^type:|^registry name:|^release\\b|^consume\\b|^press\\b|^hold\\b|^sneak\\b|^no\\b|^to\\b|^for\\b|^requires\\b|^when\\b|^if\\b|\\bsubtitle\\b|\\btooltip\\b/i;
+  // Reject only malformed/control/format-placeholder values. Display wording is
+  // intentionally not blacklisted: valid mod content may use any word or phrase.
+  const BAD_DISPLAY = /%[sdf0-9]|§|\\u00a7|<-|->|:\\s*%|[\\u0000-\\u001f]/i;
   const pushLang = (key: string, val: string, target: string[]) => {
     if (GENERIC_KEY.test(key)) return;
     const cleanKey = key.endsWith('.name') ? key.slice(0, -5) : key;
