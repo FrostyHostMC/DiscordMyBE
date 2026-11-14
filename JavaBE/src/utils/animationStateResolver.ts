@@ -17,13 +17,12 @@ import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySche
  *   • every activation condition is parsed into engine dimensions (locomotion, sprint, sneak,
  *     swim, ride, airborne, attack, use, hurt, perspective …) so two conditions can be proven
  *     mutually exclusive, or proven to be able to hold at the same time;
- *   • clips are ranked by what they are (one-shot action > sprint/sneak/swim > movement > idle >
- *     pose overlay) and by how much of the skeleton they claim;
- *   • overlapping full-body states are made mutually exclusive by guarding the lower-priority
- *     clip with the higher one's condition, so the pose is deterministic;
- *   • states that cannot be separated (identical conditions, nothing to distinguish them) are
- *     shadowed: the higher-priority clip keeps the activation and the other is reported instead
- *     of both playing at once;
+ *   • clips are ordered by the specificity of their recovered activation conditions; clip names
+ *     and bone shapes are not treated as proof of a Java-side state or priority;
+ *   • overlapping full-body states with distinct source conditions are made mutually exclusive
+ *     by adding one negation per distinct higher-priority condition;
+ *   • clips with indistinguishable conditions are moved into a state controller so they do not
+ *     blend over the same joints; any timing-based alternation is reported as an approximation;
  *   • partially overlapping clips (different limbs) are left to blend, and reported as such.
  */
 
