@@ -2,6 +2,7 @@ import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import { resolvePlayerBone } from '@/utils/playerBoneAliases';
 import { isControlBone } from '@/utils/boneAnatomy';
 import { composeTracks } from '@/utils/animationTrackMath';
+import { isBedrockPlayerBone } from '@/utils/playerSkeletonProfiles';
 import {
   recordUnmappedPlayerBones,
   type UnmappedBoneSuggestion,
@@ -49,7 +50,7 @@ export interface PlayerRigMappingResult {
  */
 export function mapJavaPlayerBone(rawName: string): PlayerBoneMapping | null {
   const hit = resolvePlayerBone(rawName);
-  if (!hit) return null;
+  if (!hit || !isBedrockPlayerBone(hit.bone, 'classic')) return null;
   // The native player rig has no separate wrist/finger/twist joints. When a source bone
   // contains a recognized anatomical part plus a sub-joint token, retain its transform by
   // composing it onto the corresponding Bedrock limb instead of silently dropping the track.

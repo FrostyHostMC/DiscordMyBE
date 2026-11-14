@@ -2,6 +2,7 @@ import type { BedrockAnimationClip } from '@/utils/animationTranslator';
 import type { PlayerAnimationOwnership } from '@/utils/animationOwnership';
 import type { PlayerModEvidence } from '@/utils/playerModEvidence';
 import { resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { isBedrockPlayerBone } from '@/utils/playerSkeletonProfiles';
 
 /**
  * Player rig discrimination from class ownership, player-only APIs, and source rig evidence.
@@ -40,7 +41,8 @@ function rigShape(clips: Record<string, BedrockAnimationClip>): { mapped: number
   }
   let mapped = 0;
   for (const name of names) {
-    if (resolvePlayerBone(name)) mapped += 1;
+    const target = resolvePlayerBone(name);
+    if (target && isBedrockPlayerBone(target.bone, 'classic')) mapped += 1;
   }
   return { mapped, total: names.size, ratio: names.size > 0 ? mapped / names.size : 0 };
 }
