@@ -14,7 +14,7 @@ import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
 
 const stages = [
-  ["01", "Import PC mod", "ZIP archive or extracted folder"],
+  ["01", "Import PC mod", "ZIP / OpenIV OIV package or extracted folder"],
   ["02", "Classify mod", "Assets, scripts, plugins and dependencies"],
   ["03", "Inspect resources", "Automatic format-specific reports"],
   ["04", "Adapt resources", "Target-specific conversion adapters"],
@@ -178,10 +178,10 @@ export default function App() {
 
       <section className="hero" id="workspace">
         <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
-          <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
+          <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,application/zip,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <div className="import-actions">
-            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP mod"}</button>
+            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP / OIV mod"}</button>
             <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
           </div>
           <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
