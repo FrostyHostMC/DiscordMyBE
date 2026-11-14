@@ -95,7 +95,7 @@ export function guaranteePlayerBaselineWiring(input: {
     let changed = !isRecord(description.animations);
 
     for (const entry of PLAYER_BASELINE_ENTRIES) {
-      if (typeof animations[entry.alias] !== 'string') {
+      if (animations[entry.alias] !== entry.identifier) {
         animations[entry.alias] = entry.identifier;
         report.aliasesRestored += 1;
         changed = true;
