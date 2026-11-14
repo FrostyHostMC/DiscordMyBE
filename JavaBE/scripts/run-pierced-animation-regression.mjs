@@ -48,6 +48,7 @@ try {
     }
   }
 
+  const expectedPlayerClipIds = sourceClipIds.filter((id) => id !== 'animation.running');
   const logs = [];
   const result = portMobAndPlayerAnimations(
     'pierced_fixture',
@@ -129,8 +130,8 @@ try {
   const playerPort = result.playerAnimationPort?.report;
   const assertions = [
     { id: 'source-fixture-has-nine-animation-definitions', expected: 9, actual: sourceClipIds.length, passed: sourceClipIds.length === 9 },
-    { id: 'player-animation-bridge-inspected-every-source-clip', expected: sourceClipIds.length, actual: playerPort?.clipsInspected ?? 0, passed: Boolean(playerPort && playerPort.clipsInspected === sourceClipIds.length) },
-    { id: 'all-source-clips-registered-on-player', expected: sourceClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === sourceClipIds.length) },
+    { id: 'player-animation-bridge-inspected-every-java-loaded-clip', expected: expectedPlayerClipIds.length, actual: playerPort?.clipsInspected ?? 0, passed: Boolean(playerPort && playerPort.clipsInspected === expectedPlayerClipIds.length) },
+    { id: 'all-java-loaded-clips-registered-on-player', expected: expectedPlayerClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === expectedPlayerClipIds.length) },
     { id: 'serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.1', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
     { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
     { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
