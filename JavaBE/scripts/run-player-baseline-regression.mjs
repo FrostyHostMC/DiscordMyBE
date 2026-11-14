@@ -13,8 +13,11 @@ const server = await createServer({
 
 try {
   const fixtures = await server.ssrLoadModule('/src/utils/regressionSchemaFixtures.ts');
-  const result = fixtures.measurePlayerMolangVariableInitialization();
-  const summary = {
+  const results = [
+    fixtures.measurePlayerMolangVariableInitialization(),
+    fixtures.measureSeriousPlayerAnimationSourceAdapter(),
+  ];
+  const summaries = results.map((result) => ({
     id: result.id,
     label: result.label,
     status: result.status,
@@ -22,9 +25,9 @@ try {
     total: result.assertions.length,
     findings: result.findings,
     unavailable: result.unavailable,
-  };
-  process.stdout.write(`${JSON.stringify(summary, null, 2)}\\n`);
-  if (result.status !== 'passed') process.exitCode = 1;
+  }));
+  process.stdout.write(`${JSON.stringify(summaries, null, 2)}\\n`);
+  if (results.some((result) => result.status !== 'passed')) process.exitCode = 1;
 } finally {
   await server.close();
 }
