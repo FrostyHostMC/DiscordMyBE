@@ -96,14 +96,17 @@ export function inspectOpenRpf7(input) {
       if (parent === undefined) fail("directory hierarchy does not lead back to the root.");
     }
   }
-  const paths = new Map([[0, ""]]);
   for (let index = 1; index < entries.length; index++) {
-    const parentIndex = parentByChild.get(index);
-    const parentPath = paths.get(parentIndex);
-    if (parentPath === undefined) fail("directory hierarchy cannot be resolved in TOC order.");
-    paths.set(index, parentPath ? parentPath + "/" + entries[index].name : entries[index].name);
+    const segments = [];
+    let current = index;
+    while (current !== 0) {
+      segments.push(entries[current].name);
+      current = parentByChild.get(current);
+      if (current === undefined) fail("directory hierarchy does not lead back to the root.");
+    }
+    entries[index].path = segments.reverse().join("/");
   }
-  for (const entry of entries) entry.path = paths.get(entry.index);
+  entries[0].path = "";
   return {
     format: "RPF7",
     encryption: "OPEN",
