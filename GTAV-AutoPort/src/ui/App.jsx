@@ -351,7 +351,13 @@ export default function App() {
           {Object.entries(portPlan.summary.statusCounts).map(([status,count])=><div className="audit-card" key={status}><b>{count}</b><span>{status.replaceAll("-"," ")}</span></div>)}
         </div>
         <div className="file-list">{portPlan.pipeline.map((stage)=><div className="file-row" key={stage.stage}><FileText size={15}/><span className="file-name"><b>{stage.stage.replaceAll("-"," ")}</b><small>{stage.files.length} resource(s) · {stage.files.slice(0,3).join(", ")}{stage.files.length>3?" …":""}</small></span><span className="file-ext">PLANNED</span></div>)}</div>
-        {portPlan.resources.filter((item)=>item.status!=="analysis-or-authoring-only").slice(0,16).map((item)=><div className="audit-warning" key={item.path}><AlertTriangle size={14}/><span><b>{item.path}</b> — {item.status.replaceAll("-"," ")} · {item.blocker}</span></div>)}
+        {portPlan.resources.slice(0,24).map((item)=><div className="native-summary" key={item.path}>
+          <div className="file-row"><FileText size={15}/><span className="file-name"><b>{item.path}</b><small>{item.family} · {item.status.replaceAll("-"," ")}</small></span><span className="file-ext">{item.extension || "FILE"}</span></div>
+          <div className="audit-warning"><AlertTriangle size={14}/><span>{item.blocker}</span></div>
+          <p className="native-disclaimer"><b>Expected outputs:</b> {item.outputContract?.artifacts?.join(", ") || "Format-specific output not yet defined"}</p>
+          <p className="native-disclaimer"><b>Source requirements:</b> {item.outputContract?.inputs?.join(", ") || "Inspect source dependencies"}</p>
+          <p className="native-disclaimer"><b>PS4 completion gate:</b> {item.outputContract?.gate || item.targetCapability}</p>
+        </div>)}
         <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
         <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest AutoPort update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
