@@ -32,8 +32,8 @@ creation, Project V loading and GoldHEN plugin deployment.
 - It does not rename YMT to OMT automatically.
 - It records CUSA00419 / 1.73 as the requested target but does not mark that
   target verified merely because the target fields are present.
-- The Orbis builder, Project V and GoldHEN integrations are explicitly reported
-  as not integrated/configured rather than represented by a dead or fake backend.
+- The Orbis builder remains explicitly not integrated; Project V remains unconfigured.
+- GoldHEN AFR configuration and explicit-mapping overlay planning already exist in `src/core/afr.js`; this planner reports that capability without claiming console deployment.
 
 ## Next implementation boundary
 
