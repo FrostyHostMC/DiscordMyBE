@@ -18,6 +18,7 @@ creation, Project V loading and GoldHEN plugin deployment.
 | `preserve-and-identify-archive` | Unsupported/encrypted RPF | Preserve bytes; do not guess at archive markers or encryption |
 | `resource-loader-compatibility` | YFT, YTD, YDR, YDD, YBN, YMAP, YTYP, YMT, etc. | Require a format-specific parser and a verified target loading/conversion route |
 | `metadata-translation-review` | META, XML, INI, scripts/config | Parse and translate the internal format; extension renaming is not conversion |
+| `pso-metadata-edit-review` | YMT, YMF, YTYP, YMAP, PSO | Identify the exact binary PSO variant; only use file-specific, tested metadata editing |
 | `source-asset-conversion` | FBX, OBJ, DDS, PNG, WAV, etc. | Require game-compatible resource export and validation |
 | `preserve-and-review` | Unknown | Keep source and require a format adapter before conversion |
 
@@ -42,3 +43,21 @@ with capability detection and output validation, (2) evidence-backed Project V
 loader profiles based on known-good files and on-console tests, and (3) a
 resource-specific conversion/validation matrix. The planner is the seam that
 will route each imported resource to those backends when they exist.
+
+## PSO/YMT research boundary
+
+OpenIV's official release notes document PS4/Orbis support for viewing archives,
+textures, models, collision bounds, navmeshes and audio as beta functionality.
+OpenIV 3.2 later documents support for specific PSO-backed YMT files and XML
+command editing for supported PSO files. This is evidence that some metadata
+can be edited through a PSO-aware workflow; it is not evidence that arbitrary
+YMT files can be renamed to OMT, that every YMT is supported, or that an edited
+PC-side file is automatically accepted by a PS4 1.73 loader.
+
+References:
+- https://openiv.com/?cat=11
+- https://github.com/OpenIV-Team/OpenIV-PackageFormat/blob/master/specification/versions/2.2.md
+
+AutoPort therefore gives PSO-like metadata its own review route and keeps
+format parsing, semantic editing, target serialization and loader compatibility
+as separate validation stages.
