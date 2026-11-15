@@ -8,7 +8,7 @@ using namespace autoport;
 
 class FakeGameApi final : public GameApi {
 public:
-    std::uint32_t spawn_entity(const SpawnEntity&) override { ++spawns; return 42; }
+    std::uint32_t spawn_entity(const SpawnEntity&) override { ++spawns; return static_cast<std::uint32_t>(41 + spawns); }
     bool set_transform(const SetTransform&) override { ++transforms; return true; }
     bool attach_entity(const AttachEntity&) override { ++attachments; return true; }
     bool set_vehicle_property(const SetVehicleProperty&) override { ++properties; return true; }
@@ -40,6 +40,21 @@ int main() {
     assert(!dispatcher.dispatch(SetEntityHealth{55, 10001}).ok);
     assert(dispatcher.dispatch(CreateExplosion{{1,2,3}, 2, 1.0f}).ok);
     assert(!dispatcher.dispatch(CreateExplosion{{1,2,3}, 2, 99.0f}).ok);
+    PlanExecutor executor(api);
+    const std::vector<PlannedAction> plan = {
+        PlannedSpawnEntity{"car", SpawnEntity{EntityKind::Vehicle, "adder", {0,0,0}, {0,0,0}, 0}},
+        PlannedSpawnEntity{"minigun", SpawnEntity{EntityKind::Object, "prop_minigun_01", {0,0,0}, {0,0,0}, 0}},
+        PlannedAttachEntity{"car", "minigun", "chassis", {0,1,0}, {0,0,0}},
+        PlannedSetVehicleProperty{"car", "livery", 2},
+    };
+    const auto plan_results = executor.execute(plan);
+    assert(plan_results.size() == 4);
+    for (const auto& result : plan_results) assert(result.ok);
+    assert(executor.entity_count() == 2);
+    const auto invalid_plan = executor.execute({PlannedSetTransform{"missing", {0,0,0}, {0,0,0}, 0}});
+    assert(invalid_plan.size() == 1 && !invalid_plan.front().ok);
+    executor.clear();
+    assert(executor.entity_count() == 0);
     std::cout << "native runtime core tests passed\n";
     return 0;
 }
