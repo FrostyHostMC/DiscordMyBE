@@ -1,6 +1,6 @@
 # Automatic preparation bundle
 
-AutoPort can build one local ZIP hand-off bundle after a PC mod is imported. The bundle preserves every source file under `source-original/`, places successful RageKit rewrites of YFT/YDR/YDD/YTD under `pc-legacy-candidates/`, and includes a machine-readable manifest plus a short human-readable guide.
+AutoPort can build one local ZIP hand-off bundle after a PC mod is imported. The bundle preserves every source file under `source-original/`, places successful RageKit rewrites of YFT/YDR/YDD/YTD under `pc-legacy-candidates/`, and includes a machine-readable manifest, a short human-readable guide, and the automatic inspection reports already produced during intake (port plan, classification, native inspection, RageKit archive/resource results, script/plugin review, metadata and format-specific reports where available).
 
 A candidate is included only when RageKit conversion succeeds and its own output round-trip succeeds. Failed conversions remain visible in the manifest and the untouched original remains preserved.
 
