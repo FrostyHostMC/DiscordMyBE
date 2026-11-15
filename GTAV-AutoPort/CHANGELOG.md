@@ -1,3 +1,8 @@
+## 2026-11-14 — Per-resource diagnostics in the workbench
+- The port-plan panel now shows each imported resource's expected output files, required source inputs, and exact PS4 conversion gate.
+- This makes the diagnostics useful for deciding what the app must generate for vehicles, peds, weapons, textures, maps and runtime plugins.
+- No expected output is represented as generated unless a real adapter has emitted it.
+
 ## 2026-11-14 — Existing PS4 conversion backend identified
 - Researched the RaringM/ps5-gtav-menu open-source project, which documents actual PC-to-PS4 converters for vehicles, peds, textures, maps and other resources, plus a custom-pack runtime.
 - Its MIT license permits reuse subject to retaining the copyright/license notice; no upstream source has been copied into AutoPort yet.
