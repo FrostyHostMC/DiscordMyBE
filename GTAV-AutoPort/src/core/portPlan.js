@@ -2,6 +2,9 @@ import { PS4_TARGET } from "./target.js";
 
 const ROUTES = Object.freeze({
   ".rpf": { family: "archive", stage: "archive-analysis", source: "ragekit-rpf-reader", target: "ps4-archive-layout-unverified", risk: "encryption-keys-and-target-container-layout" },
+  ".fx": { family: "reshade-shader", stage: "shader-source-analysis", source: "reshade-static-analyzer", target: "ps4-native-renderer-adaptation-required", risk: "PC-ReShade-runtime-and-renderer-data-are-not-available-on-PS4" },
+  ".fxh": { family: "reshade-shader-include", stage: "shader-dependency-analysis", source: "reshade-static-analyzer", target: "dependency-resolution-and-PS4-translation-required", risk: "HLSL-include-and-runtime-semantics" },
+  ".hlsl": { family: "shader-source", stage: "shader-source-analysis", source: "static-hlsl-inspection", target: "ps4-native-renderer-adaptation-required", risk: "shader-model-and-renderer-interface-mismatch" },
   ".gfx": { family: "scaleform-gfx", stage: "scaleform-analysis", source: "scaleform-header-inspector", target: "ps4-gfx-loader-build-unverified", risk: "GTA-1.46-loader-does-not-prove-1.73-hook-compatibility" },
   ".swf": { family: "scaleform-swf", stage: "scaleform-authoring", source: "scaleform-header-inspector", target: "gfXexport-and-runtime-validation-required", risk: "SWF-needs-GFx-export-and-PS4-runtime-validation" },
   ".fla": { family: "scaleform-source", stage: "scaleform-authoring", source: "external-authoring-project", target: "scaleform-export-required", risk: "ActionScript-version-and-GFx-export-settings" },
