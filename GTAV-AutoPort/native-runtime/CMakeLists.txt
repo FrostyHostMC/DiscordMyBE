@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(gtav_autoport_runtime_core LANGUAGES CXX)
 
-add_library(autoport_runtime_core STATIC src/dispatcher.cpp)
+add_library(autoport_runtime_core STATIC src/dispatcher.cpp src/plan_executor.cpp)
 target_include_directories(autoport_runtime_core PUBLIC include)
 target_compile_features(autoport_runtime_core PUBLIC cxx_std_17)
 
