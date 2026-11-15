@@ -125,6 +125,7 @@ export function buildUniversalPortPlan({ files = [], target = PS4_TARGET } = {})
       targetCapability: route?.target || "unknown",
       status: statusFor(route),
       blocker: route?.risk || "format-and-purpose-not-identified",
+      outputContract: outputContractFor(route),
       bytes: file.size ?? file.bytes?.byteLength ?? 0,
     };
   });
