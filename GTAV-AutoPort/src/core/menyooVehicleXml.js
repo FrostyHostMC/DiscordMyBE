@@ -23,7 +23,9 @@ const first = (object, names) => {
   return key ? object[key] : undefined;
 };
 const number = (value) => {
-  const parsed = Number(scalar(value));
+  const raw = scalar(value);
+  if (!raw) return null;
+  const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
 };
 function vector(node, names) {
