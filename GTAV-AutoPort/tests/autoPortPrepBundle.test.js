@@ -18,3 +18,9 @@ test("keeps the PS4 gate closed when there are no convertible resources", async 
   assert.equal(result.manifest.summary.installable, false);
   assert.ok(result.blob.size > 0);
 });
+
+test("rejects unsafe imported paths instead of normalizing traversal away", async () => {
+  await assert.rejects(() => buildAutomaticPrepBundle({
+    files: [{ path: "../outside.bin", bytes: new Uint8Array([1, 2, 3]) }]
+  }), /unsafe relative path/);
+});
