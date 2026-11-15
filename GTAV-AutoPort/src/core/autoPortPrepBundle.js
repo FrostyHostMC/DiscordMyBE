@@ -205,7 +205,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "3. rpf-extracted/ contains raw files extracted from supported PC RPF7 OPEN archives; original RPF files remain preserved.",
     "4. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
     "5. reports/ps4-delivery-plan.json explains the per-file PS4 route, blockers and required validation.",
-    "6. autoport-manifest.json records conversion, archive inspection and delivery planning results.");
+    "6. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
