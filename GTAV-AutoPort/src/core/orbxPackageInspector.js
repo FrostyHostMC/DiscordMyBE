@@ -2,7 +2,7 @@ const ORBX_PLUGIN_NAME = "orbx.prx";
 const ORBX_CONFIG_NAME = "orbx.ini";
 
 function normalizedPath(value) {
-  return String(value || "").replaceAll("\\\\", "/").replace(/^\.\//, "").toLowerCase();
+  return String(value || "").replaceAll(String.fromCharCode(92), "/").replace(/^\.\//, "").toLowerCase();
 }
 
 function findByBasename(files, basename) {
