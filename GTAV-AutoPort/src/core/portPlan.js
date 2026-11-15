@@ -51,6 +51,27 @@ const ROUTES = Object.freeze({
   ".mp3": { family: "audio-source", stage: "audio-authoring", source: "audio-tool-required", target: "rage-audio-authoring-required", risk: "codec-sample-rate-and-bank-layout" },
 });
 
+const OUTPUT_CONTRACTS = Object.freeze({
+  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "PS4 RAGE fragment writer, PS4 texture dictionary writer, dependency resolution and CUSA00411 / 1.73 validation" },
+  drawable: { artifacts: ["model.ydr or model.ydd", "model.ytd", "referenced materials and shaders"], inputs: ["mesh and material source", "texture images", "material/shader mapping"], gate: "PS4 drawable and texture dictionary writers plus target-build validation" },
+  "texture-dictionary": { artifacts: ["model.ytd"], inputs: ["source images or DDS", "texture names and hashes", "mip chain", "target compression/format"], gate: "PS4 YTD writer with verified texture formats, mipmaps and platform encoding" },
+  "texture-source": { artifacts: ["model.ytd"], inputs: ["decoded image", "texture name/hash", "mipmap policy", "material usage"], gate: "PS4 YTD writer; PNG/DDS alone is not a game-ready GTA texture" },
+  collision: { artifacts: ["model.ybn"], inputs: ["collision mesh", "materials", "bounds and physics properties"], gate: "PS4 YBN writer and in-game collision validation" },
+  "map-placement": { artifacts: ["map.ymap", "referenced .ytyp", "all referenced .ydr/.ydd/.ybn/.ytd resources"], inputs: ["world transforms", "archetype references", "entity sets", "streaming bounds"], gate: "PS4 map/archetype writers and complete world dependency validation" },
+  archetype: { artifacts: ["asset.ytyp", "referenced drawable/fragment/collision/texture resources"], inputs: ["archetype definitions", "asset bounds", "LOD and physics references"], gate: "PS4 YTYP writer and reference validation" },
+  "source-model": { artifacts: ["model.yft or model.ydr/.ydd", "model.ytd", "model.ybn when needed"], inputs: ["mesh", "UVs", "materials", "skeleton for skinned models", "LODs", "collision"], gate: "RAGE authoring/export pipeline with PS4 resource encoding" },
+  "pc-native-plugin": { artifacts: ["No direct PS4 binary output; behavior must be reimplemented as a separate Orbis PRX only if feasible"], inputs: ["documented behavior", "native API calls", "runtime dependencies"], gate: "Native PS4 implementation, exact-title hooks and independent binary validation" },
+  "script-source": { artifacts: ["No direct PS4 script output; native behavior implementation or compatible game script required"], inputs: ["source code", "runtime/API dependencies", "game-native calls"], gate: "Behavior translation and compatible PS4 runtime" },
+  "console-native-plugin": { artifacts: ["plugin SPRX/PRX", "matching plugins.ini entry", "configuration files required by that plugin"], inputs: ["Orbis ABI binary", "exact title/update support", "plugin-specific config schema"], gate: "Binary signature/ABI, GoldHEN loader, title ID and exact game update validation" },
+  archive: { artifacts: ["target-compatible RPF archive", "complete internal resource tree", "verified AFR /app0 mapping when using AFR"], inputs: ["target-platform resources", "archive encryption/container metadata", "mount/load order"], gate: "PS4 RPF writer or verified PS4 archive plus exact-build container path" },
+  "audio-source": { artifacts: ["target-compatible .awc bank", "matching .rel metadata where required"], inputs: ["decoded audio", "codec/sample rate", "bank and event mapping"], gate: "PS4 audio bank writer and in-game event validation" },
+});
+
+function outputContractFor(route) {
+  if (!route) return { artifacts: ["No output is generated until the file format and purpose are identified"], inputs: ["file content and dependency context"], gate: "Format-specific adapter and target compatibility validation" };
+  return OUTPUT_CONTRACTS[route.family] || { artifacts: [route.family + " target resource or metadata output"], inputs: ["source data and dependencies"], gate: route.target };
+}
+
 const extOf = (file) => (file.extension || file.path?.slice(file.path.lastIndexOf(".")) || "").toLowerCase();
 const baseOf = (path) => path.split("/").at(-1).toLowerCase().replace(/\.[^.]+$/, "");
 const statusFor = (route) => {
