@@ -18,6 +18,8 @@ test("only maps explicitly supplied app0 paths into the AFR overlay", () => {
   assert.equal(result.entries[0].stagingPath, "/data/GoldHEN/AFR/CUSA00419/update/x64/dlcpacks/durango/dlc.rpf");
   assert.equal(result.summary.unmappedFiles, 1);
   assert.equal(result.summary.deploymentAllowed, false);
+  assert.ok(result.limitations.some((item) => item.includes("CUSA00419 / 1.73")));
+  assert.ok(result.limitations.every((item) => !item.includes("CUSA00411")));
 });
 
 test("rejects traversal, encoded separators, Windows paths, and non-app0 guesses", () => {
