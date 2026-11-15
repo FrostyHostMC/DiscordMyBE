@@ -22,6 +22,7 @@ import { buildPs4AfrPackage } from "../core/ps4Package.js";
 import { inspectMenuRelatedFiles } from "../core/menuPack.js";
 import { inspectScriptModPackages } from "../core/scriptModPackages.js";
 import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
+import { compileMenyooNativeActionPlan } from "../core/nativeActionPlan.js";
 import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
 import { buildNativeBehaviorBlueprint } from "../core/nativeBehaviorBlueprint.js";
 import { inspectPedObjectPacks, buildPedObjectPackExport } from "../core/pedObjectPacks.js";
@@ -354,6 +355,7 @@ export default function App() {
           <div className="audit-grid"><div className="audit-card"><b>{report.summary.vehicleCount}</b><span>vehicles</span></div><div className="audit-card"><b>{report.summary.attachmentCount}</b><span>attachments</span></div><div className="audit-card"><b>{report.summary.withPosition}</b><span>with placement</span></div><div className="audit-card"><b>{report.summary.withVehicleProperties}</b><span>with vehicle properties</span></div></div>
           {report.vehicles.map((vehicle) => <div className="file-row" key={vehicle.id}><CarFront size={14}/><span className="file-name"><b>{vehicle.modelName || vehicle.modelHash.raw || vehicle.id}</b><small>Hash {vehicle.modelHash.raw || "not supplied"} · {vehicle.attachments.length} attachment(s) · {vehicle.transform.position ? "position parsed" : "position missing"}</small></span><span className="file-ext">DATA ONLY</span></div>)}
           <button className="secondary-button" onClick={()=>downloadJson(buildMenyooVehiclePackExport(report),report.sourcePath.split("/").at(-1).replace(/\.xml$/i,"")+".autoport-vehicles.json")}><ArrowDownToLine size={15}/> Export translated vehicle pack</button>
+          <button className="secondary-button" onClick={()=>downloadJson(compileMenyooNativeActionPlan(report),report.sourcePath.split("/").at(-1).replace(/\.xml$/i,"")+".native-action-plan.json")}><ArrowDownToLine size={15}/> Export native action plan</button>
         </div>)}
         <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
       </section>}
