@@ -23,6 +23,7 @@ import { inspectScriptModPackages } from "../core/scriptModPackages.js";
 import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
 import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
 import { buildNativeBehaviorBlueprint } from "../core/nativeBehaviorBlueprint.js";
+import { inspectPedObjectPacks, buildPedObjectPackExport } from "../core/pedObjectPacks.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -90,6 +91,7 @@ export default function App() {
   const [menyooVehicleReports, setMenyooVehicleReports] = useState([]);
   const [resourceConversionStatus, setResourceConversionStatus] = useState("");
   const [behaviorBlueprint, setBehaviorBlueprint] = useState(null);
+  const [pedObjectReport, setPedObjectReport] = useState(null);
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -111,13 +113,14 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setPedObjectReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
       setScriptModReport(inspectScriptModPackages(result.files));
       setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
+      setPedObjectReport(inspectPedObjectPacks(result.files));
       setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => translateMenyooVehicleXml(file.bytes, file.path)).filter((report) => report.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
@@ -353,6 +356,14 @@ export default function App() {
         <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
       </section>}
 
+      {pedObjectReport?.summary.resourceFiles > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">PED / OBJECT PACK MAPPING</div><h3>Models, assets, spawn data and dependencies</h3><p>{pedObjectReport.summary.resourceFiles} resource(s) · {pedObjectReport.summary.pedEntries} ped metadata entry(s) · {pedObjectReport.summary.objectAssetCandidates} object asset candidate(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> DEPENDENCIES UNVERIFIED</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{pedObjectReport.summary.pedMetadataFiles}</b><span>ped metadata files</span></div><div className="audit-card"><b>{pedObjectReport.summary.missingPedModels}</b><span>ped models missing</span></div><div className="audit-card"><b>{pedObjectReport.summary.spawnConfigFiles}</b><span>spawn configs</span></div><div className="audit-card"><b>{pedObjectReport.summary.validSpawnConfigs}</b><span>valid configs</span></div></div>
+        {pedObjectReport.peds.map((ped) => <div className="file-row" key={ped.metadataPath + ped.modelName}><CarFront size={14}/><span className="file-name"><b>{ped.modelName}</b><small>{ped.txdName || "No TXD name"} · model {ped.dependencyStatus.model} · texture {ped.dependencyStatus.texture}</small></span><span className="file-ext">PED</span></div>)}
+        {pedObjectReport.objectCandidates.map((item) => <div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.resourceKind} · {item.relatedSameStem.length} same-name peer(s), not confirmed dependencies</small></span><span className="file-ext">OBJECT</span></div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Spawn data and assets are kept separate.</b><p>Ped metadata, model/texture candidates, object resources and XML/JSON/INI spawn settings are inventoried. Binary archetype references, collision, animation/cloth, scenario and runtime spawn behavior still require format-specific adapters and exact-build validation.</p></div></div>
+        <button className="secondary-button" onClick={() => downloadJson(buildPedObjectPackExport(pedObjectReport), "gtav-autoport-ped-object-pack.json")}><ArrowDownToLine size={15}/> Export ped/object pack analysis</button>
+      </section>}
       {behaviorBlueprint?.summary.sourceFiles > 0 && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">PC SCRIPT BEHAVIOR REBUILD</div><h3>Native runtime behavior blueprint</h3><p>{behaviorBlueprint.summary.sourceFiles} editable source file(s) · {behaviorBlueprint.summary.behaviorTypes} behavior types · {behaviorBlueprint.summary.detectedOccurrences} API evidence matches</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT A PRX</span></div>
         <div className="audit-grid"><div className="audit-card"><b>{behaviorBlueprint.summary.behaviorTypes}</b><span>behavior areas</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.nativeHostApis}</b><span>native host APIs required</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.pcRuntimeDependencies.length}</b><span>PC runtime dependencies</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.sourceFiles}</b><span>source files reviewed</span></div></div>
