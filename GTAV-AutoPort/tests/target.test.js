@@ -2,9 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PS4_TARGET, describeTarget } from "../src/core/target.js";
 
-test("first PS4 target is the user-confirmed CUSA00411 1.73 profile", () => {
-  assert.equal(PS4_TARGET.titleId, "CUSA00411");
+test("first PS4 target is the user-confirmed CUSA00419 1.73 profile", () => {
+  assert.equal(PS4_TARGET.titleId, "CUSA00419");
   assert.equal(PS4_TARGET.updateVersion, "1.73");
+  assert.equal(PS4_TARGET.region, "US");
+  assert.equal(PS4_TARGET.publisherId, "UP1004");
+  assert.equal(PS4_TARGET.contentId, "UP1004-CUSA00419_00-GTAVDIGITALDOWNL");
   assert.equal(PS4_TARGET.platform, "PlayStation 4");
   assert.equal(PS4_TARGET.mode, "Story Mode");
 });
@@ -23,5 +26,5 @@ test("target profile remains explicitly unverified for resource compatibility", 
 });
 
 test("target label is stable for UI and manifests", () => {
-  assert.equal(describeTarget(), "CUSA00411 · GTA V 1.73 · Story Mode");
+  assert.equal(describeTarget(), "CUSA00419 · GTA V 1.73 · Story Mode");
 });
