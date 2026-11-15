@@ -94,6 +94,7 @@ test("records extracted archive entry provenance and detected format in the mani
     archivePath: "cars/sample/dlc.rpf/stream/preview.png",
     analysisPath: "rpf-extracted/cars/sample/dlc.rpf/stream/preview.png",
     size: png.length,
+    extracted: true,
     formatStatus: "recognized",
     adapterId: "png",
     role: "image",
