@@ -14,7 +14,11 @@ test("builds an OPEN RPF7 archive with nested directory entries and stored files
   assert.equal(view.getUint32(12, true), 0x4e45504f);
   assert.equal(result.report.fileCount, 2);
   assert.equal(result.report.directoryCount, 3);
-  assert.equal(bytes.length % 512, 0);
+  const namesLength = view.getUint32(8, true);
+  const entriesEnd = 16 + result.report.entryCount * 16;
+  const namesStart = entriesEnd;
+  const names = new TextDecoder().decode(bytes.subarray(namesStart, namesStart + namesLength));
+  assert.ok(names.includes("handling.meta"));
   assert.equal(result.report.installable, false);
 });
 
