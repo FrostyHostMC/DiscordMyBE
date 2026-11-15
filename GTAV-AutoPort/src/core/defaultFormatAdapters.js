@@ -22,10 +22,21 @@ const signatureAdapters = [
 export const DEFAULT_FORMAT_ADAPTERS = Object.freeze(signatureAdapters.map(({ id, description, capabilities, probe }) => Object.freeze({ id, description, capabilities, probe })));
 export const defaultFormatAdapterRegistry = new FormatAdapterRegistry(DEFAULT_FORMAT_ADAPTERS);
 
+const LEGACY_SIGNATURE_LABELS = Object.freeze({
+  "rage-rsc7": "RSC7",
+  "rage-rpf7": "RPF7",
+  dds: "DDS",
+  png: "PNG",
+  wave: "WAVE",
+  ogg: "OGG",
+  "windows-pe": "MZ",
+  elf: "ELF"
+});
+
 export function inspectBinaryFormat(file) {
   const result = defaultFormatAdapterRegistry.inspect(file);
   return {
     ...result,
-    signature: result.status === "recognized" ? result.selectedAdapterId : null
+    signature: result.status === "recognized" ? (LEGACY_SIGNATURE_LABELS[result.selectedAdapterId] || result.selectedAdapterId) : null
   };
 }
