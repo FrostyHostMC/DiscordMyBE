@@ -34,7 +34,7 @@ test("inspects object resources and spawn settings without asserting dependencie
   assert.equal(config.summary.headingFields, 1);
   assert.equal(config.summary.spawnCountFields, 1);
   assert.equal(config.modelReferences[0].resolution, "candidate-resolved-by-name-only");
-  assert.deepEqual(config.modelReferences[0].resourceCandidates.sort(), ["props/prop_custom.ydr", "props/prop_custom.ytd"]);
+  assert.deepEqual(config.modelReferences[0].resourceCandidates.sort(), ["props/prop_custom.ybn", "props/prop_custom.ydr", "props/prop_custom.ytd"]);
   assert.equal(report.objectCandidates[0].dependencyConfidence, "filename-and-pack-co-location-only");
 });
 
