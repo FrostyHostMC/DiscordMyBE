@@ -21,6 +21,7 @@ import { buildPs4AfrPackage } from "../core/ps4Package.js";
 import { inspectMenuRelatedFiles } from "../core/menuPack.js";
 import { inspectScriptModPackages } from "../core/scriptModPackages.js";
 import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
+import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -86,6 +87,7 @@ export default function App() {
   const [menuReport, setMenuReport] = useState(null);
   const [scriptModReport, setScriptModReport] = useState(null);
   const [menyooVehicleReports, setMenyooVehicleReports] = useState([]);
+  const [resourceConversionStatus, setResourceConversionStatus] = useState("");
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
