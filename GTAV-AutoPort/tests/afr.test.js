@@ -4,7 +4,7 @@ import { buildAfrOverlayPlan, buildAfrPluginIniSnippet } from "../src/core/afr.j
 
 test("builds a title-specific GoldHEN AFR plugin configuration snippet", () => {
   const snippet = buildAfrPluginIniSnippet();
-  assert.match(snippet, /\[CUSA00411\]/);
+  assert.match(snippet, /\[CUSA00419\]/);
   assert.match(snippet, /\/data\/GoldHEN\/plugins\/afr\.prx=true/);
   assert.match(snippet, /does not install afr\.prx/i);
 });
@@ -15,7 +15,7 @@ test("only maps explicitly supplied app0 paths into the AFR overlay", () => {
     mappings: { "durango.yft": "/app0/update/x64/dlcpacks/durango/dlc.rpf" },
   });
   assert.equal(result.entries.length, 1);
-  assert.equal(result.entries[0].stagingPath, "/data/GoldHEN/AFR/CUSA00411/update/x64/dlcpacks/durango/dlc.rpf");
+  assert.equal(result.entries[0].stagingPath, "/data/GoldHEN/AFR/CUSA00419/update/x64/dlcpacks/durango/dlc.rpf");
   assert.equal(result.summary.unmappedFiles, 1);
   assert.equal(result.summary.deploymentAllowed, false);
 });

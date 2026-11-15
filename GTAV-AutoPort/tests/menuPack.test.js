@@ -13,7 +13,7 @@ test("counts Synapse catalogs and reads title-specific GoldHEN entries", () => {
     file("synapse/synapse.sprx", "binary placeholder"),
   ]);
   assert.equal(report.summary.catalogFiles, 2);
-  assert.equal(report.summary.catalogItems, 3);
+  assert.equal(report.summary.catalogItems, 4);
   assert.equal(report.targetPlugins.length, 1);
   assert.equal(report.hasSynapseBinary, true);
 });
