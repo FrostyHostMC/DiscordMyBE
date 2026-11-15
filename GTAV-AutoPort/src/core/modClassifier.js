@@ -80,19 +80,31 @@ function extensionOf(file) {
 
 function classifyOne(file) {
   const extension = extensionOf(file);
-  const [family, label, portability] = EXTENSIONS[extension] || ["unknown", "Unrecognized file", "unknown-review"];
+  const extensionHint = EXTENSIONS[extension] || null;
   const formatDetection = file.bytes instanceof Uint8Array
     ? inspectBinaryFormat(file)
     : { status: "unrecognized", selectedAdapterId: null, candidates: [], probeErrors: [], preservedAsSource: true, conversionAuthorized: false, signature: null };
   const signature = signatureOf(file.bytes);
+  const inferred = {
+    "rage-resource": ["rage-resource", "RAGE resource (signature identified)", "inspection-required"],
+    "rage-archive": ["archive", "RAGE archive (signature identified)", "archive-inspection-required"],
+    texture: ["texture-source", "Texture container (signature identified)", "asset-adapter-required"],
+    image: ["texture-source", "Image asset (signature identified)", "asset-adapter-required"],
+    audio: ["audio-source", "Audio container (signature identified)", "asset-adapter-required"],
+    "windows-executable": ["pc-native-plugin", "Windows executable (signature identified)", "not-directly-portable"],
+    "native-elf-binary": ["native-binary", "ELF native binary (signature identified)", "platform-validation-required"]
+  };
+  const signatureHint = formatDetection.status === "recognized" ? inferred[formatDetection.match?.role] : null;
+  const [family, label, portability] = extensionHint || signatureHint || ["unknown", "Unrecognized file", "unknown-review"];
+  const classificationBasis = extensionHint ? "extension-hint" : signatureHint ? "content-signature" : "unknown";
   const warnings = [];
-  if ([".asi", ".dll", ".exe", ".sys"].includes(extension)) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
+  if ([".asi", ".dll", ".exe", ".sys"].includes(extension) || (family === "pc-native-plugin" && signature === "MZ")) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
   if ([".gfx", ".swf", ".fla", ".as", ".ttf", ".otf"].includes(extension)) warnings.push("Scaleform graphics/font assets need a compatible GFx authoring/export workflow and an exact-build PS4 loader; file identification alone is not a playable graphics mod.");
   if (extension === ".prx") warnings.push("A PRX is platform-native code; verify Orbis target, loader, title ID and exact game build.");
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");
   if (signature === "MZ" && ![".dll", ".exe", ".asi"].includes(extension)) warnings.push("Detected a Windows PE executable signature despite the file extension.");
-  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, signature, formatDetection, warnings };
+  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, classificationBasis, signature, formatDetection, warnings };
 }
 
 export function auditModFiles(files = []) {
