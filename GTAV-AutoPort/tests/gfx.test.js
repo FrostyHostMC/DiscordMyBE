@@ -44,7 +44,7 @@ test("creates a separate editor handoff copy without mutating the original", () 
   const source = makeFile("CFX", 10, 300);
   const original = source.bytes.slice();
   const copy = createEditableSwfCopy(source);
-  assert.equal(String.fromCharCode(...copy.bytes.slice(0, 3)), "FWS");
+  assert.equal(String.fromCharCode(...copy.bytes.slice(0, 3)), "CWS");
   assert.equal(String.fromCharCode(...source.bytes.slice(0, 3)), "CFX");
   assert.deepEqual(source.bytes, original);
   assert.match(copy.filename, /editor-copy\.swf$/);
