@@ -2,7 +2,7 @@
 
 AutoPort includes a read-only inspector for the standard PC RPF7 OPEN variant.
 
-It validates the RPF7 magic, OPEN marker, entry table bounds, name-table bounds, UTF-8 null-terminated names, directory child ranges, file flags, and 512-byte-block payload ranges. It returns a structured entry list and counts for downstream diagnostics.
+It validates the RPF7 magic, OPEN marker, entry table bounds, name-table bounds, UTF-8 null-terminated names, directory child ranges and parent-cycle detection, file flags, and 512-byte-block payload ranges. It returns a structured entry list and counts for downstream diagnostics.
 
 ## Compatibility boundary
 
