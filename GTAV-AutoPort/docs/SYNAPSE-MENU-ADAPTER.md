@@ -1,24 +1,48 @@
-# Synapse / GoldHEN menu adapter
+# Synapse menu audit and AutoPort adapter
 
-## Evidence from the supplied Synapse package
+## Supplied menu package audit
 
-The user-provided archive contains a `plugins.ini` with a `[CUSA00419]` section loading `LSOPlugin.prx` and `synapse.sprx` from `/data/GoldHEN/plugins/`. Its menu data is organized under `synapse/synapse/files/` and includes JSON catalogs for vehicles, models, objects, particles, animations and scenarios, plus `settings.ini`. The included `xml/` directory is empty.
+The inspected `synapse.zip` contains a `plugins.ini` with a `[CUSA00419]` section loading `LSOPlugin.prx` and `synapse.sprx` from `/data/GoldHEN/plugins/`. It also contains two other title sections (`CUSA57548` and `CUSA07669`); these are separate plugin entries and are not evidence of GTA V support.
 
-This establishes that GoldHEN is configured to load the menu's native plugin for the specified title ID. It does not establish the binary's update compatibility, the menu's XML parser contract, or that arbitrary Menyoo XML can be loaded.
+The Synapse data directory contains these catalogs:
 
-## Division of responsibility
+| Catalog | Entries | Categories |
+|---|---:|---:|
+| vehicles.json | 812 | 20 |
+| models.json | 275 | 7 |
+| objects.json | 172 | 13 |
+| particles.json | 197 | list |
+| animations.json | 204 | list |
+| scenarios.json | 134 | list |
+| teleports.json | 0 | empty placeholder |
 
-- GoldHEN loads per-title native PRX/SPRX plugins.
-- Synapse is the menu/runtime that implements menu actions and decides which data formats it understands.
-- AutoPort analyzes imported mods, maps supported content into a menu adapter, and separately plans native PS4 behavior where feasible.
+There are 1,794 populated catalog entries in total. The inspected JSON catalogs have no duplicate values. The zero-byte `teleports.json` is an empty placeholder, not malformed JSON.
 
-GoldHEN's plugin loader is not itself a universal mod-menu data parser. The menu's PRX must implement the parsing and runtime behavior.
+The supplied `settings.ini` defines menu position, information box, side placement, open/noclip button combinations, rainbow theme, ESP RGB values, god mode and no-ragdoll defaults.
 
-## AutoPort implementation
+The separately supplied `synapse.sprx` begins with bytes `4f 15 3d 1d`, the PS4 SELF container signature. This identifies the container signature only; it does not prove that the executable is valid, disclose its internal implementation, or establish compatibility with GTA V 1.73.
 
-`src/core/menuPack.js` inventories Synapse-style JSON catalogs, counts their categories and entries, reads title-specific GoldHEN plugin entries, identifies the Synapse SPRX by filename, and inspects vehicle XML. Menyoo/Spooner XML is identified as a source format and reports model hashes and attachment/task-sequence nodes. The workbench can export the report.
+## Findings and required menu work
 
-The parser deliberately does not label Menyoo XML as Synapse-compatible. The supplied Synapse archive has no XML examples or source code. To implement a real menu-side XML extension, the Synapse source project or a documented/tested XML schema is required.
+1. **GoldHEN plugin configuration exists.** GoldHEN is already configured to load the menu PRX for CUSA00419. AutoPort should not invent a second plugin-loading system.
+2. **Synapse data is catalog-driven in the supplied package.** Vehicles, models, objects, particles, animations and scenarios are represented as JSON catalogs.
+3. **No XML examples or XML loader contract were supplied.** The `xml/` folder has no files. The package does not include Synapse source code. AutoPort therefore cannot safely claim that Menyoo/Spooner XML is directly loadable by this menu.
+4. **The menu binary is compiled.** AutoPort inventories its header and data package but does not patch or rewrite the SPRX.
+
+## AutoPort changes
+
+`src/core/menuPack.js` now:
+- inventories catalog shape, categories, entries and duplicate values;
+- treats zero-byte JSON files as empty placeholders rather than invalid JSON;
+- parses the menu's INI settings and title-specific GoldHEN plugin configuration;
+- recognizes the PS4 SELF header signature without claiming executable validation;
+- inspects vehicle XML as a source format and keeps target-menu compatibility explicitly unverified.
+
+The import workbench shows catalog counts, settings, all title-specific plugin entries, SPRX header classification and XML findings. It can export the complete inspection report.
+
+## Safe next step for a real menu update
+
+To add a real XML loader to Synapse, we need its editable source project or a documented extension interface. The correct implementation belongs inside the menu/runtime: parse a defined XML schema, validate values, and dispatch supported game-native actions. AutoPort can then generate that schema from imported mods. Without the source or a tested interface, changing catalog JSON or renaming XML files would not add XML execution support.
 
 ## Compatibility policy
 

@@ -15,6 +15,10 @@ function walk(value, pattern, found = []) {
   return found;
 }
 
+function basename(path) {
+  return path.replaceAll("\\", "/").split("/").at(-1).toLowerCase();
+}
+
 function parsePluginIni(text) {
   const entries = [];
   let titleId = null;
@@ -23,53 +27,146 @@ function parsePluginIni(text) {
     if (!line || line.startsWith(";") || line.startsWith("#")) continue;
     const section = line.match(/^\[([A-Z0-9]{9})\]$/i);
     if (section) { titleId = section[1].toUpperCase(); continue; }
-    if (titleId && line.startsWith("/data/GoldHEN/plugins/")) {
-      entries.push({ titleId, path: line, extension: line.split(".").at(-1).toLowerCase() });
-    }
+    if (!titleId || !line.startsWith("/data/GoldHEN/plugins/")) continue;
+    const [rawPath, ...flags] = line.split("=");
+    const path = rawPath.trim();
+    entries.push({
+      titleId,
+      path,
+      extension: path.split(".").at(-1).toLowerCase(),
+      flags: flags.join("=").trim(),
+    });
   }
   return entries;
 }
 
-export function inspectSynapseMenuPack(files = [], targetTitleId = "CUSA00419") {
-  const menuFiles = files.filter((file) => file.path.replaceAll("\\", "/").toLowerCase().includes("synapse/files/"));
-  if (!menuFiles.length) return null;
-  const catalogs = [];
-  const warnings = [];
-  for (const file of menuFiles.filter((item) => /\.json$/i.test(item.path))) {
-    try {
-      const value = JSON.parse(textOf(file));
-      const categoryCount = Array.isArray(value) ? 1 : Object.keys(value || {}).length;
-      const itemCount = Array.isArray(value) ? value.length : Object.values(value || {}).reduce((sum, list) => sum + (Array.isArray(list) ? list.length : 0), 0);
-      catalogs.push({ path: file.path, categoryCount, itemCount, validJson: true });
-    } catch (error) {
-      catalogs.push({ path: file.path, categoryCount: 0, itemCount: 0, validJson: false, error: error.message });
-      warnings.push(file.path + " is invalid JSON.");
+function parseIni(text) {
+  const sections = [];
+  let current = null;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(";") || line.startsWith("#")) continue;
+    const section = line.match(/^\[([^\]]+)\]$/);
+    if (section) {
+      current = { name: section[1], settings: [] };
+      sections.push(current);
+      continue;
+    }
+    const split = line.indexOf("=");
+    if (current && split > 0) {
+      current.settings.push({ key: line.slice(0, split).trim(), value: line.slice(split + 1).trim() });
     }
   }
-  const pluginFile = files.find((file) => /(^|\/)plugins\.ini$/i.test(file.path));
+  return {
+    sections,
+    sectionCount: sections.length,
+    settingCount: sections.reduce((sum, section) => sum + section.settings.length, 0),
+  };
+}
+
+function inspectJsonCatalog(file) {
+  const source = textOf(file).trim();
+  if (!source) {
+    return { path: file.path, state: "empty-placeholder", validJson: null, categoryCount: 0, itemCount: 0, categoryNames: [], duplicateCount: 0, duplicates: [] };
+  }
+  try {
+    const value = JSON.parse(source);
+    const isArray = Array.isArray(value);
+    if (!isArray && (!value || typeof value !== "object")) {
+      return { path: file.path, state: "valid-json-wrong-shape", validJson: true, categoryCount: 0, itemCount: 0, categoryNames: [], duplicateCount: 0, duplicates: [], valueType: typeof value };
+    }
+    const categoryNames = isArray ? [] : Object.keys(value);
+    const values = isArray ? value : Object.values(value).flatMap((items) => Array.isArray(items) ? items : []);
+    const counts = new Map();
+    for (const item of values) {
+      const key = typeof item === "string" ? item : JSON.stringify(item);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const duplicates = [...counts.entries()].filter(([, count]) => count > 1).map(([value, count]) => ({ value, count }));
+    return {
+      path: file.path,
+      state: "valid-json",
+      validJson: true,
+      valueType: isArray ? "array" : "category-map",
+      categoryCount: categoryNames.length,
+      categoryNames,
+      itemCount: values.length,
+      duplicateCount: duplicates.length,
+      duplicates: duplicates.slice(0, 25),
+    };
+  } catch (error) {
+    return { path: file.path, state: "invalid-json", validJson: false, categoryCount: 0, itemCount: 0, categoryNames: [], duplicateCount: 0, duplicates: [], error: error.message };
+  }
+}
+
+function readSelfSignature(file) {
+  const bytes = file?.bytes || new Uint8Array();
+  const signature = [...bytes.slice(0, 4)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return {
+    signature,
+    isPs4SelfContainer: signature === "4f153d1d",
+    format: signature === "4f153d1d" ? "PS4 SELF container signature" : "unidentified binary header",
+    bytes: file?.size ?? bytes.byteLength,
+  };
+}
+
+/**
+ * Inspects supplied Synapse menu data and GoldHEN configuration. It does not
+ * execute, patch, reverse engineer, or certify the compiled SPRX.
+ */
+export function inspectSynapseMenuPack(files = [], targetTitleId = "CUSA00419") {
+  const normalizedFiles = files.map((file) => ({ ...file, normalizedPath: file.path.replaceAll("\\", "/") }));
+  const menuFiles = normalizedFiles.filter((file) => file.normalizedPath.toLowerCase().includes("synapse/files/"));
+  if (!menuFiles.length) return null;
+
+  const catalogs = menuFiles.filter((file) => /\.json$/i.test(file.path)).map(inspectJsonCatalog);
+  const pluginFile = normalizedFiles.find((file) => basename(file.path) === "plugins.ini");
   const plugins = pluginFile ? parsePluginIni(textOf(pluginFile)) : [];
   const targetPlugins = plugins.filter((item) => item.titleId === targetTitleId);
-  const sprx = files.find((file) => /(^|\/)synapse\.sprx$/i.test(file.path));
+  const settingsFile = menuFiles.find((file) => basename(file.path) === "settings.ini");
+  const settings = settingsFile ? parseIni(textOf(settingsFile)) : { sections: [], sectionCount: 0, settingCount: 0 };
+  const sprx = normalizedFiles.find((file) => basename(file.path) === "synapse.sprx");
+  const sprxHeader = readSelfSignature(sprx);
   const xmlFiles = menuFiles.filter((file) => /\.xml$/i.test(file.path));
+  const warnings = [];
+
   if (!pluginFile) warnings.push("No plugins.ini was included.");
   if (!targetPlugins.length) warnings.push("No GoldHEN plugin entry was found for " + targetTitleId + ".");
   if (!sprx) warnings.push("Synapse SPRX binary was not included.");
-  if (!xmlFiles.length) warnings.push("The supplied Synapse XML directory contains no XML examples, so its XML schema is unknown.");
-  else warnings.push("XML files were found, but Synapse XML loader support still requires source or runtime confirmation.");
+  else if (!sprxHeader.isPs4SelfContainer) warnings.push("The Synapse binary does not have the recognized PS4 SELF header signature.");
+  if (catalogs.some((item) => item.state === "invalid-json")) warnings.push("One or more JSON catalogs contain invalid JSON.");
+  if (catalogs.some((item) => item.duplicateCount > 0)) warnings.push("One or more JSON catalogs contain duplicate entries.");
+  if (catalogs.some((item) => item.state === "empty-placeholder")) warnings.push("One or more catalog files are empty placeholders and currently provide no entries.");
+  if (!xmlFiles.length) warnings.push("No XML files were supplied. The menu's XML loader schema and support cannot be confirmed from this package.");
+  else warnings.push("XML files were found, but loader compatibility requires the menu source or an on-console test.");
+
   return {
-    format: "synapse-menu-data", targetTitleId, catalogs, plugins, targetPlugins,
-    hasSynapseBinary: Boolean(sprx), synapseBinaryPath: sprx?.path || null,
+    format: "synapse-menu-data",
+    targetTitleId,
+    catalogs,
+    plugins,
+    targetPlugins,
+    settings,
+    hasSynapseBinary: Boolean(sprx),
+    synapseBinaryPath: sprx?.path || null,
+    sprxHeader,
     xmlFiles: xmlFiles.map((item) => item.path),
     summary: {
       catalogFiles: catalogs.length,
-      validCatalogs: catalogs.filter((item) => item.validJson).length,
+      validCatalogs: catalogs.filter((item) => item.state === "valid-json").length,
+      emptyCatalogs: catalogs.filter((item) => item.state === "empty-placeholder").length,
+      invalidCatalogs: catalogs.filter((item) => item.state === "invalid-json" || item.state === "valid-json-wrong-shape").length,
       catalogItems: catalogs.reduce((sum, item) => sum + item.itemCount, 0),
+      duplicateEntries: catalogs.reduce((sum, item) => sum + item.duplicateCount, 0),
       targetPluginEntries: targetPlugins.length,
+      allPluginEntries: plugins.length,
+      settingsSections: settings.sectionCount,
+      settingsValues: settings.settingCount,
       xmlFiles: xmlFiles.length,
     },
     warnings,
     compatibility: "inventory-only-unverified",
-    note: "GoldHEN plugin configuration is recognized; SPRX ABI, menu hooks, XML support and game-update compatibility are not validated.",
+    note: "GoldHEN plugin configuration and a PS4 SELF header signature are recognized. This does not validate the SPRX executable, menu hooks, XML support, or CUSA00419 update compatibility.",
   };
 }
 
