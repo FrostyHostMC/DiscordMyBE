@@ -62,3 +62,11 @@ test("unrelated XML with no vehicle placements remains an empty valid report", (
   assert.equal(report.validXml, true);
   assert.equal(report.summary.vehicleCount, 0);
 });
+
+test("does not invent zero transforms when source placement fields are absent", () => {
+  const xml = "<SpoonerPlacements><Placement><Type>Vehicle</Type><HashName>adder</HashName><ModelHash>123</ModelHash></Placement></SpoonerPlacements>";
+  const report = translateMenyooVehicleXml(xml);
+  assert.equal(report.summary.vehicleCount, 1);
+  assert.equal(report.vehicles[0].transform.position, null);
+  assert.equal(report.vehicles[0].transform.heading, null);
+});
