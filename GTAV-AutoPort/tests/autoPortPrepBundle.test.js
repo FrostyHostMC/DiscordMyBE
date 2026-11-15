@@ -159,3 +159,15 @@ test("recursively extracts nested PC RPF archives and preserves both containers"
     payload
   );
 });
+test("stops recursive RPF extraction at the configured nesting depth", async () => {
+  let nested = buildOpenRpf7([{ path: "payload.bin", bytes: new Uint8Array([7]) }]).bytes;
+  for (let depth = 4; depth >= 0; depth -= 1) {
+    nested = buildOpenRpf7([{ path: "nested-" + depth + ".rpf", bytes: nested }]).bytes;
+  }
+  const result = await buildAutomaticPrepBundle({ files: [{ path: "deep/root.rpf", bytes: nested }] });
+  assert.equal(result.manifest.archiveInspections.length, 6);
+  assert.equal(result.manifest.archiveInspections[5].depth, 5);
+  assert.equal(result.manifest.archiveInspections[5].status, "validated-not-extracted");
+  assert.match(result.manifest.archiveInspections[5].error, /nesting.*depth limit/);
+  assert.equal(result.manifest.summary.ps4ReadyFiles, 0);
+});
