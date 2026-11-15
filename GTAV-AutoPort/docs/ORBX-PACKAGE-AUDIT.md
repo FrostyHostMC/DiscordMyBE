@@ -70,3 +70,32 @@ The automatic preparation ZIP now includes `reports/orbx-package-audit.json` and
 2. Confirm the exact installed paths on the PS4 and the exact error text.
 3. Compare the INI keys with the loader's observed file-open attempts/log output.
 4. Only after the loader reaches resource loading should individual RPF and graphics resources be investigated.
+
+## Second archive inventory pass (user-supplied encrypted 7z)
+
+A second inventory pass used the archive password supplied by the user to read the 7z directory metadata. The available libarchive 3.7.4 build can enumerate the encrypted archive's directory and declared file sizes, but it reports that encrypted file content is unsupported. Therefore no file payload was decrypted or read in this pass.
+
+Observed directory metadata:
+- 3,677 entries total: 3,335 files and 342 directories.
+- `orbx.prx`: 1,243,584 bytes.
+- `orbx/orbx.ini`: 457 bytes.
+- `orbx/rpf_log.txt`: 916,419 bytes.
+- `Instructions.txt`: 357 bytes.
+- `ps4a.rpf`: 51,662,848 bytes.
+- Resource payload inventory includes 128 META, 72 XML, 19 OMT, 13 DAT and one BIK file.
+- The inventory contains 3,097 zero-byte files ending in `.rpf.txt`; these are path-marker/text files, not RPF archives. AutoPort must not classify them as actual archive payloads.
+- The package paths repeat the enclosing folder name: `Orbx Engine v1.4/Orbx Engine v1.4/` before the plugin/resource package root. Installation staging should flatten the outer archive wrapper rather than reproduce this duplicated nesting.
+
+This inventory is directory metadata only. Declared sizes do not prove payload contents or successful extraction. In particular, `orbx.ini`, `rpf_log.txt`, `Instructions.txt`, `orbx.prx` and `ps4a.rpf` have not yet been read or hashed from their decrypted bytes.
+
+## Inspector update
+
+The ORBX audit now:
+- Parses an uploaded plain-text INI (up to 64 KiB) without generating or modifying settings.
+- Reports sections, key/value pairs, duplicate keys, malformed line numbers and whether `AvoidCrcCheckedFiles` appears.
+- Distinguishes `.rpf.txt` path markers from real `.rpf` files.
+- Counts resource file extensions and records marker samples.
+- Detects repeated adjacent package folder names.
+- Reports the presence and paths of `rpf_log.txt` and `Instructions.txt`.
+
+A parsed INI is not considered valid for ORBX merely because it is syntactically parseable. `runtimeCompatibilityVerified` remains false.
