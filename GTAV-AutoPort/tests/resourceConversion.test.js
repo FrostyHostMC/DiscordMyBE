@@ -5,7 +5,7 @@ import { convertLegacyResourceCandidate } from "../src/core/resourceConversion.j
 test("rejects formats outside the YFT/YTD writer before making a request", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () => { throw new Error("fetch must not be called"); };
-  try { await assert.rejects(() => convertLegacyResourceCandidate({ path: "script.ysc", bytes: new Uint8Array([1]) }), /Only YFT and YTD/); }
+  try { await assert.rejects(() => convertLegacyResourceCandidate({ path: "script.ysc", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR, YDD and YBN/); }
   finally { globalThis.fetch = originalFetch; }
 });
 
