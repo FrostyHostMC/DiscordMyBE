@@ -45,3 +45,22 @@ Existing format-specific writers still need to be wrapped as adapters, with fixt
 and target evidence. The PC RPF7 OPEN writer and PC Legacy resource writer must remain
 explicitly distinct from Orbis/PS4 output. No mod-specific exception should be added
 to the registry to make a single sample pass.
+
+## Intake integration
+
+The automatic mod audit now runs the default content-signature adapters on every
+imported file with available bytes. The initial signature adapters identify RSC7,
+little-endian RPF7, DDS, PNG, RIFF/WAVE, Ogg, Windows PE and ELF. These are
+format probes, not claims of complete parsers or writers.
+
+When an extension is unknown but a signature is recognized, the intake can infer
+a broad asset family from the signature role. When an extension is known but its
+content does not match the expected signature, the report keeps the extension
+classification as a hint and separately reports the missing content recognition.
+The report includes `classificationBasis` and the full `formatDetection` result
+so downstream stages can distinguish hints from content evidence.
+
+The generic registry remains the extension point for additional adapters. New
+format support should be added by registering an adapter with format evidence and
+its own independently tested capabilities—not by adding a special case for a
+specific mod package.
