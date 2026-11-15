@@ -93,17 +93,18 @@ export function inspectPedObjectPacks(files = []) {
   const resources = files.filter((file) => MODEL_EXTENSIONS.has(extension(file.path)) || TEXTURE_EXTENSIONS.has(extension(file.path)) || WORLD_EXTENSIONS.has(extension(file.path))).map((file) => ({ path: file.path, name: basename(file.path), stem: stem(file.path), extension: extension(file.path), bytes: file.size ?? file.bytes?.byteLength ?? 0, resourceKind: MODEL_EXTENSIONS.has(extension(file.path)) ? "model-or-fragment" : TEXTURE_EXTENSIONS.has(extension(file.path)) ? "texture-dictionary" : "world-or-behavior-dependency" }));
   const peds = pedEntries.map((entry) => {
     const modelStem = entry.modelName.toLowerCase();
-    const matches = resources.filter((resource) => resource.stem === modelStem);
+    const matches = resources.filter((resource) => resource.stem === modelStem && MODEL_EXTENSIONS.has(resource.extension));
     const txd = entry.txdName?.toLowerCase();
-    const textureMatches = txd ? resources.filter((resource) => resource.stem === txd && resource.extension === ".ytd") : [];
+    const textureMatches = txd ? resources.filter((resource) => resource.stem === txd && TEXTURE_EXTENSIONS.has(resource.extension)) : [];
     return { modelName: entry.modelName, txdName: entry.txdName, pedType: entry.pedType, runtimeDependencies: entry.runtimeDependencies, metadataPath: entry.sourcePath, modelCandidates: matches, textureCandidates: textureMatches, rawMetadata: entry.raw, dependencyStatus: { model: matches.length === 1 ? "candidate-resolved-by-name-only" : matches.length ? "ambiguous" : "missing", texture: !txd ? "not-declared" : textureMatches.length === 1 ? "candidate-resolved-by-name-only" : textureMatches.length ? "ambiguous" : "missing" } };
   });
   const unboundResources = resources.filter((resource) => !peds.some((ped) => ped.modelCandidates.some((candidate) => candidate.path === resource.path)) && !peds.some((ped) => ped.textureCandidates.some((candidate) => candidate.path === resource.path)));
   const objectCandidates = unboundResources.filter((resource) => resource.resourceKind === "model-or-fragment" || resource.resourceKind === "texture-dictionary" || [".ybn", ".ymap", ".ytyp"].includes(resource.extension)).map((resource) => ({ ...resource, relatedSameStem: resources.filter((peer) => peer.stem === resource.stem && peer.path !== resource.path).map((peer) => peer.path), dependencyConfidence: "filename-and-pack-co-location-only" }));
   for (const config of spawnConfigs) if (config.valid && config.modelReferences) {
     config.modelReferences = config.modelReferences.map((reference) => {
-      const candidates = resources.filter((resource) => resource.stem === reference.value.toLowerCase()).map((resource) => resource.path);
-      return { ...reference, resourceCandidates: candidates, resolution: candidates.length === 1 ? "candidate-resolved-by-name-only" : candidates.length ? "ambiguous" : "missing" };
+      const sameNameResources = resources.filter((resource) => resource.stem === reference.value.toLowerCase());
+      const modelCandidates = sameNameResources.filter((resource) => MODEL_EXTENSIONS.has(resource.extension));
+      return { ...reference, resourceCandidates: sameNameResources.map((resource) => resource.path), resolution: modelCandidates.length === 1 ? "candidate-resolved-by-name-only" : modelCandidates.length ? "ambiguous" : sameNameResources.length ? "related-assets-only" : "missing" };
     });
   }
   const configSignals = spawnConfigs.filter((config) => config.valid).map((config) => ({ path: config.path, format: config.format, signals: config.summary, modelReferences: config.modelReferences || [] }));
