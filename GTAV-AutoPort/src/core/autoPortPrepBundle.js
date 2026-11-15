@@ -51,6 +51,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, error: null };
     try {
       const inspection = inspectOpenRpf7(bytes);
+      record.status = "validated-not-extracted";
       record.entryCount = inspection.entryCount;
       record.fileCount = inspection.fileCount;
       record.directoryCount = inspection.directoryCount;
