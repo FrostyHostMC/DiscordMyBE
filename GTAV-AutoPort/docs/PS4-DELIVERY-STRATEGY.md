@@ -44,6 +44,8 @@ loader profiles based on known-good files and on-console tests, and (3) a
 resource-specific conversion/validation matrix. The planner is the seam that
 will route each imported resource to those backends when they exist.
 
+For broader loader and version-compatibility evidence, see [PS4 loader ecosystem research](PS4-LOADER-ECOSYSTEM-RESEARCH.md).
+
 ## PSO/YMT research boundary
 
 OpenIV's official release notes document PS4/Orbis support for viewing archives,
