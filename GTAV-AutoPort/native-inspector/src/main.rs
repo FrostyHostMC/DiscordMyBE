@@ -57,6 +57,9 @@ fn drawable_summary(drawable: &Drawable) -> Value {
             "level": lod.level.to_string(),
             "model_count": lod.models.len(),
             "geometry_count": geometry_details.len(),
+            "triangle_count": geometry_details.iter()
+                .map(|geometry| geometry["triangle_count_derived_from_indices"].as_u64().unwrap_or(0))
+                .sum::<u64>(),
             "triangle_count_derived_from_indices": geometry_details.iter()
                 .map(|geometry| geometry["triangle_count_derived_from_indices"].as_u64().unwrap_or(0))
                 .sum::<u64>(),
@@ -110,6 +113,7 @@ fn drawable_summary(drawable: &Drawable) -> Value {
         "model_count": models,
         "geometry_count": geometries,
         "vertex_count_sum_across_lods": vertices,
+        "triangle_count_sum_across_lods": triangles,
         "triangle_count_sum_across_lods_derived_from_indices": triangles,
         "bounds": {
             "center": [drawable.bounds.center.x, drawable.bounds.center.y, drawable.bounds.center.z],
