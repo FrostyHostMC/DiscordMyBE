@@ -1,3 +1,12 @@
+## 2026-11-14 — Scaleform graphics intake and editor handoff
+- Added Scaleform GFX/SWF header inspection for FWS, CWS, ZWS, GFX and CFX containers with declared-size checks and bounded metadata handling.
+- Added a separate GFX/CFX-to-SWF editor-handoff copy for JPEXS workflows; original bytes are never modified and the output is explicitly not marked game-ready.
+- Classified .gfx, .swf, .fla, .as, .ttf and .otf files and routed them through dedicated Scaleform/font stages in the port plan.
+- Added a graphics workbench panel showing detected movies, header validity, compression, version, and editor-copy action.
+- Documented GFxExport requirements and the public PS4 GFX loader's exact 1.46-only hard-coded font-library hook.
+- Kept CUSA00411 / GTA V 1.73 graphics deployment blocked until a version-specific PS4 loader and platform-compatible GFx export path are validated.
+- Added parser, editor-copy, classifier and routing regression tests.
+
 ## 2026-11-14 — PS4 GTA V GFX Loader research
 - Inspected the linked public source for the PS4 GTA V GFX Loader rather than relying only on the PSXHAX thread.
 - Confirmed its narrow behavior: a GTA V 1.46 hard-coded hook redirects `font_lib_efigs` requests to `/data/font_lib_efigs_ps4.gfx`; it is not a general graphics-mod loader.
