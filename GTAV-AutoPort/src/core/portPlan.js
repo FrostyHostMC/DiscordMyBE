@@ -2,6 +2,12 @@ import { PS4_TARGET } from "./target.js";
 
 const ROUTES = Object.freeze({
   ".rpf": { family: "archive", stage: "archive-analysis", source: "ragekit-rpf-reader", target: "ps4-archive-layout-unverified", risk: "encryption-keys-and-target-container-layout" },
+  ".gfx": { family: "scaleform-gfx", stage: "scaleform-analysis", source: "scaleform-header-inspector", target: "ps4-gfx-loader-build-unverified", risk: "GTA-1.46-loader-does-not-prove-1.73-hook-compatibility" },
+  ".swf": { family: "scaleform-swf", stage: "scaleform-authoring", source: "scaleform-header-inspector", target: "gfXexport-and-runtime-validation-required", risk: "SWF-needs-GFx-export-and-PS4-runtime-validation" },
+  ".fla": { family: "scaleform-source", stage: "scaleform-authoring", source: "external-authoring-project", target: "scaleform-export-required", risk: "ActionScript-version-and-GFx-export-settings" },
+  ".as": { family: "scaleform-source", stage: "scaleform-authoring", source: "actionscript-source-review", target: "scaleform-compile-and-runtime-validation-required", risk: "ActionScript-2-and-GTA-Scaleform-API-compatibility" },
+  ".ttf": { family: "font-source", stage: "scaleform-authoring", source: "font-file-intake", target: "scaleform-font-export-required", risk: "GFx-font-linkage-and-export-pipeline" },
+  ".otf": { family: "font-source", stage: "scaleform-authoring", source: "font-file-intake", target: "scaleform-font-export-required", risk: "GFx-font-linkage-and-export-pipeline" },
   ".yft": { family: "fragment", stage: "resource-decode", source: "native-inspector-partial", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ydr": { family: "drawable", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ydd": { family: "drawable-dictionary", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
