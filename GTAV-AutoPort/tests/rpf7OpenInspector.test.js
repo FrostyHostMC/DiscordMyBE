@@ -79,14 +79,8 @@ test("refuses extraction above configured file and byte limits before copying pa
 
 test("rejects unsafe Windows extraction path segments", () => {
   for (const unsafeName of [":bad.bin", "CON", "trailing."]) {
-    const built = buildOpenRpf7([{ path: "safe.bin", bytes: new Uint8Array([1]) }]);
-    const bytes = built.bytes.slice();
-    const namesStart = 16 + 2 * 16;
-    const encoded = new TextEncoder().encode(unsafeName);
-    bytes.fill(0, namesStart + 1, namesStart + 10);
-    bytes.set(encoded, namesStart + 1);
-    bytes[namesStart + 1 + encoded.length] = 0;
-    assert.throws(() => inspectOpenRpf7(bytes), /unsafe path segment/);
+    const built = buildOpenRpf7([{ path: unsafeName, bytes: new Uint8Array([1]) }]);
+    assert.throws(() => inspectOpenRpf7(built.bytes), /unsafe path segment/);
   }
 });
 
