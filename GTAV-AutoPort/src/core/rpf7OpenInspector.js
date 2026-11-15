@@ -58,6 +58,7 @@ export function inspectOpenRpf7(input, { maxEntries = DEFAULT_MAX_ENTRIES } = {}
   if (!Number.isSafeInteger(namesEnd) || namesEnd > bytes.length) fail("name table extends beyond the archive.");
 
   const entries = [];
+  const payloadRanges = [];
   for (let index = 0; index < entryCount; index++) {
     const offset = tocStart + index * 16;
     const nameWord = view.getUint32(offset, true);
@@ -76,9 +77,20 @@ export function inspectOpenRpf7(input, { maxEntries = DEFAULT_MAX_ENTRIES } = {}
       if (view.getUint8(offset + 2) !== 0 || view.getUint8(offset + 3) !== 0 || view.getUint8(offset + 4) !== 0) fail("unsupported file flags are present.");
       const dataOffset = dataBlock * BLOCK_SIZE;
       if (dataOffset < namesEnd || dataOffset + fileSize > bytes.length || dataOffset + fileSize < dataOffset) fail("file payload range is outside the archive.");
+      if (fileSize > 0) payloadRanges.push({ start: dataOffset, end: dataOffset + fileSize, index });
       const name = readName(bytes, namesStart, namesLength, nameOffset);
       entries.push({ index, type: "file", name, dataOffset, size: fileSize });
     }
+  }
+
+  payloadRanges.sort((a, b) => a.start - b.start || a.end - b.end);
+  let widestPayloadRange = null;
+  for (const range of payloadRanges) {
+    if (widestPayloadRange && range.start < widestPayloadRange.end) {
+      const exactSharedPayload = range.start === widestPayloadRange.start && range.end === widestPayloadRange.end;
+      if (!exactSharedPayload) fail("file payload ranges overlap without being an exact shared payload.");
+    }
+    if (!widestPayloadRange || range.end > widestPayloadRange.end) widestPayloadRange = range;
   }
 
   if (entries[0].type !== "directory" || entries[0].name !== "") fail("TOC root entry is missing or malformed.");
