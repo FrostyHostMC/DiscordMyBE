@@ -43,9 +43,10 @@ test("never upgrades PC Legacy round-trip to PS4-ready", () => {
 });
 
 test("keeps metadata translation separate from extension renaming", () => {
-  const plan = buildPs4DeliveryPlan({ files: [{ path: "data/vehicles.meta" }, { path: "data/clip.ymt" }] });
+  const plan = buildPs4DeliveryPlan({ files: [{ path: "data/vehicles.meta" }, { path: "data/clip.ymt" }, { path: "stream/car.yft" }] });
   assert.equal(plan.items[0].route, "metadata-translation-review");
-  assert.equal(plan.items[1].route, "resource-loader-compatibility");
+  assert.equal(plan.items[1].route, "pso-metadata-edit-review");
+  assert.equal(plan.items[2].route, "resource-loader-compatibility");
   assert.ok(plan.limitations[0].includes("YMT to OMT"));
 });
 
