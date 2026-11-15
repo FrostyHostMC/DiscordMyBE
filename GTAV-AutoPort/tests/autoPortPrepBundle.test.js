@@ -63,3 +63,19 @@ test("keeps unsupported Orbis RPF bytes intact and reports the unsupported marke
   assert.ok(archive.file("AutoPort-Prep/source-original/dlc.rpf"));
   assert.equal(archive.file("AutoPort-Prep/rpf-extracted/dlc.rpf"), null);
 });
+
+test("includes extracted RPF metadata in automatic dependency analysis", async () => {
+  const handling = new TextEncoder().encode("<HandlingData>vehicles.meta</HandlingData>");
+  const vehicles = new TextEncoder().encode("<CVehicleModelInfo__InitDataList/>");
+  const archiveBytes = buildOpenRpf7([
+    { path: "common/data/handling.meta", bytes: handling },
+    { path: "common/data/vehicles.meta", bytes: vehicles }
+  ]).bytes;
+  const result = await buildAutomaticPrepBundle({ files: [{ path: "cars/sample/dlc.rpf", bytes: archiveBytes }] });
+  assert.equal(result.manifest.summary.rpfRawFilesAnalyzed, 2);
+  assert.equal(result.manifest.dependencies.references, 1);
+  assert.equal(result.manifest.dependencies.resolved, 1);
+  assert.equal(result.manifest.dependencies.missing, 0);
+  assert.equal(result.manifest.dependencies.ambiguous, 0);
+  assert.equal(result.manifest.archiveInspections[0].status, "extracted-raw-open-archive");
+});
