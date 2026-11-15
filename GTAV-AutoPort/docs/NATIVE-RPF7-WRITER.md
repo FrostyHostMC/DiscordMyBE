@@ -7,7 +7,7 @@ AutoPort now has a pure JavaScript RPF7 writer for the standard unencrypted **OP
 - This writer is for standard little-endian PC RPF7 OPEN archives only.
 - It does not reproduce the Orbis builder's encrypted PS4 output.
 - RSC7 resources are rejected because a valid resource entry requires system/graphics page flags; writing them as generic binary entries would produce a misleading archive.
-- The 23-bit block-offset limit is enforced, and paths are checked against traversal, absolute paths, duplicate names and file/directory collisions.
+- The 23-bit block-offset limit is enforced with block value `0x7FFFFF` reserved for the directory-entry sentinel. Paths are checked against traversal, absolute paths, duplicate names and file/directory collisions.
 - Output is labeled non-installable until target-specific validation is complete.
 
 ## Orbis reference finding
