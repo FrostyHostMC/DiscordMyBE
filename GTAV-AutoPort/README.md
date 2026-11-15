@@ -1,10 +1,10 @@
-**2026-11-14 — PS4 source-build guide assessment:** reviewed the community PS4 source-build guide supplied by the user. It describes a full ORBIS game/update rebuild targeting old firmware and GTA V 1.46, not a universal PC mod converter. Documented the mismatch with our CUSA00411 / firmware 14.00 / GTA V 1.73 target, extracted safe architecture lessons, and added provenance/security cautions. No proprietary source archive or third-party installer was downloaded or executed. See [PS4 source-build guide assessment](docs/PS4-SOURCE-BUILD-GUIDE-RESEARCH.md).
+**2026-11-14 — PS4 source-build guide assessment:** reviewed the community PS4 source-build guide supplied by the user. It describes a full ORBIS game/update rebuild targeting old firmware and GTA V 1.46, not a universal PC mod converter. Documented the mismatch with our CUSA00419 / firmware 14.00 / GTA V 1.73 target, extracted safe architecture lessons, and added provenance/security cautions. No proprietary source archive or third-party installer was downloaded or executed. See [PS4 source-build guide assessment](docs/PS4-SOURCE-BUILD-GUIDE-RESEARCH.md).
 
 **2026-11-14 — Skyline DLC intake improvements:** fixed the workbench's incomplete-report guard so an invalid/null port-plan or native-engine summary cannot crash the results view or trigger an unsafe export. Added read-only parsing for GTA V DLC `content.xml` manifests, including declared resource paths and file types; manifest instructions are never executed. `.txt` and `.md` mod instructions are now classified as documentation instead of unknown binaries and routed to a readable review stage. See [DLC manifest inspection](docs/DLC-MANIFEST-INSPECTION.md).
 
 **2026-11-14 — Native RPF integration test:** the RageKit CI job now creates a synthetic nested RPF archive, lists its nested entries with the real `rk` executable, and extracts a nested file through `rk rpf cat`. This exercises the actual upstream CLI behavior used by AutoPort rather than testing only a mocked response. See `scripts/rpf-cli-integration.mjs`.
 
-**2026-11-14 — GoldHEN AFR deployment planning:** added a guarded overlay planner based on the official GoldHEN Application File Redirector documentation. It can generate a title-specific `plugins.ini` snippet and accepts only explicit `/app0/...` mappings; it rejects traversal and duplicate destinations. The staging plan is always review-only and deployment remains disabled until CUSA00411 / GTA V 1.73 paths and resource compatibility are validated. See [PS4 deployment research](docs/PS4-DEPLOYMENT-RESEARCH.md).
+**2026-11-14 — GoldHEN AFR deployment planning:** added a guarded overlay planner based on the official GoldHEN Application File Redirector documentation. It can generate a title-specific `plugins.ini` snippet and accepts only explicit `/app0/...` mappings; it rejects traversal and duplicate destinations. The staging plan is always review-only and deployment remains disabled until CUSA00419 / GTA V 1.73 paths and resource compatibility are validated. See [PS4 deployment research](docs/PS4-DEPLOYMENT-RESEARCH.md).
 
 **2026-11-14 — Native RPF archive inventory:** the pinned RageKit CLI now uses its dedicated `rk rpf ls` reader for imported `.rpf` files, including nested archives. AutoPort validates every returned entry path, indexes file sizes/types, counts RAGE resources and encrypted entries, and displays a browsable inventory. For supported, unencrypted resources it uses the native `rk rpf cat` path to extract each entry into temporary local storage, then runs the resource parser and round-trip validator. This is source-side archive/resource inspection only; encrypted retail archives may require keys from the user's own game installation, and no PS4 compatibility or installability is inferred. Processing is bounded by per-command time/output limits, a three-minute archive inspection window, a 100-resource cap and an 80 MiB extracted-resource cap.
 
@@ -53,7 +53,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Reports remain source-side parser/round-trip evidence only; encrypted archives may require user-owned game keys, and no PS4 output or install package is produced.
 
 **2026-11-13 — GoldHEN target recorded**
-- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00411` update `1.73` Story Mode.
+- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00419` update `1.73` Story Mode.
 - GoldHEN suffix is stored as user-confirmed; official release metadata independently confirms the `2.4b18` release family, not the `.13` suffix.
 - Resource compatibility and deployment remain unverified.
 
@@ -105,7 +105,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Updated the duplicate-report regression test to assert the specific duplicate-generic-report error emitted by the report loader; runtime behavior is unchanged.
 
 **2026-11-13 — First PS4 target profile recorded**
-- Recorded the user-confirmed target label `CUSA00411` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
+- Recorded the user-confirmed target label `CUSA00419` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
 - The target profile is included in exported conversion manifests and shown in the workbench.
 - Added regression tests to ensure the supplied target label remains stable and explicitly unverified.
 - This records the intended target only; it does not independently verify the console build or establish YFT/YTD compatibility.
@@ -194,3 +194,6 @@ Then open the AutoPort workbench and choose **Load native reports**. Select the 
 
 ## Safety
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
+
+
+**2026-11-15 — US target profile correction:** the user confirmed their own base-game PKG is **CUSA00419 (US)**. AutoPort's active target profile now records CUSA00419, publisher prefix UP1004 and content ID UP1004-CUSA00419_00-GTAVDIGITALDOWNL. The prior CUSA00411 / 01.57 community backend is retained only as a separate research reference; its binaries, offsets and templates are not treated as compatible with this US target. The reported 1.73 target remains unverified against a fresh PKG metadata report and console state.
