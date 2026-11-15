@@ -26,6 +26,7 @@ import { compileMenyooNativeActionPlan } from "../core/nativeActionPlan.js";
 import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
 import { buildNativeBehaviorBlueprint } from "../core/nativeBehaviorBlueprint.js";
 import { inspectPedObjectPacks, buildPedObjectPackExport } from "../core/pedObjectPacks.js";
+import { buildAutomaticPrepBundle } from "../core/autoPortPrepBundle.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -94,6 +95,7 @@ export default function App() {
   const [resourceConversionStatus, setResourceConversionStatus] = useState("");
   const [behaviorBlueprint, setBehaviorBlueprint] = useState(null);
   const [pedObjectReport, setPedObjectReport] = useState(null);
+  const [prepBundleStatus, setPrepBundleStatus] = useState("");
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -199,6 +201,17 @@ export default function App() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function buildPrepBundle() {
+    if (!archive) return;
+    setBusy(true); setError(""); setPrepBundleStatus("Converting eligible resources and preserving originals…");
+    try {
+      const result = await buildAutomaticPrepBundle({ sourceName: archive.sourceName, files: archive.files, target: PS4_TARGET, reports: { "port-plan": portPlan, "mod-audit": modAudit, "ragekit-validation": ragekitResult, "native-inspection": nativeReports, "behavior-blueprint": behaviorBlueprint, "ped-object-report": pedObjectReport, "dlc-manifest": dlcManifest, "menu-report": menuReport, "script-mod-report": scriptModReport, "menyoo-vehicle-reports": menyooVehicleReports, "scaleform-report": scaleformReport, "reshade-report": reshadeReport, "documentation-report": documentation }, onProgress: (progress) => setPrepBundleStatus("Converted " + progress.completed + " of " + progress.total + " eligible resources · " + progress.current) });
+      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), "GTAV-AutoPort-" + PS4_TARGET.titleId + "-Preparation.zip", "application/zip");
+      setPrepBundleStatus(result.manifest.summary.convertedPcLegacyCandidates + " PC Legacy candidate(s) created · " + result.manifest.summary.failedCandidates + " failed · " + result.manifest.summary.originalFilesPreserved + " original file(s) preserved. This is not a PS4 install package.");
+    } catch (err) { setError(err?.message || "Could not build the automatic preparation bundle."); setPrepBundleStatus(""); }
+    finally { setBusy(false); }
   }
 
   async function convertLegacyCandidate(path) {
@@ -322,6 +335,12 @@ export default function App() {
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
+      {archive && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">ONE-CLICK MOD PREPARATION</div><h3>Build automatic preparation bundle</h3><p>Convert every eligible YFT, YDR, YDD and YTD resource in this import, keep all originals, and download one organized ZIP with a manifest.</p></div><span className="tag warning"><AlertTriangle size={13}/> PC LEGACY ONLY</span></div>
+        <button className="primary-button" onClick={buildPrepBundle} disabled={busy}><ArrowDownToLine size={15}/> Build automatic prep ZIP</button>
+        {prepBundleStatus && <p className="native-disclaimer">{prepBundleStatus}</p>}
+        <p className="native-disclaimer">This automates source preparation; it does not certify the output for PS4. The bundle labels PC Legacy candidates separately and explicitly keeps PS4-ready count at zero until a CUSA00419 / GTA V 1.73 writer is validated.</p>
+      </section>}
       {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>}
       {!busy && <div className="privacy-note">{nativeStatus}</div>}
 

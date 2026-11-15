@@ -51,7 +51,7 @@ test("declares concrete output artifacts and target gates for each source family
   const fragment = plan.resources.find((item) => item.extension === ".yft");
   assert.ok(fragment.outputContract.artifacts.some((item) => item.includes("model.yft")));
   assert.ok(fragment.outputContract.artifacts.some((item) => item.includes("model.ytd")));
-  assert.match(fragment.outputContract.gate, /PS4 RAGE fragment writer/);
+  assert.match(fragment.outputContract.gate, /PC Legacy candidate writer/);
   const texture = plan.resources.find((item) => item.extension === ".png");
   assert.deepEqual(texture.outputContract.artifacts, ["model.ytd"]);
   assert.match(texture.outputContract.gate, /PS4 YTD writer/);

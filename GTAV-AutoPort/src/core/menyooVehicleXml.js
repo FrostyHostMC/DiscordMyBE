@@ -16,11 +16,16 @@ const scalar = (value) => {
   if (value && typeof value === "object" && "#text" in value) return String(value["#text"]).trim();
   return "";
 };
+// Respect the caller's preferred field order, not the XML source order.
+// This matters when an attachment contains ModelHash before its HashName.
 const first = (object, names) => {
   if (!object || typeof object !== "object") return undefined;
-  const wanted = new Set(names.map((name) => name.toLowerCase()));
-  const key = Object.keys(object).find((name) => wanted.has(name.toLowerCase()));
-  return key ? object[key] : undefined;
+  const keys = Object.keys(object);
+  for (const candidate of names) {
+    const key = keys.find((name) => name.toLowerCase() === candidate.toLowerCase());
+    if (key) return object[key];
+  }
+  return undefined;
 };
 const number = (value) => {
   const raw = scalar(value);
@@ -90,12 +95,7 @@ function attachmentRecords(placement) {
   return result;
 }
 
-/**
- * Parse Menyoo/Spooner XML into a loss-preserving intermediate vehicle pack.
- * This is deliberately not a Synapse JSON or PS4 resource writer: the supplied
- * Synapse package has no documented XML contract, and attachments need runtime
- * support before they can be executed on console.
- */
+/** Parse Menyoo/Spooner XML into a loss-preserving intermediate vehicle pack. */
 export function translateMenyooVehicleXml(input, sourcePath = "vehicle.xml") {
   const xml = typeof input === "string" ? input : new TextDecoder("utf-8", { fatal: false }).decode(input || new Uint8Array());
   if (new TextEncoder().encode(xml).byteLength > MAX_XML_BYTES) throw new Error("Menyoo XML exceeds the 8 MiB inspection limit.");
