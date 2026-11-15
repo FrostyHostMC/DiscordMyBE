@@ -193,6 +193,20 @@ export default function App() {
     }
   }
 
+  async function convertLegacyCandidate(path) {
+    if (!archive) return;
+    const file = archive.files.find((item) => item.path === path);
+    if (!file) { setError('The selected resource is no longer in the current import.'); return; }
+    setBusy(true); setError(''); setResourceConversionStatus('');
+    try {
+      const result = await convertLegacyResourceCandidate(file);
+      const safeName = path.split('/').at(-1);
+      downloadBytes(result.bytes, safeName, 'application/octet-stream');
+      setResourceConversionStatus(safeName + ': GTA V PC Legacy-format candidate (' + formatBytes(result.outputBytes) + '). Internal RageKit round-trip: ' + (result.roundtripVerified ? 'passed' : 'failed') + '. PS4 compatibility remains unverified.');
+    } catch (err) { setError(err?.message || 'Legacy resource conversion failed.'); }
+    finally { setBusy(false); }
+  }
+
   async function analyzeVehicle() {
     if (!archive) return;
     setBusy(true); setError(""); setAnalysis(null); setManifest(null);
