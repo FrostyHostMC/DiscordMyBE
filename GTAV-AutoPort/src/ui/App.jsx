@@ -20,6 +20,7 @@ import { inspectReshadeMod } from "../core/reshade.js";
 import { buildPs4AfrPackage } from "../core/ps4Package.js";
 import { inspectMenuRelatedFiles } from "../core/menuPack.js";
 import { inspectScriptModPackages } from "../core/scriptModPackages.js";
+import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -84,6 +85,7 @@ export default function App() {
   const [packageStatus, setPackageStatus] = useState("");
   const [menuReport, setMenuReport] = useState(null);
   const [scriptModReport, setScriptModReport] = useState(null);
+  const [menyooVehicleReports, setMenyooVehicleReports] = useState([]);
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -105,12 +107,13 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
       setScriptModReport(inspectScriptModPackages(result.files));
+      setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => translateMenyooVehicleXml(file.bytes, file.path)).filter((report) => report.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
@@ -318,6 +321,17 @@ export default function App() {
         {menuReport.vehicleXml.map((item)=><div className="native-summary" key={item.path}><div className="file-row"><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.format} · {item.modelHash ? "model hash " + item.modelHash : "no model hash found"}</small></span><span className="file-ext">{item.validXml?"VALID XML":"INVALID"}</span></div>{item.validXml && <p className="native-disclaimer">{item.attachmentNodes} attachment-related node(s) · {item.taskSequenceNodes} task-sequence node(s) · {item.note}</p>}{!item.validXml && <div className="audit-warning"><AlertTriangle size={14}/><span>{item.error}</span></div>}</div>)}
         <div className="notice"><ShieldCheck size={18}/><div><b>GoldHEN loads plugins; the menu/runtime defines the supported data formats.</b><p>AutoPort inventories GoldHEN plugin entries, Synapse-style JSON catalogs and vehicle XML separately. It does not patch the compiled Synapse SPRX or claim that Menyoo XML is directly loadable by Synapse. A menu-side XML adapter needs the menu source or a confirmed loader schema.</p></div></div>
         <button className="secondary-button" onClick={()=>downloadJson(menuReport,"gtav-autoport-menu-xml-report.json")}><ArrowDownToLine size={15}/> Export menu / XML report</button>
+      </section>}
+
+      {menyooVehicleReports.length > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">MENYOO / SPOONER VEHICLE TRANSLATOR</div><h3>Saved vehicles, placement and attachments</h3><p>{menyooVehicleReports.reduce((sum, report) => sum + report.summary.vehicleCount, 0)} vehicle(s) · {menyooVehicleReports.reduce((sum, report) => sum + report.summary.attachmentCount, 0)} attachment(s) translated into AutoPort's intermediate format</p></div><span className="tag warning"><AlertTriangle size={13}/> RUNTIME ADAPTER REQUIRED</span></div>
+        {menyooVehicleReports.map((report) => <div className="native-summary" key={report.sourcePath}>
+          <h4>{report.sourcePath}</h4>
+          <div className="audit-grid"><div className="audit-card"><b>{report.summary.vehicleCount}</b><span>vehicles</span></div><div className="audit-card"><b>{report.summary.attachmentCount}</b><span>attachments</span></div><div className="audit-card"><b>{report.summary.withPosition}</b><span>with placement</span></div><div className="audit-card"><b>{report.summary.withVehicleProperties}</b><span>with vehicle properties</span></div></div>
+          {report.vehicles.map((vehicle) => <div className="file-row" key={vehicle.id}><Car size={14}/><span className="file-name"><b>{vehicle.modelName || vehicle.modelHash.raw || vehicle.id}</b><small>Hash {vehicle.modelHash.raw || "not supplied"} · {vehicle.attachments.length} attachment(s) · {vehicle.transform.position ? "position parsed" : "position missing"}</small></span><span className="file-ext">DATA ONLY</span></div>)}
+          <button className="secondary-button" onClick={()=>downloadJson(buildMenyooVehiclePackExport(report),report.sourcePath.split("/").at(-1).replace(/\\.xml$/i,"")+".autoport-vehicles.json")}><ArrowDownToLine size={15}/> Export translated vehicle pack</button>
+        </div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
       </section>}
 
       {scriptModReport?.summary.packageCount > 0 && <section className="panel results-panel">
