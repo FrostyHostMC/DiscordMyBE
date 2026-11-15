@@ -4,6 +4,7 @@ const RAGE_RESOURCE_EXTENSIONS = new Set([
   ".yft", ".ydr", ".ydd", ".ytd", ".ybn", ".ymap", ".ytyp", ".ymf",
   ".ymt", ".ycd", ".ypt", ".ynd", ".ynv", ".awc", ".rel", ".gxt2", ".ysc"
 ]);
+const PSO_METADATA_EXTENSIONS = new Set([".ymt", ".ymf", ".ytyp", ".ymap", ".pso"]);
 const METADATA_EXTENSIONS = new Set([".meta", ".xml", ".ini", ".cfg", ".json", ".txt", ".lua", ".cs", ".js", ".py"]);
 const SOURCE_ASSET_EXTENSIONS = new Set([".fbx", ".obj", ".dae", ".gltf", ".glb", ".blend", ".png", ".jpg", ".jpeg", ".dds", ".tga", ".bmp", ".wav", ".mp3", ".ogg", ".flac"]);
 
@@ -46,6 +47,14 @@ function routeFor(path, conversion, archive) {
       status: "unsupported-or-unverified",
       reason: inspected?.error || "Archive format and encryption have not been validated by a supported reader.",
       requirements: ["Identify archive variant and encryption", "Preserve original bytes", "Do not rewrite unknown Orbis/RPF headers"]
+    };
+  }
+  if (PSO_METADATA_EXTENSIONS.has(ext)) {
+    return {
+      route: "pso-metadata-edit-review",
+      status: "format-specific-review-required",
+      reason: "This extension can represent binary PSO-style metadata. OpenIV documents XML-command editing for supported PSO files, but support is file-specific and does not establish Orbis export or Project V compatibility.",
+      requirements: ["Identify the exact PSO schema and supported file variant", "Parse and preserve unknown fields", "Validate the target loader and game-build expectations before packaging"]
     };
   }
   if (RAGE_RESOURCE_EXTENSIONS.has(ext)) {
