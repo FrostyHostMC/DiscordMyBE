@@ -1,5 +1,6 @@
 const TEXT_EXTENSIONS = new Set([".xml", ".meta", ".ini", ".cfg", ".json", ".txt", ".md", ".lua", ".ymt", ".ymf", ".rel", ".gxt2", ".toml"]);
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+const REFERENCE_EXTENSIONS = new Set([".rpf", ".yft", ".ydr", ".ydd", ".ytd", ".ybn", ".ymap", ".ytyp", ".ymf", ".ymt", ".ycd", ".ypt", ".ynd", ".ynv", ".ysc", ".awc", ".rel", ".gxt2", ".meta", ".xml", ".ini", ".cfg", ".json", ".lua", ".dll", ".asi", ".prx", ".png", ".dds", ".wav", ".ogg", ".txt"]);
 const REFERENCE_PATTERN = /([a-z0-9_./\\-]{1,260}?\.[a-z0-9]{1,8})/gi;
 const PATH_PATTERN = /[\\/]/;
 
@@ -76,7 +77,7 @@ export function analyzeModDependencies(files = []) {
     const seen = new Set();
     for (const match of text.matchAll(REFERENCE_PATTERN)) {
       const reference = match[1].trim();
-      if (!reference || !/[.]/.test(reference) || !/[a-z0-9]/i.test(reference)) continue;
+      if (!reference || !REFERENCE_EXTENSIONS.has(extension(reference))) continue;
       const key = reference.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
