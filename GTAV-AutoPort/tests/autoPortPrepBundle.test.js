@@ -120,3 +120,21 @@ test("keeps extracted analysis paths separate from standalone upload paths", asy
   assert.deepEqual(new Uint8Array(await archive.file("AutoPort-Prep/rpf-extracted/cars/sample/dlc.rpf/common/data/vehicles.meta").async("uint8array")), insideArchive);
   assert.equal(result.manifest.archiveInspections[0].entries[0].analysisPath, "rpf-extracted/cars/sample/dlc.rpf/common/data/vehicles.meta");
 });
+
+test("retains the full validated file inventory when extraction exceeds its file limit", async () => {
+  const files = Array.from({ length: 5001 }, (_, index) => ({
+    path: "payload/" + String(index).padStart(4, "0") + ".bin",
+    bytes: new Uint8Array([index & 0xff])
+  }));
+  const archiveBytes = buildOpenRpf7(files).bytes;
+  const result = await buildAutomaticPrepBundle({
+    files: [{ path: "large/dlc.rpf", bytes: archiveBytes }]
+  });
+  const record = result.manifest.archiveInspections[0];
+  assert.equal(record.status, "validated-not-extracted");
+  assert.match(record.error, /file-count limit/);
+  assert.equal(record.entries.length, 5001);
+  assert.equal(record.entries.filter((entry) => entry.extracted).length, 0);
+  assert.ok(record.entries.some((entry) => entry.path === "payload/5000.bin" && entry.size === 1));
+  assert.equal(result.manifest.summary.rpfRawFilesExtracted, 0);
+});
