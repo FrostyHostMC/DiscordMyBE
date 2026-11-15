@@ -466,7 +466,7 @@ export default function App() {
         <p className="native-disclaimer">This is a conversion work plan. Legacy candidates are separate downloads; source files are never overwritten. Candidate filename relationships remain unverified, and no PS4 installable package exists.</p>
         <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest AutoPort update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
-      {archive && archive.files.some((file) => /\\.rpf$/i.test(file.path)) && <section className="panel results-panel">
+      {archive && archive.files.some((file) => /\.rpf$/i.test(file.path)) && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">GOLDHEN PACKAGE BUILDER</div><h3>Stage verified PS4 RPF overlays</h3><p>Creates a title-specific AFR folder, plugins.ini snippet, hashes and install notes. This does not convert PC archives.</p></div><span className="tag warning"><AlertTriangle size={13}/> STRICT GATES</span></div>
         <p className="native-disclaimer">Only select complete RPF archives that are already built for PS4. A PC RPF with an RPF7 header is not automatically PS4-compatible. Map each source archive to the exact game file path that you have verified for CUSA00419 / 1.73.</p>
         <label className="field-label" htmlFor="afr-mappings">Exact source-to-game path mappings (JSON)</label>
