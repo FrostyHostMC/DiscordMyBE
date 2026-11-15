@@ -69,13 +69,24 @@ export function inspectOpenRpf7(input) {
   }
 
   if (entries[0].type !== "directory" || entries[0].name !== "") fail("TOC root entry is missing or malformed.");
-  const seen = new Set();
-  for (const entry of entries) {
-    if (entry.index === 0) continue;
-    if (!entry.name || entry.name.includes("/") || entry.name.includes("\\\\") || entry.name === "." || entry.name === "..") fail("entry contains an invalid path segment.");
-    const key = entry.name.toLowerCase();
-    if (seen.has(entry.index + ":" + key)) fail("duplicate entry name in a TOC position.");
-    seen.add(entry.index + ":" + key);
+  const parentByChild = new Map();
+  for (const directory of entries) {
+    if (directory.type !== "directory") continue;
+    const siblingNames = new Set();
+    for (let childIndex = directory.firstChild; childIndex < directory.firstChild + directory.childCount; childIndex++) {
+      if (childIndex === 0) fail("root entry cannot be a child.");
+      if (parentByChild.has(childIndex)) fail("TOC entry is assigned to more than one parent directory.");
+      parentByChild.set(childIndex, directory.index);
+      const child = entries[childIndex];
+      if (!child) fail("directory child entry is missing.");
+      if (!child.name || child.name.includes("/") || child.name.includes("\\") || child.name === "." || child.name === "..") fail("entry contains an invalid path segment.");
+      const key = child.name.toLowerCase();
+      if (siblingNames.has(key)) fail("directory contains duplicate child names.");
+      siblingNames.add(key);
+    }
+  }
+  for (let index = 1; index < entries.length; index++) {
+    if (!parentByChild.has(index)) fail("TOC entry is not referenced by a parent directory.");
   }
   return {
     format: "RPF7",
