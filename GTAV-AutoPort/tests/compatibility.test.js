@@ -6,11 +6,11 @@ import { PS4_TARGET } from "../src/core/target.js";
 test("default target assessment blocks conversion and deployment", () => {
   const result = assessPs4Compatibility();
   assert.equal(result.status, "blocked");
-  assert.equal(result.target.titleId, "CUSA00411");
+  assert.equal(result.target.titleId, "CUSA00419");
   assert.equal(result.target.updateVersion, "1.73");
   assert.equal(result.conversionAllowed, false);
   assert.equal(result.deploymentAllowed, false);
-  assert.equal(result.passed, 0);
+  assert.equal(result.passed, 2);
   assert.equal(result.total, 7);
 });
 
