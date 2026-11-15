@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { registeredFormatAdapterRegistry } from "./registeredFormatAdapters.js";
+import { analyzeModDependencies } from "./modDependencyGraph.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -30,6 +31,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const sourceManifest = [];
   const conversions = [];
   let completed = 0;
+  const dependencyGraph = analyzeModDependencies(files);
   const inspected = files.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
   const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
   for (const file of files) {
@@ -73,6 +75,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       installable: false
     },
     sourceFiles: sourceManifest,
+    dependencies: dependencyGraph.summary,
     conversions,
     limitations: [
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
@@ -83,6 +86,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     ]
   };
   const reportRoot = root.folder("reports");
+  reportRoot.file("dependency-graph.json", JSON.stringify(dependencyGraph, null, 2));
   for (const [name, value] of Object.entries(reports)) {
     if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
   }
@@ -92,7 +96,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "",
     "1. source-original/ contains the original imported mod files.",
     "2. pc-legacy-candidates/ contains only resources successfully rewritten and round-trip checked by RageKit for GTA V PC Legacy.",
-    "3. autoport-manifest.json records every conversion result and limitation.",
+    "3. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
+    "4. autoport-manifest.json records every conversion result and limitation.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
