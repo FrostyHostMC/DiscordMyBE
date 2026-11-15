@@ -46,7 +46,7 @@ export function resourceConvertPlugin() {
         const output = path.join(temp, "legacy-candidate" + ext);
         const roundtrip = path.join(temp, "roundtrip" + ext);
         await writeFile(input, inputBytes);
-        await run(executable, ["--legacy", "convert", input, output]);
+        await run(executable, ["convert", input, output, "--legacy"]);
         const outputBytes = await readFile(output);
         if (!outputBytes.length || outputBytes.length > MAX_BYTES) throw new Error("Converted output is empty or exceeds 64 MiB.");
         const info = await run(executable, ["info", output, "-v"]);
