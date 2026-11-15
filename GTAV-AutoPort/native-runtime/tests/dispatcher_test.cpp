@@ -69,6 +69,24 @@ int main() {
  api.failDelete = false;
  executor.clear();
  assert(executor.entity_count() == 0);
+
+ // If rollback deletion itself fails, retain both handles for a later clear().
+ api.failAttachment = true;
+ api.failDelete = true;
+ const std::vector<PlannedAction> rollbackRetryPlan = {
+  PlannedSpawnEntity{"retry-car", SpawnEntity{EntityKind::Vehicle, "adder", {0,0,0}, {0,0,0}, 0}},
+  PlannedSpawnEntity{"retry-object", SpawnEntity{EntityKind::Object, "prop_minigun_01", {0,0,0}, {0,0,0}, 0}},
+  PlannedAttachEntity{"retry-car", "retry-object", "chassis", {0,1,0}, {0,0,0}},
+ };
+ const auto retryResults = executor.execute(rollbackRetryPlan);
+ assert(retryResults.size() == 3 && !retryResults.back().ok);
+ assert(retryResults.back().error.find("rollback could not delete") != std::string::npos);
+ assert(executor.entity_count() == 2);
+ api.failAttachment = false;
+ api.failDelete = false;
+ executor.clear();
+ assert(executor.entity_count() == 0);
+
  const auto missingRef = executor.execute({PlannedSetTransform{"missing", {0,0,0}, {0,0,0}, 0}});
  assert(missingRef.size() == 1 && !missingRef.front().ok);
  std::cout << "native runtime core tests passed\n";
