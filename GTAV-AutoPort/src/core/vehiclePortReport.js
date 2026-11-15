@@ -109,6 +109,8 @@ export function buildVehiclePortReport({ files, modelName }) {
   const audioFiles = audioName ? files.filter((file) => /\.(awc|rel|dat151|dat54|dat10)$/i.test(file.path) && file.path.toLowerCase().includes(audioName.toLowerCase())) : [];
   const cameraName = findValue(vehicle, ["cameraName", "cameraHash", "firstPersonDrivebyData"]);
   const layoutMatches = layoutName && layouts.parsed ? records(layouts.parsed, (node) => containsValue(node, layoutName)) : [];
+  if (layoutName && !layouts.parsed) unresolved.push("Vehicle layout metadata is referenced but vehiclelayouts.meta was not supplied.");
+  else if (layoutName && !layoutMatches.length) unresolved.push(`Vehicle layout "${layoutName}" was not resolved in vehiclelayouts.meta.`);
   return {
     schemaVersion: 1,
     format: "autoport-vehicle-port-report",
