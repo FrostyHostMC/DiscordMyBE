@@ -24,3 +24,17 @@ test("decodes a successful Legacy candidate response and keeps PS4 status unveri
     assert.equal(result.ps4Compatibility, "unverified");
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("accepts drawable and collision resources through the same Legacy adapter", async () => {
+  const originalFetch = globalThis.fetch;
+  const output = new Uint8Array([1, 2, 3, 4]);
+  globalThis.fetch = async (_url, options) => {
+    const payload = JSON.parse(options.body);
+    assert.equal(payload.name, "prop.ydr");
+    return { ok: true, json: async () => ({ outputBase64: btoa(String.fromCharCode(...output)), outputBytes: output.length, ps4Compatibility: "unverified" }) };
+  };
+  try {
+    const result = await convertLegacyResourceCandidate({ path: "prop.ydr", bytes: new Uint8Array([9]) });
+    assert.deepEqual(result.bytes, output);
+  } finally { globalThis.fetch = originalFetch; }
+});
