@@ -3,6 +3,7 @@ import { registeredFormatAdapterRegistry } from "./registeredFormatAdapters.js";
 import { analyzeModDependencies } from "./modDependencyGraph.js";
 import { extractOpenRpf7, inspectOpenRpf7 } from "./rpf7OpenInspector.js";
 import { buildPs4DeliveryPlan } from "./ps4DeliveryPlanner.js";
+import { inspectOrbxPackage } from "./orbxPackageInspector.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -225,6 +226,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   }
 
   const deliveryPlan = buildPs4DeliveryPlan({ files: analysisFiles, conversions, archiveInspections, target });
+  const orbxPackageAudit = inspectOrbxPackage(analysisFiles);
 
   const manifest = {
     schemaVersion: 1,
@@ -252,6 +254,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     conversions,
     archiveInspections,
     deliveryPlan,
+    orbxPackageAudit,
     limitations: [
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
       "CUSA00419 / GTA V 1.73 resource encoding and in-game behavior are not verified.",
@@ -265,6 +268,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const reportRoot = root.folder("reports");
   reportRoot.file("dependency-graph.json", JSON.stringify(dependencyGraph, null, 2));
   reportRoot.file("ps4-delivery-plan.json", JSON.stringify(deliveryPlan, null, 2));
+  reportRoot.file("orbx-package-audit.json", JSON.stringify(orbxPackageAudit, null, 2));
   for (const [name, value] of Object.entries(reports)) {
     if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
   }
@@ -277,7 +281,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "3. rpf-extracted/ contains raw files extracted from supported PC RPF7 OPEN archives; original RPF files remain preserved.",
     "4. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
     "5. reports/ps4-delivery-plan.json explains the per-file PS4 route, blockers and required validation.",
-    "6. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
+    "6. reports/orbx-package-audit.json checks for the ORBX PRX, INI and resource tree when present.",
+    "7. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
