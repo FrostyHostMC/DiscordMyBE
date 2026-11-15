@@ -73,7 +73,7 @@ function signatureOf(bytes) {
 
 function extensionOf(file) {
   if (file.extension) return file.extension.toLowerCase();
-  const name = file.path.split("/").at(-1).toLowerCase();
+  const name = String(file.path || "").split(/[\\/]/).at(-1).toLowerCase();
   const index = name.lastIndexOf(".");
   return index > 0 ? name.slice(index) : "";
 }
@@ -104,6 +104,18 @@ function classifyOne(file) {
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");
   if (signature === "MZ" && ![".dll", ".exe", ".asi"].includes(extension)) warnings.push("Detected a Windows PE executable signature despite the file extension.");
+  if (signature && extensionHint) {
+    const signatureRole = formatDetection.match?.role;
+    const extensionFamily = extensionHint[0];
+    const compatible = (signatureRole === "rage-resource" && extensionFamily === "rage-resource")
+      || (signatureRole === "rage-archive" && extensionFamily === "archive")
+      || (signatureRole === "texture" && extensionFamily === "texture-source")
+      || (signatureRole === "image" && extensionFamily === "texture-source")
+      || (signatureRole === "audio" && extensionFamily === "audio-source")
+      || (signatureRole === "windows-executable" && extensionFamily === "pc-native-plugin")
+      || (signatureRole === "native-elf-binary" && ["native-binary", "console-native-plugin"].includes(extensionFamily));
+    if (!compatible) warnings.push("The detected binary signature does not agree with the file extension hint; inspect the file before selecting a converter.");
+  }
   return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, classificationBasis, signature, formatDetection, warnings };
 }
 
