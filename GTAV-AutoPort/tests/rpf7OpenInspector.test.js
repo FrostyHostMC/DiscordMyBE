@@ -46,3 +46,15 @@ test("rejects malformed UTF-8 names", () => {
   bytes[namesStart + 1] = 0xff;
   assert.throws(() => inspectOpenRpf7(bytes), /not valid UTF-8/);
 });
+
+test("rejects self-referential directory entries", () => {
+  const built = buildOpenRpf7([{ path: "folder/file.bin", bytes: new Uint8Array([1]) }]);
+  const bytes = built.bytes.slice();
+  const view = new DataView(bytes.buffer);
+  // Root now references the file; the child directory points to itself.
+  view.setUint32(16 + 8, 2, true);
+  view.setUint32(16 + 12, 1, true);
+  view.setUint32(16 + 16 + 8, 1, true);
+  view.setUint32(16 + 16 + 12, 1, true);
+  assert.throws(() => inspectOpenRpf7(bytes), /parent cycle/);
+});
