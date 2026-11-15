@@ -14,13 +14,17 @@ creation, Project V loading and GoldHEN plugin deployment.
 |---|---|---|
 | `preserve-pc-runtime-only` | ASI, DLL, EXE, SYS | Keep Windows code as source; it is not a PS4 plugin |
 | `validate-orbis-plugin` | PRX, SPRX | Require Orbis architecture, loader, title and update validation |
-| `inspect-contents-then-package` | Extracted PC RPF7 OPEN | Raw extraction succeeded; inspect resources and dependencies before packaging |
+| `inspect-contents-then-package` | Extracted PC RPF7 OPEN | Recursively extracted supported nested PC RPF7 OPEN containers; inspect resources and dependencies before packaging |
 | `preserve-and-identify-archive` | Unsupported/encrypted RPF | Preserve bytes; do not guess at archive markers or encryption |
 | `resource-loader-compatibility` | YFT, YTD, YDR, YDD, YBN, YMAP, YTYP, YMT, etc. | Require a format-specific parser and a verified target loading/conversion route |
 | `metadata-translation-review` | META, XML, INI, scripts/config | Parse and translate the internal format; extension renaming is not conversion |
 | `pso-metadata-edit-review` | YMT, YMF, YTYP, YMAP, PSO | Identify the exact binary PSO variant; only use file-specific, tested metadata editing |
 | `source-asset-conversion` | FBX, OBJ, DDS, PNG, WAV, etc. | Require game-compatible resource export and validation |
 | `preserve-and-review` | Unknown | Keep source and require a format adapter before conversion |
+
+## Nested archive handling
+
+The automatic preparation stage now follows supported PC RPF7 OPEN archives recursively, including nested .rpf files. It preserves every original top-level archive, stores nested raw archive files and their extracted members under a provenance path, and records the parent archive and nesting depth. Recursion is bounded to depth 4 and 128 archives, with global limits of 20,000 extracted files, 512 MiB expanded data and 4,096 characters per combined extraction path. Unsupported/encrypted containers remain preserved without guessed decoding.
 
 ## Safety contract
 
