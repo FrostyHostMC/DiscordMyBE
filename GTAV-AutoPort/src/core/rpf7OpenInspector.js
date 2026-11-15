@@ -87,6 +87,14 @@ export function inspectOpenRpf7(input) {
   }
   for (let index = 1; index < entries.length; index++) {
     if (!parentByChild.has(index)) fail("TOC entry is not referenced by a parent directory.");
+    const visited = new Set([index]);
+    let parent = parentByChild.get(index);
+    while (parent !== 0) {
+      if (visited.has(parent)) fail("directory hierarchy contains a parent cycle.");
+      visited.add(parent);
+      parent = parentByChild.get(parent);
+      if (parent === undefined) fail("directory hierarchy does not lead back to the root.");
+    }
   }
   return {
     format: "RPF7",
