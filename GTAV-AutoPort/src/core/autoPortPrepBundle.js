@@ -2,7 +2,14 @@ import JSZip from "jszip";
 import { convertLegacyResourceCandidate } from "./resourceConversion.js";
 
 const CONVERTIBLE = new Set([".yft", ".ydr", ".ydd", ".ytd"]);
-function safePath(value) {\n  const normalized = String(value || "").replaceAll("\\\\", "/");\n  const parts = normalized.split("/");\n  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized) || parts.some((part) => !part || part === "." || part === "..")) throw new Error("The imported file list contains an unsafe relative path.");\n  return parts.join("/");\n}
+function safePath(value) {
+  const normalized = String(value || "").replaceAll("\\", "/");
+  const parts = normalized.split("/");
+  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized) || parts.some((part) => !part || part === "." || part === "..")) {
+    throw new Error("The imported file list contains an unsafe relative path.");
+  }
+  return parts.join("/");
+}
 
 function extension(path) {
   const name = String(path || "").split("/").at(-1);
