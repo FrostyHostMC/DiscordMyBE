@@ -139,3 +139,23 @@ test("retains the full validated file inventory when extraction exceeds its file
   assert.ok(record.entries.some((entry) => entry.path === "payload/5000.bin" && entry.size === 1));
   assert.equal(result.manifest.summary.rpfRawFilesExtracted, 0);
 });
+test("recursively extracts nested PC RPF archives and preserves both containers", async () => {
+  const payload = new TextEncoder().encode("<HandlingData/>");
+  const nestedBytes = buildOpenRpf7([{ path: "common/data/handling.meta", bytes: payload }]).bytes;
+  const outerBytes = buildOpenRpf7([{ path: "nested/dlc.rpf", bytes: nestedBytes }]).bytes;
+  const result = await buildAutomaticPrepBundle({ files: [{ path: "cars/outer.rpf", bytes: outerBytes }] });
+  assert.equal(result.manifest.summary.rpfArchivesInspected, 2);
+  assert.equal(result.manifest.summary.rpfArchivesExtracted, 2);
+  assert.equal(result.manifest.summary.rpfRawFilesExtracted, 2);
+  assert.equal(result.manifest.summary.rpfRawFilesAnalyzed, 2);
+  assert.equal(result.manifest.archiveInspections[1].sourcePath, "rpf-extracted/cars/outer.rpf/nested/dlc.rpf");
+  assert.equal(result.manifest.archiveInspections[1].parentArchive, "cars/outer.rpf");
+  assert.equal(result.manifest.deliveryPlan.items.find((item) => item.path === "rpf-extracted/cars/outer.rpf/nested/dlc.rpf").route, "inspect-contents-then-package");
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.ok(archive.file("AutoPort-Prep/source-original/cars/outer.rpf"));
+  assert.ok(archive.file("AutoPort-Prep/rpf-extracted/cars/outer.rpf/nested/dlc.rpf"));
+  assert.deepEqual(
+    new Uint8Array(await archive.file("AutoPort-Prep/rpf-extracted/cars/outer.rpf/nested/dlc.rpf/common/data/handling.meta").async("uint8array")),
+    payload
+  );
+});
