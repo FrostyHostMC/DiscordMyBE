@@ -1,3 +1,11 @@
+## 2026-11-14 — First gated GoldHEN AFR package writer
+- Added a ZIP package writer for complete RPF7 archives that are already built for PS4; source bytes are preserved and SHA-256 hashes are included.
+- Added a CUSA00411 / GTA V 1.73 package handoff with the correct AFR staging directory shape, a mergeable plugins.ini snippet, manifest and installation notes.
+- Added strict attestations for PS4 resource-build compatibility and exact /app0 destination-path verification; rejects PC/non-RPF inputs, unsafe paths and duplicate destinations.
+- Added an export panel to the app. This is a staging workflow only: it does not convert PC RPF/YFT/YTD assets or prove the user's 1.73 AFR file-open path.
+- Added regression tests for package gates, path safety, RPF signatures, duplicate destinations and generated ZIP output.
+- Latest web CI run 43673090860: JavaScript tests and Vite build passed; native and RageKit jobs were still running at changelog time.
+
 ## 2026-11-14 — ReShade shader intake and DYNA dependency analysis
 - Added static inspection for ReShade .fx/.fxh/HLSL and preset INI files, including techniques, uniforms, include dependencies and likely effect families.
 - Added missing-include detection and explicit renderer-hook blockers for depth-buffer, AO, RTGI, SSR, temporal and depth-of-field effects.
