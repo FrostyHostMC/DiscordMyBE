@@ -10,6 +10,14 @@
 
 # GTAV AutoPort
 
+**2026-11-15 — Multi-family conversion pipeline expansion:** added Menyoo/Spooner vehicle XML translation into a loss-preserving intermediate vehicle pack; expanded vehicle metadata mapping for audio, camera, handling and other fields; added a RageKit-backed PC Legacy YFT/YTD candidate writer with output inspection and round-trip verification; added source-level PC script behavior blueprints; and added ped/object metadata, asset and spawn-config mapping. These stages produce source-side interchange data and PC Legacy candidates only. PS4 CUSA00419 / 1.73 resource encoding, menu/runtime execution, Orbis PRX behavior and on-console acceptance remain explicit gates. See:
+- [Menyoo vehicle translation](docs/MENYOO-VEHICLE-TRANSLATION.md)
+- [Vehicle metadata mapping](docs/VEHICLE-METADATA-MAPPING.md)
+- [YFT/YTD resource conversion](docs/YFT-YTD-RESOURCE-CONVERSION.md)
+- [PC script native reimplementation](docs/PC-SCRIPT-NATIVE-REIMPLEMENTATION.md)
+- [Ped/object pack mapping](docs/PED-OBJECT-PACK-MAPPING.md)
+
+
 **2026-11-14 — Local 7z archive intake:** AutoPort now bundles the 7-Zip command-line binary for local extraction of `.7z` mods, including archives such as the Durango SRT test target. Extraction is performed by the local Vite workbench, inventories entries before extraction, rejects unsafe paths/links and encrypted entries, and enforces 160 MiB compressed / 512 MiB expanded / 5,000-file limits. No archive is uploaded to a remote service; this does not convert resources for PS4.
 
 **2026-11-14 — OpenIV OIV intake:** AutoPort now opens `.oiv` packages directly using the ZIP container reader, detects and parses `assembly.xml`, extracts basic package metadata and inventories declared file operations for review. It does not execute OIV install instructions or assume PC install paths are valid on PS4.
