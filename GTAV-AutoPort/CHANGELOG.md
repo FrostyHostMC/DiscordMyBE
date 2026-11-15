@@ -1,3 +1,9 @@
+## 2026-11-14 — PS4 GTA V GFX Loader research
+- Inspected the linked public source for the PS4 GTA V GFX Loader rather than relying only on the PSXHAX thread.
+- Confirmed its narrow behavior: a GTA V 1.46 hard-coded hook redirects `font_lib_efigs` requests to `/data/font_lib_efigs_ps4.gfx`; it is not a general graphics-mod loader.
+- Recorded the build-specific function offset/signature, ELF injection timing note, and the risk of reusing the 1.46 hook on GTA V 1.73.
+- Added it as a research reference for a future build-verified GFX adapter; no binary was bundled or deployed.
+
 ## 2026-11-14 — Project V / GoldHEN modding route research
 - Documented Project V as an existing community PS4 GTA V plugin path supporting a subset of PC mods, based on the Modded Warfare demonstration and listed example mods.
 - Clarified GoldHEN PRX plugin loading versus AFR file redirection and distinguished both from PC ASI/DLL execution and RPF asset conversion.
