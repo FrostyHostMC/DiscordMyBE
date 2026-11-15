@@ -36,6 +36,8 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-14 — Scaleform graphics intake:** AutoPort now detects and validates GFX/SWF headers, classifies font and ActionScript source files, routes them through a graphics-specific worklist, and can create a separate SWF editor-handoff copy for JPEXS. This is not a game-ready GFX build. The public PS4 GFX loader only proves a GTA V 1.46 fixed font hook; GTA V 1.73 runtime loading remains unvalidated. See [Scaleform graphics pipeline](docs/SCALEFORM-GRAPHICS-PIPELINE.md).
+
 **2026-11-14 — PS4 GTA V GFX Loader research:** inspected the linked source code and confirmed a narrow GTA V 1.46 hook that redirects the `font_lib_efigs` request to a file under `/data`. It is a useful runtime-hook reference, not a universal graphics loader, and its hard-coded 1.46 address is not safe to reuse on GTA V 1.73. See [Project V and GFX loader research](docs/PROJECT-V-GOLDHEN-RESEARCH.md).
 
 **2026-11-14 — Guided porting and first-run tool preparation**
