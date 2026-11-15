@@ -38,3 +38,25 @@ Therefore AFR is a promising deployment mechanism for a later validated overlay,
 - Keep the original game files and saves untouched.
 - Generate a reversible, file-by-file overlay with hashes and a manifest.
 - Do not enable a plugin or deploy files until the user explicitly approves a reviewed manifest.
+
+## Plugin-first deployment: EBOOT is not a prerequisite
+
+A decrypted or rebuilt EBOOT.BIN is **not a general installation prerequisite** for GoldHEN plugin/overlay mods. GoldHEN's official plugin repository documents loading PRX plugins before game boot, with per-title entries in `/data/GoldHEN/plugins.ini`; the documented plugin directory is `/data/GoldHEN/plugins/`. It also documents AFR (`afr.prx`) as a separate file-redirection plugin using `/data/GoldHEN/AFR/<TITLE_ID>/` overlays.
+
+A real GTA V example is the public Lotus GoldHEN SPRX port. Its README instructs users to place an SPRX in the GoldHEN plugins directory and add a per-title entry to `plugins.ini`. However, that release specifically calls out GTA V updates 1.27 and 1.48 and uses a different example title ID (`CUSA00419`); it is proof of the plugin-based method, **not** proof that its binary or hooks work on CUSA00411 update 1.73.
+
+References:
+- GoldHEN plugin loading and AFR: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
+- GTA V Lotus SPRX installation example: https://github.com/illusionyy/PS4-GTAV-Lotus-SPRX-Release
+
+### AutoPort output policy
+
+AutoPort must select the least invasive valid deployment mechanism per mod:
+1. **AFR overlay only** when the mod consists of replacement files and the exact GTA V 1.73 game-open path/container has been verified.
+2. **GoldHEN PRX/SPRX + config** when runtime behavior needs a native PS4 plugin and a plugin build is verified for the exact title/update/GoldHEN environment.
+3. **Combined plugin + overlay** when both a runtime hook and replacement assets are required.
+4. **Rebuilt game package/EBOOT workflow** only when a specific mod or patch demonstrably requires executable changes. This is an advanced, separate path—not the default.
+
+JSON, XML, INI and other configuration files are not automatically executable or meaningful on PS4. AutoPort must identify which plugin or game subsystem consumes each config, validate its schema/version, and package it at the exact expected location. A `.sprx` extension alone also does not establish compatibility: the binary must target the PS4 Orbis ABI and the correct GTA V build/hooks.
+
+The user's decrypted EBOOT may still be useful as an optional research artifact for build identification, reverse engineering, or validating a version-specific hook. It is not required merely to stage a known-good GoldHEN plugin or AFR overlay. AutoPort must not block plugin/overlay work while waiting for it.
