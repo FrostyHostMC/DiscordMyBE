@@ -28,8 +28,14 @@ function decodeText(file) {
   if (!(file?.bytes instanceof Uint8Array) || file.bytes.byteLength > MAX_TEXT_BYTES) return null;
   if (!TEXT_EXTENSIONS.has(extension(file.path))) return null;
   const sample = file.bytes.subarray(0, Math.min(file.bytes.length, 4096));
-  if (sample.includes(0)) return null;
   try {
+    if (file.bytes.length >= 2 && file.bytes[0] === 0xff && file.bytes[1] === 0xfe) {
+      return new TextDecoder("utf-16le", { fatal: true }).decode(file.bytes.subarray(2));
+    }
+    if (file.bytes.length >= 2 && file.bytes[0] === 0xfe && file.bytes[1] === 0xff) {
+      return new TextDecoder("utf-16be", { fatal: true }).decode(file.bytes.subarray(2));
+    }
+    if (sample.includes(0)) return null;
     return new TextDecoder("utf-8", { fatal: true }).decode(file.bytes);
   } catch {
     return null;
