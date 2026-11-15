@@ -52,7 +52,7 @@ const ROUTES = Object.freeze({
 });
 
 const OUTPUT_CONTRACTS = Object.freeze({
-  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "PS4 RAGE fragment writer, PS4 texture dictionary writer, dependency resolution and CUSA00411 / 1.73 validation" },
+  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "PS4 RAGE fragment writer, PS4 texture dictionary writer, dependency resolution and CUSA00419 / 1.73 validation" },
   drawable: { artifacts: ["model.ydr or model.ydd", "model.ytd", "referenced materials and shaders"], inputs: ["mesh and material source", "texture images", "material/shader mapping"], gate: "PS4 drawable and texture dictionary writers plus target-build validation" },
   "texture-dictionary": { artifacts: ["model.ytd"], inputs: ["source images or DDS", "texture names and hashes", "mip chain", "target compression/format"], gate: "PS4 YTD writer with verified texture formats, mipmaps and platform encoding" },
   "texture-source": { artifacts: ["model.ytd"], inputs: ["decoded image", "texture name/hash", "mipmap policy", "material usage"], gate: "PS4 YTD writer; PNG/DDS alone is not a game-ready GTA texture" },
@@ -158,7 +158,7 @@ export function buildUniversalPortPlan({ files = [], target = PS4_TARGET } = {})
       "This plan does not rewrite or package any resource.",
       "Filename co-location is a candidate relationship, not proof of a game dependency.",
       "PC Legacy/Enhanced writer support is not PS4 writer support.",
-      "Exact CUSA00411 / GTA V 1.73 resources and executable compatibility remain unverified.",
+      "Exact CUSA00419 / GTA V 1.73 resources and executable compatibility remain unverified.",
       "PC ASI/DLL and runtime-dependent scripts need separate PS4-native behavior implementations.",
     ],
   };
