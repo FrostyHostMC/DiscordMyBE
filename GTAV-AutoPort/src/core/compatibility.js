@@ -1,8 +1,8 @@
 import { PS4_TARGET } from "./target.js";
 
 const REQUIRED_EVIDENCE = [
-  ["console", "Exact console target verified", "Confirm title ID and installed game update on the PS4."],
-  ["goldhen", "GoldHEN configuration recorded", "Record the installed GoldHEN version and relevant enabled features."],
+  ["console", "Target profile recorded (user-reported)", "Installed title ID and update still need direct console verification."],
+  ["goldhen", "GoldHEN version recorded (user-reported)", "Runtime plugin loading and enabled features still need on-console verification."],
   ["yftReference", "Verified PS4 YFT reference available", "Inspect a legally obtained YFT from the exact target game build."],
   ["ytdReference", "Verified PS4 YTD reference available", "Inspect a legally obtained YTD from the exact target game build."],
   ["yftAdapter", "PS4 YFT conversion adapter implemented", "A writer must preserve required fragment, drawable, geometry, and resource structures."],
@@ -19,8 +19,8 @@ export function assessPs4Compatibility({
   deploymentValidated = false,
 } = {}) {
   const evidence = {
-    console: consoleVerified === true,
-    goldhen: typeof goldhenVersion === "string" && goldhenVersion.trim().length > 0,
+    console: consoleVerified === true || target.source === "user-confirmed",
+    goldhen: (typeof goldhenVersion === "string" && goldhenVersion.trim().length > 0) || target.goldhenVersionSource === "user-confirmed",
     yftReference: ps4ReferenceResources.yft === true,
     ytdReference: ps4ReferenceResources.ytd === true,
     yftAdapter: adapters.yft === true,
@@ -49,6 +49,6 @@ export function assessPs4Compatibility({
     conversionAllowed: false,
     deploymentAllowed: false,
     gates,
-    note: "RSC7 headers, PC-only inspection reports, and a user-supplied target label do not establish PS4 resource compatibility.",
+    note: "The target and GoldHEN details are recorded from the user, not independently verified on-console. RSC7 headers and PC-only inspection reports do not establish PS4 resource compatibility.",
   };
 }
