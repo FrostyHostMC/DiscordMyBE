@@ -1,5 +1,8 @@
 const EXTENSIONS = {
   ".rpf": ["archive", "RAGE archive", "archive-adapter-required"],
+  ".fx": ["reshade-shader", "ReShade HLSL effect source", "ps4-renderer-adaptation-required"],
+  ".fxh": ["reshade-shader-include", "ReShade HLSL include", "shader-dependency-resolution-required"],
+  ".hlsl": ["shader-source", "HLSL shader source", "ps4-renderer-adaptation-required"],
   ".gfx": ["scaleform-graphics", "Scaleform GFx movie", "scaleform-runtime-validation-required"],
   ".swf": ["scaleform-graphics", "Flash / Scaleform source movie", "scaleform-export-required"],
   ".fla": ["scaleform-source", "Flash authoring project", "scaleform-authoring-required"],
