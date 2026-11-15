@@ -57,6 +57,21 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       record.fileCount = inspection.fileCount;
       record.directoryCount = inspection.directoryCount;
       record.encryption = inspection.encryption;
+      record.entries = inspection.entries
+        .filter((entry) => entry.type === "file")
+        .map((entry) => ({
+          path: entry.path,
+          size: entry.size,
+          archivePath: null,
+          analysisPath: null,
+          extracted: false,
+          formatStatus: "not-extracted",
+          adapterId: null,
+          role: null,
+          evidence: [],
+          candidates: []
+        }));
+      const entryRecords = new Map(record.entries.map((entry) => [entry.path, entry]));
       const extracted = extractOpenRpf7(bytes);
       for (const entry of extracted) {
         const archivePath = sourcePath + "/" + safePath(entry.path);
@@ -64,8 +79,9 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
         const extractedFile = { path: analysisPath, bytes: entry.bytes, sourceArchive: sourcePath };
         extractedRoot.file(archivePath, entry.bytes);
         extractedFiles.push(extractedFile);
-        const entryRecord = { path: entry.path, archivePath, analysisPath, size: entry.bytes.length, formatStatus: "not-inspected", adapterId: null, role: null, evidence: [] };
-        record.entries.push(entryRecord);
+        const entryRecord = entryRecords.get(entry.path);
+        if (!entryRecord) throw new Error("Extracted RPF entry is missing from the validated inventory.");
+        Object.assign(entryRecord, { archivePath, analysisPath, size: entry.bytes.length, extracted: true, formatStatus: "not-inspected" });
         extractedEntryRecords.set(extractedFile, entryRecord);
         record.extractedFiles += 1;
         record.extractedBytes += entry.bytes.length;
