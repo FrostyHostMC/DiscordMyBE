@@ -442,7 +442,7 @@ export default function App() {
           {[".yft", ".ytd"].includes(item.extension) && <button className="secondary-button" onClick={() => convertLegacyCandidate(item.path)} disabled={busy}><ArrowDownToLine size={15}/> Build PC Legacy resource candidate</button>}
         </div>)}
         {resourceConversionStatus && <div className="notice"><ShieldCheck size={18}/><div><b>Legacy candidate created</b><p>{resourceConversionStatus}</p></div></div>}
-        <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
+        <p className="native-disclaimer">This is a conversion work plan. Legacy candidates are separate downloads; source files are never overwritten. Candidate filename relationships remain unverified, and no PS4 installable package exists.</p>
         <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest AutoPort update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
       </section>}
       {archive && archive.files.some((file) => /\\.rpf$/i.test(file.path)) && <section className="panel results-panel">
