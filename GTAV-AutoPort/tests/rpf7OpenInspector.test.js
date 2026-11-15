@@ -95,3 +95,28 @@ test("rejects reconstructed paths above the path-length safety limit", () => {
   const built = buildOpenRpf7([{ path: segments.join("/") + "/file.bin", bytes: new Uint8Array([1]) }]);
   assert.throws(() => inspectOpenRpf7(built.bytes), /reconstructed entry path exceeds the configured safety limit/);
 });
+
+test("rejects partially overlapping payload ranges but permits exact shared payloads", () => {
+  const payload = new Uint8Array(1024).fill(0x5a);
+  const built = buildOpenRpf7([
+    { path: "first.bin", bytes: payload },
+    { path: "second.bin", bytes: payload }
+  ]);
+  const shared = built.bytes.slice();
+  const sharedView = new DataView(shared.buffer);
+  const firstOffset = 16 + 1 * 16 + 5;
+  const secondOffset = 16 + 2 * 16 + 5;
+  shared[secondOffset] = shared[firstOffset];
+  shared[secondOffset + 1] = shared[firstOffset + 1];
+  shared[secondOffset + 2] = shared[firstOffset + 2];
+  assert.equal(inspectOpenRpf7(shared).fileCount, 2);
+
+  const partial = built.bytes.slice();
+  const partialView = new DataView(partial.buffer);
+  const firstBlock = partialView.getUint8(firstOffset) | (partialView.getUint8(firstOffset + 1) << 8) | (partialView.getUint8(firstOffset + 2) << 16);
+  const secondBlock = firstBlock + 1;
+  partial[secondOffset] = secondBlock & 0xff;
+  partial[secondOffset + 1] = (secondBlock >>> 8) & 0xff;
+  partial[secondOffset + 2] = (secondBlock >>> 16) & 0xff;
+  assert.throws(() => inspectOpenRpf7(partial), /payload ranges overlap/);
+});
