@@ -64,3 +64,15 @@ The generic registry remains the extension point for additional adapters. New
 format support should be added by registering an adapter with format evidence and
 its own independently tested capabilities—not by adding a special case for a
 specific mod package.
+
+## Writer-driven automatic preparation
+
+The preparation ZIP now asks the registered adapter registry which imported files
+have a conversion-capable adapter. It no longer owns a separate extension allowlist.
+The RageKit PC Legacy resource writer is registered as one format adapter; its
+format-specific supported resource extensions live with that adapter, not in the
+general bundle orchestration code. This keeps the bundle generic as additional
+writers are registered.
+
+The RageKit adapter remains a PC Legacy writer. Its output is never promoted to
+PS4-ready or installable status, even when its own output round-trip check succeeds.
