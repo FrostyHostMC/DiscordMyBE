@@ -17,6 +17,7 @@ import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
 import { inspectModDocumentation } from "../core/documentation.js";
 import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
 import { inspectReshadeMod } from "../core/reshade.js";
+import { buildPs4AfrPackage } from "../core/ps4Package.js";
 import Ps4PkgInspector from "./Ps4PkgInspector.jsx";
 
 const stages = [
@@ -76,6 +77,10 @@ export default function App() {
   const [nativeStatus, setNativeStatus] = useState("Native reports are generated automatically after import.");
   const [previewUrls, setPreviewUrls] = useState({});
   const [guideOpen, setGuideOpen] = useState(true);
+  const [afrMappingsText, setAfrMappingsText] = useState("{}");
+  const [ps4BuildConfirmed, setPs4BuildConfirmed] = useState(false);
+  const [ps4PathsConfirmed, setPs4PathsConfirmed] = useState(false);
+  const [packageStatus, setPackageStatus] = useState("");
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -322,6 +327,17 @@ export default function App() {
         {portPlan.resources.filter((item)=>item.status!=="analysis-or-authoring-only").slice(0,16).map((item)=><div className="audit-warning" key={item.path}><AlertTriangle size={14}/><span><b>{item.path}</b> — {item.status.replaceAll("-"," ")} · {item.blocker}</span></div>)}
         <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
         <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest AutoPort update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
+      </section>}
+      {archive && archive.files.some((file) => /\\.rpf$/i.test(file.path)) && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">GOLDHEN PACKAGE BUILDER</div><h3>Stage verified PS4 RPF overlays</h3><p>Creates a title-specific AFR folder, plugins.ini snippet, hashes and install notes. This does not convert PC archives.</p></div><span className="tag warning"><AlertTriangle size={13}/> STRICT GATES</span></div>
+        <p className="native-disclaimer">Only select complete RPF archives that are already built for PS4. A PC RPF with an RPF7 header is not automatically PS4-compatible. Map each source archive to the exact game file path that you have verified for CUSA00411 / 1.73.</p>
+        <label className="field-label" htmlFor="afr-mappings">Exact source-to-game path mappings (JSON)</label>
+        <textarea id="afr-mappings" rows={5} value={afrMappingsText} onChange={(event) => setAfrMappingsText(event.target.value)} spellCheck="false" placeholder={'{\n  "update.rpf": "/app0/update/update.rpf"\n}'}/>
+        <div className="check-row"><label><input type="checkbox" checked={ps4BuildConfirmed} onChange={(event) => setPs4BuildConfirmed(event.target.checked)}/> I verified these complete RPF archives are PS4-target builds, not PC archives.</label></div>
+        <div className="check-row"><label><input type="checkbox" checked={ps4PathsConfirmed} onChange={(event) => setPs4PathsConfirmed(event.target.checked)}/> I verified every destination path for CUSA00411 / GTA V 1.73.</label></div>
+        <button className="primary-button" onClick={exportAfrPackage} disabled={busy || !ps4BuildConfirmed || !ps4PathsConfirmed}><ArrowDownToLine size={15}/> Build GoldHEN AFR staging ZIP</button>
+        {packageStatus && <p className="native-disclaimer">{packageStatus}</p>}
+        <p className="native-disclaimer">This first package writer preserves RPF bytes unchanged. It cannot turn PC vehicle, ped, weapon or texture resources into PS4 resources. Do not attest compatibility unless you have independently verified it.</p>
       </section>}
       {ragekitResult && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RAGE RESOURCE ENGINE</div><h3>Read and round-trip validation</h3><p>{ragekitResult.summary.parsed} parsed · {ragekitResult.summary.byteExact} byte-exact · {ragekitResult.summary.failed} failed</p></div><span className="tag success"><CheckCircle2 size={13}/> ENGINE RAN</span></div>
