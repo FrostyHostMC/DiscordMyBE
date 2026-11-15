@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildOpenRpf7 } from "../src/core/rpf7OpenBuilder.js";
-import { inspectOpenRpf7 } from "../src/core/rpf7OpenInspector.js";
+import { extractOpenRpf7, inspectOpenRpf7 } from "../src/core/rpf7OpenInspector.js";
 
 test("inspects a writer-produced nested OPEN archive", () => {
   const built = buildOpenRpf7([
@@ -57,4 +57,15 @@ test("rejects self-referential directory entries", () => {
   view.setUint32(16 + 16 + 8, 1, true);
   view.setUint32(16 + 16 + 12, 1, true);
   assert.throws(() => inspectOpenRpf7(bytes), /parent cycle/);
+});
+
+test("extracts nested files with reconstructed paths and exact copied bytes", () => {
+  const expected = [{ path: "common/data/handling.meta", bytes: new TextEncoder().encode("<HandlingData/>") }, { path: "content.xml", bytes: new Uint8Array([0, 1, 2, 255]) }];
+  const built = buildOpenRpf7(expected);
+  const extracted = extractOpenRpf7(built.bytes);
+  assert.deepEqual(extracted.map((file) => file.path).sort(), expected.map((file) => file.path).sort());
+  for (const source of expected) assert.deepEqual(extracted.find((file) => file.path === source.path).bytes, source.bytes);
+  const original = built.bytes.slice();
+  extracted[0].bytes[0] ^= 0xff;
+  assert.deepEqual(built.bytes, original);
 });
