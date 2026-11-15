@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, open, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,8 +29,8 @@ function run(input, output) {
   });
 }
 
-// readdir({ recursive: true }) also returns directory entries. Read only regular
-// files so nested report folders never trigger EISDIR on readFile().
+// Recursively enumerate regular files only. Dirent checks prevent directories
+// from being returned; the file-handle check below is a second Windows-safe guard.
 export async function listNativeOutputFiles(directory) {
   const files = [];
   const entries = await readdir(directory, { withFileTypes: true });
@@ -41,9 +41,28 @@ export async function listNativeOutputFiles(directory) {
     } else if (entry.isFile()) {
       files.push(absolute);
     }
-    // Ignore symlinks and other special entries; generated reports should be regular files.
+    // Ignore symlinks and other special entries.
   }
   return files;
+}
+
+// Open and verify the actual filesystem object before reading it. This gives
+// useful path context if a native tool unexpectedly creates a directory where
+// a report file was expected, instead of surfacing a bare EISDIR error.
+export async function readNativeOutputFile(filePath) {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      throw new Error("native inspector output is not a regular file");
+    }
+    return await handle.readFile();
+  } catch (error) {
+    throw new Error(`Could not read native inspector output "${filePath}": ${error.message}`);
+  } finally {
+    await handle?.close();
+  }
 }
 
 export function nativeInspectionPlugin() {
@@ -97,7 +116,7 @@ export function nativeInspectionPlugin() {
 
             for (const absolute of await listNativeOutputFiles(out)) {
               const relative = path.relative(out, absolute).split(path.sep).join("/");
-              let content = await readFile(absolute);
+              let content = await readNativeOutputFile(absolute);
               if (relative.endsWith("-ytd-inspection.json")) {
                 const report = JSON.parse(content.toString("utf8"));
                 for (const texture of report.textures || []) {
