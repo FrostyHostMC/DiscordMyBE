@@ -126,9 +126,14 @@ export function inspectOpenRpf7(input) {
 }
 
 /** Extract raw payloads using paths reconstructed from the validated TOC. */
-export function extractOpenRpf7(input) {
+export function extractOpenRpf7(input, { maxFiles = 5000, maxBytes = 512 * 1024 * 1024 } = {}) {
   const bytes = input instanceof Uint8Array ? input : input instanceof ArrayBuffer ? new Uint8Array(input) : ArrayBuffer.isView(input) ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength) : null;
   if (!bytes) throw new Error("RPF input must be Uint8Array-compatible bytes.");
+  if (!Number.isSafeInteger(maxFiles) || maxFiles < 0 || !Number.isSafeInteger(maxBytes) || maxBytes < 0) throw new Error("RPF extraction limits must be non-negative safe integers.");
   const inspection = inspectOpenRpf7(bytes);
-  return inspection.entries.filter((entry) => entry.type === "file").map((entry) => ({ path: entry.path, bytes: bytes.slice(entry.dataOffset, entry.dataOffset + entry.size) }));
+  const files = inspection.entries.filter((entry) => entry.type === "file");
+  const totalBytes = files.reduce((sum, entry) => sum + entry.size, 0);
+  if (files.length > maxFiles) throw new Error("RPF extraction exceeds the configured file-count limit.");
+  if (totalBytes > maxBytes) throw new Error("RPF extraction exceeds the configured expanded-byte limit.");
+  return files.map((entry) => ({ path: entry.path, bytes: bytes.slice(entry.dataOffset, entry.dataOffset + entry.size) }));
 }
