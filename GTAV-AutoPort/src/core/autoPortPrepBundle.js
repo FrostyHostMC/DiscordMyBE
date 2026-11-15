@@ -32,6 +32,7 @@ function extension(path) {
  */
 export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = [], target, reports = {}, onProgress = () => {} } = {}) {
   if (!Array.isArray(files) || files.length === 0) throw new Error("Import a PC mod before building its preparation bundle.");
+  const normalizedFiles = files.map((file) => ({ ...file, bytes: asBytes(file.bytes) }));
   const zip = new JSZip();
   const root = zip.folder("AutoPort-Prep");
   const originalRoot = root.folder("source-original");
@@ -40,13 +41,15 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const conversions = [];
   const archiveInspections = [];
   const extractedFiles = [];
+  const extractedEntryRecords = new Map();
   const extractedRoot = root.folder("rpf-extracted");
   let completed = 0;
-  for (const file of files) {
-    const bytes = asBytes(file.bytes);
+
+  for (const file of normalizedFiles) {
+    const bytes = file.bytes;
     if (!bytes || (extension(file.path) !== ".rpf" && !(bytes.length >= 4 && bytes[0] === 0x37 && bytes[1] === 0x46 && bytes[2] === 0x50 && bytes[3] === 0x52))) continue;
     const sourcePath = safePath(file.path);
-    const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, error: null };
+    const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, entries: [], error: null };
     try {
       const inspection = inspectOpenRpf7(bytes);
       record.status = "validated-not-extracted";
@@ -56,9 +59,14 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       record.encryption = inspection.encryption;
       const extracted = extractOpenRpf7(bytes);
       for (const entry of extracted) {
-        const outputPath = sourcePath + "/" + safePath(entry.path);
-        extractedRoot.file(outputPath, entry.bytes);
-        extractedFiles.push({ path: outputPath, bytes: entry.bytes, sourceArchive: sourcePath });
+        const archivePath = sourcePath + "/" + safePath(entry.path);
+        const analysisPath = "rpf-extracted/" + archivePath;
+        const extractedFile = { path: analysisPath, bytes: entry.bytes, sourceArchive: sourcePath };
+        extractedRoot.file(archivePath, entry.bytes);
+        extractedFiles.push(extractedFile);
+        const entryRecord = { path: entry.path, archivePath, analysisPath, size: entry.bytes.length, formatStatus: "not-inspected", adapterId: null, role: null, evidence: [] };
+        record.entries.push(entryRecord);
+        extractedEntryRecords.set(extractedFile, entryRecord);
         record.extractedFiles += 1;
         record.extractedBytes += entry.bytes.length;
       }
@@ -68,19 +76,49 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     }
     archiveInspections.push(record);
   }
-  const analysisFiles = [...files, ...extractedFiles];
+
+  const analysisFiles = [...normalizedFiles, ...extractedFiles];
   const dependencyGraph = analyzeModDependencies(analysisFiles);
-  const inspected = analysisFiles.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
+  const inspected = analysisFiles.map((file) => {
+    try {
+      const inspection = file.bytes instanceof Uint8Array
+        ? registeredFormatAdapterRegistry.inspect(file)
+        : { status: "unrecognized", selectedAdapterId: null, match: null, candidates: [], probeErrors: [{ adapterId: null, error: "File bytes are unavailable for format inspection." }] };
+      const entryRecord = extractedEntryRecords.get(file);
+      if (entryRecord) {
+        entryRecord.formatStatus = inspection.status;
+        entryRecord.adapterId = inspection.selectedAdapterId;
+        entryRecord.role = inspection.match?.role ?? null;
+        entryRecord.evidence = inspection.match?.evidence ?? [];
+        entryRecord.candidates = inspection.candidates.map(({ adapterId, confidence, role }) => ({ adapterId, confidence, role }));
+      }
+      return { file, inspection };
+    } catch (error) {
+      return { file, inspection: { status: "unrecognized", selectedAdapterId: null, match: null, candidates: [], probeErrors: [{ adapterId: null, error: error?.message || "Format inspection failed." }] } };
+    }
+  });
   const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
-  for (const file of files) {
+
+  for (const file of normalizedFiles) {
     const relative = safePath(file.path);
     if (!relative) continue;
-    originalRoot.file(relative, file.bytes);
+    originalRoot.file(relative, file.bytes ?? new Uint8Array());
     sourceManifest.push({ path: relative, bytes: file.bytes?.byteLength ?? file.size ?? 0, preserved: true });
   }
+
   for (const { file, inspection } of eligible) {
     const relative = safePath(file.path);
-    const record = { sourcePath: relative, extension: extension(relative), status: "failed", outputPath: null, outputBytes: 0, roundtripVerified: false, error: null, targetCompatibility: "unverified" };
+    const record = {
+      sourcePath: relative,
+      sourceArchive: file.sourceArchive ?? null,
+      extension: extension(relative),
+      status: "failed",
+      outputPath: null,
+      outputBytes: 0,
+      roundtripVerified: false,
+      error: null,
+      targetCompatibility: "unverified"
+    };
     try {
       const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
       if (!converted.bytes?.length || !converted.roundtripVerified) throw new Error("RageKit did not confirm a successful output round-trip.");
@@ -96,6 +134,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     completed += 1;
     onProgress({ completed, total: eligible.length, current: relative, status: record.status });
   }
+
   const manifest = {
     schemaVersion: 1,
     product: "GTAV AutoPort",
@@ -129,6 +168,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
   };
+
   const reportRoot = root.folder("reports");
   reportRoot.file("dependency-graph.json", JSON.stringify(dependencyGraph, null, 2));
   for (const [name, value] of Object.entries(reports)) {
