@@ -15,6 +15,7 @@ import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
 import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
 import { inspectModDocumentation } from "../core/documentation.js";
+import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
 import Ps4PkgInspector from "./Ps4PkgInspector.jsx";
 
 const stages = [
@@ -35,7 +36,7 @@ function downloadJson(value, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function formatBytes(bytes) {
+function downloadBytes(bytes, filename, type = "application/octet-stream") {\n  const blob = new Blob([bytes], { type });\n  const url = URL.createObjectURL(blob);\n  const anchor = document.createElement("a");\n  anchor.href = url;\n  anchor.download = filename;\n  anchor.click();\n  setTimeout(() => URL.revokeObjectURL(url), 1000);\n}\n\nfunction formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -52,7 +53,7 @@ export default function App() {
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
-  const [dlcManifest, setDlcManifest] = useState(null);
+  const [dlcManifest, setDlcManifest] = useState(null);\n  const [scaleformReport, setScaleformReport] = useState(null);
   const [documentation, setDocumentation] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -83,12 +84,12 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setModAudit(auditModFiles(result.files));
-      setDocumentation(inspectModDocumentation(result.files));
+      setDocumentation(inspectModDocumentation(result.files));\n      const gfxReport = inspectScaleformAssets(result.files);\n      setScaleformReport(gfxReport.summary.files ? gfxReport : null);
       const generatedPlan = buildUniversalPortPlan({ files: result.files });
       if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("AutoPort could not build a complete port plan for this import.");
       setPortPlan(generatedPlan);
@@ -244,6 +245,25 @@ export default function App() {
         <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
+      {scaleformReport && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">SCALEFORM GRAPHICS WORKBENCH</div><h3>GFX / SWF asset inspection</h3><p>{scaleformReport.summary.scaleformGfx} Scaleform GFX · {scaleformReport.summary.swf} SWF · {scaleformReport.summary.invalid} invalid header(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> EDITOR HANDOFF</span></div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{scaleformReport.summary.files}</b><span>graphics files</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.validHeaders}</b><span>valid headers</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.scaleformGfx}</b><span>GFX / CFX</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.payloadsVerified}</b><span>movie bodies verified</span></div>
+        </div>
+        {scaleformReport.reports.map((report) => {
+          const source = archive?.files.find((file) => file.path === report.path);
+          return <div className="native-summary" key={report.path}>
+            <div className="file-row"><FileText size={15}/><span className="file-name"><b>{report.path}</b><small>{report.format} · {report.signature} · {report.compression} · {formatBytes(report.actualBytes)}</small></span><span className="file-ext">{report.validHeader ? "HEADER OK" : "INVALID"}</span></div>
+            {report.validHeader && <p className="native-disclaimer">Movie version {report.version} · declared uncompressed size {formatBytes(report.declaredUncompressedBytes)}. {report.note}</p>}
+            {report.errors.map((message) => <div className="audit-warning" key={message}><AlertTriangle size={14}/><span>{message}</span></div>)}
+            {report.editableSwfCopyAvailable && source && <button className="secondary-button" onClick={() => { try { const copy = createEditableSwfCopy(source); downloadBytes(copy.bytes, copy.filename, "application/x-shockwave-flash"); } catch (err) { setError(err?.message || "Could not prepare the editor copy."); } }}><ArrowDownToLine size={15}/> Prepare SWF editor copy</button>}
+          </div>;
+        })}
+        <div className="notice"><ShieldCheck size={19}/><div><b>Editor handoff is not a game-ready conversion.</b><p>AutoPort can inspect GFX/CFX headers and create a separate SWF-compatible copy for JPEXS editing. A compatible GFxExport step is still needed to build a game-ready GFX. The public PS4 loader found so far is hard-coded for GTA V 1.46; your 1.73 hook is not yet validated.</p></div></div>
+      </section>}
       {documentation.length > 0 && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">MOD README & INSTALL NOTES</div><h3>Instruction file review</h3><p>{documentation.length} text file(s) decoded locally · commands are never executed</p></div><span className="tag warning"><ShieldCheck size={13}/> READ ONLY</span></div>
         {documentation.map((item)=><details className="native-summary" key={item.path}><summary>{item.path} · {item.encoding}{item.truncated ? " · preview truncated" : ""}</summary><div className="audit-grid"><div className="audit-card"><b>{formatBytes(item.bytes)}</b><span>source size</span></div><div className="audit-card"><b>{item.pathHints.length}</b><span>path hints</span></div><div className="audit-card"><b>{item.commandHints.length}</b><span>install keywords</span></div></div>{item.pathHints.length > 0 && <p className="native-disclaimer">Path hints: {item.pathHints.join(" · ")}</p>}{item.commandHints.length > 0 && <p className="native-disclaimer">Keywords: {item.commandHints.join(", ")}</p>}<pre className="text-preview">{item.preview}</pre></details>)}
