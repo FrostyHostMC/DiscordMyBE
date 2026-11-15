@@ -13,7 +13,7 @@ defaultFormatAdapterRegistry.register({
     if (!PC_LEGACY_RESOURCE_EXTENSIONS.has(file.extension)) return { match: false };
     return {
       match: true,
-      confidence: 0.95,
+      confidence: 1,
       role: "rage-resource",
       evidence: ["RageKit PC Legacy writer supports this RAGE resource family", "format-specific writer will validate the actual resource"],
       capabilities: ["convert", "roundtrip-verify"]
