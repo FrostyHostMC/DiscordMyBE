@@ -21,7 +21,8 @@ test("resolves vehicle, handling, variation, layout, model and texture dependenc
   assert.equal(report.references.textureDictionary.resolved, true);
   assert.equal(report.references.audio.resolution, "candidate-file-match");
   assert.equal(report.references.vehicleLayout.resolution, "not-found-or-schema-different");
-  assert.equal(report.references.variationKitReferences[0].value, "0_default_modkit");\n  assert.equal(report.references.carcols.kitReferences[0].resolved, true);
+  assert.equal(report.references.variationKitReferences[0].value, "0_default_modkit");
+  assert.equal(report.references.carcols.kitReferences[0].resolved, true);
   assert.equal(report.validation.readyForResourceConversion, false);
   assert.equal(report.assets.mainFragment.length, 1);
   assert.equal(report.assets.highFragment.length, 1);
