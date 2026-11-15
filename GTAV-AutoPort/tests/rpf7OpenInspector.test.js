@@ -94,3 +94,9 @@ test("enforces configured TOC entry limits", () => {
   assert.throws(() => inspectOpenRpf7(built.bytes, { maxEntries: 1 }), /entry count exceeds the configured inspection limit/);
   assert.throws(() => inspectOpenRpf7(built.bytes, { maxEntries: 0 }), /maxEntries must be a positive safe integer/);
 });
+
+test("rejects reconstructed paths above the path-length safety limit", () => {
+  const segments = Array.from({ length: 18 }, (_, index) => String(index).padStart(2, "0") + "x".repeat(240));
+  const built = buildOpenRpf7([{ path: segments.join("/") + "/file.bin", bytes: new Uint8Array([1]) }]);
+  assert.throws(() => inspectOpenRpf7(built.bytes), /reconstructed entry path exceeds the configured safety limit/);
+});
