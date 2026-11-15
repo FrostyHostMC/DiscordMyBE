@@ -22,6 +22,7 @@ import { inspectMenuRelatedFiles } from "../core/menuPack.js";
 import { inspectScriptModPackages } from "../core/scriptModPackages.js";
 import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
 import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
+import { buildNativeBehaviorBlueprint } from "../core/nativeBehaviorBlueprint.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -88,6 +89,7 @@ export default function App() {
   const [scriptModReport, setScriptModReport] = useState(null);
   const [menyooVehicleReports, setMenyooVehicleReports] = useState([]);
   const [resourceConversionStatus, setResourceConversionStatus] = useState("");
+  const [behaviorBlueprint, setBehaviorBlueprint] = useState(null);
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -109,12 +111,13 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
       setScriptModReport(inspectScriptModPackages(result.files));
+      setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
       setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => translateMenyooVehicleXml(file.bytes, file.path)).filter((report) => report.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
@@ -350,6 +353,13 @@ export default function App() {
         <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
       </section>}
 
+      {behaviorBlueprint?.summary.sourceFiles > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">PC SCRIPT BEHAVIOR REBUILD</div><h3>Native runtime behavior blueprint</h3><p>{behaviorBlueprint.summary.sourceFiles} editable source file(s) · {behaviorBlueprint.summary.behaviorTypes} behavior types · {behaviorBlueprint.summary.detectedOccurrences} API evidence matches</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT A PRX</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{behaviorBlueprint.summary.behaviorTypes}</b><span>behavior areas</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.nativeHostApis}</b><span>native host APIs required</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.pcRuntimeDependencies.length}</b><span>PC runtime dependencies</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.sourceFiles}</b><span>source files reviewed</span></div></div>
+        {behaviorBlueprint.behaviors.map((behavior) => <div className="file-row" key={behavior.id}><FileText size={14}/><span className="file-name"><b>{behavior.id}</b><small>{behavior.area} · {behavior.occurrences} source occurrence(s)</small></span><span className="file-ext">REBUILD</span></div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Behavior requirements extracted; gameplay not recreated yet.</b><p>The blueprint identifies likely game-native actions and PC framework dependencies. A real implementation still needs source-level control-flow review, a tested CUSA00419 / 1.73 native-call adapter, Orbis SDK/toolchain, and on-console acceptance. No hook addresses or PRX payload are invented.</p></div></div>
+        <button className="secondary-button" onClick={() => downloadJson(behaviorBlueprint, "gtav-autoport-native-behavior-blueprint.json")}><ArrowDownToLine size={15}/> Export behavior blueprint</button>
+      </section>}
       {scriptModReport?.summary.packageCount > 0 && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">SCRIPT / RUNTIME MOD AUDIT</div><h3>Configuration data vs gameplay code</h3><p>{scriptModReport.summary.packageCount} package(s) · {scriptModReport.summary.runtimeFiles} runtime file(s) · {scriptModReport.summary.configFiles} config file(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> BEHAVIOR PORT REQUIRED</span></div>
         <div className="audit-grid"><div className="audit-card"><b>{scriptModReport.summary.pcRuntimeFiles}</b><span>PC runtime files</span></div><div className="audit-card"><b>{scriptModReport.summary.consolePlugins}</b><span>console plugins</span></div><div className="audit-card"><b>{scriptModReport.summary.xmlFiles}</b><span>XML configs</span></div><div className="audit-card"><b>{scriptModReport.summary.homeInvasionLike}</b><span>scripted gameplay mods</span></div></div>
