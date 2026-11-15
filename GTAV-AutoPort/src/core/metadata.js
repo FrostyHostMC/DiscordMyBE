@@ -9,20 +9,20 @@ const parser = new XMLParser({
 });
 
 const VEHICLE_FIELD_GROUPS = Object.freeze({
-  identity: ["modelName", "txdName", "handlingId", "gameName", "vehicleMakeName", "vehicleClass", "type", "plateType"],
+  identity: ["modelName", "txdName", "handlingId", "gameName", "vehicleMakeName", "vehicleClass", "type", "plateType", "vehicleType", "layout", "wheelType", "dashboardType", "displayName", "name", "vehicleClass"],
   audio: ["audioNameHash"],
-  camera: ["cameraName", "cameraHash", "firstPersonDrivebyData"],
-  layoutAndAnimation: ["layout", "animConvRoofDictName", "animConvRoofName", "animConvRoofWindowsAffected", "expressionDictName", "expressionName"],
-  appearanceAndEquipment: ["wheelType", "dashboardType", "flags", "vehicleFlags", "modKit", "extras"],
-  streaming: ["lodDistances", "minSeatHeight", "maxNum", "frequency", "scenarioLayout"],
+  camera: ["cameraName", "cameraHash", "firstPersonDrivebyData", "aimCameraName", "bonnetCameraName", "povCameraName"],
+  layoutAndAnimation: ["animConvRoofDictName", "animConvRoofName", "animConvRoofWindowsAffected", "expressionDictName", "expressionName", "coverBoundOffsets", "bonnetCameraName", "povCameraName"],
+  appearanceAndEquipment: ["flags", "vehicleFlags", "modKit", "extras", "wheelScale", "wheelScaleRear", "dirtLevelMin", "dirtLevelMax", "envEffScale", "seatOffsetDistX", "seatOffsetDistY", "seatOffsetDistZ", "steerWheelMult", "damageMapScale", "damageOffsetScale"],
+  streaming: ["lodDistances", "minSeatHeight", "maxNum", "frequency", "scenarioLayout", "populationGroup", "spawnFrequency", "lightSettings", "sirenSettings"],
 });
 const HANDLING_FIELD_GROUPS = Object.freeze({
   massAndAero: ["fMass", "fInitialDragCoeff", "fDownforceModifier", "fPercentSubmerged"],
   drivetrain: ["fDriveBiasFront", "nInitialDriveGears", "fInitialDriveForce", "fDriveInertia", "fClutchChangeRateScaleUpShift", "fClutchChangeRateScaleDownShift", "fInitialDriveMaxFlatVel"],
   brakesAndSteering: ["fBrakeForce", "fBrakeBiasFront", "fHandBrakeForce", "fSteeringLock"],
-  traction: ["fTractionCurveMax", "fTractionCurveMin", "fTractionCurveLateral", "fTractionSpringDeltaMax", "fLowSpeedTractionLossMult", "fCamberStiffnesss"],
-  suspension: ["fSuspensionForce", "fSuspensionCompDamp", "fSuspensionReboundDamp", "fSuspensionUpperLimit", "fSuspensionLowerLimit", "fSuspensionRaise", "fSuspensionBiasFront", "fAntiRollBarForce", "fAntiRollBarBiasFront"],
-  damageAndOther: ["fCollisionDamageMult", "fWeaponDamageMult", "fDeformationDamageMult", "fEngineDamageMult", "fPetrolTankVolume", "fOilVolume", "nMonetaryValue"],
+  traction: ["fTractionCurveMax", "fTractionCurveMin", "fTractionCurveLateral", "fTractionSpringDeltaMax", "fLowSpeedTractionLossMult", "fTractionLossMult", "fTractionBiasFront", "fTractionBiasRear", "fCamberStiffnesss"],
+  suspension: ["fSuspensionForce", "fSuspensionCompDamp", "fSuspensionReboundDamp", "fSuspensionUpperLimit", "fSuspensionLowerLimit", "fSuspensionRaise", "fSuspensionBiasFront", "fSuspensionBiasRear", "fAntiRollBarForce", "fAntiRollBarBiasFront", "fAntiRollBarBiasRear", "fRollCentreHeightFront", "fRollCentreHeightRear"],
+  damageAndOther: ["fCollisionDamageMult", "fWeaponDamageMult", "fDeformationDamageMult", "fEngineDamageMult", "fPetrolTankVolume", "fOilVolume", "nMonetaryValue", "fSeatOffsetDistX", "fSeatOffsetDistY", "fSeatOffsetDistZ", "fPopUpLightRotation"],
 });
 function pickFields(source, groups) {
   const result = {};
