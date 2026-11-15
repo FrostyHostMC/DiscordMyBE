@@ -46,11 +46,48 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const extractedRoot = root.folder("rpf-extracted");
   let completed = 0;
 
-  for (const file of normalizedFiles) {
-    const bytes = file.bytes;
-    if (!bytes || (extension(file.path) !== ".rpf" && !(bytes.length >= 4 && bytes[0] === 0x37 && bytes[1] === 0x46 && bytes[2] === 0x50 && bytes[3] === 0x52))) continue;
-    const sourcePath = safePath(file.path);
-    const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, entries: [], error: null };
+  const MAX_RPF_NESTING_DEPTH = 4;
+  const MAX_RPF_ARCHIVES = 128;
+  const MAX_RPF_EXTRACTED_FILES = 20_000;
+  const MAX_RPF_EXTRACTED_BYTES = 512 * 1024 * 1024;
+  const archiveQueue = normalizedFiles
+    .filter((file) => file.bytes && (extension(file.path) === ".rpf" || (file.bytes.length >= 4 && file.bytes[0] === 0x37 && file.bytes[1] === 0x46 && file.bytes[2] === 0x50 && file.bytes[3] === 0x52)))
+    .map((file) => {
+      const sourcePath = safePath(file.path);
+      return { file, archivePath: sourcePath, sourcePath, depth: 0, parentArchive: null };
+    });
+  let inspectedArchiveCount = 0;
+  let totalExtractedFiles = 0;
+  let totalExtractedBytes = 0;
+
+  while (archiveQueue.length) {
+    const task = archiveQueue.shift();
+    const bytes = task.file.bytes;
+    const record = {
+      sourcePath: task.sourcePath,
+      archivePath: task.archivePath,
+      parentArchive: task.parentArchive,
+      depth: task.depth,
+      status: "unsupported-or-invalid",
+      format: "RPF7",
+      extractedFiles: 0,
+      extractedBytes: 0,
+      entries: [],
+      error: null
+    };
+    archiveInspections.push(record);
+    if (task.depth > MAX_RPF_NESTING_DEPTH) {
+      record.status = "validated-not-extracted";
+      record.error = "RPF nesting exceeds the configured depth limit.";
+      continue;
+    }
+    if (inspectedArchiveCount >= MAX_RPF_ARCHIVES) {
+      record.status = "validated-not-extracted";
+      record.error = "RPF archive count exceeds the configured recursive inspection limit.";
+      continue;
+    }
+    inspectedArchiveCount += 1;
+
     try {
       const inspection = inspectOpenRpf7(bytes);
       record.status = "validated-not-extracted";
@@ -73,25 +110,57 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
           candidates: []
         }));
       const entryRecords = new Map(record.entries.map((entry) => [entry.path, entry]));
-      const extracted = extractOpenRpf7(bytes);
+      const remainingFiles = MAX_RPF_EXTRACTED_FILES - totalExtractedFiles;
+      const remainingBytes = MAX_RPF_EXTRACTED_BYTES - totalExtractedBytes;
+      const declaredBytes = record.entries.reduce((sum, entry) => sum + entry.size, 0);
+      if (record.fileCount > Math.min(5000, remainingFiles)) {
+        throw new Error("RPF extraction exceeds the remaining global file-count budget.");
+      }
+      if (declaredBytes > remainingBytes) {
+        throw new Error("RPF extraction exceeds the remaining global expanded-byte budget.");
+      }
+      const extracted = extractOpenRpf7(bytes, {
+        maxFiles: Math.min(5000, remainingFiles),
+        maxBytes: remainingBytes
+      });
       for (const entry of extracted) {
-        const archivePath = sourcePath + "/" + safePath(entry.path);
+        const archivePath = task.archivePath + "/" + safePath(entry.path);
         const analysisPath = "rpf-extracted/" + archivePath;
-        const extractedFile = { path: analysisPath, bytes: entry.bytes, sourceArchive: sourcePath };
+        const extractedFile = { path: analysisPath, bytes: entry.bytes, sourceArchive: task.sourcePath };
         extractedRoot.file(archivePath, entry.bytes);
         extractedFiles.push(extractedFile);
         const entryRecord = entryRecords.get(entry.path);
         if (!entryRecord) throw new Error("Extracted RPF entry is missing from the validated inventory.");
-        Object.assign(entryRecord, { archivePath, analysisPath, size: entry.bytes.length, extracted: true, formatStatus: "not-inspected" });
+        Object.assign(entryRecord, {
+          archivePath,
+          analysisPath,
+          size: entry.bytes.length,
+          extracted: true,
+          formatStatus: "not-inspected"
+        });
         extractedEntryRecords.set(extractedFile, entryRecord);
         record.extractedFiles += 1;
         record.extractedBytes += entry.bytes.length;
+        totalExtractedFiles += 1;
+        totalExtractedBytes += entry.bytes.length;
+
+        const nestedBytes = entry.bytes;
+        const isNestedArchive = extension(entry.path) === ".rpf"
+          || (nestedBytes.length >= 4 && nestedBytes[0] === 0x37 && nestedBytes[1] === 0x46 && nestedBytes[2] === 0x50 && nestedBytes[3] === 0x52);
+        if (isNestedArchive) {
+          archiveQueue.push({
+            file: extractedFile,
+            archivePath,
+            sourcePath: analysisPath,
+            depth: task.depth + 1,
+            parentArchive: task.sourcePath
+          });
+        }
       }
       record.status = "extracted-raw-open-archive";
     } catch (error) {
       record.error = error?.message || "RPF inspection failed.";
     }
-    archiveInspections.push(record);
   }
 
   const analysisFiles = [...normalizedFiles, ...extractedFiles];
