@@ -18,6 +18,7 @@ import { inspectModDocumentation } from "../core/documentation.js";
 import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
 import { inspectReshadeMod } from "../core/reshade.js";
 import { buildPs4AfrPackage } from "../core/ps4Package.js";
+import { inspectMenuRelatedFiles } from "../core/menuPack.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -80,6 +81,7 @@ export default function App() {
   const [ps4BuildConfirmed, setPs4BuildConfirmed] = useState(false);
   const [ps4PathsConfirmed, setPs4PathsConfirmed] = useState(false);
   const [packageStatus, setPackageStatus] = useState("");
+  const [menuReport, setMenuReport] = useState(null);
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -101,10 +103,11 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
+      setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
@@ -290,6 +293,18 @@ export default function App() {
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
       {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>}
       {!busy && <div className="privacy-note">{nativeStatus}</div>}
+
+      {menuReport && (menuReport.summary.hasSynapsePack || menuReport.summary.xmlFiles > 0) && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">GOLDHEN MENU / XML ADAPTER</div><h3>Menu package and vehicle XML inspection</h3><p>{menuReport.summary.xmlFiles} XML file(s) · {menuReport.summary.validVehicleXml} valid · {menuReport.summary.detectedMenyooXml} Menyoo/Spooner preset(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> INSPECTED ONLY</span></div>
+        {menuReport.synapse && <><div className="audit-grid"><div className="audit-card"><b>{menuReport.synapse.summary.catalogFiles}</b><span>menu catalogs</span></div><div className="audit-card"><b>{menuReport.synapse.summary.catalogItems}</b><span>catalog entries</span></div><div className="audit-card"><b>{menuReport.synapse.summary.targetPluginEntries}</b><span>{PS4_TARGET.titleId} plugin entries</span></div><div className="audit-card"><b>{menuReport.synapse.summary.xmlFiles}</b><span>menu XML files</span></div></div>
+          {menuReport.synapse.catalogs.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.categoryCount} categories · {item.itemCount} entries</small></span><span className="file-ext">{item.validJson?"VALID JSON":"INVALID"}</span></div>)}
+          {menuReport.synapse.targetPlugins.map((plugin)=><div className="file-row" key={plugin.path}><ShieldCheck size={14}/><span className="file-name"><b>{plugin.path}</b><small>GoldHEN plugin entry for {plugin.titleId}</small></span><span className="file-ext">{plugin.extension.toUpperCase()}</span></div>)}
+          {menuReport.synapse.warnings.map((warning)=><div className="audit-warning" key={warning}><AlertTriangle size={14}/><span>{warning}</span></div>)}
+        </>}
+        {menuReport.vehicleXml.map((item)=><div className="native-summary" key={item.path}><div className="file-row"><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.format} · {item.modelHash ? "model hash " + item.modelHash : "no model hash found"}</small></span><span className="file-ext">{item.validXml?"VALID XML":"INVALID"}</span></div>{item.validXml && <p className="native-disclaimer">{item.attachmentNodes} attachment-related node(s) · {item.taskSequenceNodes} task-sequence node(s) · {item.note}</p>}{!item.validXml && <div className="audit-warning"><AlertTriangle size={14}/><span>{item.error}</span></div>}</div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>GoldHEN loads plugins; the menu/runtime defines the supported data formats.</b><p>AutoPort inventories GoldHEN plugin entries, Synapse-style JSON catalogs and vehicle XML separately. It does not patch the compiled Synapse SPRX or claim that Menyoo XML is directly loadable by Synapse. A menu-side XML adapter needs the menu source or a confirmed loader schema.</p></div></div>
+        <button className="secondary-button" onClick={()=>downloadJson(menuReport,"gtav-autoport-menu-xml-report.json")}><ArrowDownToLine size={15}/> Export menu / XML report</button>
+      </section>}
 
       {archive?.packageMetadata && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">OPENIV PACKAGE INSPECTION</div><h3>{archive.packageMetadata.type} manifest</h3><p>{archive.packageMetadata.assemblyDetected ? "Assembly manifest found and parsed without executing its instructions." : "No assembly.xml manifest found; contents are treated as an ordinary archive."}</p></div><span className="tag warning"><AlertTriangle size={13}/> REVIEW ONLY</span></div>
