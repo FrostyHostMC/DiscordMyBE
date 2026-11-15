@@ -2,7 +2,8 @@ const RPF7_MAGIC = 0x52504637;
 const RPF_OPEN = 0x4e45504f;
 const DIRECTORY_IDENT = 0x7fffff00;
 const BLOCK_SIZE = 512;
-const MAX_OFFSET_BLOCKS = 0x7fffff;
+// 0x7fffff is reserved by the directory-entry sentinel in this OPEN layout.
+const MAX_OFFSET_BLOCKS = 0x7ffffe;
 const MAX_U24 = 0xffffff;
 
 function safePath(value) {
