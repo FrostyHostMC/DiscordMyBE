@@ -216,3 +216,6 @@ Never overwrite original game files. Never label copied PC assets as converted. 
 
 
 **2026-11-15 — Automatic dependency graph:** every preparation bundle now includes a read-only dependency report that resolves quoted file references against the imported package and explicitly flags missing or ambiguous targets. The scan is bounded, does not execute scripts or metadata, and makes no mod-specific naming/layout assumptions. See [Automatic dependency graph](docs/AUTOMATIC-DEPENDENCY-GRAPH.md).
+
+
+**2026-11-15 — Safer archive and dependency intake:** the RPF7 OPEN inspector now rejects cyclic directory-parent relationships instead of returning a malformed hierarchy. Mod intake now handles Windows-style paths consistently and warns when a recognized binary signature conflicts with the filename extension. Dependency scanning also supports BOM-marked UTF-16 metadata commonly exported by Windows tools.
