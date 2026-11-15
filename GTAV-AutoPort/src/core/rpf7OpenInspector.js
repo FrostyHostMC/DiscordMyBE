@@ -48,7 +48,7 @@ export function inspectOpenRpf7(input) {
   for (let index = 0; index < entryCount; index++) {
     const offset = tocStart + index * 16;
     const nameWord = view.getUint32(offset, true);
-    const directory = (nameWord & 0xffffff00) === DIRECTORY_IDENT;
+    const directory = view.getUint32(offset + 4, true) === DIRECTORY_IDENT;
     if (directory) {
       const nameOffset = nameWord;
       const firstChild = view.getUint32(offset + 8, true);
