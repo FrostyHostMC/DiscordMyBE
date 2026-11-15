@@ -6,6 +6,8 @@ AutoPort now scans readable `.cs`, `.lua` and `.js` source files for common GTA 
 
 The exported blueprint lists each source file, matched API tokens and small source excerpts, detected behavior types, PC dependencies, and the host API surface a native implementation would need.
 
+A portable C++17 runtime core now defines and validates a first set of typed actions (spawn, transforms, attachments, vehicle properties, wanted level, rewards, ped tasks, health and explosions). Its `GameApi` remains abstract; the Orbis/GoldHEN implementation and GTA V 1.73 native mappings are not present. See [Native runtime core](NATIVE-RUNTIME-CORE.md).
+
 ## What it cannot do
 
 - A compiled `.dll` or `.asi` is not source code. The blueprint intentionally does not pretend it can recover full program logic from an opaque binary.
