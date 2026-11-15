@@ -36,7 +36,17 @@ function downloadJson(value, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function downloadBytes(bytes, filename, type = "application/octet-stream") {\n  const blob = new Blob([bytes], { type });\n  const url = URL.createObjectURL(blob);\n  const anchor = document.createElement("a");\n  anchor.href = url;\n  anchor.download = filename;\n  anchor.click();\n  setTimeout(() => URL.revokeObjectURL(url), 1000);\n}\n\nfunction formatBytes(bytes) {
+function downloadBytes(bytes, filename, type = "application/octet-stream") {
+  const blob = new Blob([bytes], { type });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
@@ -53,7 +63,8 @@ export default function App() {
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
-  const [dlcManifest, setDlcManifest] = useState(null);\n  const [scaleformReport, setScaleformReport] = useState(null);
+  const [dlcManifest, setDlcManifest] = useState(null);
+  const [scaleformReport, setScaleformReport] = useState(null);
   const [documentation, setDocumentation] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +100,9 @@ export default function App() {
       const result = await work();
       setArchive(result);
       setModAudit(auditModFiles(result.files));
-      setDocumentation(inspectModDocumentation(result.files));\n      const gfxReport = inspectScaleformAssets(result.files);\n      setScaleformReport(gfxReport.summary.files ? gfxReport : null);
+      setDocumentation(inspectModDocumentation(result.files));
+      const gfxReport = inspectScaleformAssets(result.files);
+      setScaleformReport(gfxReport.summary.files ? gfxReport : null);
       const generatedPlan = buildUniversalPortPlan({ files: result.files });
       if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("AutoPort could not build a complete port plan for this import.");
       setPortPlan(generatedPlan);
