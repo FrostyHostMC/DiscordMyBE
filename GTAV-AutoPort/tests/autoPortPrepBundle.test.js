@@ -23,6 +23,10 @@ test("keeps the PS4 gate closed when there are no convertible resources", async 
   assert.ok(archive.file("AutoPort-Prep/source-original/vehicles.meta"));
   assert.ok(archive.file("AutoPort-Prep/autoport-manifest.json"));
   assert.ok(archive.file("AutoPort-Prep/reports/port-plan.json"));
+  assert.ok(archive.file("AutoPort-Prep/reports/dependency-graph.json"));
+  assert.equal(result.manifest.dependencies.references, 0);
+  const dependencyReport = JSON.parse(await archive.file("AutoPort-Prep/reports/dependency-graph.json").async("string"));
+  assert.equal(dependencyReport.status, "read-only-reference-analysis");
   const report = JSON.parse(await archive.file("AutoPort-Prep/reports/port-plan.json").async("string"));
   assert.equal(report.summary.fileCount, 1);
 });
