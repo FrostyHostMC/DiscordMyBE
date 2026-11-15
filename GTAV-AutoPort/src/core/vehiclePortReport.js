@@ -102,9 +102,12 @@ export function buildVehiclePortReport({ files, modelName }) {
   if (!modelAssets.textureDictionary.length) requiredMissing.push(`${txdName || target}.ytd`);
   if (modelAssets.mainFragment.length > 1 || modelAssets.textureDictionary.length > 1) unresolved.push("Duplicate model or texture filenames make asset selection ambiguous.");
   if (!modelAssets.highFragment.length) unresolved.push("High-detail fragment is absent; verify whether the source mod intentionally omits it.");
-  if (!variationMatches.length) unresolved.push("No matching carvariations.meta entry was found; stock/default variation behavior is not inferred.");\n  if (errors.length) unresolved.push(...errors);
+  if (!variationMatches.length) unresolved.push("No matching carvariations.meta entry was found; stock/default variation behavior is not inferred.");
+  if (errors.length) unresolved.push(...errors);
   const variationKitRefs = variationMatches.flatMap(({ node }) => referenceValues(node, /kit|siren/i));
-  const carcolsPresent = !!carcols.parsed;\n  const carcolsValues = carcols.parsed ? collectScalars(carcols.parsed) : new Set();\n  const carcolsKitResolution = variationKitRefs.map((reference) => ({ ...reference, resolved: carcolsValues.has(reference.value.toLowerCase()) }));
+  const carcolsPresent = !!carcols.parsed;
+  const carcolsValues = carcols.parsed ? collectScalars(carcols.parsed) : new Set();
+  const carcolsKitResolution = variationKitRefs.map((reference) => ({ ...reference, resolved: carcolsValues.has(reference.value.toLowerCase()) }));
   if (variationKitRefs.length && carcolsPresent && carcolsKitResolution.some((reference) => !reference.resolved)) unresolved.push("One or more variation kit references do not appear in carcols.meta.");
   const audioFiles = audioName ? files.filter((file) => /\.(awc|rel|dat151|dat54|dat10)$/i.test(file.path) && file.path.toLowerCase().includes(audioName.toLowerCase())) : [];
   const cameraName = findValue(vehicle, ["cameraName", "cameraHash", "firstPersonDrivebyData"]);
