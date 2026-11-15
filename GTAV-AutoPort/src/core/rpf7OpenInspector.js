@@ -96,6 +96,14 @@ export function inspectOpenRpf7(input) {
       if (parent === undefined) fail("directory hierarchy does not lead back to the root.");
     }
   }
+  const paths = new Map([[0, ""]]);
+  for (let index = 1; index < entries.length; index++) {
+    const parentIndex = parentByChild.get(index);
+    const parentPath = paths.get(parentIndex);
+    if (parentPath === undefined) fail("directory hierarchy cannot be resolved in TOC order.");
+    paths.set(index, parentPath ? parentPath + "/" + entries[index].name : entries[index].name);
+  }
+  for (const entry of entries) entry.path = paths.get(entry.index);
   return {
     format: "RPF7",
     encryption: "OPEN",
@@ -106,4 +114,12 @@ export function inspectOpenRpf7(input) {
     archiveBytes: bytes.length,
     entries
   };
+}
+
+/** Extract raw payloads using paths reconstructed from the validated TOC. */
+export function extractOpenRpf7(input) {
+  const bytes = input instanceof Uint8Array ? input : input instanceof ArrayBuffer ? new Uint8Array(input) : ArrayBuffer.isView(input) ? new Uint8Array(input.buffer, input.byteOffset, input.byteLength) : null;
+  if (!bytes) throw new Error("RPF input must be Uint8Array-compatible bytes.");
+  const inspection = inspectOpenRpf7(bytes);
+  return inspection.entries.filter((entry) => entry.type === "file").map((entry) => ({ path: entry.path, bytes: bytes.slice(entry.dataOffset, entry.dataOffset + entry.size) }));
 }
