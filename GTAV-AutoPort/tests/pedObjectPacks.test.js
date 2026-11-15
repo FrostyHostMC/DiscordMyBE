@@ -15,7 +15,7 @@ test("maps ped metadata to candidate model and texture resources", () => {
   assert.equal(report.peds[0].modelName, "mp_m_freemode_01");
   assert.equal(report.peds[0].modelCandidates[0].extension, ".ydd");
   assert.equal(report.peds[0].textureCandidates[0].extension, ".ytd");
-  assert.equal(report.peds[0].dependencyStatus.model, "candidate-resolved-by-name-only");
+  assert.equal(report.peds[0].dependencyStatus.model, "candidate-resolved-by-name-only");\n  assert.equal(report.peds[0].runtimeDependencies.movementClipSet, "move_m@brave");
 });
 
 test("inspects object resources and spawn settings without asserting dependencies", () => {
@@ -31,7 +31,7 @@ test("inspects object resources and spawn settings without asserting dependencie
   assert.equal(config.summary.modelReferences, 1);
   assert.equal(config.summary.positionVectors, 1);
   assert.equal(config.summary.headingFields, 1);
-  assert.equal(config.summary.spawnCountFields, 1);
+  assert.equal(config.summary.spawnCountFields, 1);\n  assert.equal(config.modelReferences[0].resolution, "candidate-resolved-by-name-only");\n  assert.deepEqual(config.modelReferences[0].resourceCandidates.sort(), ["props/prop_custom.ydr", "props/prop_custom.ytd"]);
   assert.equal(report.objectCandidates[0].dependencyConfidence, "filename-and-pack-co-location-only");
 });
 
