@@ -47,3 +47,18 @@ test("bounds text scanning and rejects traversal outside the imported package", 
   assert.equal(result.summary.ignoredOversizeTextFiles, 1);
   assert.equal(result.status, "read-only-reference-analysis");
 });
+
+test("scans BOM-marked UTF-16 metadata commonly exported by Windows tools", () => {
+  const source = '<Item>common\\\\data\\\\handling.meta</Item>';
+  const encoded = new TextEncoder().encode(source);
+  const utf16 = new Uint8Array(2 + encoded.length * 2);
+  utf16[0] = 0xff;
+  utf16[1] = 0xfe;
+  for (let index = 0; index < encoded.length; index += 1) utf16[2 + index * 2] = encoded[index];
+  const result = analyzeModDependencies([
+    { path: "dlc/content.xml", bytes: utf16 },
+    { path: "dlc/common/data/handling.meta", bytes: bytes("<Handling/>") }
+  ]);
+  assert.equal(result.summary.references, 1);
+  assert.equal(result.summary.resolved, 1);
+});
