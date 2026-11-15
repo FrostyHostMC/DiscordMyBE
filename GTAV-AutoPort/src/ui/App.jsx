@@ -156,6 +156,33 @@ export default function App() {
   }
 
 
+  async function exportAfrPackage() {
+    if (!archive) return;
+    setBusy(true); setError(""); setPackageStatus("");
+    try {
+      const mappings = JSON.parse(afrMappingsText);
+      if (!mappings || typeof mappings !== "object" || Array.isArray(mappings)) {
+        throw new Error("Mappings must be a JSON object mapping each source RPF path to an exact /app0/... destination.");
+      }
+      const selected = archive.files.filter((file) => Object.prototype.hasOwnProperty.call(mappings, file.path));
+      const result = await buildPs4AfrPackage({
+        files: selected,
+        mappings,
+        target: PS4_TARGET,
+        attestations: {
+          ps4ResourceBuildVerified: ps4BuildConfirmed,
+          destinationPathsVerified: ps4PathsConfirmed,
+        },
+      });
+      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), "GTAV-AutoPort-CUSA00411-AFR-Overlay.zip", "application/zip");
+      setPackageStatus("Created a staging package with " + result.manifest.entries.length + " unchanged PS4 RPF archive(s).");
+    } catch (err) {
+      setError(err?.message || "Could not create the AFR package.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function analyzeVehicle() {
     if (!archive) return;
     setBusy(true); setError(""); setAnalysis(null); setManifest(null);
