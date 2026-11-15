@@ -4,6 +4,7 @@ const DIRECTORY_IDENT = 0x7fffff00;
 const BLOCK_SIZE = 512;
 const DEFAULT_MAX_ENTRIES = 250_000;
 const MAX_ENTRY_PATH_LENGTH = 4096;
+const MAX_TOTAL_PATH_CHARACTERS = 64 * 1024 * 1024;
 
 function fail(message) {
   throw new Error("Invalid RPF7 OPEN archive: " + message);
@@ -116,6 +117,7 @@ export function inspectOpenRpf7(input, { maxEntries = DEFAULT_MAX_ENTRIES } = {}
     for (const childIndex of chain) hierarchyState[childIndex] = 2;
   }
   const paths = new Map([[0, ""]]);
+  let totalPathCharacters = 0;
   for (let index = 1; index < entries.length; index++) {
     const chain = [];
     let current = index;
@@ -129,6 +131,8 @@ export function inspectOpenRpf7(input, { maxEntries = DEFAULT_MAX_ENTRIES } = {}
       const childIndex = chain[cursor];
       parentPath = parentPath ? parentPath + "/" + entries[childIndex].name : entries[childIndex].name;
       if (parentPath.length > MAX_ENTRY_PATH_LENGTH) fail("reconstructed entry path exceeds the configured safety limit.");
+      totalPathCharacters += parentPath.length;
+      if (totalPathCharacters > MAX_TOTAL_PATH_CHARACTERS) fail("total reconstructed path data exceeds the configured safety limit.");
       paths.set(childIndex, parentPath);
     }
   }
