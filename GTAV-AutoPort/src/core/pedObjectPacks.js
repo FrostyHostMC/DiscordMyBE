@@ -19,16 +19,41 @@ function collectPedEntries(parsed) {
     const modelName = text(get(node, ["modelName", "Name", "name"]));
     const txdName = text(get(node, ["txdName", "TextureDictionary", "txd"]));
     const pedType = text(get(node, ["Pedtype", "pedType", "Type"]));
-    if (modelName && (txdName || pedType || get(node, ["ClipDictionaryName", "MovementClipSet", "ExpressionSetName", "AudioNameHash"]))) found.push({ modelName, txdName: txdName || null, pedType: pedType || null, raw: node });
+    if (modelName && (txdName || pedType || get(node, ["ClipDictionaryName", "MovementClipSet", "ExpressionSetName", "AudioNameHash"]))) found.push({
+      modelName, txdName: txdName || null, pedType: pedType || null,
+      runtimeDependencies: {
+        clipDictionaryName: text(get(node, ["ClipDictionaryName"])),
+        movementClipSet: text(get(node, ["MovementClipSet"])),
+        strafeClipSet: text(get(node, ["StrafeClipSet"])),
+        expressionSetName: text(get(node, ["ExpressionSetName"])),
+        audioNameHash: text(get(node, ["AudioNameHash"])),
+        weaponInfo: text(get(node, ["WeaponInfo"])),
+        relationshipGroup: text(get(node, ["RelationshipGroup"])),
+        scenarioInfo: text(get(node, ["ScenarioInfo"])),
+      },
+      raw: node
+    });
   });
   const seen = new Set();
   return found.filter((entry) => { const key = entry.modelName.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
 }
+function collectModelReferences(parsed) {
+  const found = [];
+  walk(parsed, (node) => {
+    for (const [key, value] of Object.entries(node)) {
+      if (!/^(modelName|modelHash|model|hashName|archetypeName|assetName|txdName)$/i.test(key)) continue;
+      const reference = text(value);
+      if (reference) found.push({ field: key, value: reference });
+    }
+  });
+  const seen = new Set();
+  return found.filter((item) => { const key = item.field.toLowerCase() + ":" + item.value.toLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
+}
 function inspectSpawnConfig(file) {
   const source = decode(file); const ext = extension(file.path);
   if (source.length > 8 * 1024 * 1024) return { path: file.path, valid: false, format: ext.slice(1), error: "Configuration exceeds the 8 MiB inspection limit", summary: {} };
-  if (ext === ".json") { try { const parsed = JSON.parse(source); return { path: file.path, valid: true, format: "json", parsed, summary: summarizeConfig(parsed) }; } catch (error) { return { path: file.path, valid: false, format: "json", error: error.message, summary: {} }; } }
-  if (ext === ".xml") { const validation = XMLValidator.validate(source); if (validation !== true) return { path: file.path, valid: false, format: "xml", error: validation.err?.msg || "Invalid XML", summary: {} }; const parsed = parser.parse(source); return { path: file.path, valid: true, format: "xml", parsed, summary: summarizeConfig(parsed) }; }
+  if (ext === ".json") { try { const parsed = JSON.parse(source); return { path: file.path, valid: true, format: "json", parsed, modelReferences: collectModelReferences(parsed), summary: summarizeConfig(parsed) }; } catch (error) { return { path: file.path, valid: false, format: "json", error: error.message, summary: {} }; } }
+  if (ext === ".xml") { const validation = XMLValidator.validate(source); if (validation !== true) return { path: file.path, valid: false, format: "xml", error: validation.err?.msg || "Invalid XML", summary: {} }; const parsed = parser.parse(source); return { path: file.path, valid: true, format: "xml", parsed, modelReferences: collectModelReferences(parsed), summary: summarizeConfig(parsed) }; }
   if (ext === ".ini") { const keys = source.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith(";") && !line.startsWith("#") && line.includes("=")).map((line) => line.slice(0, line.indexOf("=")).trim()); return { path: file.path, valid: true, format: "ini", summary: { settingCount: keys.length, spawnSettings: keys.filter((key) => /(spawn|model|ped|object|coord|position|rotation|heading|count|amount|scenario)/i.test(key)) } }; }
   return { path: file.path, valid: false, format: ext.slice(1), error: "Unsupported spawn configuration format", summary: {} };
 }
@@ -71,11 +96,17 @@ export function inspectPedObjectPacks(files = []) {
     const matches = resources.filter((resource) => resource.stem === modelStem);
     const txd = entry.txdName?.toLowerCase();
     const textureMatches = txd ? resources.filter((resource) => resource.stem === txd && resource.extension === ".ytd") : [];
-    return { modelName: entry.modelName, txdName: entry.txdName, pedType: entry.pedType, metadataPath: entry.sourcePath, modelCandidates: matches, textureCandidates: textureMatches, rawMetadata: entry.raw, dependencyStatus: { model: matches.length === 1 ? "candidate-resolved-by-name-only" : matches.length ? "ambiguous" : "missing", texture: !txd ? "not-declared" : textureMatches.length === 1 ? "candidate-resolved-by-name-only" : textureMatches.length ? "ambiguous" : "missing" } };
+    return { modelName: entry.modelName, txdName: entry.txdName, pedType: entry.pedType, runtimeDependencies: entry.runtimeDependencies, metadataPath: entry.sourcePath, modelCandidates: matches, textureCandidates: textureMatches, rawMetadata: entry.raw, dependencyStatus: { model: matches.length === 1 ? "candidate-resolved-by-name-only" : matches.length ? "ambiguous" : "missing", texture: !txd ? "not-declared" : textureMatches.length === 1 ? "candidate-resolved-by-name-only" : textureMatches.length ? "ambiguous" : "missing" } };
   });
   const unboundResources = resources.filter((resource) => !peds.some((ped) => ped.modelCandidates.some((candidate) => candidate.path === resource.path)) && !peds.some((ped) => ped.textureCandidates.some((candidate) => candidate.path === resource.path)));
   const objectCandidates = unboundResources.filter((resource) => resource.resourceKind === "model-or-fragment" || resource.resourceKind === "texture-dictionary" || [".ybn", ".ymap", ".ytyp"].includes(resource.extension)).map((resource) => ({ ...resource, relatedSameStem: resources.filter((peer) => peer.stem === resource.stem && peer.path !== resource.path).map((peer) => peer.path), dependencyConfidence: "filename-and-pack-co-location-only" }));
-  const configSignals = spawnConfigs.filter((config) => config.valid).map((config) => ({ path: config.path, format: config.format, signals: config.summary }));
+  for (const config of spawnConfigs) if (config.valid && config.modelReferences) {
+    config.modelReferences = config.modelReferences.map((reference) => {
+      const candidates = resources.filter((resource) => resource.stem === reference.value.toLowerCase()).map((resource) => resource.path);
+      return { ...reference, resourceCandidates: candidates, resolution: candidates.length === 1 ? "candidate-resolved-by-name-only" : candidates.length ? "ambiguous" : "missing" };
+    });
+  }
+  const configSignals = spawnConfigs.filter((config) => config.valid).map((config) => ({ path: config.path, format: config.format, signals: config.summary, modelReferences: config.modelReferences || [] }));
   return { schemaVersion: 1, kind: "ped-object-pack-analysis", pedMetadataReports, peds, objectCandidates, resources, spawnConfigs, configSignals, summary: { resourceFiles: resources.length, pedMetadataFiles: pedMetadataFiles.length, pedEntries: peds.length, objectAssetCandidates: objectCandidates.length, spawnConfigFiles: spawnConfigs.length, validSpawnConfigs: spawnConfigs.filter((config) => config.valid).length, missingPedModels: peds.filter((ped) => ped.dependencyStatus.model === "missing").length, ambiguousPedModels: peds.filter((ped) => ped.dependencyStatus.model === "ambiguous").length }, target: { titleId: "CUSA00419", updateVersion: "1.73", compatibility: "unverified" }, limitations: ["Filename matches are candidates, not proof of resource references.", "YMAP/YTYP/YBN and binary ped metadata require resource-level parsing and reference resolution.", "Spawn configuration fields do not implement spawn behavior; a verified menu/native runtime adapter is required.", "PS4 resource writers and exact-build in-game validation remain separate gates."] };
 }
 
