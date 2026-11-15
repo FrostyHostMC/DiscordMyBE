@@ -2,7 +2,7 @@ import JSZip from "jszip";
 import { convertLegacyResourceCandidate } from "./resourceConversion.js";
 
 const CONVERTIBLE = new Set([".yft", ".ydr", ".ydd", ".ytd"]);
-const safePath = (value) => String(value || "").replace(/\\\\/g, "/").split("/").filter((part) => part && part !== "." && part !== "..").join("/");
+function safePath(value) {\n  const normalized = String(value || "").replaceAll("\\\\", "/");\n  const parts = normalized.split("/");\n  if (!normalized || normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized) || parts.some((part) => !part || part === "." || part === "..")) throw new Error("The imported file list contains an unsafe relative path.");\n  return parts.join("/");\n}
 
 function extension(path) {
   const name = String(path || "").split("/").at(-1);
@@ -75,13 +75,13 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
   };
-  root.file("autport-manifest.json", JSON.stringify(manifest, null, 2));
+  root.file("autoport-manifest.json", JSON.stringify(manifest, null, 2));
   root.file("README-FIRST.txt", [
     "GTAV AUTOPORT — AUTOMATIC PREPARATION BUNDLE",
     "",
     "1. source-original/ contains the original imported mod files.",
     "2. pc-legacy-candidates/ contains only resources successfully rewritten and round-trip checked by RageKit for GTA V PC Legacy.",
-    "3. autport-manifest.json records every conversion result and limitation.",
+    "3. autoport-manifest.json records every conversion result and limitation.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
