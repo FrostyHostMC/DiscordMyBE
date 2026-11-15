@@ -1,6 +1,6 @@
 const TEXT_EXTENSIONS = new Set([".xml", ".meta", ".ini", ".cfg", ".json", ".txt", ".md", ".lua", ".ymt", ".ymf", ".rel", ".gxt2", ".toml"]);
 const MAX_TEXT_BYTES = 2 * 1024 * 1024;
-const REFERENCE_PATTERN = /["']([^"'<>\r\n]{1,260}?\.[a-z0-9]{1,8})["']/gi;
+const REFERENCE_PATTERN = /([a-z0-9_./\\-]{1,260}?\\.[a-z0-9]{1,8})/gi;
 const PATH_PATTERN = /[\\/]/;
 
 function extension(path) {
