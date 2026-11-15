@@ -135,7 +135,7 @@ export default function App() {
       if (ragekitFiles.length) {
         setRagekitStatus("Running native RAGE read/round-trip validation…");
         try { const nativeResult = await inspectRagekitAutomatically(result.files); if (!nativeResult?.summary || !Array.isArray(nativeResult.reports)) throw new Error("The native RAGE helper returned an incomplete report. The source inventory and port plan are still available."); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
-        catch (nativeError) { setRagekitStatus(nativeError?.message || "Native RAGE engine is not configured."); }
+        catch (nativeError) { const message = nativeError?.message || "Native RAGE engine is not configured."; setRagekitStatus(/failed to fetch|networkerror|load failed/i.test(message) ? "RageKit helper was unreachable. Restart AutoPort with START-AUTOPORT.bat; source inventory and YFT/YTD inspection are still available." : message); }
       } else setRagekitStatus("No ragekit-supported RAGE resources found in this import.");
     } catch (err) {
       setError(err?.message || "Could not inspect this import.");
