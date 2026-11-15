@@ -174,7 +174,7 @@ export default function App() {
           destinationPathsVerified: ps4PathsConfirmed,
         },
       });
-      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), `GTAV-AutoPort-$CUSA00419-AFR-Overlay.zip`, "application/zip");
+      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), `GTAV-AutoPort-${PS4_TARGET.titleId}-AFR-Overlay.zip`, "application/zip");
       setPackageStatus("Created a staging package with " + result.manifest.entries.length + " unchanged PS4 RPF archive(s).");
     } catch (err) {
       setError(err?.message || "Could not create the AFR package.");
