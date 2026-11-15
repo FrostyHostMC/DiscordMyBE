@@ -49,7 +49,7 @@ function collectPlacements(parsed) {
     if (Object.keys(node).some((key) => key.toLowerCase() === "modelhash") ||
         Object.keys(node).some((key) => key.toLowerCase() === "hashname")) {
       const type = scalar(first(node, ["Type", "type"])).toLowerCase();
-      if (!type || type.includes("vehicle") || first(node, ["VehicleProperties", "SpoonerAttachments", "Attachments"])) found.push(node);
+      if (type.includes("vehicle") || (!type && (first(node, ["PositionRotation", "Transform", "PositionAndRotation", "VehicleProperties", "SpoonerAttachments", "Attachments"]) !== undefined))) found.push(node);
     }
   });
   return found.slice(0, MAX_PLACEMENTS);
