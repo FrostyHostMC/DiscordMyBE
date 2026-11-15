@@ -69,3 +69,10 @@ test("extracts nested files with reconstructed paths and exact copied bytes", ()
   extracted[0].bytes[0] ^= 0xff;
   assert.deepEqual(built.bytes, original);
 });
+
+test("refuses extraction above configured file and byte limits before copying payloads", () => {
+  const built = buildOpenRpf7([{ path: "one.bin", bytes: new Uint8Array([1, 2]) }, { path: "two.bin", bytes: new Uint8Array([3, 4]) }]);
+  assert.throws(() => extractOpenRpf7(built.bytes, { maxFiles: 1 }), /file-count limit/);
+  assert.throws(() => extractOpenRpf7(built.bytes, { maxBytes: 3 }), /expanded-byte limit/);
+  assert.throws(() => extractOpenRpf7(built.bytes, { maxBytes: -1 }), /non-negative safe integers/);
+});
