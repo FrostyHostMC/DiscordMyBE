@@ -25,6 +25,8 @@ function run(executable, args, timeoutMs = 90000) {
     child.on("close", (code) => { clearTimeout(timer); if (timedOut) return reject(new Error("RageKit conversion timed out.")); if (code !== 0) return reject(new Error(stderr.trim() || stdout.trim() || "RageKit conversion failed.")); resolve({ stdout, stderr }); });
   });
 }
+export function buildLegacyConvertArgs(input, output) { return ["convert", input, output, "--legacy"]; }
+
 export function resourceConvertPlugin() {
   return { name: "gtav-autoport-resource-convert", configureServer(server) {
     server.middlewares.use("/__autoport/convert-legacy-resource", async (req, res) => {
@@ -46,7 +48,7 @@ export function resourceConvertPlugin() {
         const output = path.join(temp, "legacy-candidate" + ext);
         const roundtrip = path.join(temp, "roundtrip" + ext);
         await writeFile(input, inputBytes);
-        await run(executable, ["convert", input, output, "--legacy"]);
+        await run(executable, buildLegacyConvertArgs(input, output));
         const outputBytes = await readFile(output);
         if (!outputBytes.length || outputBytes.length > MAX_BYTES) throw new Error("Converted output is empty or exceeds 64 MiB.");
         const info = await run(executable, ["info", output, "-v"]);
