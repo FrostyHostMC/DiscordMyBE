@@ -40,6 +40,10 @@ The separately supplied `synapse.sprx` begins with bytes `4f 15 3d 1d`, the PS4 
 
 The import workbench shows catalog counts, settings, all title-specific plugin entries, SPRX header classification and XML findings. It can export the complete inspection report.
 
+## Menyoo vehicle export handoff
+
+The workbench now exports `autoport-menyoo-vehicle-pack` JSON with the original placement subtree, model hashes/names, transforms, attachments and vehicle property nodes preserved. This is an AutoPort interchange format only. It must not be copied into `synapse/files/xml` or renamed to `vehicles.json`: the supplied Synapse archive had an empty XML folder and no documented XML loader schema. A real menu adapter must define and implement the pack schema, vehicle spawn, transforms, property setters, attachment/bone handling and cleanup.
+
 ## Safe next step for a real menu update
 
 To add a real XML loader to Synapse, we need its editable source project or a documented extension interface. The correct implementation belongs inside the menu/runtime: parse a defined XML schema, validate values, and dispatch supported game-native actions. AutoPort can then generate that schema from imported mods. Without the source or a tested interface, changing catalog JSON or renaming XML files would not add XML execution support.
