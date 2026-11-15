@@ -416,7 +416,8 @@ export default function App() {
         {reshadeReport.requirements.map((requirement) => <div className="audit-warning" key={requirement}><AlertTriangle size={14}/><span>{requirement}</span></div>)}
         <div className="notice"><ShieldCheck size={19}/><div><b>No PC injector files will be copied to PS4.</b><p>AutoPort inventories shader logic and separates effects that may be approximated from effects needing renderer hooks. It will not create a fake install package or claim that an INI preset is a converted shader.</p></div></div>
       </section>}
-\n      {scaleformReport && <section className="panel results-panel">
+
+      {scaleformReport && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">SCALEFORM GRAPHICS WORKBENCH</div><h3>GFX / SWF asset inspection</h3><p>{scaleformReport.summary.scaleformGfx} Scaleform GFX · {scaleformReport.summary.swf} SWF · {scaleformReport.summary.invalid} invalid header(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> EDITOR HANDOFF</span></div>
         <div className="audit-grid">
           <div className="audit-card"><b>{scaleformReport.summary.files}</b><span>graphics files</span></div>
