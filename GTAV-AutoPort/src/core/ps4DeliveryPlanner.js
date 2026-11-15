@@ -15,7 +15,16 @@ function extension(path) {
 }
 
 function routeFor(path, conversion, archive) {
+  const normalized = String(path || "").replaceAll("\\\\", "/").toLowerCase();
   const ext = extension(path);
+  if (normalized.endsWith(".rpf.txt")) {
+    return {
+      route: "preserve-orbx-rpf-path-marker",
+      status: "marker-review-required",
+      reason: "This filename ends in .rpf.txt. In the inspected ORBX package inventory these were zero-byte path-marker/text files, not RPF archive payloads. Preserve the exact relative path and do not send it to an RPF reader or archive writer.",
+      requirements: ["Preserve the marker's exact relative path", "Inspect the ORBX instructions and runtime log to establish marker semantics", "Do not count this file as an RPF archive"]
+    };
+  }
   if (PC_NATIVE_EXTENSIONS.has(ext)) {
     return {
       route: "preserve-pc-runtime-only",
