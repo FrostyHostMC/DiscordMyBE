@@ -67,3 +67,4 @@ References:
 AutoPort therefore gives PSO-like metadata its own review route and keeps
 format parsing, semantic editing, target serialization and loader compatibility
 as separate validation stages.
+\n## ORBX-specific RPF path markers\n\nThe inspected ORBX Engine v1.4 archive contains thousands of zero-byte files ending in `.rpf.txt` beneath its `orbx/gta/rpf/` tree. These are inventory/path markers, not RPF archives. AutoPort routes `.rpf.txt` separately as `preserve-orbx-rpf-path-marker` and does not pass them to an RPF parser or writer. Their precise runtime semantics remain unverified until the ORBX instructions and `rpf_log.txt` contents are readable.\n
