@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { registeredFormatAdapterRegistry } from "./registeredFormatAdapters.js";
 import { analyzeModDependencies } from "./modDependencyGraph.js";
 import { extractOpenRpf7, inspectOpenRpf7 } from "./rpf7OpenInspector.js";
+import { buildPs4DeliveryPlan } from "./ps4DeliveryPlanner.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -151,6 +152,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     onProgress({ completed, total: eligible.length, current: relative, status: record.status });
   }
 
+  const deliveryPlan = buildPs4DeliveryPlan({ files: analysisFiles, conversions, archiveInspections, target });
+
   const manifest = {
     schemaVersion: 1,
     product: "GTAV AutoPort",
@@ -168,13 +171,15 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       rpfArchivesExtracted: archiveInspections.filter((item) => item.status === "extracted-raw-open-archive").length,
       rpfRawFilesExtracted: archiveInspections.reduce((sum, item) => sum + item.extractedFiles, 0),
       rpfRawFilesAnalyzed: extractedFiles.length,
-      ps4ReadyFiles: 0,
-      installable: false
+      ps4ReadyFiles: deliveryPlan.summary.ps4ReadyFiles,
+      installable: deliveryPlan.summary.installable,
+      deliveryPlanItems: deliveryPlan.summary.fileCount
     },
     sourceFiles: sourceManifest,
     dependencies: dependencyGraph.summary,
     conversions,
     archiveInspections,
+    deliveryPlan,
     limitations: [
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
       "CUSA00419 / GTA V 1.73 resource encoding and in-game behavior are not verified.",
@@ -187,6 +192,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
 
   const reportRoot = root.folder("reports");
   reportRoot.file("dependency-graph.json", JSON.stringify(dependencyGraph, null, 2));
+  reportRoot.file("ps4-delivery-plan.json", JSON.stringify(deliveryPlan, null, 2));
   for (const [name, value] of Object.entries(reports)) {
     if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
   }
@@ -198,7 +204,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "2. pc-legacy-candidates/ contains only resources successfully rewritten and round-trip checked by RageKit for GTA V PC Legacy.",
     "3. rpf-extracted/ contains raw files extracted from supported PC RPF7 OPEN archives; original RPF files remain preserved.",
     "4. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
-    "5. autoport-manifest.json records conversion and archive inspection results and limitations.",
+    "5. reports/ps4-delivery-plan.json explains the per-file PS4 route, blockers and required validation.",
+    "6. autoport-manifest.json records conversion, archive inspection and delivery planning results.");
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
