@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 
 const MAX_BYTES = 64 * 1024 * 1024;
-const ALLOWED = new Set([".yft", ".ytd"]);
+const ALLOWED = new Set([".yft", ".ytd", ".ydr", ".ydd", ".ybn"]);
 const sha = (bytes) => createHash("sha256").update(bytes).digest("hex");
 function findRk() {
   const configured = process.env.GTAV_AUTOPORT_RK;
@@ -37,7 +37,7 @@ export function resourceConvertPlugin() {
         const chunks = []; let requestBytes = 0;
         for await (const chunk of req) { requestBytes += chunk.length; if (requestBytes > MAX_BYTES * 1.4) throw new Error("Resource conversion request exceeds 64 MiB."); chunks.push(chunk); }
         const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-        if (typeof payload.name !== "string" || !ALLOWED.has(path.extname(payload.name).toLowerCase())) throw new Error("Only YFT and YTD resources can use this Legacy writer route.");
+        if (typeof payload.name !== "string" || !ALLOWED.has(path.extname(payload.name).toLowerCase())) throw new Error("Only YFT, YTD, YDR, YDD and YBN resources can use this Legacy writer route.");
         const inputBytes = Buffer.from(payload.data || "", "base64");
         if (!inputBytes.length || inputBytes.length > MAX_BYTES) throw new Error("Input resource is empty or exceeds 64 MiB.");
         temp = await mkdtemp(path.join(os.tmpdir(), "gtav-autoport-legacy-"));
