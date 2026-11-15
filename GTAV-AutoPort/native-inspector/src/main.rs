@@ -308,7 +308,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::safe_texture_filename;
+    use super::{geometry_triangle_count, safe_texture_filename};
 
     #[test]
     fn texture_filename_removes_path_separators_and_unsafe_characters() {
