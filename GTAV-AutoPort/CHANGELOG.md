@@ -1,3 +1,12 @@
+## 2026-11-14 — ReShade shader intake and DYNA dependency analysis
+- Added static inspection for ReShade .fx/.fxh/HLSL and preset INI files, including techniques, uniforms, include dependencies and likely effect families.
+- Added missing-include detection and explicit renderer-hook blockers for depth-buffer, AO, RTGI, SSR, temporal and depth-of-field effects.
+- Classified Windows ReShade/add-on binaries as PC-only; they are never treated as PS4 payloads.
+- Added a dedicated ReShade analysis panel and port-plan routes for shader sources.
+- Researched DYNA Dynamic Reshade 1.0 requirements: ReShade 5.2.2+, Pascal Gilcher RTGI, NaturalVision Remastered, and Simple Trainer Timecycle Modifier 7 / NoPedLights.
+- Documented that the supplied 7z archive could not be retrieved in this environment; its contents remain uninspected and no DYNA package or PS4 destination paths are fabricated.
+- Added regression tests for shader parsing, missing includes, effect blockers and preset-only archives.
+
 ## 2026-11-14 — Scaleform graphics intake and editor handoff
 - Added Scaleform GFX/SWF header inspection for FWS, CWS, ZWS, GFX and CFX containers with declared-size checks and bounded metadata handling.
 - Added a separate GFX/CFX-to-SWF editor-handoff copy for JPEXS workflows; original bytes are never modified and the output is explicitly not marked game-ready.
