@@ -1,3 +1,9 @@
+## 2026-11-14 — Existing PS4 conversion backend identified
+- Researched the RaringM/ps5-gtav-menu open-source project, which documents actual PC-to-PS4 converters for vehicles, peds, textures, maps and other resources, plus a custom-pack runtime.
+- Its MIT license permits reuse subject to retaining the copyright/license notice; no upstream source has been copied into AutoPort yet.
+- Hard target mismatch recorded: upstream PS4 runtime and converter target is CUSA00411 01.57, while this AutoPort target is user-confirmed CUSA00411 1.73. Do not package 1.57 PRX/offsets/custom packs as 1.73 compatible.
+- Added backend research and integration policy. Matching 1.73 game templates and a verified 1.73 loader path remain required for an installable asset test on the user's current build.
+
 ## 2026-11-14 — Per-family output contracts
 - Added explicit expected deliverables and required source dependencies for fragments, drawables, texture dictionaries, image textures, collision, maps, archetypes, source models, scripts, PC plugins, console plugins, audio and RPF archives.
 - Port-plan exports now explain which game resource files a family needs and which PS4 writer/runtime gate is still missing, rather than only classifying the source extension.
