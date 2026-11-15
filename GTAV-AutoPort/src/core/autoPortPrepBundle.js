@@ -1,6 +1,7 @@
 import JSZip from "jszip";
 import { registeredFormatAdapterRegistry } from "./registeredFormatAdapters.js";
 import { analyzeModDependencies } from "./modDependencyGraph.js";
+import { extractOpenRpf7, inspectOpenRpf7 } from "./rpf7OpenInspector.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -9,6 +10,13 @@ function safePath(value) {
     throw new Error("The imported file list contains an unsafe relative path.");
   }
   return parts.join("/");
+}
+
+function asBytes(value) {
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  return null;
 }
 
 function extension(path) {
@@ -30,10 +38,36 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const candidateRoot = root.folder("pc-legacy-candidates");
   const sourceManifest = [];
   const conversions = [];
+  const archiveInspections = [];
+  const extractedRoot = root.folder("rpf-extracted");
   let completed = 0;
   const dependencyGraph = analyzeModDependencies(files);
   const inspected = files.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
   const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
+  for (const { file } of inspected) {
+    const bytes = asBytes(file.bytes);
+    if (!bytes || (extension(file.path) !== ".rpf" && !(bytes.length >= 4 && bytes[0] === 0x37 && bytes[1] === 0x46 && bytes[2] === 0x50 && bytes[3] === 0x52))) continue;
+    const sourcePath = safePath(file.path);
+    const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, error: null };
+    try {
+      const inspection = inspectOpenRpf7(bytes);
+      const extracted = extractOpenRpf7(bytes);
+      for (const entry of extracted) {
+        const outputPath = sourcePath + "/" + safePath(entry.path);
+        extractedRoot.file(outputPath, entry.bytes);
+        record.extractedFiles += 1;
+        record.extractedBytes += entry.bytes.length;
+      }
+      record.status = "extracted-raw-open-archive";
+      record.entryCount = inspection.entryCount;
+      record.fileCount = inspection.fileCount;
+      record.directoryCount = inspection.directoryCount;
+      record.encryption = inspection.encryption;
+    } catch (error) {
+      record.error = error?.message || "RPF inspection failed.";
+    }
+    archiveInspections.push(record);
+  }
   for (const file of files) {
     const relative = safePath(file.path);
     if (!relative) continue;
@@ -71,17 +105,22 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       convertedPcLegacyCandidates: conversions.filter((item) => item.status === "pc-legacy-candidate").length,
       failedCandidates: conversions.filter((item) => item.status === "failed").length,
       originalFilesPreserved: sourceManifest.length,
+      rpfArchivesInspected: archiveInspections.length,
+      rpfArchivesExtracted: archiveInspections.filter((item) => item.status === "extracted-raw-open-archive").length,
+      rpfRawFilesExtracted: archiveInspections.reduce((sum, item) => sum + item.extractedFiles, 0),
       ps4ReadyFiles: 0,
       installable: false
     },
     sourceFiles: sourceManifest,
     dependencies: dependencyGraph.summary,
     conversions,
+    archiveInspections,
     limitations: [
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
       "CUSA00419 / GTA V 1.73 resource encoding and in-game behavior are not verified.",
       "PC ASI/DLL/EXE plugins and runtime-dependent scripts are preserved as source only; they are not executable PS4 plugins.",
-      "RPF archives and metadata are preserved unchanged unless a dedicated validated adapter reports otherwise.",
+      "Supported PC RPF7 OPEN archives are additionally extracted as raw files for inspection; payload formats are not converted by extraction.",
+      "Encrypted or Orbis/PS4 RPF variants are preserved unchanged when the OPEN inspector cannot validate them.",
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
   };
@@ -96,8 +135,9 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "",
     "1. source-original/ contains the original imported mod files.",
     "2. pc-legacy-candidates/ contains only resources successfully rewritten and round-trip checked by RageKit for GTA V PC Legacy.",
-    "3. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
-    "4. autoport-manifest.json records every conversion result and limitation.",
+    "3. rpf-extracted/ contains raw files extracted from supported PC RPF7 OPEN archives; original RPF files remain preserved.",
+    "4. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
+    "5. autoport-manifest.json records conversion and archive inspection results and limitations.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
