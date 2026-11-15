@@ -283,8 +283,8 @@ export default function App() {
 
       <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">PS4 COMPATIBILITY GATES</div><h3>Target validation checklist</h3><p>{compatibility.passed} of {compatibility.total} evidence gates satisfied · conversion remains locked</p></div><span className="tag warning"><AlertTriangle size={13}/> BLOCKED</span></div>
-        <div className="file-list">{compatibility.gates.map((gate) => <div className="file-row" key={gate.id}><AlertTriangle size={15}/><span className="file-name"><b>{gate.label}</b><small>{gate.nextStep}</small></span><span className="file-ext">PENDING</span></div>)}</div>
-        <div className="notice"><ShieldCheck size={19}/><div><b>Why this is locked</b><p>{compatibility.note} The next step is collecting exact-build PS4 reference evidence before implementing any resource writer.</p></div></div>
+        <div className="file-list">{compatibility.gates.map((gate) => <div className="file-row" key={gate.id}>{gate.passed ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}<span className="file-name"><b>{gate.label}</b><small>{gate.nextStep}</small></span><span className="file-ext">{gate.passed ? "RECORDED" : "PENDING"}</span></div>)}</div>
+        <div className="notice"><ShieldCheck size={19}/><div><b>Why this is locked</b><p>{compatibility.note} The remaining blockers are exact-build PS4 resource references, working conversion adapters, and a tested deployment/rollback path.</p></div></div>
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
