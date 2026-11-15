@@ -5,7 +5,7 @@ function encode(bytes) {
 }
 export async function convertLegacyResourceCandidate(file) {
   const extension = file.path.slice(file.path.lastIndexOf(".")).toLowerCase();
-  if (![".yft", ".ytd", ".ydr", ".ydd", ".ybn"].includes(extension)) throw new Error("Only YFT, YTD, YDR, YDD and YBN resources can be converted by this adapter.");
+  if (![".yft", ".ytd", ".ydr", ".ydd"].includes(extension)) throw new Error("Only YFT, YTD, YDR and YDD resources can be converted by this adapter.");
   const response = await fetch("/__autoport/convert-legacy-resource", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: file.path, data: encode(file.bytes) }),
