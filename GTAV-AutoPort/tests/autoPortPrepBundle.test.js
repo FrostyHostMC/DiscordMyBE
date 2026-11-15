@@ -11,6 +11,7 @@ test("keeps the PS4 gate closed when there are no convertible resources", async 
   const result = await buildAutomaticPrepBundle({
     sourceName: "metadata-only",
     target: { titleId: "CUSA00419", updateVersion: "1.73" },
+    reports: { "port-plan": { summary: { fileCount: 1 } } },
     files: [{ path: "vehicles.meta", bytes: new TextEncoder().encode("<CVehicleModelInfo__InitDataList/>") }]
   });
   assert.equal(result.manifest.summary.importedFiles, 1);
@@ -21,7 +22,9 @@ test("keeps the PS4 gate closed when there are no convertible resources", async 
   const archive = await JSZip.loadAsync(result.blob);
   assert.ok(archive.file("AutoPort-Prep/source-original/vehicles.meta"));
   assert.ok(archive.file("AutoPort-Prep/autoport-manifest.json"));
-  assert.ok(archive.file("AutoPort-Prep/reports/port-plan.json") === null);
+  assert.ok(archive.file("AutoPort-Prep/reports/port-plan.json"));
+  const report = JSON.parse(await archive.file("AutoPort-Prep/reports/port-plan.json").async("string"));
+  assert.equal(report.summary.fileCount, 1);
 });
 
 test("rejects unsafe imported paths instead of normalizing traversal away", async () => {
