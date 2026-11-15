@@ -51,6 +51,10 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     const record = { sourcePath, status: "unsupported-or-invalid", format: "RPF7", extractedFiles: 0, extractedBytes: 0, error: null };
     try {
       const inspection = inspectOpenRpf7(bytes);
+      record.entryCount = inspection.entryCount;
+      record.fileCount = inspection.fileCount;
+      record.directoryCount = inspection.directoryCount;
+      record.encryption = inspection.encryption;
       const extracted = extractOpenRpf7(bytes);
       for (const entry of extracted) {
         const outputPath = sourcePath + "/" + safePath(entry.path);
@@ -59,10 +63,6 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
         record.extractedBytes += entry.bytes.length;
       }
       record.status = "extracted-raw-open-archive";
-      record.entryCount = inspection.entryCount;
-      record.fileCount = inspection.fileCount;
-      record.directoryCount = inspection.directoryCount;
-      record.encryption = inspection.encryption;
     } catch (error) {
       record.error = error?.message || "RPF inspection failed.";
     }
