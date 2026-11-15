@@ -63,3 +63,16 @@ test("returns an explicit non-integrated packaging boundary", () => {
   assert.equal(plan.packaging.projectVLoader, "not-configured");
   assert.equal(plan.summary.installable, false);
 });
+
+
+test("keeps ORBX .rpf.txt path markers out of archive conversion", () => {
+  const plan = buildPs4DeliveryPlan({
+    files: [
+      { path: "orbx/gta/rpf/levels/gta5/update.rpf.txt", size: 0 },
+      { path: "orbx/gta/ps4a.rpf", size: 1024 }
+    ]
+  });
+  assert.equal(plan.items[0].route, "preserve-orbx-rpf-path-marker");
+  assert.equal(plan.items[0].status, "marker-review-required");
+  assert.equal(plan.items[1].route, "preserve-and-identify-archive");
+});
