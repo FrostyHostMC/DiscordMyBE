@@ -62,15 +62,14 @@ export function createEditableSwfCopy(file) {
     throw new Error("Only a structurally valid GFX/CFX file can be prepared as an editor handoff copy.");
   }
   const output = bytes.slice();
-  output[0] = 0x46; // F
-  output[1] = 0x57; // W
-  output[2] = 0x53; // S
+  const targetSignature = report.signature === "CFX" ? "CWS" : "FWS";
+  output.set([...targetSignature].map((character) => character.charCodeAt(0)), 0);
   const base = String(file.path || "scaleform").split("/").at(-1).replace(/\.(gfx|swf)$/i, "");
   return {
     filename: `${base || "scaleform"}-editor-copy.swf`,
     bytes: output,
     sourceSignature: report.signature,
-    outputSignature: "FWS",
+    outputSignature: targetSignature,
     warning: "Editor handoff only. This copy is not a game-ready GFX build; use a compatible Scaleform GFx export pipeline and validate the target runtime.",
   };
 }
