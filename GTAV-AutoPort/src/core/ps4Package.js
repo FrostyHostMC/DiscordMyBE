@@ -1,11 +1,10 @@
 import JSZip from "jszip";
-import { createHash } from "node:crypto";
 import { PS4_TARGET } from "./target.js";
 
 const SAFE_TITLE = /^CUSA\\d{5}$/;
 const FORBIDDEN = /[\\\\\\0]|%(?:2e|2f|5c)/i;
 
-function safeAppPath(value) {
+async function sha256(bytes) {\n  if (!globalThis.crypto?.subtle) throw new Error("SHA-256 support is unavailable in this runtime.");\n  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);\n  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");\n}\n\nfunction safeAppPath(value) {
   if (typeof value !== "string" || !value.startsWith("/app0/") || FORBIDDEN.test(value)) {
     throw new Error("Every overlay destination must be an explicit safe /app0/... path.");
   }
@@ -56,7 +55,7 @@ export async function buildPs4AfrPackage({ files = [], mappings = {}, target = P
     const key = destination.toLowerCase();
     if (seen.has(key)) throw new Error(`Two source archives map to the same destination: /app0/${destination}`);
     seen.add(key);
-    const digest = createHash("sha256").update(bytes).digest("hex");
+    const digest = await sha256(bytes);
     const stagingPath = `data/GoldHEN/AFR/${target.titleId}/${destination}`;
     zip.file(stagingPath, bytes);
     manifest.entries.push({ sourcePath: path, destination: `/app0/${destination}`, stagingPath: `/${stagingPath}`, bytes: bytes.length, sha256: digest, status: "staged-unchanged-ps4-rpf" });
