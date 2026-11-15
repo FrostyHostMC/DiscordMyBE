@@ -15,7 +15,7 @@ function extension(path) {
 }
 
 function routeFor(path, conversion, archive) {
-  const normalized = String(path || "").replaceAll("\\\\", "/").toLowerCase();
+  const normalized = String(path || "").split(String.fromCharCode(92)).join("/").toLowerCase();
   const ext = extension(path);
   if (normalized.endsWith(".rpf.txt")) {
     return {
