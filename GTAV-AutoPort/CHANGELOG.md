@@ -1,3 +1,9 @@
+## 2026-11-14 — Per-family output contracts
+- Added explicit expected deliverables and required source dependencies for fragments, drawables, texture dictionaries, image textures, collision, maps, archetypes, source models, scripts, PC plugins, console plugins, audio and RPF archives.
+- Port-plan exports now explain which game resource files a family needs and which PS4 writer/runtime gate is still missing, rather than only classifying the source extension.
+- Added regression coverage for vehicle/ped fragment, texture and PC plugin output contracts.
+- These contracts describe required artifacts; they do not claim those artifacts were generated.
+
 ## 2026-11-14 — First gated GoldHEN AFR package writer
 - Added a ZIP package writer for complete RPF7 archives that are already built for PS4; source bytes are preserved and SHA-256 hashes are included.
 - Added a CUSA00411 / GTA V 1.73 package handoff with the correct AFR staging directory shape, a mergeable plugins.ini snippet, manifest and installation notes.
