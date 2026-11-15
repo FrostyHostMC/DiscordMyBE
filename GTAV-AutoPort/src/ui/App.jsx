@@ -113,7 +113,7 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setPedObjectReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setPedObjectReport(null); setResourceConversionStatus(""); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
@@ -121,7 +121,7 @@ export default function App() {
       setScriptModReport(inspectScriptModPackages(result.files));
       setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
       setPedObjectReport(inspectPedObjectPacks(result.files));
-      setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => translateMenyooVehicleXml(file.bytes, file.path)).filter((report) => report.validXml && report.summary.vehicleCount > 0));
+      setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => { try { return translateMenyooVehicleXml(file.bytes, file.path); } catch { return null; } }).filter((report) => report?.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
