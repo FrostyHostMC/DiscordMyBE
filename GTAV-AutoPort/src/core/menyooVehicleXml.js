@@ -73,7 +73,7 @@ function attachmentRecords(placement) {
   const result = [];
   for (const container of containers) {
     walk(container, (node) => {
-      const model = scalar(first(node, ["AttachedObject", "ModelHash", "HashName", "Model"]));
+      const model = scalar(first(node, ["HashName", "AttachedObject", "Model", "ModelHash"]));
       if (!model) return;
       result.push({
         model,
