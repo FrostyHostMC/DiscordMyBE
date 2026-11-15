@@ -36,6 +36,8 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
+**2026-11-14 — PS4 GTA V GFX Loader research:** inspected the linked source code and confirmed a narrow GTA V 1.46 hook that redirects the `font_lib_efigs` request to a file under `/data`. It is a useful runtime-hook reference, not a universal graphics loader, and its hard-coded 1.46 address is not safe to reuse on GTA V 1.73. See [Project V and GFX loader research](docs/PROJECT-V-GOLDHEN-RESEARCH.md).
+
 **2026-11-14 — Guided porting and first-run tool preparation**
 - Added an in-app walkthrough with current-stage progress, contextual next-step prompts, and expandable setup/capability guidance.
 - Updated the Windows launcher to attempt the pinned RageKit CMake FetchContent download/build when CMake and the compiler toolchain are available; it falls back to intake/planning when unavailable.
