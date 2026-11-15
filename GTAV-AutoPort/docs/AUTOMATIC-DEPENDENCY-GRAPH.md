@@ -4,7 +4,7 @@ The automatic preparation stage now emits `reports/dependency-graph.json` for ea
 
 ## What it does
 
-- Scans bounded UTF-8 text files with common metadata/configuration/source extensions.
+- Scans bounded UTF-8 and BOM-marked UTF-16 text files with common metadata/configuration/source extensions.
 - Finds filename-like references in quoted or unquoted metadata text without assuming a creator, mod name, vehicle name, or directory layout.
 - Resolves references against the imported package using case-insensitive relative paths and basename matching.
 - Reports each edge as `resolved`, `missing`, or `ambiguous`; multiple possible targets are never silently selected.
