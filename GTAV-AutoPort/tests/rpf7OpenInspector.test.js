@@ -76,3 +76,21 @@ test("refuses extraction above configured file and byte limits before copying pa
   assert.throws(() => extractOpenRpf7(built.bytes, { maxBytes: 3 }), /expanded-byte limit/);
   assert.throws(() => extractOpenRpf7(built.bytes, { maxBytes: -1 }), /non-negative safe integers/);
 });
+
+test("rejects unsafe Windows extraction path segments", () => {
+  for (const unsafeName of [":bad.bin", "CON", "trailing."]) {
+    const built = buildOpenRpf7([{ path: "safe.bin", bytes: new Uint8Array([1]) }]);
+    const bytes = built.bytes.slice();
+    const namesStart = 16 + 2 * 16;
+    const encoded = new TextEncoder().encode(unsafeName);
+    bytes.fill(0, namesStart + 1, namesStart + 1 + 16);
+    bytes.set(encoded, namesStart + 1);
+    assert.throws(() => inspectOpenRpf7(bytes), /unsafe path segment/);
+  }
+});
+
+test("enforces configured TOC entry limits", () => {
+  const built = buildOpenRpf7([{ path: "a.bin", bytes: new Uint8Array([1]) }]);
+  assert.throws(() => inspectOpenRpf7(built.bytes, { maxEntries: 1 }), /entry count exceeds the configured inspection limit/);
+  assert.throws(() => inspectOpenRpf7(built.bytes, { maxEntries: 0 }), /maxEntries must be a positive safe integer/);
+});
