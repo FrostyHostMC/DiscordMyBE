@@ -113,6 +113,9 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       const remainingFiles = MAX_RPF_EXTRACTED_FILES - totalExtractedFiles;
       const remainingBytes = MAX_RPF_EXTRACTED_BYTES - totalExtractedBytes;
       const declaredBytes = record.entries.reduce((sum, entry) => sum + entry.size, 0);
+      if (record.entries.some((entry) => task.archivePath.length + 1 + entry.path.length > 4096)) {
+        throw new Error("Nested RPF extraction path exceeds the configured safety limit.");
+      }
       if (record.fileCount > Math.min(5000, remainingFiles)) {
         throw new Error("RPF extraction exceeds the remaining global file-count budget.");
       }
