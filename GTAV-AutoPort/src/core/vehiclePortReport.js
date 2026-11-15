@@ -44,12 +44,16 @@ function modelVariationEntries(parsed, modelName) {
 }
 function referenceValues(node, pattern) {
   const values = [];
-  walk(node, (entry, parents) => {
-    for (const [key, value] of Object.entries(entry)) {
-      const fieldPath = [...parents, key].join(".");
-      if (pattern.test(fieldPath) && typeof value !== "object" && text(value)) values.push({ field: fieldPath, value: text(value) });
+  const scan = (value, parents = []) => {
+    if (Array.isArray(value)) { value.forEach((item) => scan(item, parents)); return; }
+    if (value && typeof value === "object") {
+      for (const [key, child] of Object.entries(value)) scan(child, [...parents, key]);
+      return;
     }
-  });
+    const fieldPath = parents.join(".");
+    if (pattern.test(fieldPath) && text(value)) values.push({ field: fieldPath, value: text(value) });
+  };
+  scan(node);
   return values;
 }
 function collectScalars(node, output = new Set()) {
