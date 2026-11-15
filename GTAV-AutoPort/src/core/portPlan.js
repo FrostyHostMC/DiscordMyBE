@@ -11,10 +11,10 @@ const ROUTES = Object.freeze({
   ".as": { family: "scaleform-source", stage: "scaleform-authoring", source: "actionscript-source-review", target: "scaleform-compile-and-runtime-validation-required", risk: "ActionScript-2-and-GTA-Scaleform-API-compatibility" },
   ".ttf": { family: "font-source", stage: "scaleform-authoring", source: "font-file-intake", target: "scaleform-font-export-required", risk: "GFx-font-linkage-and-export-pipeline" },
   ".otf": { family: "font-source", stage: "scaleform-authoring", source: "font-file-intake", target: "scaleform-font-export-required", risk: "GFx-font-linkage-and-export-pipeline" },
-  ".yft": { family: "fragment", stage: "resource-decode", source: "native-inspector-partial", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
+  ".yft": { family: "fragment", stage: "resource-decode", source: "ragekit-legacy-writer-and-native-inspector", target: "ps4-console-encoding-unverified", risk: "PS4-resource-layout-and-console-streaming-unverified" },
   ".ydr": { family: "drawable", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ydd": { family: "drawable-dictionary", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
-  ".ytd": { family: "texture-dictionary", stage: "resource-decode", source: "native-inspector-partial", target: "ps4-writer-missing", risk: "texture-encoding-unverified" },
+  ".ytd": { family: "texture-dictionary", stage: "resource-decode", source: "ragekit-legacy-writer-and-native-inspector", target: "ps4-console-encoding-unverified", risk: "PS4-texture-encoding-and-console-streaming-unverified" },
   ".ybn": { family: "collision", stage: "resource-decode", source: "backend-required", target: "ps4-writer-missing", risk: "platform-layout-unverified" },
   ".ymap": { family: "map-placement", stage: "world-resource-analysis", source: "backend-required", target: "ps4-writer-missing", risk: "world-dependency-unresolved" },
   ".ytyp": { family: "archetype", stage: "world-resource-analysis", source: "backend-required", target: "ps4-writer-missing", risk: "world-dependency-unresolved" },
@@ -52,9 +52,9 @@ const ROUTES = Object.freeze({
 });
 
 const OUTPUT_CONTRACTS = Object.freeze({
-  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "PS4 RAGE fragment writer, PS4 texture dictionary writer, dependency resolution and CUSA00419 / 1.73 validation" },
+  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "RageKit PC Legacy candidate writer is available; PS4-specific resource encoding, dependencies and CUSA00419 / 1.73 validation remain unverified" },
   drawable: { artifacts: ["model.ydr or model.ydd", "model.ytd", "referenced materials and shaders"], inputs: ["mesh and material source", "texture images", "material/shader mapping"], gate: "PS4 drawable and texture dictionary writers plus target-build validation" },
-  "texture-dictionary": { artifacts: ["model.ytd"], inputs: ["source images or DDS", "texture names and hashes", "mip chain", "target compression/format"], gate: "PS4 YTD writer with verified texture formats, mipmaps and platform encoding" },
+  "texture-dictionary": { artifacts: ["model.ytd"], inputs: ["source images or DDS", "texture names and hashes", "mip chain", "target compression/format"], gate: "RageKit PC Legacy YTD writer is available; PS4 texture formats, mipmaps and console encoding remain unverified" },
   "texture-source": { artifacts: ["model.ytd"], inputs: ["decoded image", "texture name/hash", "mipmap policy", "material usage"], gate: "PS4 YTD writer; PNG/DDS alone is not a game-ready GTA texture" },
   collision: { artifacts: ["model.ybn"], inputs: ["collision mesh", "materials", "bounds and physics properties"], gate: "PS4 YBN writer and in-game collision validation" },
   "map-placement": { artifacts: ["map.ymap", "referenced .ytyp", "all referenced .ydr/.ydd/.ybn/.ytd resources"], inputs: ["world transforms", "archetype references", "entity sets", "streaming bounds"], gate: "PS4 map/archetype writers and complete world dependency validation" },
