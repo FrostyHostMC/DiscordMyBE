@@ -16,6 +16,7 @@ import { inspectRagekitAutomatically } from "../core/ragekit.js";
 import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
 import { inspectModDocumentation } from "../core/documentation.js";
 import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
+import { inspectReshadeMod } from "../core/reshade.js";
 import Ps4PkgInspector from "./Ps4PkgInspector.jsx";
 
 const stages = [
@@ -65,6 +66,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null);
   const [dlcManifest, setDlcManifest] = useState(null);
   const [scaleformReport, setScaleformReport] = useState(null);
+  const [reshadeReport, setReshadeReport] = useState(null);
   const [documentation, setDocumentation] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -95,7 +97,7 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
@@ -258,7 +260,23 @@ export default function App() {
         <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
-      {scaleformReport && <section className="panel results-panel">
+
+      {reshadeReport && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">RESHADE / SHADER ANALYSIS</div><h3>PC graphics effect inventory</h3><p>{reshadeReport.summary.sourceFiles} shader source(s) · {reshadeReport.summary.presetFiles} preset(s) · {reshadeReport.summary.pcBinaries} PC binary/binaries</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT PS4 READY</span></div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{reshadeReport.summary.techniques}</b><span>techniques</span></div>
+          <div className="audit-card"><b>{reshadeReport.summary.includes}</b><span>shader includes</span></div>
+          <div className="audit-card"><b>{reshadeReport.summary.detectedEffectFamilies}</b><span>effect families</span></div>
+          <div className="audit-card"><b>{reshadeReport.missingIncludes.length}</b><span>missing includes</span></div>
+        </div>
+        {reshadeReport.detectedEffects.length > 0 && <p><b>Detected effects:</b> {reshadeReport.detectedEffects.join(", ")}</p>}
+        {reshadeReport.techniques.length > 0 && <p><b>Techniques:</b> {reshadeReport.techniques.join(", ")}</p>}
+        {reshadeReport.files.effects.map((path) => <div className="file-row" key={path}><FileText size={15}/><span className="file-name"><b>{path}</b><small>ReShade shader source — static analysis only</small></span></div>)}
+        {reshadeReport.missingIncludes.map((include) => <div className="audit-warning" key={include}><AlertTriangle size={14}/><span>Missing shader include: {include}</span></div>)}
+        {reshadeReport.requirements.map((requirement) => <div className="audit-warning" key={requirement}><AlertTriangle size={14}/><span>{requirement}</span></div>)}
+        <div className="notice"><ShieldCheck size={19}/><div><b>No PC injector files will be copied to PS4.</b><p>AutoPort inventories shader logic and separates effects that may be approximated from effects needing renderer hooks. It will not create a fake install package or claim that an INI preset is a converted shader.</p></div></div>
+      </section>}
+\n      {scaleformReport && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">SCALEFORM GRAPHICS WORKBENCH</div><h3>GFX / SWF asset inspection</h3><p>{scaleformReport.summary.scaleformGfx} Scaleform GFX · {scaleformReport.summary.swf} SWF · {scaleformReport.summary.invalid} invalid header(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> EDITOR HANDOFF</span></div>
         <div className="audit-grid">
           <div className="audit-card"><b>{scaleformReport.summary.files}</b><span>graphics files</span></div>
