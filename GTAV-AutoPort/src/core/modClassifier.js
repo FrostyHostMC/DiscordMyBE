@@ -1,3 +1,5 @@
+import { inspectBinaryFormat } from "./defaultFormatAdapters.js";
+
 const EXTENSIONS = {
   ".rpf": ["archive", "RAGE archive", "archive-adapter-required"],
   ".fx": ["reshade-shader", "ReShade HLSL effect source", "ps4-renderer-adaptation-required"],
@@ -64,17 +66,9 @@ const EXTENSIONS = {
 };
 
 function signatureOf(bytes) {
-  if (!bytes || bytes.length < 4) return null;
-  const ascii = String.fromCharCode(...bytes.subarray(0, 4));
-  if (ascii === "RSC7") return "RSC7";
-  if (ascii === "RPF7") return "RPF7";
-  if (ascii === "DDS ") return "DDS";
-  if (ascii === "OggS") return "OGG";
-  if (ascii === "RIFF" && bytes.length >= 12 && String.fromCharCode(...bytes.subarray(8, 12)) === "WAVE") return "WAVE";
-  if (bytes[0] === 0x89 && ascii.slice(1, 4) === "PNG") return "PNG";
-  if (bytes[0] === 0x4d && bytes[1] === 0x5a) return "MZ";
-  if (bytes[0] === 0x7f && ascii.slice(1, 4) === "ELF") return "ELF";
-  return null;
+  if (!bytes) return null;
+  const result = inspectBinaryFormat({ path: "", bytes });
+  return result.signature;
 }
 
 function extensionOf(file) {
@@ -87,6 +81,9 @@ function extensionOf(file) {
 function classifyOne(file) {
   const extension = extensionOf(file);
   const [family, label, portability] = EXTENSIONS[extension] || ["unknown", "Unrecognized file", "unknown-review"];
+  const formatDetection = file.bytes instanceof Uint8Array
+    ? inspectBinaryFormat(file)
+    : { status: "unrecognized", selectedAdapterId: null, candidates: [], probeErrors: [], preservedAsSource: true, conversionAuthorized: false, signature: null };
   const signature = signatureOf(file.bytes);
   const warnings = [];
   if ([".asi", ".dll", ".exe", ".sys"].includes(extension)) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
@@ -95,7 +92,7 @@ function classifyOne(file) {
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");
   if (signature === "MZ" && ![".dll", ".exe", ".asi"].includes(extension)) warnings.push("Detected a Windows PE executable signature despite the file extension.");
-  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, signature, warnings };
+  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, signature, formatDetection, warnings };
 }
 
 export function auditModFiles(files = []) {
