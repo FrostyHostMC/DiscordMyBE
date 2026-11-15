@@ -2,7 +2,7 @@
 
 AutoPort includes a read-only inspector for the standard PC RPF7 OPEN variant.
 
-It validates the RPF7 magic, OPEN marker, entry table bounds, name-table bounds, UTF-8 null-terminated names, directory child ranges and parent-cycle detection, file flags, and 512-byte-block payload ranges. It returns a structured entry list and counts for downstream diagnostics.
+It validates the RPF7 magic, OPEN marker, entry table bounds, name-table bounds, UTF-8 null-terminated names, directory child ranges and parent-cycle detection, file flags, and 512-byte-block payload ranges. It reconstructs each entry path from the validated directory hierarchy. The companion `extractOpenRpf7` API returns copied raw file payloads with those paths; it does not decode or convert the payload formats.
 
 ## Compatibility boundary
 
@@ -10,4 +10,4 @@ The inspector intentionally rejects non-OPEN markers. In particular, it does not
 
 ## Tests
 
-The tests round-trip the current JavaScript OPEN writer, exercise truncated structures and invalid payload offsets, and verify that an Orbis-style marker is rejected rather than guessed.
+The tests round-trip the current JavaScript OPEN writer, exercise truncated structures and invalid payload offsets, verify that an Orbis-style marker is rejected rather than guessed, and check nested raw extraction and path reconstruction.
