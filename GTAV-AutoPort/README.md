@@ -15,6 +15,7 @@
 - [Vehicle metadata mapping](docs/VEHICLE-METADATA-MAPPING.md)
 - [YFT/YTD resource conversion](docs/YFT-YTD-RESOURCE-CONVERSION.md)
 - [PC script native reimplementation](docs/PC-SCRIPT-NATIVE-REIMPLEMENTATION.md)
+- [Portable native runtime core](docs/NATIVE-RUNTIME-CORE.md)
 - [Ped/object pack mapping](docs/PED-OBJECT-PACK-MAPPING.md)
 
 
