@@ -27,9 +27,9 @@ This changes the mapping rule: redirecting an individual loose file may do nothi
 
 ## What remains unverified
 
-The public AFR README does not establish that a particular GTA V CUSA00411 update 1.73 file is requested through the expected `/app0` path, that the AFR plugin build works with the user's exact PS4 firmware/GoldHEN combination, or that a PC RPF/resource can simply be redirected and loaded by the PS4 game.
+The public AFR README does not establish that a particular GTA V CUSA00419 update 1.73 file is requested through the expected `/app0` path, that the AFR plugin build works with the user's exact PS4 firmware/GoldHEN combination, or that a PC RPF/resource can simply be redirected and loaded by the PS4 game.
 
-Therefore AFR is a promising deployment mechanism for a later validated overlay, not a universal mod loader and not proof of compatibility. The v1.56 community workflow is a research reference only and must not be copied as a confirmed v1.73 install recipe. The next work is to verify real CUSA00411 1.73 file paths and resource requirements using user-owned reference files, then build a staged overlay and validate it on the exact console/game build.
+Therefore AFR is a promising deployment mechanism for a later validated overlay, not a universal mod loader and not proof of compatibility. The v1.56 community workflow is a research reference only and must not be copied as a confirmed v1.73 install recipe. The next work is to verify real CUSA00419 1.73 file paths and resource requirements using user-owned reference files, then build a staged overlay and validate it on the exact console/game build.
 
 ## Safety policy
 
@@ -43,7 +43,7 @@ Therefore AFR is a promising deployment mechanism for a later validated overlay,
 
 A decrypted or rebuilt EBOOT.BIN is **not a general installation prerequisite** for GoldHEN plugin/overlay mods. GoldHEN's official plugin repository documents loading PRX plugins before game boot, with per-title entries in `/data/GoldHEN/plugins.ini`; the documented plugin directory is `/data/GoldHEN/plugins/`. It also documents AFR (`afr.prx`) as a separate file-redirection plugin using `/data/GoldHEN/AFR/<TITLE_ID>/` overlays.
 
-A real GTA V example is the public Lotus GoldHEN SPRX port. Its README instructs users to place an SPRX in the GoldHEN plugins directory and add a per-title entry to `plugins.ini`. However, that release specifically calls out GTA V updates 1.27 and 1.48 and uses a different example title ID (`CUSA00419`); it is proof of the plugin-based method, **not** proof that its binary or hooks work on CUSA00411 update 1.73.
+A real GTA V example is the public Lotus GoldHEN SPRX port. Its README instructs users to place an SPRX in the GoldHEN plugins directory and add a per-title entry to `plugins.ini`. However, that release specifically calls out GTA V updates 1.27 and 1.48 and uses CUSA00419 but only documents older updates 1.27 and 1.48; it is proof of the plugin-based method, **not** proof that its binary or hooks work on CUSA00419 update 1.73.
 
 References:
 - GoldHEN plugin loading and AFR: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
