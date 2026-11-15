@@ -2,7 +2,7 @@
 
 ## Available writer stage
 
-AutoPort now exposes a bounded local conversion action for `.yft`, `.ytd`, `.ydr`, `.ydd` and `.ybn` resources through the pinned RageKit v0.3.1 CLI. The route asks RageKit to write the resource in GTA V PC Legacy edition format, then parses the output with `rk info` and runs `rk roundtrip` on the output. It reports source/output SHA-256 values and whether the second round-trip is byte-exact. The source file is never overwritten.
+AutoPort now exposes a bounded local conversion action for `.yft`, `.ytd`, `.ydr` and `.ydd` resources through the pinned RageKit v0.3.1 CLI. The route asks RageKit to write the resource in GTA V PC Legacy edition format, then parses the output with `rk info` and runs `rk roundtrip` on the output. It reports source/output SHA-256 values and whether the second round-trip is byte-exact. The source file is never overwritten.
 
 RageKit documents readers and writers for YFT fragments, YTD texture dictionaries, YDR drawables, YDD drawable dictionaries and YBN collision resources, including cross-edition Legacy/Enhanced conversion. Its documentation describes validation against PC Legacy and Enhanced game files and CodeWalker; it does not establish PS4 CUSA00419 update 1.73 compatibility. See [RageKit's format coverage](https://github.com/RatPrez/ragekit) and [Enhanced/Legacy conversion notes](https://github.com/RatPrez/ragekit/blob/main/docs/enhanced.md).
 
