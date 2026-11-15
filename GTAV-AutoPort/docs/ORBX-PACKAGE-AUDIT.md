@@ -1,0 +1,72 @@
+# ORBX Engine package audit
+
+## What the public vendor listing says
+
+The public ORBX Engine v1.4 listing advertises support for these GTA V PS4 versions:
+
+- 1.00
+- 1.32
+- 1.38
+- 1.46
+- 1.47
+- 1.48
+- 1.49
+- 1.50
+- 1.51
+- 1.52
+- 1.53
+- 1.55
+- 1.56
+
+It advertises loading main-game RPFs, DLC RPFs, XML, OMT, META, DAT, GXT2 and GFX files, plus a `dlclist.xml` loader. The v1.3.4 description says file types can be selected in `orbx.ini` and names an `AvoidCrcCheckedFiles` option.
+
+Source: https://ko-fi.com/s/8b1c775f83
+
+This is the vendor's published claim, not an independent test matrix. The listing does not publish the complete INI schema, a source release for `orbx.prx`, a compatibility statement for every title ID, or a 1.73 test. A version not named in the listing is **unlisted**, not proof that it is technically impossible to use.
+
+## User-supplied archive
+
+The user supplied `Orbx Engine v1.4.7z` and the archive password in chat. The archive is a 7-Zip container with encrypted content. The current inspection runtime has no 7-Zip executable or Python 7z library, and network access is unavailable to install one. A previous extraction attempt left a zero-byte `orbx.ini` placeholder; that zero-byte file is not the vendor's configuration and must not be used.
+
+Do not claim to have read the INI or PRX until extraction succeeds. The package inventory previously surfaced the expected names `orbx.prx`, `orbx/orbx.ini`, `orbx/rpf_log.txt` and RPF assets, but their contents and hashes still need direct extraction and verification.
+
+## Installation paths to audit
+
+The runtime error reported by the user names:
+
+```text
+/data/orbx/orbx.ini
+```
+
+The expected GoldHEN plugin directory is commonly:
+
+```text
+/data/GoldHEN/plugins/
+```
+
+The GoldHEN plugin repository documents per-title plugin configuration in `plugins.ini` and plugin files in the GoldHEN plugins directory:
+
+https://github.com/GoldHEN/GoldHEN_Plugins_Repository
+
+The package's nested vendor folder layout must be flattened carefully during installation. Do not copy an extra enclosing `Orbx Engine v1.4/Orbx Engine v1.4/` directory into a runtime location. Keep the plugin binary, INI and resource tree at the paths expected by the loader. The precise destination for each RPF must be confirmed from the extracted INI/instructions/log, not inferred from its filename.
+
+## Compatibility interpretation
+
+- A PRX extension is not proof that a binary is an Orbis PRX or that its hooks match the running game.
+- The vendor's published version list is useful evidence, but absence of 1.73 from that list is not itself a technical diagnosis.
+- Do not patch a version string, bypass a version check, change executable offsets, or fabricate an INI schema without source/debug evidence.
+- First distinguish a missing configuration path, malformed INI, plugin load failure, hook/build mismatch, and resource parsing failure using the actual error and `rpf_log.txt`.
+- Keep the graphics archives separate from the loader binary. If the loader fails before reading assets, changing textures or repacking RPFs will not repair that initialization failure.
+
+## AutoPort implementation
+
+`src/core/orbxPackageInspector.js` adds a read-only package audit. It detects `orbx.prx`, `orbx.ini`, RPF archives and files under an `orbx/gta/` resource tree, reports duplicate or missing components, and suggests the runtime INI path from the observed error. It does not modify PRX binaries, invent INI values, execute package scripts, deploy files or claim compatibility.
+
+The automatic preparation ZIP now includes `reports/orbx-package-audit.json` and embeds the audit in `autoport-manifest.json`. The report deliberately keeps `contentsInspected`, `runtimeCompatibilityVerified` and `deploymentAuthorized` false until actual evidence exists.
+
+## Next evidence needed
+
+1. Extract the archive on a machine with 7-Zip and provide the real `orbx.ini`, `rpf_log.txt` and `orbx.prx` (or a report containing their hashes and text).
+2. Confirm the exact installed paths on the PS4 and the exact error text.
+3. Compare the INI keys with the loader's observed file-open attempts/log output.
+4. Only after the loader reaches resource loading should individual RPF and graphics resources be investigated.
