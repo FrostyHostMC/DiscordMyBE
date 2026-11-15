@@ -19,6 +19,7 @@ import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
 import { inspectReshadeMod } from "../core/reshade.js";
 import { buildPs4AfrPackage } from "../core/ps4Package.js";
 import { inspectMenuRelatedFiles } from "../core/menuPack.js";
+import { inspectScriptModPackages } from "../core/scriptModPackages.js";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -82,6 +83,7 @@ export default function App() {
   const [ps4PathsConfirmed, setPs4PathsConfirmed] = useState(false);
   const [packageStatus, setPackageStatus] = useState("");
   const [menuReport, setMenuReport] = useState(null);
+  const [scriptModReport, setScriptModReport] = useState(null);
   const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
@@ -103,11 +105,12 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
       setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
+      setScriptModReport(inspectScriptModPackages(result.files));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
@@ -317,7 +320,7 @@ export default function App() {
         <button className="secondary-button" onClick={()=>downloadJson(menuReport,"gtav-autoport-menu-xml-report.json")}><ArrowDownToLine size={15}/> Export menu / XML report</button>
       </section>}
 
-      {archive?.packageMetadata && <section className="panel">
+      {scriptModReport?.summary.packageCount > 0 && <section className="panel results-panel">\n        <div className="panel-head"><div><div className="eyebrow">SCRIPT / RUNTIME MOD AUDIT</div><h3>Configuration data vs gameplay code</h3><p>{scriptModReport.summary.packageCount} package(s) · {scriptModReport.summary.runtimeFiles} runtime file(s) · {scriptModReport.summary.configFiles} config file(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> BEHAVIOR PORT REQUIRED</span></div>\n        <div className="audit-grid"><div className="audit-card"><b>{scriptModReport.summary.pcRuntimeFiles}</b><span>PC runtime files</span></div><div className="audit-card"><b>{scriptModReport.summary.consolePlugins}</b><span>console plugins</span></div><div className="audit-card"><b>{scriptModReport.summary.xmlFiles}</b><span>XML configs</span></div><div className="audit-card"><b>{scriptModReport.summary.homeInvasionLike}</b><span>scripted gameplay mods</span></div></div>\n        {scriptModReport.packages.map((pkg)=><div className="native-summary" key={pkg.directory}><h4>{pkg.label} · {pkg.directory}</h4><div className="file-list">{pkg.runtimeFiles.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.extension.toUpperCase()} · {formatBytes(item.bytes)}</small></span><span className="file-ext">{item.extension===".prx"||item.extension===".sprx"?"CONSOLE PLUGIN":"SOURCE INPUT"}</span></div>)}{pkg.configFiles.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>Configuration / data file</small></span><span className="file-ext">CONFIG</span></div>)}</div>\n          {pkg.xmlReports.map((xml)=><div key={xml.path}>{!xml.validXml?<div className="audit-warning"><AlertTriangle size={14}/><span>{xml.path}: {xml.error}</span></div>:<><p className="native-disclaimer"><b>{xml.path}</b> · XML parsed · root: {xml.rootName}</p><div className="audit-grid">{Object.entries(xml.signals).filter(([,count])=>count>0).map(([name,count])=><div className="audit-card" key={name}><b>{count}</b><span>{name.replaceAll(/([A-Z])/g," $1").toLowerCase()}</span></div>)}</div></>}</div>)}\n          {pkg.notes.map((note)=><div className="audit-warning" key={note}><AlertTriangle size={14}/><span>{note}</span></div>)}\n        </div>)}\n        <div className="notice"><ShieldCheck size={18}/><div><b>AutoPort keeps data and runtime behavior separate.</b><p>XML/INI/JSON settings can be mapped into a proven menu schema. PC DLL/ASI/.NET/script behavior must be recreated in a PS4-native runtime or a confirmed menu action interface; this report does not generate a working plugin.</p></div></div>\n        <button className="secondary-button" onClick={()=>downloadJson(scriptModReport,"gtav-autoport-script-mod-report.json")}><ArrowDownToLine size={15}/> Export script mod report</button>\n      </section>}\n\n      {archive?.packageMetadata && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">OPENIV PACKAGE INSPECTION</div><h3>{archive.packageMetadata.type} manifest</h3><p>{archive.packageMetadata.assemblyDetected ? "Assembly manifest found and parsed without executing its instructions." : "No assembly.xml manifest found; contents are treated as an ordinary archive."}</p></div><span className="tag warning"><AlertTriangle size={13}/> REVIEW ONLY</span></div>
         {archive.packageMetadata.assemblies?.map((assembly) => <div className="file-row" key={assembly.path}><FileText size={15}/><span className="file-name"><b>{assembly.name || assembly.path}</b><small>{[assembly.version && `Version ${assembly.version}`, assembly.author && `By ${assembly.author}`].filter(Boolean).join(" · ") || (assembly.validXml ? "Manifest parsed" : assembly.error)}</small></span><span className="file-ext">{assembly.validXml ? `${assembly.operationCount} actions` : "INVALID XML"}</span></div>)}
         {archive.packageMetadata.assemblies?.flatMap((assembly) => assembly.operations || []).slice(0,20).map((operation,index) => <div className="audit-warning" key={operation.action+index}><FileText size={14}/><span><b>{operation.action.toUpperCase()}</b> · {Object.entries(operation.attributes || {}).map(([key,value]) => `${key.replace(/^@_/,"")}: ${value}`).join(" → ") || operation.value || "No path attributes found"}</span></div>)}
