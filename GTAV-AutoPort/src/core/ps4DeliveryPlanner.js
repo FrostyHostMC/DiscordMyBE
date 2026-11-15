@@ -119,8 +119,9 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     packaging: {
       orbisRpfBackend: "not-integrated",
       projectVLoader: "not-configured",
-      goldhenPluginDeployment: "planning-only",
-      note: "No Orbis builder or PS4 plugin is executed by this planner. Backend integration and target-build tests are still required."
+      afrOverlayPlanner: "available-explicit-mappings-only",
+      goldhenPluginDeployment: "configuration-and-overlay-planning-available-deployment-disabled",
+      note: "The existing AFR helper can generate a title-specific plugins.ini snippet and explicit-mapping overlay plan, but it does not install plugins or deploy files. No Orbis builder or PS4 plugin is executed by this planner."
     },
     summary: {
       fileCount: items.length,
