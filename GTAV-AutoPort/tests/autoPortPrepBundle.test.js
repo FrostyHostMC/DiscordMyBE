@@ -79,3 +79,44 @@ test("includes extracted RPF metadata in automatic dependency analysis", async (
   assert.equal(result.manifest.dependencies.ambiguous, 0);
   assert.equal(result.manifest.archiveInspections[0].status, "extracted-raw-open-archive");
 });
+
+test("records extracted archive entry provenance and detected format in the manifest", async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+  const archiveBytes = buildOpenRpf7([{ path: "stream/preview.png", bytes: png }]).bytes;
+  const result = await buildAutomaticPrepBundle({
+    files: [{ path: "cars/sample/dlc.rpf", bytes: archiveBytes }]
+  });
+  const archiveRecord = result.manifest.archiveInspections[0];
+  assert.equal(archiveRecord.sourcePath, "cars/sample/dlc.rpf");
+  assert.equal(archiveRecord.entries.length, 1);
+  assert.deepEqual(archiveRecord.entries[0], {
+    path: "stream/preview.png",
+    archivePath: "cars/sample/dlc.rpf/stream/preview.png",
+    analysisPath: "rpf-extracted/cars/sample/dlc.rpf/stream/preview.png",
+    size: png.length,
+    formatStatus: "recognized",
+    adapterId: "png",
+    role: "image",
+    evidence: ["PNG signature"],
+    candidates: [{ adapterId: "png", confidence: 1, role: "image" }]
+  });
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.ok(archive.file("AutoPort-Prep/rpf-extracted/cars/sample/dlc.rpf/stream/preview.png"));
+});
+
+test("keeps extracted analysis paths separate from standalone upload paths", async () => {
+  const nestedPath = "cars/sample/dlc.rpf/common/data/vehicles.meta";
+  const standalone = new TextEncoder().encode("<Standalone/>");
+  const insideArchive = new TextEncoder().encode("<Inside/>");
+  const archiveBytes = buildOpenRpf7([{ path: "common/data/vehicles.meta", bytes: insideArchive }]).bytes;
+  const result = await buildAutomaticPrepBundle({
+    files: [
+      { path: nestedPath, bytes: standalone },
+      { path: "cars/sample/dlc.rpf", bytes: archiveBytes }
+    ]
+  });
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.deepEqual(new Uint8Array(await archive.file("AutoPort-Prep/source-original/" + nestedPath).async("uint8array")), standalone);
+  assert.deepEqual(new Uint8Array(await archive.file("AutoPort-Prep/rpf-extracted/cars/sample/dlc.rpf/common/data/vehicles.meta").async("uint8array")), insideArchive);
+  assert.equal(result.manifest.archiveInspections[0].entries[0].analysisPath, "rpf-extracted/cars/sample/dlc.rpf/common/data/vehicles.meta");
+});
