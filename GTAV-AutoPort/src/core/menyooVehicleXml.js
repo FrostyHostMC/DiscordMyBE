@@ -7,7 +7,7 @@ const parser = new XMLParser({
   attributeNamePrefix: "@_",
   parseTagValue: false,
   trimValues: true,
-  isArray: (name) => /^(Placement|Attachment|SpoonerAttachment|VehicleProperties)$/i.test(name),
+  isArray: (name) => /^(Placement|Attachment|SpoonerAttachment)$/i.test(name),
 });
 
 const asArray = (value) => value == null ? [] : Array.isArray(value) ? value : [value];
