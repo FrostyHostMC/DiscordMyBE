@@ -33,9 +33,9 @@ test("rejects payload offsets outside the archive", () => {
   const bytes = built.bytes.slice();
   const view = new DataView(bytes.buffer);
   // First file is entry 1; overwrite its 24-bit block offset.
-  bytes[16 + 16 + 5] = 0xff;
-  bytes[16 + 16 + 6] = 0xff;
-  bytes[16 + 16 + 7] = 0x7f;
+  bytes[16 + 2 * 16 + 5] = 0xff;
+  bytes[16 + 2 * 16 + 6] = 0xff;
+  bytes[16 + 2 * 16 + 7] = 0x7f;
   assert.throws(() => inspectOpenRpf7(bytes), /payload range is outside/);
 });
 
