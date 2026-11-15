@@ -96,17 +96,23 @@ export function inspectOpenRpf7(input) {
       if (parent === undefined) fail("directory hierarchy does not lead back to the root.");
     }
   }
+  const paths = new Map([[0, ""]]);
   for (let index = 1; index < entries.length; index++) {
-    const segments = [];
+    const chain = [];
     let current = index;
-    while (current !== 0) {
-      segments.push(entries[current].name);
+    while (!paths.has(current)) {
+      chain.push(current);
       current = parentByChild.get(current);
       if (current === undefined) fail("directory hierarchy does not lead back to the root.");
     }
-    entries[index].path = segments.reverse().join("/");
+    let parentPath = paths.get(current);
+    for (let cursor = chain.length - 1; cursor >= 0; cursor--) {
+      const childIndex = chain[cursor];
+      parentPath = parentPath ? parentPath + "/" + entries[childIndex].name : entries[childIndex].name;
+      paths.set(childIndex, parentPath);
+    }
   }
-  entries[0].path = "";
+  for (const entry of entries) entry.path = paths.get(entry.index);
   return {
     format: "RPF7",
     encryption: "OPEN",
