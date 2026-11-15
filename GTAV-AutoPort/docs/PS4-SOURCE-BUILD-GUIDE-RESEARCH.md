@@ -13,7 +13,7 @@ The guide explicitly calls for:
 - An update RPF / update package at GTA V version 1.46.
 - ORBIS SDK 1.200 / 2.500 and a legacy Visual Studio 2017 toolchain.
 
-The AutoPort target profile supplied by the user is PS4 firmware 14.00, GoldHEN 2.4b18.13, title ID CUSA00411, GTA V update 1.73, Story Mode. The guide does not establish compatibility with firmware 14.00 or update 1.73. Do not use its old update package, replace the user's 1.73 installation with 1.46, or follow its full rebuild instructions as an installation procedure for this target.
+The AutoPort target profile supplied by the user is PS4 firmware 14.00, GoldHEN 2.4b18.13, title ID CUSA00419, GTA V update 1.73, Story Mode. The guide does not establish compatibility with firmware 14.00 or update 1.73. Do not use its old update package, replace the user's 1.73 installation with 1.46, or follow its full rebuild instructions as an installation procedure for this target.
 
 ## What we can safely learn for AutoPort
 
@@ -29,7 +29,7 @@ The guide recommends disabling antivirus and references third-party installers, 
 
 ## Required evidence before any PS4 writer is enabled
 
-- Exact CUSA00411 update 1.73 reference RPFs/resources from the user's own installation, with hashes and source paths.
+- Exact CUSA00419 update 1.73 reference RPFs/resources from the user's own installation, with hashes and source paths.
 - Resource/container metadata demonstrating the PS4 platform variant and version—not merely an RSC7 signature or a user-entered target label.
 - A known-good PS4 1.73 resource/container that can be parsed and rebuilt without changing semantics, then compared/validated.
 - A reversible packaging/overlay plan and explicit console-side validation.
