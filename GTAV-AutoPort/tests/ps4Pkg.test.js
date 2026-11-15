@@ -21,7 +21,7 @@ function makePkg() {
   view.setUint16(0x1114, 0, true);
   view.setUint16(0x1116, 0x0204, true);
   view.setUint32(0x1118, 4, true);
-  view.setUint32(0x1120, 16, true);
+  view.setUint32(0x1120, 0, true);
   bytes.set(new TextEncoder().encode("CATEGORY\0"), 0x1130);
   bytes.set(new TextEncoder().encode("gp\0\0"), 0x1140);
   const entry = new DataView(bytes.buffer);
@@ -34,6 +34,7 @@ function makePkg() {
 test("inspects PS4 PKG header and identifies title ID without opening payload", async () => {
   const report = await inspectPs4Pkg(makePkg());
   assert.equal(report.titleId, "CUSA00411");
+  assert.equal(report.category, "gp");
   assert.equal(report.packageType, "update-candidate");
   assert.equal(report.compatibilityVerified, false);
 });
