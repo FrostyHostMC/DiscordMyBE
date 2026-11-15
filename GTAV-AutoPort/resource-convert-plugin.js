@@ -16,7 +16,7 @@ function findRk() {
 }
 function run(executable, args, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, RAGEKIT_EDITION: "legacy" } });
+    const child = spawn(executable, args, { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env } });
     let stdout = "", stderr = "", timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill(); }, timeoutMs);
     child.stdout.setEncoding("utf8").on("data", (chunk) => { stdout += chunk; if (Buffer.byteLength(stdout) > 8 * 1024 * 1024) child.kill(); });
@@ -46,7 +46,7 @@ export function resourceConvertPlugin() {
         const output = path.join(temp, "legacy-candidate" + ext);
         const roundtrip = path.join(temp, "roundtrip" + ext);
         await writeFile(input, inputBytes);
-        await run(executable, ["convert", input, output]);
+        await run(executable, ["--legacy", "convert", input, output]);
         const outputBytes = await readFile(output);
         if (!outputBytes.length || outputBytes.length > MAX_BYTES) throw new Error("Converted output is empty or exceeds 64 MiB.");
         const info = await run(executable, ["info", output, "-v"]);
