@@ -1,7 +1,6 @@
 import JSZip from "jszip";
-import { convertLegacyResourceCandidate } from "./resourceConversion.js";
+import { registeredFormatAdapterRegistry } from "./registeredFormatAdapters.js";
 
-const CONVERTIBLE = new Set([".yft", ".ydr", ".ydd", ".ytd"]);
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
   const parts = normalized.split("/");
@@ -31,18 +30,19 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const sourceManifest = [];
   const conversions = [];
   let completed = 0;
-  const eligible = files.filter((file) => CONVERTIBLE.has(extension(file.path)));
+  const inspected = files.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
+  const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
   for (const file of files) {
     const relative = safePath(file.path);
     if (!relative) continue;
     originalRoot.file(relative, file.bytes);
     sourceManifest.push({ path: relative, bytes: file.bytes?.byteLength ?? file.size ?? 0, preserved: true });
   }
-  for (const file of eligible) {
+  for (const { file, inspection } of eligible) {
     const relative = safePath(file.path);
     const record = { sourcePath: relative, extension: extension(relative), status: "failed", outputPath: null, outputBytes: 0, roundtripVerified: false, error: null, targetCompatibility: "unverified" };
     try {
-      const converted = await convertLegacyResourceCandidate(file);
+      const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
       if (!converted.bytes?.length || !converted.roundtripVerified) throw new Error("RageKit did not confirm a successful output round-trip.");
       record.status = "pc-legacy-candidate";
       record.outputPath = relative;
