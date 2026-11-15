@@ -45,6 +45,6 @@ test("all gates are individually evidence-driven", () => {
 });
 
 test("blank GoldHEN values do not count as recorded evidence", () => {
-  const result = assessPs4Compatibility({ goldhenVersion: "   " });
+  const result = assessPs4Compatibility({ target: { ...PS4_TARGET, source: "unknown", goldhenVersionSource: "unknown" }, goldhenVersion: "   " });
   assert.equal(result.gates.find((gate) => gate.id === "goldhen").passed, false);
 });
