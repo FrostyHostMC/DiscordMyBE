@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 #include <variant>
+#include <vector>
+#include <unordered_map>
 
 namespace autoport {
 
@@ -37,12 +39,28 @@ public:
 
 struct DispatchResult { bool ok{false}; std::uint32_t entity{0}; std::string error; };
 
+struct PlannedSpawnEntity { std::string result_id; SpawnEntity action; };
+struct PlannedSetTransform { std::string entity_ref; Vec3 position; Vec3 rotation; float heading{0}; };
+struct PlannedAttachEntity { std::string parent_ref; std::string child_ref; std::string bone; Vec3 offset; Vec3 rotation; };
+struct PlannedSetVehicleProperty { std::string entity_ref; std::string property; float value{0}; };
+using PlannedAction = std::variant<PlannedSpawnEntity, PlannedSetTransform, PlannedAttachEntity, PlannedSetVehicleProperty>;
 class Dispatcher {
 public:
     explicit Dispatcher(GameApi& api) : api_(api) {}
     DispatchResult dispatch(const Action& action) const;
 private:
     GameApi& api_;
+};
+
+class PlanExecutor {
+public:
+    explicit PlanExecutor(GameApi& api) : dispatcher_(api) {}
+    std::vector<DispatchResult> execute(const std::vector<PlannedAction>& actions);
+    void clear() { handles_.clear(); }
+    std::size_t entity_count() const { return handles_.size(); }
+private:
+    Dispatcher dispatcher_;
+    std::unordered_map<std::string, std::uint32_t> handles_;
 };
 
 } // namespace autoport
