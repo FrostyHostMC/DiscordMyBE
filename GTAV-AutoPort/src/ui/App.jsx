@@ -18,7 +18,6 @@ import { inspectModDocumentation } from "../core/documentation.js";
 import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
 import { inspectReshadeMod } from "../core/reshade.js";
 import { buildPs4AfrPackage } from "../core/ps4Package.js";
-import Ps4PkgInspector from "./Ps4PkgInspector.jsx";
 
 const stages = [
   ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
@@ -238,7 +237,20 @@ export default function App() {
     <section className="content">
       <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Universal mod conversion</h1><p>Import a PC GTA V mod. AutoPort inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
-      <Ps4PkgInspector />
+      <section className="panel target-evidence-panel">
+        <div className="panel-head">
+          <div><div className="eyebrow">TARGET PROFILE</div><h3>PS4 game verification</h3><p>AutoPort uses a shared target profile. You do not need to upload your base-game or update PKG files.</p></div>
+          <span className="tag success"><ShieldCheck size={13}/> NO PKG REQUIRED</span>
+        </div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{PS4_TARGET.titleId}</b><span>US title ID</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.updateVersion}</b><span>Target update</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>System firmware</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>GoldHEN version</span></div>
+        </div>
+        <div className="notice"><CheckCircle2 size={18}/><div><b>Shared profile; local confirmation only when needed.</b><p>The title ID and versions you supplied are saved as the project target. AutoPort can perform source-mod inspection and format conversion without reading a game PKG. If a particular adapter later needs game-specific reference data, it will request only the smallest relevant local sample or a generated fingerprint report—not the full game package. No game files are uploaded.</p></div></div>
+        <p className="native-disclaimer">Compatibility with CUSA00419 update 1.73 remains unverified until the relevant runtime/resource adapter has been tested. The target profile does not unlock unsupported conversion or deployment steps.</p>
+      </section>
       <section className="hero" id="workspace">
         <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,.7z,application/zip,application/x-7z-compressed,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
