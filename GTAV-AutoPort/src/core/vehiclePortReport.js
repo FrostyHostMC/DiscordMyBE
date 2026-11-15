@@ -44,10 +44,23 @@ function modelVariationEntries(parsed, modelName) {
 }
 function referenceValues(node, pattern) {
   const values = [];
-  walk(node, (entry) => {
-    for (const [key, value] of Object.entries(entry)) if (pattern.test(key) && typeof value !== "object" && text(value)) values.push({ field: key, value: text(value) });
+  walk(node, (entry, parents) => {
+    for (const [key, value] of Object.entries(entry)) {
+      const fieldPath = [...parents, key].join(".");
+      if (pattern.test(fieldPath) && typeof value !== "object" && text(value)) values.push({ field: fieldPath, value: text(value) });
+    }
   });
   return values;
+}
+function collectScalars(node, output = new Set()) {
+  if (Array.isArray(node)) for (const value of node) collectScalars(value, output);
+  else if (node && typeof node === "object") for (const value of Object.values(node)) collectScalars(value, output);
+  else if (text(node)) output.add(text(node).toLowerCase());
+  return output;
+}
+function containsValue(node, expected) {
+  const wanted = expected.toLowerCase();
+  return collectScalars(node).has(wanted);
 }
 
 /**
@@ -89,13 +102,13 @@ export function buildVehiclePortReport({ files, modelName }) {
   if (!modelAssets.textureDictionary.length) requiredMissing.push(`${txdName || target}.ytd`);
   if (modelAssets.mainFragment.length > 1 || modelAssets.textureDictionary.length > 1) unresolved.push("Duplicate model or texture filenames make asset selection ambiguous.");
   if (!modelAssets.highFragment.length) unresolved.push("High-detail fragment is absent; verify whether the source mod intentionally omits it.");
-  if (!variationMatches.length) unresolved.push("No matching carvariations.meta entry was found; stock/default variation behavior is not inferred.");
+  if (!variationMatches.length) unresolved.push("No matching carvariations.meta entry was found; stock/default variation behavior is not inferred.");\n  if (variationKitRefs.length && carcolsPresent && carcolsKitResolution.some((reference) => !reference.resolved)) unresolved.push("One or more variation kit references do not appear in carcols.meta.");
   if (errors.length) unresolved.push(...errors);
   const variationKitRefs = variationMatches.flatMap(({ node }) => referenceValues(node, /kit|siren/i));
-  const carcolsPresent = !!carcols.parsed;
+  const carcolsPresent = !!carcols.parsed;\n  const carcolsValues = carcols.parsed ? collectScalars(carcols.parsed) : new Set();\n  const carcolsKitResolution = variationKitRefs.map((reference) => ({ ...reference, resolved: carcolsValues.has(reference.value.toLowerCase()) }));
   const audioFiles = audioName ? files.filter((file) => /\.(awc|rel|dat151|dat54|dat10)$/i.test(file.path) && file.path.toLowerCase().includes(audioName.toLowerCase())) : [];
   const cameraName = findValue(vehicle, ["cameraName", "cameraHash", "firstPersonDrivebyData"]);
-  const layoutMatches = layoutName && layouts.parsed ? records(layouts.parsed, (node) => Object.values(node).some((value) => text(value).toLowerCase() === layoutName.toLowerCase())) : [];
+  const layoutMatches = layoutName && layouts.parsed ? records(layouts.parsed, (node) => containsValue(node, layoutName)) : [];
   return {
     schemaVersion: 1,
     format: "autoport-vehicle-port-report",
@@ -109,7 +122,7 @@ export function buildVehiclePortReport({ files, modelName }) {
       camera: { value: cameraName || null, resolution: cameraName ? "game-native-reference-unresolved" : "not-declared" },
       vehicleLayout: { value: layoutName || null, matchingEntries: layoutMatches.length, resolution: layoutName ? layoutMatches.length ? "candidate-entry-match" : "not-found-or-schema-different" : "not-declared" },
       variationKitReferences: variationKitRefs,
-      carcols: { present: carcolsPresent, resolution: carcolsPresent ? "source-document-retained-kit-schema-not-yet-typed" : "not-provided" },
+      carcols: { present: carcolsPresent, kitReferences: carcolsKitResolution, resolution: !carcolsPresent ? "not-provided" : carcolsKitResolution.length ? carcolsKitResolution.every((reference) => reference.resolved) ? "all-referenced-values-found-in-carcols-source" : "one-or-more-kit-values-not-found" : "no-kit-references-detected" },
     },
     assets: Object.fromEntries(Object.entries(modelAssets).map(([key, matches]) => [key, matches.map((file) => ({ path: file.path, bytes: file.bytes?.byteLength ?? file.size ?? 0 }))])),
     validation: { validMetadataLinks: true, requiredMissing, unresolved, readyForResourceConversion: requiredMissing.length === 0 && unresolved.length === 0 },
