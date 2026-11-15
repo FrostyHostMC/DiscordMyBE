@@ -121,7 +121,7 @@ export default function App() {
       setScriptModReport(inspectScriptModPackages(result.files));
       setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
       setPedObjectReport(inspectPedObjectPacks(result.files));
-      setMenyooVehicleReports(result.files.filter((file) => /\\.xml$/i.test(file.path)).map((file) => { try { return translateMenyooVehicleXml(file.bytes, file.path); } catch { return null; } }).filter((report) => report?.validXml && report.summary.vehicleCount > 0));
+      setMenyooVehicleReports(result.files.filter((file) => /\.xml$/i.test(file.path)).map((file) => { try { return translateMenyooVehicleXml(file.bytes, file.path); } catch { return null; } }).filter((report) => report?.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
@@ -351,7 +351,7 @@ export default function App() {
           <h4>{report.sourcePath}</h4>
           <div className="audit-grid"><div className="audit-card"><b>{report.summary.vehicleCount}</b><span>vehicles</span></div><div className="audit-card"><b>{report.summary.attachmentCount}</b><span>attachments</span></div><div className="audit-card"><b>{report.summary.withPosition}</b><span>with placement</span></div><div className="audit-card"><b>{report.summary.withVehicleProperties}</b><span>with vehicle properties</span></div></div>
           {report.vehicles.map((vehicle) => <div className="file-row" key={vehicle.id}><CarFront size={14}/><span className="file-name"><b>{vehicle.modelName || vehicle.modelHash.raw || vehicle.id}</b><small>Hash {vehicle.modelHash.raw || "not supplied"} · {vehicle.attachments.length} attachment(s) · {vehicle.transform.position ? "position parsed" : "position missing"}</small></span><span className="file-ext">DATA ONLY</span></div>)}
-          <button className="secondary-button" onClick={()=>downloadJson(buildMenyooVehiclePackExport(report),report.sourcePath.split("/").at(-1).replace(/\\.xml$/i,"")+".autoport-vehicles.json")}><ArrowDownToLine size={15}/> Export translated vehicle pack</button>
+          <button className="secondary-button" onClick={()=>downloadJson(buildMenyooVehiclePackExport(report),report.sourcePath.split("/").at(-1).replace(/\.xml$/i,"")+".autoport-vehicles.json")}><ArrowDownToLine size={15}/> Export translated vehicle pack</button>
         </div>)}
         <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
       </section>}
