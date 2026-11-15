@@ -41,3 +41,10 @@ test("rejects duplicate AFR destination paths", () => {
 test("validates the target title ID before creating plugin configuration", () => {
   assert.throws(() => buildAfrPluginIniSnippet({ titleId: "CUSA0041", updateVersion: "1.73", mode: "Story Mode" }), /valid CUSA/i);
 });
+test("uses the confirmed CUSA00419 target in AFR planning without enabling deployment", () => {
+  const result = buildAfrOverlayPlan({ files: [{ path: "update.rpf" }], mappings: {} });
+  assert.equal(result.target.titleId, "CUSA00419");
+  assert.equal(result.target.updateVersion, "1.73");
+  assert.equal(result.summary.deploymentAllowed, false);
+  assert.ok(result.limitations.some((item) => item.includes("CUSA00419 / 1.73")));
+});
