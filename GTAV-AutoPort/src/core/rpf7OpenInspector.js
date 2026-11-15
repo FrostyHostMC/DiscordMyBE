@@ -2,9 +2,19 @@ const RPF7_MAGIC = 0x52504637;
 const RPF_OPEN = 0x4e45504f;
 const DIRECTORY_IDENT = 0x7fffff00;
 const BLOCK_SIZE = 512;
+const DEFAULT_MAX_ENTRIES = 250_000;
+const MAX_ENTRY_PATH_LENGTH = 4096;
 
 function fail(message) {
   throw new Error("Invalid RPF7 OPEN archive: " + message);
+}
+
+function isSafePathSegment(name) {
+  if (!name || name.includes("/") || name.includes("\\") || name === "." || name === "..") return false;
+  if (/[\u0000-\u001f\u007f<>:"|?*]/.test(name) || /[. ]$/.test(name)) return false;
+  const deviceName = name.split(".")[0].toUpperCase();
+  if (/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$/.test(deviceName)) return false;
+  return true;
 }
 
 function readName(bytes, namesStart, namesLength, offset) {
@@ -25,12 +35,13 @@ function readName(bytes, namesStart, namesLength, offset) {
  * Inspects the supported standard PC RPF7 OPEN variant.
  * It deliberately refuses encrypted/Orbis headers rather than guessing.
  */
-export function inspectOpenRpf7(input) {
+export function inspectOpenRpf7(input, { maxEntries = DEFAULT_MAX_ENTRIES } = {}) {
   let bytes;
   if (input instanceof Uint8Array) bytes = input;
   else if (input instanceof ArrayBuffer) bytes = new Uint8Array(input);
   else if (ArrayBuffer.isView(input)) bytes = new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
   else throw new Error("RPF input must be Uint8Array-compatible bytes.");
+  if (!Number.isSafeInteger(maxEntries) || maxEntries < 1) throw new Error("RPF inspection maxEntries must be a positive safe integer.");
   if (bytes.length < 16) fail("header is truncated.");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (view.getUint32(0, true) !== RPF7_MAGIC) fail("RPF7 magic does not match.");
@@ -38,7 +49,8 @@ export function inspectOpenRpf7(input) {
   const namesLength = view.getUint32(8, true);
   const encryptionMarker = view.getUint32(12, true);
   if (encryptionMarker !== RPF_OPEN) fail("archive is not the supported OPEN variant (marker 0x" + encryptionMarker.toString(16) + ").");
-  if (entryCount < 1 || entryCount > Math.floor((bytes.length - 16) / 16)) fail("entry table is truncated or has an invalid count.");
+  if (entryCount < 1 || entryCount > maxEntries) fail("entry count exceeds the configured inspection limit.");
+  if (entryCount > Math.floor((bytes.length - 16) / 16)) fail("entry table is truncated or has an invalid count.");
   const tocStart = 16;
   const namesStart = tocStart + entryCount * 16;
   const namesEnd = namesStart + namesLength;
@@ -79,7 +91,7 @@ export function inspectOpenRpf7(input) {
       parentByChild.set(childIndex, directory.index);
       const child = entries[childIndex];
       if (!child) fail("directory child entry is missing.");
-      if (!child.name || child.name.includes("/") || child.name.includes("\\") || child.name === "." || child.name === "..") fail("entry contains an invalid path segment.");
+      if (!isSafePathSegment(child.name)) fail("entry contains an unsafe path segment.");
       const key = child.name.toLowerCase();
       if (siblingNames.has(key)) fail("directory contains duplicate child names.");
       siblingNames.add(key);
@@ -87,14 +99,21 @@ export function inspectOpenRpf7(input) {
   }
   for (let index = 1; index < entries.length; index++) {
     if (!parentByChild.has(index)) fail("TOC entry is not referenced by a parent directory.");
-    const visited = new Set([index]);
-    let parent = parentByChild.get(index);
-    while (parent !== 0) {
-      if (visited.has(parent)) fail("directory hierarchy contains a parent cycle.");
-      visited.add(parent);
-      parent = parentByChild.get(parent);
-      if (parent === undefined) fail("directory hierarchy does not lead back to the root.");
+  }
+  const hierarchyState = new Uint8Array(entryCount);
+  hierarchyState[0] = 2;
+  for (let index = 1; index < entries.length; index++) {
+    if (hierarchyState[index] === 2) continue;
+    const chain = [];
+    let current = index;
+    while (current !== 0 && hierarchyState[current] !== 2) {
+      if (hierarchyState[current] === 1) fail("directory hierarchy contains a parent cycle.");
+      hierarchyState[current] = 1;
+      chain.push(current);
+      current = parentByChild.get(current);
+      if (current === undefined) fail("directory hierarchy does not lead back to the root.");
     }
+    for (const childIndex of chain) hierarchyState[childIndex] = 2;
   }
   const paths = new Map([[0, ""]]);
   for (let index = 1; index < entries.length; index++) {
@@ -109,6 +128,7 @@ export function inspectOpenRpf7(input) {
     for (let cursor = chain.length - 1; cursor >= 0; cursor--) {
       const childIndex = chain[cursor];
       parentPath = parentPath ? parentPath + "/" + entries[childIndex].name : entries[childIndex].name;
+      if (parentPath.length > MAX_ENTRY_PATH_LENGTH) fail("reconstructed entry path exceeds the configured safety limit.");
       paths.set(childIndex, parentPath);
     }
   }
