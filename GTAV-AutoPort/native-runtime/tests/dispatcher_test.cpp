@@ -40,6 +40,6 @@ int main() {
     assert(!dispatcher.dispatch(SetEntityHealth{55, 10001}).ok);
     assert(dispatcher.dispatch(CreateExplosion{{1,2,3}, 2, 1.0f}).ok);
     assert(!dispatcher.dispatch(CreateExplosion{{1,2,3}, 2, 99.0f}).ok);
-    std::cout << "native runtime core tests passed\\n";
+    std::cout << "native runtime core tests passed\n";
     return 0;
 }
