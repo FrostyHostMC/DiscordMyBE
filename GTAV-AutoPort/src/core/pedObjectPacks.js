@@ -26,6 +26,7 @@ function collectPedEntries(parsed) {
 }
 function inspectSpawnConfig(file) {
   const source = decode(file); const ext = extension(file.path);
+  if (source.length > 8 * 1024 * 1024) return { path: file.path, valid: false, format: ext.slice(1), error: "Configuration exceeds the 8 MiB inspection limit", summary: {} };
   if (ext === ".json") { try { const parsed = JSON.parse(source); return { path: file.path, valid: true, format: "json", parsed, summary: summarizeConfig(parsed) }; } catch (error) { return { path: file.path, valid: false, format: "json", error: error.message, summary: {} }; } }
   if (ext === ".xml") { const validation = XMLValidator.validate(source); if (validation !== true) return { path: file.path, valid: false, format: "xml", error: validation.err?.msg || "Invalid XML", summary: {} }; const parsed = parser.parse(source); return { path: file.path, valid: true, format: "xml", parsed, summary: summarizeConfig(parsed) }; }
   if (ext === ".ini") { const keys = source.split(/\r?\n/).map((line) => line.trim()).filter((line) => line && !line.startsWith(";") && !line.startsWith("#") && line.includes("=")).map((line) => line.slice(0, line.indexOf("=")).trim()); return { path: file.path, valid: true, format: "ini", summary: { settingCount: keys.length, spawnSettings: keys.filter((key) => /(spawn|model|ped|object|coord|position|rotation|heading|count|amount|scenario)/i.test(key)) } }; }
@@ -54,7 +55,9 @@ export function inspectPedObjectPacks(files = []) {
   const pedMetadataFiles = files.filter((file) => /^(peds|pedalternatevariations|pedcomponentvariations|pedprops|pedpersonality|pedgroup)\.meta$/i.test(basename(file.path)));
   const pedEntries = []; const pedMetadataReports = [];
   for (const file of pedMetadataFiles) {
-    const source = decode(file); const validation = XMLValidator.validate(source);
+    const source = decode(file);
+    if (source.length > 8 * 1024 * 1024) { pedMetadataReports.push({ path: file.path, valid: false, error: "Ped metadata exceeds the 8 MiB inspection limit" }); continue; }
+    const validation = XMLValidator.validate(source);
     if (validation !== true) { pedMetadataReports.push({ path: file.path, valid: false, error: validation.err?.msg || "Invalid XML" }); continue; }
     const parsed = parser.parse(source); const entries = collectPedEntries(parsed);
     pedEntries.push(...entries.map((entry) => ({ ...entry, sourcePath: file.path })));
