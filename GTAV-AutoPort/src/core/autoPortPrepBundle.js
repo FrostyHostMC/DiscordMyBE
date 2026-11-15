@@ -39,12 +39,10 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const sourceManifest = [];
   const conversions = [];
   const archiveInspections = [];
+  const extractedFiles = [];
   const extractedRoot = root.folder("rpf-extracted");
   let completed = 0;
-  const dependencyGraph = analyzeModDependencies(files);
-  const inspected = files.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
-  const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
-  for (const { file } of inspected) {
+  for (const file of files) {
     const bytes = asBytes(file.bytes);
     if (!bytes || (extension(file.path) !== ".rpf" && !(bytes.length >= 4 && bytes[0] === 0x37 && bytes[1] === 0x46 && bytes[2] === 0x50 && bytes[3] === 0x52))) continue;
     const sourcePath = safePath(file.path);
@@ -60,6 +58,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       for (const entry of extracted) {
         const outputPath = sourcePath + "/" + safePath(entry.path);
         extractedRoot.file(outputPath, entry.bytes);
+        extractedFiles.push({ path: outputPath, bytes: entry.bytes, sourceArchive: sourcePath });
         record.extractedFiles += 1;
         record.extractedBytes += entry.bytes.length;
       }
@@ -69,6 +68,10 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     }
     archiveInspections.push(record);
   }
+  const analysisFiles = [...files, ...extractedFiles];
+  const dependencyGraph = analyzeModDependencies(analysisFiles);
+  const inspected = analysisFiles.map((file) => ({ file, inspection: registeredFormatAdapterRegistry.inspect(file) }));
+  const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
   for (const file of files) {
     const relative = safePath(file.path);
     if (!relative) continue;
@@ -109,6 +112,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       rpfArchivesInspected: archiveInspections.length,
       rpfArchivesExtracted: archiveInspections.filter((item) => item.status === "extracted-raw-open-archive").length,
       rpfRawFilesExtracted: archiveInspections.reduce((sum, item) => sum + item.extractedFiles, 0),
+      rpfRawFilesAnalyzed: extractedFiles.length,
       ps4ReadyFiles: 0,
       installable: false
     },
@@ -120,7 +124,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
       "CUSA00419 / GTA V 1.73 resource encoding and in-game behavior are not verified.",
       "PC ASI/DLL/EXE plugins and runtime-dependent scripts are preserved as source only; they are not executable PS4 plugins.",
-      "Supported PC RPF7 OPEN archives are additionally extracted as raw files for inspection; payload formats are not converted by extraction.",
+      "Supported PC RPF7 OPEN archives are extracted as raw files and included in dependency analysis and format classification; extraction itself does not decode or convert payloads.",
       "Encrypted or Orbis/PS4 RPF variants are preserved unchanged when the OPEN inspector cannot validate them.",
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
