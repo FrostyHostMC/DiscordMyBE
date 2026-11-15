@@ -1,0 +1,162 @@
+export interface AddonPack {
+  id: string;
+  name: string;
+  type: 'Behavior Pack' | 'Resource Pack' | 'Skin Pack';
+  version: string;
+  versionArray?: [number, number, number];
+  uuid: string;
+  description?: string;
+  iconDataUrl?: string; // base64 or objectUrl
+  minEngineVersion?: string;
+  scriptVersion?: string; // e.g. @minecraft/server version if present
+  scriptUiVersion?: string;
+  gameTestVersion?: string;
+  hasScripts?: boolean;
+  hasExperimental?: boolean;
+  isObfuscated?: boolean;
+  subpacks?: Array<{ folder: string; name: string; memory_tier?: number }>;
+  fileSize: number; // in bytes
+  dateAdded: number; // timestamp
+  sourceFileName?: string;
+  fileBlob?: Blob; // optional raw blob stored in memory/IDB
+}
+
+export interface MergedOutput {
+  id: string;
+  label: string; // e.g. "Resource Pack", "Behavior (Data)", "Behavior (Script API v2)"
+  fileName: string; // e.g. resource_pack.mcpack
+  type: 'resource' | 'behavior_data' | 'behavior_script';
+  scriptMajor?: number;
+  packCount: number;
+  size: number;
+  achievementsDisabled: boolean;
+  blob?: Blob;
+}
+
+export interface MergedModpack {
+  id: string;
+  name: string;
+  totalPacks: number;
+  size: number; // bytes
+  version: string;
+  createdAt: number;
+  iconDataUrl?: string;
+  description: string;
+  outputs?: MergedOutput[];
+  /** Internal component archives retained only when a combined bundle is enabled without separate downloads. */
+  bundleParts?: MergedOutput[];
+  includedPacks: Array<{
+    name: string;
+    type: string;
+    version: string;
+    iconDataUrl?: string;
+    uuid?: string;
+  }>;
+  outputBlob?: Blob;
+  // Small JSON files for the combined .mcaddon. The combined file itself is built on demand
+  // (see ensureCombinedBlob) so merging never holds an extra full copy in memory.
+  combinedExtras?: { manifestJson: string; reportJson: string; diagnosticsText?: string };
+  outputFileName: string;
+  /** Whether the combined .mcaddon should be offered for install/publish. */
+  generateAddon?: boolean;
+  /** Whether component .mcpack files should be offered as individual downloads. */
+  generateSeparatePacks?: boolean;
+}
+
+export interface ConflictItem {
+  id: string;
+  type: 'entity' | 'item' | 'block' | 'recipe' | 'spawn_rule' | 'attachable' | 'loot_table' | 'animation_controller' | 'render_controller' | 'vanilla_asset';
+  identifier: string;
+  packA: { id: string; name: string; path?: string };
+  packB: { id: string; name: string; path?: string };
+  resolution: 'prefix_all' | 'keep_a' | 'keep_b';
+}
+
+export type TabType =
+  | 'overview'
+  | 'home'
+  | 'workspace'
+  | 'mypacks'
+  | 'bp_library'
+  | 'rp_library'
+  | 'library'
+  | 'community'
+  | 'community_addons'
+  | 'conflicts_tool'
+  | 'dependencies_tool'
+  | 'history_tool'
+  | 'logs_tool'
+  | 'settings'
+  | 'about';
+
+export interface CommunityModpack {
+  id: string;
+  name: string;
+  description: string;
+  detail_description?: string;
+  detail_images?: string[];
+  author: string;
+  author_id: string;
+  author_avatar?: string | null;
+  version: string;
+  total_packs: number;
+  size: number;
+  icon_data_url?: string;
+  created_at: number;
+  downloads: number;
+  blob_url: string;
+  file_name: string;
+  content_type?: 'modpack' | 'addon';
+  category?: string;
+  license_id?: string;
+  last_updated_at?: number | null;
+  last_download_at?: number | null;
+  role_removed_at?: number | null;
+  role_purge_after?: number | null;
+  inactivity_warning_at?: number | null;
+  inactivity_purge_after?: number | null;
+  lifecycle_state?: 'active' | 'role_grace' | 'inactivity_warning' | 'deleted';
+  included_packs: Array<{
+    name: string;
+    type: string;
+    version: string;
+    icon_data_url?: string;
+  }>;
+}
+
+export interface MergeSessionConfig {
+  name: string;
+  description: string;
+  version: string;
+  targetEngine: string;
+  autoPrefix: boolean;
+  generateAddon: boolean;
+  generateSeparatePacks: boolean;
+  /** HUD layout policy: auto-resolve safe collisions, preserve source layout, or prefer a screen position. */
+  hudPlacement?: 'auto' | 'preserve' | 'top_left' | 'top_middle' | 'top_right' | 'left_middle' | 'center' | 'right_middle' | 'bottom_left' | 'bottom_middle' | 'bottom_right';
+}
+
+export interface ActivityLogEntry {
+  id: string;
+  timestamp: number;
+  level: 'info' | 'success' | 'warn' | 'error';
+  category: string;
+  message: string;
+  details?: string;
+}
+
+export type ScreenType =
+  | 'splash'
+  | 'main'
+  | 'add_packs'
+  | 'script_check'
+  | 'conflicts'
+  | 'merging'
+  | 'merge_complete'
+  | 'modpack_details'
+  | 'community'
+  | 'about'
+  | 'pack_extract'
+  | 'list_maker'
+  | 'tos'
+  | 'privacy';
