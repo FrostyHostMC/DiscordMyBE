@@ -12,7 +12,7 @@ const asArray = (value) => value == null ? [] : Array.isArray(value) ? value : [
 const text = (value) => typeof value === "string" || typeof value === "number" ? String(value).trim() : value && typeof value === "object" && "#text" in value ? String(value["#text"]).trim() : "";
 function walk(value, visitor) { if (Array.isArray(value)) value.forEach((item) => walk(item, visitor)); else if (value && typeof value === "object") { visitor(value); Object.values(value).forEach((child) => walk(child, visitor)); } }
 function get(object, names) { const wanted = new Set(names.map((name) => name.toLowerCase())); const key = Object.keys(object || {}).find((item) => wanted.has(item.toLowerCase())); return key ? object[key] : undefined; }
-function vector(value) { if (!value || typeof value !== "object") return null; const x = Number(text(get(value, ["X"]))), y = Number(text(get(value, ["Y"]))), z = Number(text(get(value, ["Z"]))); return [x, y, z].every(Number.isFinite) ? { x, y, z } : null; }
+function vector(value) { if (!value || typeof value !== "object") return null; const raw = ["X", "Y", "Z"].map((axis) => text(get(value, [axis]))); if (raw.some((item) => !item)) return null; const [x, y, z] = raw.map(Number); return [x, y, z].every(Number.isFinite) ? { x, y, z } : null; }
 function collectPedEntries(parsed) {
   const found = [];
   walk(parsed, (node) => {
@@ -70,7 +70,6 @@ export function inspectPedObjectPacks(files = []) {
     const textureMatches = txd ? resources.filter((resource) => resource.stem === txd && resource.extension === ".ytd") : [];
     return { modelName: entry.modelName, txdName: entry.txdName, pedType: entry.pedType, metadataPath: entry.sourcePath, modelCandidates: matches, textureCandidates: textureMatches, rawMetadata: entry.raw, dependencyStatus: { model: matches.length === 1 ? "candidate-resolved-by-name-only" : matches.length ? "ambiguous" : "missing", texture: !txd ? "not-declared" : textureMatches.length === 1 ? "candidate-resolved-by-name-only" : textureMatches.length ? "ambiguous" : "missing" } };
   });
-  const modelNames = new Set(resources.map((resource) => resource.stem));
   const unboundResources = resources.filter((resource) => !peds.some((ped) => ped.modelCandidates.some((candidate) => candidate.path === resource.path)) && !peds.some((ped) => ped.textureCandidates.some((candidate) => candidate.path === resource.path)));
   const objectCandidates = unboundResources.filter((resource) => resource.resourceKind === "model-or-fragment" || resource.resourceKind === "texture-dictionary" || [".ybn", ".ymap", ".ytyp"].includes(resource.extension)).map((resource) => ({ ...resource, relatedSameStem: resources.filter((peer) => peer.stem === resource.stem && peer.path !== resource.path).map((peer) => peer.path), dependencyConfidence: "filename-and-pack-co-location-only" }));
   const configSignals = spawnConfigs.filter((config) => config.valid).map((config) => ({ path: config.path, format: config.format, signals: config.summary }));
