@@ -32,7 +32,7 @@ function finiteVector(value) {
 export function compileMenyooNativeActionPlan(report) {
   if (!report?.validXml || report.format !== "menyoo-spooner-vehicle-xml") throw new Error("A valid Menyoo vehicle report is required.");
   const actions = [];
-  const blockers = ["A target-specific GoldHEN/Orbis GameApi adapter is still required to execute these actions."];
+  const blockers = [];
   const unsupportedProperties = [];
   for (const vehicle of report.vehicles) {
     const model = vehicle.modelName || vehicle.modelHash?.raw;
@@ -70,7 +70,7 @@ export function compileMenyooNativeActionPlan(report) {
     target: report.target,
     actions,
     unsupportedProperties,
-    execution: { status: blockers.length ? "blocked" : "adapter-required", executable: false, blockers },
+    execution: { status: blockers.length ? "blocked-by-source-data" : "adapter-required", executable: false, blockers, runtimeRequirement: "A target-specific GoldHEN/Orbis GameApi adapter is required to execute these actions." },
     summary: { vehicles: report.vehicles.length, actions: actions.length, spawns: actions.filter((action) => action.op === "spawn_entity").length, transforms: actions.filter((action) => action.op === "set_transform").length, attachments: actions.filter((action) => action.op === "attach_entity").length, vehicleProperties: actions.filter((action) => action.op === "set_vehicle_property").length, blockers: blockers.length },
   };
 }
