@@ -23,7 +23,7 @@ test("compiles saved vehicle, placement, attachment and known vehicle properties
   assert.equal(plan.actions[0].op, "spawn_entity");
   assert.equal(plan.actions[1].op, "set_transform");
   assert.equal(plan.actions.find((action) => action.op === "attach_entity").bone, "chassis");
-  assert.equal(plan.execution.status, "adapter-required");
+  assert.equal(plan.execution.status, "blocked-by-source-data");
   assert.equal(plan.execution.executable, false);
   assert.equal(plan.unsupportedProperties[0].key, "UnknownField");
 });
