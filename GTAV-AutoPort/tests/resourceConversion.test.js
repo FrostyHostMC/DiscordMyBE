@@ -5,7 +5,7 @@ import { convertLegacyResourceCandidate } from "../src/core/resourceConversion.j
 test("rejects formats outside the YFT/YTD writer before making a request", async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = () => { throw new Error("fetch must not be called"); };
-  try { await assert.rejects(() => convertLegacyResourceCandidate({ path: "script.ysc", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR, YDD and YBN/); }
+  try { await assert.rejects(() => convertLegacyResourceCandidate({ path: "script.ysc", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR and YDD/); }
   finally { globalThis.fetch = originalFetch; }
 });
 
@@ -38,3 +38,5 @@ test("accepts drawable and collision resources through the same Legacy adapter",
     assert.deepEqual(result.bytes, output);
   } finally { globalThis.fetch = originalFetch; }
 });
+
+test("rejects YBN because the RageKit edition-convert command does not support it", async () => {\n  await assert.rejects(() => convertLegacyResourceCandidate({ path: "collision.ybn", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR and YDD/);\n});\n
