@@ -35,7 +35,7 @@ test("rejects payload offsets outside the archive", () => {
   // First file is entry 1; overwrite its 24-bit block offset.
   bytes[16 + 1 * 16 + 5] = 0xff;
   bytes[16 + 1 * 16 + 6] = 0xff;
-  bytes[16 + 1 * 16 + 7] = 0x7f;
+  bytes[16 + 1 * 16 + 7] = 0x7e;
   assert.throws(() => inspectOpenRpf7(bytes), /payload range is outside/);
 });
 
@@ -83,8 +83,9 @@ test("rejects unsafe Windows extraction path segments", () => {
     const bytes = built.bytes.slice();
     const namesStart = 16 + 2 * 16;
     const encoded = new TextEncoder().encode(unsafeName);
-    bytes.fill(0, namesStart + 1, namesStart + 1 + 16);
+    bytes.fill(0, namesStart + 1, namesStart + 10);
     bytes.set(encoded, namesStart + 1);
+    bytes[namesStart + 1 + encoded.length] = 0;
     assert.throws(() => inspectOpenRpf7(bytes), /unsafe path segment/);
   }
 });
