@@ -82,7 +82,11 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
   };
-  const reportRoot = root.folder("reports");\n  for (const [name, value] of Object.entries(reports)) {\n    if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));\n  }\n  root.file("autoport-manifest.json", JSON.stringify(manifest, null, 2));
+  const reportRoot = root.folder("reports");
+  for (const [name, value] of Object.entries(reports)) {
+    if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
+  }
+  root.file("autoport-manifest.json", JSON.stringify(manifest, null, 2));
   root.file("README-FIRST.txt", [
     "GTAV AUTOPORT — AUTOMATIC PREPARATION BUNDLE",
     "",
