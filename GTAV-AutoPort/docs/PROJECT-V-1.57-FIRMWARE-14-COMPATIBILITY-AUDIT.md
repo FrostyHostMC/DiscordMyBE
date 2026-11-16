@@ -18,6 +18,18 @@ A public GTA V PS4 source-build guide explicitly instructs users to update its s
 
 Reference: https://github.com/FranklinClintonDev/gta-v-source-code-guide/blob/main/PS4.md
 
+## Previously supplied Project V v1.2 archive
+
+The user previously supplied an archive named `ProjectV_Plugin_v1.2.zip` in an earlier conversation. The recorded archive inventory from that inspection was:
+
+- 1 PRX: `ProjectV.prx`
+- 609 GXT2 files
+- 89 XML files
+- 34 META files
+- 19 OMT files
+
+This inventory is retained as provenance for the exact v1.2 package. The archive's bytes and a cryptographic hash are not currently available in this repository workspace, so no binary modification, PRX rebuild, or byte-level comparison is claimed. Do not replace this package with the public 1.3.2 source and label it as the same binary. Resume from the exact v1.2 PRX when its original bytes are accessible.
+
 ## Source inspected
 
 Public Project V 1.3.2 source: https://github.com/rfoodxmodz/GTAV-ProjectV-1.3.2
