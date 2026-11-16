@@ -86,7 +86,7 @@ function classifyOne(file) {
     ? inspectBinaryFormat(file)
     : { status: "unrecognized", selectedAdapterId: null, candidates: [], probeErrors: [], preservedAsSource: true, conversionAuthorized: false, signature: null };
   const signature = signatureOf(file.bytes);
-  const binaryInspection = /\\.(asi|dll|exe|sys|prx|sprx|elf)$/i.test(String(file.path || "")) ? inspectExecutableHeader(file.bytes) : null;
+  const binaryInspection = [".asi", ".dll", ".exe", ".sys", ".prx", ".sprx", ".elf"].includes(extension) ? inspectExecutableHeader(file.bytes) : null;
   const inferred = {
     "rage-resource": ["rage-resource", "RAGE resource (signature identified)", "inspection-required"],
     "rage-archive": ["archive", "RAGE archive (signature identified)", "archive-inspection-required"],
