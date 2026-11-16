@@ -1,17 +1,28 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assessPs4Compatibility } from "../src/core/compatibility.js";
-import { PS4_TARGET } from "../src/core/target.js";
+import { PS4_TARGET, PS4_TARGETS } from "../src/core/target.js";
 
-test("default target assessment blocks conversion and deployment", () => {
+test("default US target assessment blocks conversion and deployment", () => {
   const result = assessPs4Compatibility();
   assert.equal(result.status, "blocked");
   assert.equal(result.target.titleId, "CUSA00419");
-  assert.equal(result.target.updateVersion, "1.73");
+  assert.equal(result.target.region, "US");
+  assert.equal(result.target.updateVersion, "1.57");
   assert.equal(result.conversionAllowed, false);
   assert.equal(result.deploymentAllowed, false);
   assert.equal(result.passed, 2);
   assert.equal(result.total, 7);
+});
+
+test("EU title recognition does not inherit US-only console or GoldHEN evidence", () => {
+  const result = assessPs4Compatibility({ target: PS4_TARGETS.CUSA00411 });
+  assert.equal(result.target.titleId, "CUSA00411");
+  assert.equal(result.target.region, "EU");
+  assert.equal(result.passed, 0);
+  assert.equal(result.status, "blocked");
+  assert.equal(result.conversionAllowed, false);
+  assert.equal(result.deploymentAllowed, false);
 });
 
 test("PC-side evidence alone cannot satisfy PS4 compatibility gates", () => {
@@ -28,7 +39,7 @@ test("PC-side evidence alone cannot satisfy PS4 compatibility gates", () => {
   assert.equal(result.deploymentAllowed, false);
 });
 
-test("all gates are individually evidence-driven", () => {
+test("all gates are individually evidence-driven and never auto-enable conversion", () => {
   const result = assessPs4Compatibility({
     target: PS4_TARGET,
     consoleVerified: true,
@@ -39,12 +50,14 @@ test("all gates are individually evidence-driven", () => {
   });
   assert.equal(result.status, "validated");
   assert.equal(result.passed, 7);
-  // A green checklist is not an authorization to enable code that does not exist.
   assert.equal(result.conversionAllowed, false);
   assert.equal(result.deploymentAllowed, false);
 });
 
 test("blank GoldHEN values do not count as recorded evidence", () => {
-  const result = assessPs4Compatibility({ target: { ...PS4_TARGET, source: "unknown", goldhenVersionSource: "unknown" }, goldhenVersion: "   " });
+  const result = assessPs4Compatibility({
+    target: { ...PS4_TARGET, source: "unknown", goldhenVersionSource: "unknown" },
+    goldhenVersion: "   ",
+  });
   assert.equal(result.gates.find((gate) => gate.id === "goldhen").passed, false);
 });
