@@ -309,3 +309,19 @@ test("groups duplicate imported content by SHA-256 without deleting either sourc
   assert.equal(report[0].references.length, 2);
   assert.match(report[0].sha256, /^[a-f0-9]{64}$/);
 });
+
+
+test("finds identical bytes shared by a loose file and an extracted RPF member", async () => {
+  const shared = new Uint8Array([0x10, 0x20, 0x30, 0x40, 0x50]);
+  const rpf = buildOpenRpf7([{ path: "shared.dat", bytes: shared }]).bytes;
+  const result = await buildAutomaticPrepBundle({
+    files: [
+      { path: "loose/shared.dat", bytes: shared.slice() },
+      { path: "cars/sample/dlc.rpf", bytes: rpf }
+    ]
+  });
+  const group = result.manifest.duplicateContentGroups.find((item) => item.references.length === 2);
+  assert.ok(group);
+  assert.deepEqual(group.references.map((item) => item.source), ["imported-file", "extracted-rpf-entry"]);
+  assert.ok(group.references.some((item) => item.path.endsWith("! /shared.dat") || item.path.endsWith("!/shared.dat")));
+});
