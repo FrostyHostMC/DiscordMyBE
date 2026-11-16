@@ -47,6 +47,7 @@ const EXTENSIONS = {
   ".exe": ["pc-native-plugin", "Windows executable", "not-directly-portable"],
   ".sys": ["pc-native-plugin", "Windows driver", "not-directly-portable"],
   ".prx": ["console-native-plugin", "Console PRX plugin", "target-build-validation-required"],
+  ".sprx": ["console-native-plugin", "Sony SPRX plugin", "target-build-validation-required"],
   ".elf": ["native-binary", "ELF executable/module", "platform-validation-required"],
   ".fbx": ["3d-source", "FBX model source", "asset-adapter-required"],
   ".obj": ["3d-source", "Wavefront OBJ model source", "asset-adapter-required"],
