@@ -90,7 +90,7 @@ function elfHeader({ machine = 62, is64 = true } = {}) {
 }
 
 function peHeader() {
-  const bytes = new Uint8Array(256);
+  const bytes = new Uint8Array(512);
   const view = new DataView(bytes.buffer);
   bytes.set([0x4d, 0x5a]);
   view.setUint32(0x3c, 0x80, true);
