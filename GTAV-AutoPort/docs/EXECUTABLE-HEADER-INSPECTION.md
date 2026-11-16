@@ -18,7 +18,7 @@ A readable ELF header does not establish Orbis ABI, SELF/SPRX signature validity
 
 - Reads only the supplied file bytes; no external tool or process is launched.
 - Limits ELF program-header inspection to 256 entries.
-- Checks program-header table and segment numeric ranges.
+- Checks program-header table and segment numeric ranges, including JavaScript safe-integer bounds for ELF64 offsets and addresses.
 - Regression fixtures cover valid PE/ELF headers, wrong architecture, truncated tables, opaque SCE magic and unknown data.
 
 The result is diagnostic evidence only. It cannot upgrade any file to PS4-ready or installable.
