@@ -79,7 +79,7 @@ export async function inspectPs4Pkg(file) {
   const category = sfo?.CATEGORY || null;
   const packageVersion = sfo?.APP_VER || null;
   const systemVersion = sfo?.SYSTEM_VER || null;
-  const isUpdate = typeof category === "string" && /^gp/i.test(category);
+  const isUpdate = typeof category === "string" && /^gp/i.test(category);\n  const targetResolution = resolvePs4Target({ titleId, updateVersion: packageVersion });
   return {
     fileName: file.name || "unnamed.pkg",
     fileSize: file.size,
@@ -95,6 +95,6 @@ export async function inspectPs4Pkg(file) {
     paramSfo: sfo,
     warning: sfoWarning || (!sfo ? "PARAM.SFO was not available as a readable metadata entry; only the PKG header was inspected." : null),
     inspection: "Header, metadata entry table and readable PARAM.SFO only. The encrypted PFS game payload was not opened or extracted.",
-    compatibilityVerified: false,
+    targetResolution,\n    compatibilityVerified: false,
   };
 }

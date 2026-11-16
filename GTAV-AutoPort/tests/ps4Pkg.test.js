@@ -36,7 +36,7 @@ test("inspects PS4 PKG header and identifies title ID without opening payload", 
   assert.equal(report.titleId, "CUSA00411");
   assert.equal(report.category, "gp");
   assert.equal(report.packageType, "update-candidate");
-  assert.equal(report.compatibilityVerified, false);
+  assert.equal(report.compatibilityVerified, false);\n  assert.equal(report.targetResolution.status, "title-matched-version-unconfirmed");\n  assert.equal(report.targetResolution.target.region, "EU");
 });
 
 test("rejects non-PS4 package signatures", async () => {

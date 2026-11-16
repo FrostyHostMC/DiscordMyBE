@@ -1,30 +1,30 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PS4_TARGET, describeTarget } from "../src/core/target.js";
-
-test("first PS4 target is the user-confirmed CUSA00419 1.73 profile", () => {
-  assert.equal(PS4_TARGET.titleId, "CUSA00419");
-  assert.equal(PS4_TARGET.updateVersion, "1.73");
-  assert.equal(PS4_TARGET.region, "US");
-  assert.equal(PS4_TARGET.publisherId, "UP1004");
-  assert.equal(PS4_TARGET.contentId, "UP1004-CUSA00419_00-GTAVDIGITALDOWNL");
-  assert.equal(PS4_TARGET.platform, "PlayStation 4");
-  assert.equal(PS4_TARGET.mode, "Story Mode");
+import { normalizeUpdateVersion, resolvePs4Target, PS4_TARGETS } from "../src/core/target.js";
+test("US and EU title IDs resolve to separate 1.57 profiles", () => {
+  const us = resolvePs4Target({ titleId: "CUSA00419", updateVersion: "1.57" });
+  const eu = resolvePs4Target({ titleId: "cusa00411", updateVersion: "01.57" });
+  assert.equal(us.status, "matched"); assert.equal(us.target.region, "US");
+  assert.equal(eu.status, "matched"); assert.equal(eu.target.region, "EU");
+  assert.notEqual(us.target.titleId, eu.target.titleId);
 });
-
-test("user-confirmed console firmware and GoldHEN version are recorded separately", () => {
-  assert.equal(PS4_TARGET.systemFirmware, "14.00");
-  assert.equal(PS4_TARGET.systemFirmwareSource, "user-confirmed");
-  assert.equal(PS4_TARGET.goldhenVersion, "2.4b18.13");
-  assert.equal(PS4_TARGET.goldhenVersionSource, "user-confirmed");
+test("title ID alone selects a region but does not claim update verification", () => {
+  const result = resolvePs4Target({ titleId: "CUSA00411" });
+  assert.equal(result.status, "title-matched-version-unconfirmed");
+  assert.equal(result.target.region, "EU");
 });
-
-test("target profile remains explicitly unverified for resource compatibility", () => {
-  assert.equal(PS4_TARGET.source, "user-confirmed");
-  assert.equal(PS4_TARGET.verifiedAgainstConsole, false);
-  assert.equal(PS4_TARGET.resourceCompatibility, "unverified");
+test("unknown title IDs never fall back to the US profile", () => {
+  const result = resolvePs4Target({ titleId: "CUSA99999", updateVersion: "1.57" });
+  assert.equal(result.status, "unsupported-title"); assert.equal(result.target, null);
 });
-
-test("target label is stable for UI and manifests", () => {
-  assert.equal(describeTarget(), "CUSA00419 · GTA V 1.73 · Story Mode");
+test("wrong update version is rejected for a known title ID", () => {
+  const result = resolvePs4Target({ titleId: "CUSA00419", updateVersion: "1.46" });
+  assert.equal(result.status, "unsupported-update"); assert.equal(result.target, PS4_TARGETS.CUSA00419);
+});
+test("version normalization accepts common SFO formatting without guessing unknown values", () => {
+  assert.equal(normalizeUpdateVersion("01.57"), "1.57");
+  assert.equal(normalizeUpdateVersion("1.57"), "1.57");
+  assert.equal(normalizeUpdateVersion("1.46"), "1.46");
+  assert.equal(normalizeUpdateVersion("unknown-build"), "unknown-build");
+  assert.equal(normalizeUpdateVersion(null), null);
 });

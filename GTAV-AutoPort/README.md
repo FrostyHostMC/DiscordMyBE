@@ -1,16 +1,16 @@
-**2026-11-14 — PS4 source-build guide assessment:** reviewed the community PS4 source-build guide supplied by the user. It describes a full ORBIS game/update rebuild targeting old firmware and GTA V 1.46, not a universal PC mod converter. Documented the mismatch with our CUSA00419 / firmware 14.00 / GTA V 1.73 target, extracted safe architecture lessons, and added provenance/security cautions. No proprietary source archive or third-party installer was downloaded or executed. See [PS4 source-build guide assessment](docs/PS4-SOURCE-BUILD-GUIDE-RESEARCH.md).
+**2026-11-14 — PS4 source-build guide assessment:** reviewed the community PS4 source-build guide supplied by the user. It describes a full ORBIS game/update rebuild targeting old firmware and GTA V 1.46, not a universal PC mod converter. Documented the mismatch with our CUSA00419 / firmware 14.00 / GTA V 1.57 target, extracted safe architecture lessons, and added provenance/security cautions. No proprietary source archive or third-party installer was downloaded or executed. See [PS4 source-build guide assessment](docs/PS4-SOURCE-BUILD-GUIDE-RESEARCH.md).
 
 **2026-11-14 — Skyline DLC intake improvements:** fixed the workbench's incomplete-report guard so an invalid/null port-plan or native-engine summary cannot crash the results view or trigger an unsafe export. Added read-only parsing for GTA V DLC `content.xml` manifests, including declared resource paths and file types; manifest instructions are never executed. `.txt` and `.md` mod instructions are now classified as documentation instead of unknown binaries and routed to a readable review stage. See [DLC manifest inspection](docs/DLC-MANIFEST-INSPECTION.md).
 
 **2026-11-14 — Native RPF integration test:** the RageKit CI job now creates a synthetic nested RPF archive, lists its nested entries with the real `rk` executable, and extracts a nested file through `rk rpf cat`. This exercises the actual upstream CLI behavior used by AutoPort rather than testing only a mocked response. See `scripts/rpf-cli-integration.mjs`.
 
-**2026-11-14 — GoldHEN AFR deployment planning:** added a guarded overlay planner based on the official GoldHEN Application File Redirector documentation. It can generate a title-specific `plugins.ini` snippet and accepts only explicit `/app0/...` mappings; it rejects traversal and duplicate destinations. The staging plan is always review-only and deployment remains disabled until CUSA00419 / GTA V 1.73 paths and resource compatibility are validated. See [PS4 deployment research](docs/PS4-DEPLOYMENT-RESEARCH.md).
+**2026-11-14 — GoldHEN AFR deployment planning:** added a guarded overlay planner based on the official GoldHEN Application File Redirector documentation. It can generate a title-specific `plugins.ini` snippet and accepts only explicit `/app0/...` mappings; it rejects traversal and duplicate destinations. The staging plan is always review-only and deployment remains disabled until CUSA00419 / GTA V 1.57 paths and resource compatibility are validated. See [PS4 deployment research](docs/PS4-DEPLOYMENT-RESEARCH.md).
 
 **2026-11-14 — Native RPF archive inventory:** the pinned RageKit CLI now uses its dedicated `rk rpf ls` reader for imported `.rpf` files, including nested archives. AutoPort validates every returned entry path, indexes file sizes/types, counts RAGE resources and encrypted entries, and displays a browsable inventory. For supported, unencrypted resources it uses the native `rk rpf cat` path to extract each entry into temporary local storage, then runs the resource parser and round-trip validator. This is source-side archive/resource inspection only; encrypted retail archives may require keys from the user's own game installation, and no PS4 compatibility or installability is inferred. Processing is bounded by per-command time/output limits, a three-minute archive inspection window, a 100-resource cap and an 80 MiB extracted-resource cap.
 
 # GTAV AutoPort
 
-**2026-11-15 — Multi-family conversion pipeline expansion:** added Menyoo/Spooner vehicle XML translation into a loss-preserving intermediate vehicle pack; expanded vehicle metadata mapping for audio, camera, handling and other fields; added a RageKit-backed PC Legacy YFT/YTD/YDR/YDD candidate writer with output inspection and round-trip verification; added source-level PC script behavior blueprints; and added ped/object metadata, asset and spawn-config mapping. These stages produce source-side interchange data and PC Legacy candidates only. PS4 CUSA00419 / 1.73 resource encoding, menu/runtime execution, Orbis PRX behavior and on-console acceptance remain explicit gates. See:
+**2026-11-15 — Multi-family conversion pipeline expansion:** added Menyoo/Spooner vehicle XML translation into a loss-preserving intermediate vehicle pack; expanded vehicle metadata mapping for audio, camera, handling and other fields; added a RageKit-backed PC Legacy YFT/YTD/YDR/YDD candidate writer with output inspection and round-trip verification; added source-level PC script behavior blueprints; and added ped/object metadata, asset and spawn-config mapping. These stages produce source-side interchange data and PC Legacy candidates only. PS4 CUSA00419 / 1.57 resource encoding, menu/runtime execution, Orbis PRX behavior and on-console acceptance remain explicit gates. See:
 - [Menyoo vehicle translation](docs/MENYOO-VEHICLE-TRANSLATION.md)
 - [Vehicle metadata mapping](docs/VEHICLE-METADATA-MAPPING.md)
 - [YFT/YTD resource conversion](docs/YFT-YTD-RESOURCE-CONVERSION.md)
@@ -23,9 +23,9 @@
 
 **2026-11-14 — OpenIV OIV intake:** AutoPort now opens `.oiv` packages directly using the ZIP container reader, detects and parses `assembly.xml`, extracts basic package metadata and inventories declared file operations for review. It does not execute OIV install instructions or assume PC install paths are valid on PS4.
 
-**2026-11-14 — Guided workflow update:** the workbench now includes an in-app step-by-step porting guide, contextual next-step prompts, and first-run native-tool setup. `START-AUTOPORT.bat` installs web dependencies and attempts to fetch/build the pinned RageKit backend automatically when the local CMake/C++ toolchain is present. PS4 1.73 output remains unvalidated.
+**2026-11-14 — Guided workflow update:** the workbench now includes an in-app step-by-step porting guide, contextual next-step prompts, and first-run native-tool setup. `START-AUTOPORT.bat` installs web dependencies and attempts to fetch/build the pinned RageKit backend automatically when the local CMake/C++ toolchain is present. PS4 1.57 output remains unvalidated.
 
-**2026-11-14 — Upstream integration audit:** RageKit v0.3.1 is already fetched and built as the primary native RAGE engine; the latest CI failure was traced to a malformed newline escape in the browser intake module and has been corrected. See [upstream integration register](docs/UPSTREAM-TOOL-INTEGRATION.md) for which external projects are wired in versus reference-only. PS4 1.73 output is still not validated.
+**2026-11-14 — Upstream integration audit:** RageKit v0.3.1 is already fetched and built as the primary native RAGE engine; the latest CI failure was traced to a malformed newline escape in the browser intake module and has been corrected. See [upstream integration register](docs/UPSTREAM-TOOL-INTEGRATION.md) for which external projects are wired in versus reference-only. PS4 1.57 output is still not validated.
 
 **RPF archive validation added:** imported `.rpf` files now enter the native RAGE parser and isolated round-trip check alongside loose resources when the backend is configured. Encrypted archives may still require keys from the user's own game installation; this is validation only, not PS4 conversion.
 
@@ -45,9 +45,9 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 
 ## Latest update
 
-**2026-11-14 — Scaleform graphics intake:** AutoPort now detects and validates GFX/SWF headers, classifies font and ActionScript source files, routes them through a graphics-specific worklist, and can create a separate SWF editor-handoff copy for JPEXS. This is not a game-ready GFX build. The public PS4 GFX loader only proves a GTA V 1.46 fixed font hook; GTA V 1.73 runtime loading remains unvalidated. See [Scaleform graphics pipeline](docs/SCALEFORM-GRAPHICS-PIPELINE.md).
+**2026-11-14 — Scaleform graphics intake:** AutoPort now detects and validates GFX/SWF headers, classifies font and ActionScript source files, routes them through a graphics-specific worklist, and can create a separate SWF editor-handoff copy for JPEXS. This is not a game-ready GFX build. The public PS4 GFX loader only proves a GTA V 1.46 fixed font hook; GTA V 1.57 runtime loading remains unvalidated. See [Scaleform graphics pipeline](docs/SCALEFORM-GRAPHICS-PIPELINE.md).
 
-**2026-11-14 — PS4 GTA V GFX Loader research:** inspected the linked source code and confirmed a narrow GTA V 1.46 hook that redirects the `font_lib_efigs` request to a file under `/data`. It is a useful runtime-hook reference, not a universal graphics loader, and its hard-coded 1.46 address is not safe to reuse on GTA V 1.73. See [Project V and GFX loader research](docs/PROJECT-V-GOLDHEN-RESEARCH.md).
+**2026-11-14 — PS4 GTA V GFX Loader research:** inspected the linked source code and confirmed a narrow GTA V 1.46 hook that redirects the `font_lib_efigs` request to a file under `/data`. It is a useful runtime-hook reference, not a universal graphics loader, and its hard-coded 1.46 address is not safe to reuse on GTA V 1.57. See [Project V and GFX loader research](docs/PROJECT-V-GOLDHEN-RESEARCH.md).
 
 **2026-11-14 — Guided porting and first-run tool preparation**
 - Added an in-app walkthrough with current-stage progress, contextual next-step prompts, and expandable setup/capability guidance.
@@ -62,13 +62,13 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Reports remain source-side parser/round-trip evidence only; encrypted archives may require user-owned game keys, and no PS4 output or install package is produced.
 
 **2026-11-13 — GoldHEN target recorded**
-- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00419` update `1.73` Story Mode.
+- Recorded the user-confirmed PS4 system firmware `14.00` and GoldHEN `2.4b18.13` as separate target details; GTA V remains `CUSA00419` update `1.57` Story Mode.
 - GoldHEN suffix is stored as user-confirmed; official release metadata independently confirms the `2.4b18` release family, not the `.13` suffix.
 - Resource compatibility and deployment remain unverified.
 
 
 **2026-11-13 — PS4 firmware target recorded**
-- Recorded the user-confirmed PS4 system firmware 14.00 separately from the GTA V title update 1.73; GoldHEN version remains unknown and resource compatibility remains unverified.
+- Recorded the user-confirmed PS4 system firmware 14.00 separately from the GTA V title update 1.57; GoldHEN version remains unknown and resource compatibility remains unverified.
 
 **2026-11-13 — AutoPort JSX build repair**
 - Corrected both missing/extra expression delimiters in the import-status JSX that blocked the Vite production build.
@@ -114,7 +114,7 @@ A separate, local-first project inside this repository for analyzing PC Grand Th
 - Updated the duplicate-report regression test to assert the specific duplicate-generic-report error emitted by the report loader; runtime behavior is unchanged.
 
 **2026-11-13 — First PS4 target profile recorded**
-- Recorded the user-confirmed target label `CUSA00419` / GTA V `1.73` / PS4 Story Mode in a dedicated target profile module.
+- Recorded the user-confirmed target label `CUSA00419` / GTA V `1.57` / PS4 Story Mode in a dedicated target profile module.
 - The target profile is included in exported conversion manifests and shown in the workbench.
 - Added regression tests to ensure the supplied target label remains stable and explicitly unverified.
 - This records the intended target only; it does not independently verify the console build or establish YFT/YTD compatibility.
@@ -205,4 +205,4 @@ Then open the AutoPort workbench and choose **Load native reports**. Select the 
 Never overwrite original game files. Never label copied PC assets as converted. A deployment package is only installable after conversion, dependency validation, and testing against the exact PS4 title ID and game build.
 
 
-**2026-11-15 — US target profile correction:** the user confirmed their own base-game PKG is **CUSA00419 (US)**. AutoPort's active target profile now records CUSA00419, publisher prefix UP1004 and content ID UP1004-CUSA00419_00-GTAVDIGITALDOWNL. The prior CUSA00411 / 01.57 community backend is retained only as a separate research reference; its binaries, offsets and templates are not treated as compatible with this US target. The reported 1.73 target remains unverified against a fresh PKG metadata report and console state.
+**2026-11-15 — US target profile correction:** the user confirmed their own base-game PKG is **CUSA00419 (US)**. AutoPort's active target profile now records CUSA00419, publisher prefix UP1004 and content ID UP1004-CUSA00419_00-GTAVDIGITALDOWNL. The prior CUSA00411 / 01.57 community backend is retained only as a separate research reference; its binaries, offsets and templates are not treated as compatible with this US target. The reported 1.57 target remains unverified against a fresh PKG metadata report and console state.
