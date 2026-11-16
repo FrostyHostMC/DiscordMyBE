@@ -109,7 +109,7 @@ function parseRuntimeLog(file) {
 
   const lines = text.split(/\r?\n/);
   const signals = [];
-  const signalPattern = /\b(error|failed|failure|unsupported|not supported|version|crc|warning|warn|cannot|missing|invalid|denied|exception|unable)\b/i;
+  const signalPattern = /\b(error|failed|failure|unsupported|not supported|crc|warning|warn|cannot|missing|invalid|denied|exception|unable)\b|\bversion\b.{0,48}\b(mismatch|unsupported|not supported|invalid|incompatible|expected|required)\b|\b(mismatch|incompatible)\b.{0,48}\bversion\b/i;
   for (const [index, rawLine] of lines.entries()) {
     const line = rawLine.trim();
     if (!line || !signalPattern.test(line)) continue;
@@ -117,7 +117,7 @@ function parseRuntimeLog(file) {
     signals.push({
       line: index + 1,
       category: /error|failed|failure|exception|unable|cannot|denied|invalid/i.test(line) ? "error"
-        : /unsupported|not supported|version/i.test(line) ? "compatibility"
+        : /unsupported|not supported|version.{0,48}(mismatch|unsupported|not supported|invalid|incompatible|expected|required)|(mismatch|incompatible).{0,48}version/i.test(line) ? "compatibility"
           : /crc/i.test(line) ? "crc"
             : "warning",
       text: line.slice(0, 300)
