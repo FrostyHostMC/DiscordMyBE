@@ -1,3 +1,11 @@
+## 2026-11-16 — Executable inspection and PS4 texture storage prototype
+- Added bounded PE, ELF, PlayStation SELF and SCE header inspection. AutoPort can flag Windows PE files disguised as PRX/SPRX and non-x86-64 ELF candidates; a readable x86-64 ELF remains unverified until Orbis ABI, SELF/PRX, imports, GoldHEN and exact game-build checks pass.
+- Added DDS BC1/BC3/BC5 to PS4 Thin1DThin storage-layout conversion, with generated mip payloads, bounded allocations and byte-for-byte untile round-trip checks.
+- Integrated the texture storage stage into the automatic prep ZIP, including raw partial outputs, JSON sidecars, per-file delivery-plan status and a separate report. Unsupported DDS formats remain preserved.
+- This is a partial storage-payload conversion only. It does not encode source images, build complete RSC7/YTD dictionaries, write PS4 RPFs or make any output installable. PS4-ready count remains zero.
+- Added regression tests for executable signatures, architecture mismatches, DDS format/shape validation, tiled-storage round trips and automatic bundle export.
+- Corrected the upstream backend assessment: RaringM/ps5-gtav-menu has an experimental PS4 CUSA00411/01.57 profile and PS4-specific texture/validation helpers, but its prominent PC vehicle/ped converters are PS5-template based. It is not a drop-in backend for CUSA00419/1.57.
+
 ## 2026-11-15 — Confirmed target correction and ORBX runtime diagnostics
 - Corrected the active target from the previously recorded GTA V 1.73 to the user's confirmed CUSA00419 (US) / GTA V 1.57 / GoldHEN 2.4b18.13 setup. Updated the target profile, app UI, prep bundle, regression tests and current deployment research. Historical entries below are retained as a record of earlier development state.
 - Added bounded parsing of supplied ORBX `rpf_log.txt` files (maximum 1 MiB), extracting up to 100 diagnostic excerpts with line numbers and categories for errors, compatibility, CRC and warnings. Routine version banners are not treated as compatibility errors.
@@ -8,11 +16,11 @@
 - This makes the diagnostics useful for deciding what the app must generate for vehicles, peds, weapons, textures, maps and runtime plugins.
 - No expected output is represented as generated unless a real adapter has emitted it.
 
-## 2026-11-14 — Existing PS4 conversion backend identified
-- Researched the RaringM/ps5-gtav-menu open-source project, which documents actual PC-to-PS4 converters for vehicles, peds, textures, maps and other resources, plus a custom-pack runtime.
-- Its MIT license permits reuse subject to retaining the copyright/license notice; no upstream source has been copied into AutoPort yet.
-- Hard target mismatch recorded: upstream PS4 runtime and converter target is CUSA00411 01.57, while this AutoPort target is user-confirmed CUSA00411 1.73. Do not package 1.57 PRX/offsets/custom packs as 1.73 compatible.
-- Added backend research and integration policy. Matching 1.73 game templates and a verified 1.73 loader path remain required for an installable asset test on the user's current build.
+## 2026-11-14 — PS4 backend research and target boundary
+- Reviewed RaringM/ps5-gtav-menu. Its README lists an experimental PS4 Legacy plugin/custom-pack profile for CUSA00411 / 01.57. It includes PS4-specific texture read/write and resource-check modules plus a narrow fragment declaration conversion helper.
+- The upstream pack reference and main PC vehicle/ped converters rely on PS5 resources/templates; they are not generic PC-to-PS4 vehicle/ped converters.
+- The upstream PS4 target ID is CUSA00411, while AutoPort targets CUSA00419 / 1.57. Matching update labels do not make title IDs, executable hashes, offsets or retail templates interchangeable.
+- No upstream plugin, binary, CodeWalker DLL or game asset is bundled. See the corrected backend research and PS4 texture storage adapter documents.
 
 ## 2026-11-14 — Per-family output contracts
 - Added explicit expected deliverables and required source dependencies for fragments, drawables, texture dictionaries, image textures, collision, maps, archetypes, source models, scripts, PC plugins, console plugins, audio and RPF archives.
