@@ -263,6 +263,9 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       ps4TextureRoot.file(sidecarPath, JSON.stringify({
         sourcePath,
         outputPath,
+        target: target ? { titleId: target.titleId || target.cusa || null, updateVersion: target.updateVersion || target.gameUpdate || null } : null,
+        adapterId: converted.adapterId,
+        adapterVersion: converted.adapterVersion,
         sourceSha256,
         outputSha256,
         format: converted.layout.format,
@@ -282,6 +285,9 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       }, null, 2));
       Object.assign(record, {
         status: "ps4-texture-storage-candidate",
+        target: target ? { titleId: target.titleId || target.cusa || null, updateVersion: target.updateVersion || target.gameUpdate || null } : null,
+        adapterId: converted.adapterId,
+        adapterVersion: converted.adapterVersion,
         format: converted.layout.format,
         width: converted.layout.width,
         height: converted.layout.height,
