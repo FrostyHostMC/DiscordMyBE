@@ -1,3 +1,4 @@
+import { inspectExecutableHeader } from "./executableInspector.js";
 import { inspectBinaryFormat } from "./defaultFormatAdapters.js";
 
 const EXTENSIONS = {
@@ -85,6 +86,7 @@ function classifyOne(file) {
     ? inspectBinaryFormat(file)
     : { status: "unrecognized", selectedAdapterId: null, candidates: [], probeErrors: [], preservedAsSource: true, conversionAuthorized: false, signature: null };
   const signature = signatureOf(file.bytes);
+  const binaryInspection = /\\.(asi|dll|exe|sys|prx|sprx|elf)$/i.test(String(file.path || "")) ? inspectExecutableHeader(file.bytes) : null;
   const inferred = {
     "rage-resource": ["rage-resource", "RAGE resource (signature identified)", "inspection-required"],
     "rage-archive": ["archive", "RAGE archive (signature identified)", "archive-inspection-required"],
@@ -100,7 +102,11 @@ function classifyOne(file) {
   const warnings = [];
   if ([".asi", ".dll", ".exe", ".sys"].includes(extension) || (family === "pc-native-plugin" && signature === "MZ")) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
   if ([".gfx", ".swf", ".fla", ".as", ".ttf", ".otf"].includes(extension)) warnings.push("Scaleform graphics/font assets need a compatible GFx authoring/export workflow and an exact-build PS4 loader; file identification alone is not a playable graphics mod.");
-  if (extension === ".prx") warnings.push("A PRX is platform-native code; verify Orbis target, loader, title ID and exact game build.");
+  if (extension === ".prx" || extension === ".sprx") warnings.push("A PRX/SPRX is platform-native code; verify Orbis target, loader, title ID and exact game build.");
+  if (binaryInspection?.format === "pe" && [".prx", ".sprx"].includes(extension)) warnings.push("Binary inspection found a Windows PE image inside a PRX/SPRX-named file; it is not a valid Orbis plugin candidate.");
+  if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && !binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF machine/class/byte order does not match the expected PS4 x86-64 architecture.");
+  if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF CPU architecture matches x86-64, but Orbis ABI, SELF/PRX packaging, imports and game-build compatibility remain unverified.");
+  if (binaryInspection?.format === "sce-container") warnings.push("Sony SCE container signature detected; signature, encryption, imports and target compatibility are not validated.");
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");
   if (signature === "MZ" && ![".dll", ".exe", ".asi"].includes(extension)) warnings.push("Detected a Windows PE executable signature despite the file extension.");
@@ -116,7 +122,7 @@ function classifyOne(file) {
       || (signatureRole === "native-elf-binary" && ["native-binary", "console-native-plugin"].includes(extensionFamily));
     if (!compatible) warnings.push("The detected binary signature does not agree with the file extension hint; inspect the file before selecting a converter.");
   }
-  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, classificationBasis, signature, formatDetection, warnings };
+  return { path: file.path, extension, size: file.size ?? file.bytes?.byteLength ?? 0, family, label, portability, classificationBasis, signature, formatDetection, binaryInspection, warnings };
 }
 
 export function auditModFiles(files = []) {
