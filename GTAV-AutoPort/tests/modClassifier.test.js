@@ -37,3 +37,11 @@ test("infers a compressed texture family from DDS content without a known extens
  assert.equal(r.files[0].classificationBasis,"content-signature");
  assert.equal(r.files[0].formatDetection.selectedAdapterId,"ps4-thin1dthin-dds-storage");
 });
+
+
+test("classifies SPRX files as console-native plugins and inspects their SELF signature",()=>{
+ const r=auditModFiles([f("plugins/graphics.sprx",new Uint8Array([0x4f,0x15,0x3d,0x1d,0,0,0,0]))]);
+ assert.equal(r.files[0].family,"console-native-plugin");
+ assert.equal(r.files[0].binaryInspection.format,"self-container");
+ assert.equal(r.files[0].binaryInspection.targetCompatibility,"unverified");
+});
