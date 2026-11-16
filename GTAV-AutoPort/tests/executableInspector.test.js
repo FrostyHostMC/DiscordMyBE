@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { inspectExecutableHeader } from "../src/core/executableInspector.js";
 
 function elf64({ machine = 62, osAbi = 0, phnum = 0, phoff = 64 } = {}) {
-  const bytes = new Uint8Array(512);
+  const bytes = new Uint8Array(256);
   bytes.set([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, osAbi, 0]);
   const view = new DataView(bytes.buffer);
   view.setUint16(16, 3, true);
