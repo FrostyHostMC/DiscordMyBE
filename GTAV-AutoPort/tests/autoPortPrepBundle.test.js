@@ -171,3 +171,23 @@ test("stops recursive RPF extraction at the configured nesting depth", async () 
   assert.match(result.manifest.archiveInspections[5].error, /nesting.*depth limit/);
   assert.equal(result.manifest.summary.ps4ReadyFiles, 0);
 });
+
+
+test("exports bounded ORBX runtime-log diagnostics in the automatic prep report", async () => {
+  const result = await buildAutomaticPrepBundle({
+    sourceName: "orbx-diagnostic-fixture",
+    target: { titleId: "CUSA00419", updateVersion: "1.57" },
+    files: [
+      { path: "orbx.prx", bytes: new Uint8Array([1, 2, 3]) },
+      { path: "orbx.ini", bytes: new TextEncoder().encode("[Files]\nLoadMETA=true\n") },
+      { path: "orbx/rpf_log.txt", bytes: new TextEncoder().encode("ORBX initialized\nERROR: unsupported game version\n") }
+    ]
+  });
+  assert.equal(result.manifest.target.updateVersion, "1.57");
+  assert.equal(result.manifest.orbxPackageAudit.components.runtimeLog.analysis.status, "parsed-with-signals");
+  const archive = await JSZip.loadAsync(result.blob);
+  const audit = JSON.parse(await archive.file("AutoPort-Prep/reports/orbx-package-audit.json").async("string"));
+  assert.equal(audit.components.runtimeLog.analysis.signals[0].line, 2);
+  assert.equal(audit.components.runtimeLog.analysis.signals[0].category, "error");
+  assert.equal(audit.installReview.runtimeCompatibilityVerified, false);
+});
