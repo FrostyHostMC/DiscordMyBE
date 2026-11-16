@@ -21,7 +21,7 @@ function dds({ width = 16, height = 16, format = "DXT1", mipCount = 1, dx10 = fa
 
 test("inspects legacy BC1 DDS mip chains and calculates exact payload extents",()=>{
  const report=inspectDdsTexture(dds({width:32,height:16,format:"DXT1",mipCount:4}));
- assert.equal(report.status,"supported");assert.equal(report.format,"BC1");assert.equal(report.mipCount,4);assert.equal(report.payloadBytes,Math.ceil(32/4)*Math.ceil(16/4)*8+Math.ceil(16/4)*Math.ceil(8/4)*8+Math.ceil(8/4)*Math.ceil(4/4)*8+8);
+ assert.equal(report.status,"supported");assert.equal(report.format,"BC1");assert.equal(report.mipCount,4);assert.equal(report.maxMipCount,6);assert.equal(report.hasFullMipChain,false);assert.equal(report.missingMipLevels,2);assert.ok(report.warnings.some(w=>w.includes("missing levels are not generated")));assert.equal(report.payloadBytes,Math.ceil(32/4)*Math.ceil(16/4)*8+Math.ceil(16/4)*Math.ceil(8/4)*8+Math.ceil(8/4)*Math.ceil(4/4)*8+8);
 });
 
 test("inspects DX10 BC1 and rejects unsupported array shapes",()=>{
