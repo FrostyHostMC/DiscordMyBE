@@ -26,6 +26,7 @@ const LEGACY_SIGNATURE_LABELS = Object.freeze({
   "rage-rsc7": "RSC7",
   "rage-rpf7": "RPF7",
   dds: "DDS",
+  "ps4-thin1dthin-dds-storage": "DDS",
   png: "PNG",
   wave: "WAVE",
   ogg: "OGG",
