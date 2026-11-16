@@ -201,7 +201,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     const relative = safePath(file.path);
     if (!relative) continue;
     originalRoot.file(relative, file.bytes ?? new Uint8Array());
-    sourceManifest.push({ path: relative, bytes: file.bytes?.byteLength ?? file.size ?? 0, preserved: true });
+    sourceManifest.push({ path: relative, bytes: file.bytes?.byteLength ?? file.size ?? 0, sha256: file.bytes ? await sha256(file.bytes) : null, preserved: true });
   }
 
   for (const { file, inspection } of eligible) {
