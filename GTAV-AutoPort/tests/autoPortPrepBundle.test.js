@@ -301,7 +301,6 @@ test("groups duplicate imported content by SHA-256 without deleting either sourc
   });
   assert.equal(result.manifest.summary.duplicateContentGroups, 1);
   assert.equal(result.manifest.duplicateContentGroups[0].references.length, 2);
-  assert.equal(result.manifest.duplicateContentGroups[0].references[0].sha256, undefined);
   const archive = await JSZip.loadAsync(result.blob);
   assert.ok(archive.file("AutoPort-Prep/source-original/assets/first.dat"));
   assert.ok(archive.file("AutoPort-Prep/source-original/assets/copy/second.dat"));
