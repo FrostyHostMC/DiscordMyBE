@@ -33,7 +33,7 @@ test("never upgrades PC Legacy round-trip to PS4-ready", () => {
   const plan = buildPs4DeliveryPlan({
     files: [{ path: "stream/car.yft" }],
     conversions: [{ sourcePath: "stream/car.yft", status: "pc-legacy-candidate" }],
-    target: { titleId: "CUSA00419", updateVersion: "1.73" }
+    target: { titleId: "CUSA00419", updateVersion: "1.57" }
   });
   assert.equal(plan.items[0].status, "pc-candidate-only");
   assert.equal(plan.summary.ps4ReadyFiles, 0);
@@ -58,7 +58,7 @@ test("classifies source assets and preserves unknown files", () => {
 });
 
 test("returns an explicit non-integrated packaging boundary", () => {
-  const plan = buildPs4DeliveryPlan({ files: [], target: { titleId: "CUSA00419", updateVersion: "1.73" } });
+  const plan = buildPs4DeliveryPlan({ files: [], target: { titleId: "CUSA00419", updateVersion: "1.57" } });
   assert.equal(plan.packaging.orbisRpfBackend, "not-integrated");
   assert.equal(plan.packaging.projectVLoader, "not-configured");
   assert.equal(plan.summary.installable, false);
