@@ -25,6 +25,10 @@ test("extracts behavior requirements and PC dependencies from readable source", 
   assert.ok(report.behaviors.some((item) => item.id === "police.wanted"));
   assert.ok(report.requiredNativeHostApis.includes("spawnPed"));
   assert.equal(report.target.implementationStatus, "blueprint-only");
+  assert.equal(report.target.updateVersion, "1.57");
+  assert.deepEqual(report.target.titleIds, ["CUSA00419", "CUSA00411"]);
+  assert.equal(report.target.regions.CUSA00419, "US");
+  assert.equal(report.target.regions.CUSA00411, "EU");
 });
 test("does not pretend opaque DLL files are source code", () => {
   const report = buildNativeBehaviorBlueprint([{ path: "HomeInvasion.dll", size: 1024, bytes: new Uint8Array(1024) }]);

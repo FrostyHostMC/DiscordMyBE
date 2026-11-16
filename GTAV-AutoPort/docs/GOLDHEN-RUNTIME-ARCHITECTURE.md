@@ -2,7 +2,7 @@
 
 ## Goal
 
-Build one native GoldHEN PRX runtime for the user's confirmed US GTA V target, **CUSA00419 / reported update 1.73 / Story Mode**. AutoPort converts and packages supported mod content into a documented data format; the runtime loads that data and implements supported behavior inside the game.
+Build one native GoldHEN PRX runtime for GTA V **1.57 only**, with separate US **CUSA00419** and EU **CUSA00411** profiles / Story Mode. AutoPort converts and packages supported mod content into a documented data format; the runtime loads that data and implements supported behavior inside the game.
 
 This is a runtime architecture, not a promise that arbitrary PC mods can be executed unchanged.
 
@@ -70,24 +70,24 @@ A generic loader cannot make all PC mods work:
 - **Textures/models/vehicles/peds/maps:** require conversion to the PS4 GTA resource formats and a verified way to register or replace resources in the target game build.
 - **Scripts and trainers:** PC ASI, ScriptHookV, .NET and Windows DLL code cannot run on PS4. Each supported behavior must be reimplemented in native PS4 code or a deliberately restricted, sandboxed data-driven scripting VM.
 - **Graphics/ReShade effects:** require PS4 renderer hooks and equivalent shader implementations; copying shader files is not enough.
-- **Native game hooks:** require exact CUSA00419 1.73 executable identity, ABI, addresses/signatures, and runtime validation. Never reuse 1.57 offsets because the menu happens to work.
+- **Native game hooks:** require exact regional 1.57 executable identity, ABI, addresses/signatures, and runtime validation. Never reuse 1.57 offsets because the menu happens to work.
 - **Online:** out of scope; target Story Mode only.
 
 ## Fail-closed build identity
 
 Before enabling game hooks or loading packs, the runtime must identify the running title and game build using reliable runtime evidence. If the title ID, update, executable fingerprint, or required adapter is unknown, it must disable game modifications and write a diagnostic log. A matching title ID alone is not enough to prove update compatibility.
 
-The user's report that certain 1.57 menus work on their 1.73 game is a lead for testing those exact binaries/features. It is not evidence that unrelated 1.57 hooks, offsets, resource packs, or assets are compatible.
+The supported project target is GTA V 1.57 only. A menu or plugin working on one region/build is not evidence that unrelated hooks, offsets, resource packs, or assets are compatible across regions; US and EU executable evidence must remain separate.
 
 ## Development phases
 
-1. **PRX hello-world:** build a minimal native PS4 PRX with the supported Orbis toolchain, load only for CUSA00419, emit a startup log, and provide a safe disable path. No game hooks yet.
+1. **PRX hello-world:** build a minimal native PS4 PRX with the supported Orbis toolchain, load only for the matching CUSA00419 or CUSA00411 profile, emit a startup log, and provide a safe disable path. No game hooks yet.
 2. **Runtime identity:** identify title/build, log runtime capabilities, and fail closed on unknown builds.
 3. **Pack reader:** parse and validate manifests, hashes, dependencies and path safety without changing game resources.
 4. **Read-only file experiment:** verify a known harmless test file can be read from the chosen data directory; compare direct file access and AFR redirection. No asset replacement yet.
-5. **First resource adapter:** select one low-risk resource type and prove it can be registered/replaced on CUSA00419 1.73 using matching build evidence.
+5. **First resource adapter:** select one low-risk resource type and prove it can be registered/replaced on CUSA00419 1.57 using matching build evidence.
 6. **Feature adapters:** implement selected script/menu behaviors in native code, one feature at a time, with automated unit tests and on-console logs.
-7. **Installer/export:** produce a PRX plus manifest/data packs and a generated CUSA00419 plugins.ini snippet. Never overwrite the user's existing plugin configuration silently.
+7. **Installer/export:** produce a PRX plus manifest/data packs and a generated region-specific plugins.ini snippet. Never overwrite the user's existing plugin configuration silently.
 
 ## Toolchain and release gates
 
@@ -96,7 +96,7 @@ The current `native-engine` CMake target builds the desktop RageKit CLI; it does
 A PRX release is blocked until the repository has:
 - a legally obtained PS4 SDK/toolchain and documented reproducible build environment;
 - a minimal PRX entry point that links for the intended PS4 environment;
-- a CUSA00419-only plugin configuration;
+- a separate CUSA00419 and CUSA00411 plugin configurations;
 - static validation of PRX format/imports and dependency list;
 - a startup log and safe failure behavior;
 - evidence from the exact target game build;
@@ -107,8 +107,8 @@ No compiled PRX or installable package is claimed by this architecture document.
 ## Public references
 
 - GoldHEN plugin repository and installation layout: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
-- GTA V Lotus GoldHEN PRX example for CUSA00419 (its README calls for old updates 1.27/1.48; research reference only, not a 1.73 binary): https://github.com/illusionyy/PS4-GTAV-Lotus-SPRX-Release
+- GTA V Lotus GoldHEN PRX example for CUSA00419 (its README calls for old updates 1.27/1.48; research reference only, not a 1.57 binary): https://github.com/illusionyy/PS4-GTAV-Lotus-SPRX-Release
 - GoldHEN plugin documentation lists native C/C++ game hooks and per-title plugin sections: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
 - AFR file redirector reference: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
 
-These references establish the GoldHEN plugin mechanism, not compatibility of any existing plugin with CUSA00419 update 1.73.
+These references establish the GoldHEN plugin mechanism, not compatibility of any existing plugin with CUSA00419 update 1.57.

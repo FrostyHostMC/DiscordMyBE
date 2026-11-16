@@ -56,11 +56,16 @@
 - [x] Implement initial generic inventory and explicit model/texture/handling dependency graph with missing/ambiguous reporting.
 - [ ] Expand dependency graph across variations, carcols, mod kits, audio, layout, collision, LOD and damage assets.
 - [ ] Implement source decoders that populate the intermediate representation without dropping unsupported constructs.
-- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.73.
+- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.57.
 - [ ] Implement PS4 YFT/YTD encoders and validate round-trip against independent readers and game runtime.
 
+## Active PS4 target profiles
+- US: CUSA00419 / GTA V 1.57.
+- EU: CUSA00411 / GTA V 1.57.
+- Keep executable fingerprints, hook signatures, offsets, and validation evidence separate by region. Never infer US compatibility from EU evidence or vice versa.
+
 ## Phase 3 — first PS4 vehicle conversion
-- [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
+- [x] Record user-specified first target label: CUSA00411 · GTA V 1.57 · PS4 Story Mode (console/build compatibility still unverified).
 - [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
 - [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
 - [ ] Determine PS4 YFT/YTD resource differences from verified retail PS4 files.
