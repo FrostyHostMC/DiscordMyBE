@@ -89,7 +89,7 @@ test("places adjacent 8x8 microtiles at the expected tile-row and tile-column of
  const layout=createPs4TextureLayout(64,64,1,"BC1");
  const input=Uint8Array.from({length:16*16*8},(_,i)=>Math.floor(i/8)&0xff);
  const tiled=tilePs4TextureMips([input],layout);
- const blockByte=(tileIndex)=>tiled[tileIndex*64*8];
+ const blockByte=(blockIndex)=>tiled[blockIndex*8];
  assert.equal(blockByte(0),0);
  assert.equal(blockByte(64),8);   // second tile column begins at source x=8
  assert.equal(blockByte(128),128); // second tile row begins at source y=8
