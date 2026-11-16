@@ -325,3 +325,26 @@ test("finds identical bytes shared by a loose file and an extracted RPF member",
   assert.deepEqual(group.references.map((item) => item.source), ["imported-file", "extracted-rpf-entry"]);
   assert.ok(group.references.some((item) => item.path.endsWith("!/shared.dat")));
 });
+
+
+test("reuses a hash-identical DDS conversion while writing separate per-path outputs", async () => {
+  const dds = makeDdsFixture({ width: 16, height: 16, fourCC: "DXT1", mipCount: 3 });
+  const result = await buildAutomaticPrepBundle({
+    target: { titleId: "CUSA00419", updateVersion: "1.57" },
+    files: [
+      { path: "textures/first.dds", bytes: dds },
+      { path: "textures/copy/second.dds", bytes: dds.slice() }
+    ]
+  });
+  assert.equal(result.manifest.summary.ps4TextureStorageCandidates, 2);
+  assert.equal(result.manifest.summary.textureConversionCacheHits, 1);
+  assert.equal(result.manifest.textureConversions[0].cacheHit, false);
+  assert.equal(result.manifest.textureConversions[1].cacheHit, true);
+  assert.equal(result.manifest.textureConversions[0].sourceSha256, result.manifest.textureConversions[1].sourceSha256);
+  assert.equal(result.manifest.textureConversions[0].outputSha256, result.manifest.textureConversions[1].outputSha256);
+  assert.notEqual(result.manifest.textureConversions[0].outputPath, result.manifest.textureConversions[1].outputPath);
+  const archive = await JSZip.loadAsync(result.blob);
+  for (const path of result.manifest.textureConversions.map((item) => "AutoPort-Prep/ps4-texture-storage-candidates/" + item.outputPath)) {
+    assert.ok(archive.file(path));
+  }
+});
