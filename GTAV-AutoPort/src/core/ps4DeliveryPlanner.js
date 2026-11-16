@@ -141,8 +141,6 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     const binaryInspection = [".asi", ".dll", ".exe", ".sys", ".prx", ".sprx", ".elf"].includes(extension(path))
       ? inspectExecutableHeader(file.bytes)
       : null;
-      ? inspectExecutableHeader(file.bytes)
-      : null;
     return {
       path,
       bytes: Number.isFinite(file.bytes?.byteLength) ? file.bytes.byteLength : Number(file.size) || 0,
