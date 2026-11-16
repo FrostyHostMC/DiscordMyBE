@@ -12,13 +12,14 @@ ScanResult findUniquePattern(const std::uint8_t* image, std::size_t imageSize,
         std::strlen(mask) != patternSize)
         return ScanResult::InvalidInput;
 
+    for (std::size_t j = 0; j < patternSize; ++j)
+        if (mask[j] != 'x' && mask[j] != '?') return ScanResult::InvalidInput;
+
     std::size_t match = 0;
     unsigned int matches = 0;
     for (std::size_t i = 0; i <= imageSize - patternSize; ++i) {
         bool equal = true;
         for (std::size_t j = 0; j < patternSize; ++j) {
-            if (mask[j] != 'x' && mask[j] != '?')
-                return ScanResult::InvalidInput;
             if (mask[j] == 'x' && image[i + j] != pattern[j]) {
                 equal = false;
                 break;
