@@ -1,41 +1,41 @@
 # PS4 conversion backend research
 
-## Existing open-source reference implementation
+## Candidate repository reviewed
 
-Research identified `RaringM/ps5-gtav-menu` as a substantive PS4/PS5 custom-content pipeline, not just a plugin loader. Its documented PS4 target is **GTA V Legacy CUSA00411 version 01.57**, with custom packs marked experimental. The repository includes PC-to-PS4 resource conversion tools for vehicles, peds, drawables, maps, collision and PS4 texture dictionaries, plus a runtime custom-pack format and validator.
+Repository: https://github.com/RaringM/ps5-gtav-menu
+License: repository LICENSE declares MIT; THIRD_PARTY_NOTICES documents additional provenance and licensing constraints.
 
-Upstream references:
-- Repository: https://github.com/RaringM/ps5-gtav-menu
-- Pack author guide: https://github.com/RaringM/ps5-gtav-menu/blob/main/docs/pack-author-guide.md
-- Pack reference: https://github.com/RaringM/ps5-gtav-menu/blob/main/docs/pack-reference.md
-- PS4 texture writer: https://github.com/RaringM/ps5-gtav-menu/blob/main/tools/gtavmenu_tools/ps4_texture_writer.py
-- PC vehicle converter: https://github.com/RaringM/ps5-gtav-menu/blob/main/tools/convert_pc_vehicle.py
-- PC ped converter: https://github.com/RaringM/ps5-gtav-menu/blob/main/tools/convert_pc_ped.py
+This is a substantial GTA V Story Mode menu/runtime project with an experimental PS4 Legacy plugin profile for **CUSA00411 / 01.57**. Its README explicitly lists PS4 custom packs as experimental. It is not a ready-made AutoPort backend for the user's **CUSA00419 / 1.57** installation.
 
-## Important target boundary
+### What is genuinely PS4-specific
 
-The upstream repository explicitly supports PS4 **CUSA00411 01.57** only. Its build manifest pins executable identity, native addresses, loader hooks, custom-pack runtime, and target resources to that exact update. It refuses unknown title IDs and versions. The user-confirmed AutoPort target is **CUSA00419 GTA V 1.57**, so the 1.57 plugin, offsets, runtime pack loader and compatibility claims must not be reused as if they supported 1.73.
+- data/targets/ps4/cusa00411-01.57.json pins a different title ID, executable hashes, loader addresses, native addresses and feature profile.
+- tools/gtavmenu_tools/ps4_texture_reader.py and ps4_texture_writer.py implement/read PS4 Legacy texture dictionary structures and BC1/BC3/BC5 Thin1DThin storage.
+- tools/gtavmenu_tools/ps4_resource_checks.py checks PS4 fragment vertex declarations and texture storage invariants.
+- tools/ps4_fragment_convert.ps1 makes a narrow Legacy fragment declaration change (PC BlendIndices Colour type to PS4 UByte4) using a separately supplied CodeWalker.Core.dll and verifies serialized geometry fingerprints.
+- tools/gtavmenu_tools/ps4_build.py configures the PS4 plugin build from the pinned target manifest.
 
-The converters also rely on templates extracted from the user's own matching game build. A 1.57 template cache is not evidence for 1.73. The upstream documentation describes retrieving templates from the console while GTA is running and hashing them against build-specific pins.
+### What must not be misrepresented
 
-## AutoPort integration policy
+The upstream pack reference primarily documents PS5 RSC7 assets and PS5 target packs. The prominent PC vehicle and ped converters import PS5 texture writers/readers and depend on PS5 retail templates. They are not generic CUSA00419 PS4 vehicle/ped converters. The existence of a PS4 texture writer or one fragment fix-up does not make the full PS5 content pipeline PS4-compatible.
 
-1. Treat this project as a candidate conversion backend and study/reuse its format algorithms under its license and third-party notices.
-2. Keep PC intake, diagnostics, dependency graphs and conversion logs in AutoPort.
-3. Add a backend adapter only after its target profile, required Python dependencies, source formats, generated pack schema and error/refusal behavior are pinned and tested.
-4. Never change the target version label on a 1.57 binary or pack to make it appear to support 1.73.
-5. Do not package its 1.57 PRX or 1.57 custom packs for the user's 1.73 installation.
-6. For 1.73, obtain matching PS4 resource templates and independently validate a 1.73 custom-pack loader / AFR path before emitting a GTA-installable asset.
+The PS4 plugin manifest is CUSA00411 / 01.57, not CUSA00419 / 1.57. Although the reported update number matches, the title ID, executable hash, native offsets, loader hooks and resource template provenance differ. AutoPort must not copy its plugin, offsets, target manifest or resource templates into the user's CUSA00419 profile.
 
-## What this means for the first playable test
+## AutoPort work derived from the research
 
-- The upstream project proves that PC-to-PS4 asset conversion is technically achievable for a pinned PS4 build, including texture, vehicle and ped workflows.
-- It does **not** currently provide a verified ready-to-install package for CUSA00419 1.57.
-- AutoPort must report this as a known backend candidate with a target-version mismatch, not claim that a converted output can already be installed on the user's current game.
+AutoPort has independently implemented an experimental DDS BC1/BC3/BC5 to PS4 Thin1DThin storage-layout stage. It verifies the output by un-tiling and comparing every compressed block byte. This stage is intentionally limited to raw texture storage payloads; it does not create a complete RSC7/YTD dictionary and does not mark output installable.
 
+See [PS4 texture storage adapter](PS4-TEXTURE-STORAGE-ADAPTER.md).
 
-## US target correction — CUSA00419
+## Integration policy
 
-The active AutoPort target is the user's US-region **CUSA00419**, not CUSA00411. The earlier 01.57 backend reference remains a separate CUSA00411-specific research target and is **not** a CUSA00419/1.57 compatibility proof. Do not reuse its executable identity, offsets, PRX, resource templates, or custom-pack loader for CUSA00419. The user's report that some 01.57 mod menus still run is useful compatibility evidence for those specific menus, but it does not establish compatibility for other 01.57 binaries or assets.
+1. Keep the upstream repository as a research/reference source, not a binary dependency.
+2. Reimplement only clearly understood, licensed algorithms behind AutoPort's own adapter contract.
+3. Preserve attribution and all applicable third-party notices. Do not redistribute CodeWalker-derived source/data or its DLL without resolving the upstream licensing constraints.
+4. Require CUSA00419 / 1.57 retail reference resources and hashes before target-specific serialization.
+5. Require independent readers and real target tests before enabling a writer.
+6. Keep plugin/runtime offsets, custom-pack loader behavior and executable identity isolated by exact title ID and build fingerprint.
 
-The exact active target metadata is maintained in `src/core/target.js`. The user confirmed the US title ID from their own base-game PKG and corrected the installed game update to 1.57. AutoPort still requires independent PKG metadata inspection and exact-build resource/runtime evidence; `verifiedAgainstConsole` remains false and resource compatibility remains unverified.
+## Current conclusion
+
+The upstream project confirms that a PS4-specific texture storage and runtime-pack path exists for a different US/region title profile, but its custom packs are experimental and its core model/ped converters are not a drop-in PS4 backend. AutoPort's next concrete step is to complete a full PS4 texture dictionary writer around its own tested storage-layout primitive, using lawful CUSA00419 / 1.57 reference data. Until then, the PS4 texture output is a partial conversion candidate only.
