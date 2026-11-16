@@ -47,6 +47,29 @@ int main() {
     const std::uint8_t wrong[] = {0x90, 0x90, 0x90};
     assert(!ProjectV::validatePatchWindow(uniqueImage, sizeof(uniqueImage), 1, wrong, 3, 3));
 
+    const std::uint8_t secondExpected[] = {0x90};
+    const ProjectV::RequiredHookCheck validHooks[] = {
+        {ProjectV::ScanResult::Found, 1, expected, 3, 3},
+        {ProjectV::ScanResult::Found, 4, secondExpected, 1, 1}
+    };
+    assert(ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), validHooks, 2));
+    assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), validHooks, 0));
+    const ProjectV::RequiredHookCheck missingHook[] = {
+        {ProjectV::ScanResult::Found, 1, expected, 3, 3},
+        {ProjectV::ScanResult::NotFound, 4, secondExpected, 1, 1}
+    };
+    assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), missingHook, 2));
+    const ProjectV::RequiredHookCheck mismatchedHook[] = {
+        {ProjectV::ScanResult::Found, 1, expected, 3, 3},
+        {ProjectV::ScanResult::Found, 4, wrong, 1, 1}
+    };
+    assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), mismatchedHook, 2));
+    const ProjectV::RequiredHookCheck overlappingHooks[] = {
+        {ProjectV::ScanResult::Found, 1, expected, 3, 3},
+        {ProjectV::ScanResult::Found, 3, expected, 2, 2}
+    };
+    assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), overlappingHooks, 2));
+
     assert(ProjectV::profileCount() == 4);
     assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157) == 0);
     assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V157) == 1);
@@ -126,12 +149,11 @@ int main() {
     unlink(join(join(library, "folder"), "nested.dat").c_str());
     rmdir(join(library, "folder").c_str());
     unlink(join(library, "readme.txt").c_str());
-    unlink(join(library, "empty.bin").c_str());
     unlink(join(library, ".private").c_str());
+    unlink(join(library, "empty.bin").c_str());
     rmdir(library.c_str());
-    unlink(config.c_str());
     unlink(backup.c_str());
+    unlink(config.c_str());
     rmdir(root.c_str());
-    std::puts("Project V signature, profile and PS4 platform host regression tests passed");
     return 0;
 }
