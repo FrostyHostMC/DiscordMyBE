@@ -7,7 +7,7 @@ test("default target assessment blocks conversion and deployment", () => {
   const result = assessPs4Compatibility();
   assert.equal(result.status, "blocked");
   assert.equal(result.target.titleId, "CUSA00419");
-  assert.equal(result.target.updateVersion, "1.73");
+  assert.equal(result.target.updateVersion, "1.57");
   assert.equal(result.conversionAllowed, false);
   assert.equal(result.deploymentAllowed, false);
   assert.equal(result.passed, 2);
