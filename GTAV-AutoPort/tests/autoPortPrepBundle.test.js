@@ -236,6 +236,7 @@ test("automatically creates experimental PS4 texture storage candidates from sup
   assert.equal(sidecar.format, "BC3");
   assert.equal(sidecar.adapterId, "ps4-thin1dthin-dds-storage");
   assert.equal(sidecar.adapterVersion, "experimental-v1");
+  assert.deepEqual(sidecar.target, { titleId: "CUSA00419", updateVersion: "1.57" });
   assert.equal(sidecar.tileIndex, 13);
   assert.equal(sidecar.installable, false);
   assert.match(sidecar.sourceSha256, /^[a-f0-9]{64}$/);
