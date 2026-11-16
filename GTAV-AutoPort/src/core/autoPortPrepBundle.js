@@ -317,6 +317,29 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     textureConversions.push(record);
   }
 
+  const contentReferences = new Map();
+  const addContentReference = (sha256Value, reference) => {
+    if (!sha256Value) return;
+    if (!contentReferences.has(sha256Value)) contentReferences.set(sha256Value, []);
+    contentReferences.get(sha256Value).push(reference);
+  };
+  for (const file of sourceManifest) {
+    addContentReference(file.sha256, { path: file.path, source: "imported-file", bytes: file.bytes });
+  }
+  for (const archive of archiveInspections) {
+    for (const entry of archive.entries || []) {
+      addContentReference(entry.sha256, {
+        path: archive.sourcePath + "!/" + entry.path,
+        source: "extracted-rpf-entry",
+        bytes: entry.size
+      });
+    }
+  }
+  const duplicateContentGroups = [...contentReferences.entries()]
+    .filter(([, references]) => references.length > 1)
+    .map(([sha256Value, references]) => ({ sha256: sha256Value, references }))
+    .sort((left, right) => left.sha256.localeCompare(right.sha256));
+
   const deliveryPlan = buildPs4DeliveryPlan({ files: analysisFiles, conversions, archiveInspections, textureConversions, target });
   const orbxPackageAudit = inspectOrbxPackage(analysisFiles);
 
@@ -332,6 +355,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       convertibleCandidates: eligible.length,
       convertedPcLegacyCandidates: conversions.filter((item) => item.status === "pc-legacy-candidate").length,
       ps4TextureStorageCandidates: textureConversions.filter((item) => item.status === "ps4-texture-storage-candidate").length,
+      duplicateContentGroups: duplicateContentGroups.length,
       failedCandidates: conversions.filter((item) => item.status === "failed").length,
       originalFilesPreserved: sourceManifest.length,
       rpfArchivesInspected: archiveInspections.length,
@@ -346,6 +370,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     dependencies: dependencyGraph.summary,
     conversions,
     textureConversions,
+    duplicateContentGroups,
     archiveInspections,
     deliveryPlan,
     orbxPackageAudit,
@@ -365,6 +390,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   reportRoot.file("ps4-delivery-plan.json", JSON.stringify(deliveryPlan, null, 2));
   reportRoot.file("orbx-package-audit.json", JSON.stringify(orbxPackageAudit, null, 2));
   reportRoot.file("ps4-texture-storage.json", JSON.stringify(textureConversions, null, 2));
+  reportRoot.file("duplicate-content.json", JSON.stringify(duplicateContentGroups, null, 2));
   for (const [name, value] of Object.entries(reports)) {
     if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
   }
@@ -380,7 +406,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "6. ps4-texture-storage-candidates/ contains experimental BC1/BC3/BC5 PS4-tiled texture allocation payloads, with JSON sidecars; these are not complete YTD resources.",
     "7. reports/orbx-package-audit.json checks for the ORBX PRX, INI and resource tree when present.",
     "8. reports/ps4-texture-storage.json records supported and rejected DDS conversions.",
-    "9. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
+    "9. reports/duplicate-content.json groups identical imported/extracted bytes by SHA-256 without deleting or merging files.",
+    "10. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.57 writer and runtime still require exact-build validation.",
