@@ -10,7 +10,10 @@
 
 # GTAV AutoPort
 
-**2026-11-15 — Multi-family conversion pipeline expansion:** added Menyoo/Spooner vehicle XML translation into a loss-preserving intermediate vehicle pack; expanded vehicle metadata mapping for audio, camera, handling and other fields; added a RageKit-backed PC Legacy YFT/YTD/YDR/YDD candidate writer with output inspection and round-trip verification; added source-level PC script behavior blueprints; and added ped/object metadata, asset and spawn-config mapping. These stages produce source-side interchange data and PC Legacy candidates only. PS4 CUSA00419 / 1.57 resource encoding, menu/runtime execution, Orbis PRX behavior and on-console acceptance remain explicit gates. See:
+**2026-11-15 — Native PS4 companion app foundation:** added an OpenOrbis v0.5.4 homebrew application with a controller-driven browser for USB 0, USB 1, `/data`, and the staged import library. Individual files can be copied into `/data/AutoPort/imports` using temporary files, byte-count verification, flush/atomic rename, collision-safe names and JSONL import receipts. GitHub Actions compiles the unsigned PKG and stores it as the `AutoPort-PS4-PKG` artifact for 90 days. This is a staging/import milestone only: it does not extract archives, convert PC assets, install AFR overlays or manage GoldHEN plugin configuration yet, and it has not been tested on a physical console.
+
+
+**2026-11-15 — Multi-family conversion pipeline expansion:** added Menyoo/Spooner vehicle XML translation into a loss-preserving intermediate vehicle pack; expanded vehicle metadata mapping for audio, camera, handling and other fields; added a RageKit-backed PC Legacy YFT/YTD/YDR/YDD candidate writer with output inspection and round-trip verification; added source-level PC script behavior blueprints; and added ped/object metadata, asset and spawn-config mapping. These stages produce source-side interchange data and PC Legacy candidates only. PS4 regional CUSA00419 / CUSA00411 1.57 resource encoding, menu/runtime execution, Orbis PRX behavior and on-console acceptance remain explicit gates. See:
 - [Menyoo vehicle translation](docs/MENYOO-VEHICLE-TRANSLATION.md)
 - [Vehicle metadata mapping](docs/VEHICLE-METADATA-MAPPING.md)
 - [YFT/YTD resource conversion](docs/YFT-YTD-RESOURCE-CONVERSION.md)

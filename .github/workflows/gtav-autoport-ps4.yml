@@ -43,4 +43,4 @@ jobs:
             GTAV-AutoPort/ps4-app/*.pkg
             GTAV-AutoPort/ps4-app/eboot.bin
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 90
