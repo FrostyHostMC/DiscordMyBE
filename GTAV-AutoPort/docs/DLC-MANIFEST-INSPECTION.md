@@ -14,7 +14,7 @@ AutoPort reads a mod's `content.xml` as a data manifest. It can list declared DL
 
 The Skyline ZIP inventory you shared contains `content.xml` and `skyline/dlc.rpf`. Once the XML is parsed, its declared resource paths can be compared with the contents of the DLC archive. That comparison is important for finding missing metadata, models, textures, handling data and other referenced resources.
 
-The manifest's `dlc_...` paths are PC-side identifiers. They do not prove that the same paths or mount behavior exist in PS4 GTA V CUSA00411 update 1.73. Target mapping remains blocked until exact-build reference evidence is available.
+The manifest's `dlc_...` paths are PC-side identifiers. They do not prove that the same paths or mount behavior exist in PS4 GTA V CUSA00419 update 1.57. Target mapping remains blocked until exact-build reference evidence is available.
 
 ## Safety and limits
 
