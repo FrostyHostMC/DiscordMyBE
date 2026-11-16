@@ -42,7 +42,7 @@ This register separates actual runtime/build dependencies from research referenc
 
 - Repository: https://github.com/AICyberGuardian/GoldSantos
 - Its README describes a CUSA00411 GTA V v1.56 GoldHEN-oriented modding suite, staged asset redirection, RPF tooling, and LAN deployment scripts.
-- Decision: inspect its architecture and scripts for reusable concepts, but do not copy its payloads or treat its claims as verified for GTA V 1.73. The documented game build is 1.56, so its offsets, paths, resource assumptions, and PRX code are not drop-in compatible with the target.
+- Decision: inspect its architecture and scripts for reusable concepts, but do not copy its payloads or treat its claims as verified for CUSA00419 / GTA V 1.57. The documented game build is 1.56 and its title ID is CUSA00411, so its offsets, paths, resource assumptions, and PRX code are not drop-in compatible with the target.
 
 ### InsulinEngine/InsulinGTAV
 
