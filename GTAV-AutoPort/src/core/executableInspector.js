@@ -145,7 +145,17 @@ function inspectPe(bytes) {
 export function inspectExecutableHeader(file) {
   const bytes = bytesOf(file?.bytes ?? file);
   if (!bytes) return { format: "unknown", status: "unavailable", error: "Executable inspection requires byte data." };
-  if (hasMagic(bytes, SELF_MAGIC)) {\n    return {\n      format: "self-container",\n      status: "opaque-console-container",\n      magic: "4f153d1d",\n      platform: "playstation-self-container",\n      targetCompatibility: "unverified",\n      warnings: ["PlayStation SELF container signature detected. This bounded inspector does not decrypt or validate signatures, embedded ELF, imports, title ID or game-update compatibility."]\n    };\n  }\n  if (hasMagic(bytes, SCE_MAGIC)) {
+  if (hasMagic(bytes, SELF_MAGIC)) {
+    return {
+      format: "self-container",
+      status: "opaque-console-container",
+      magic: "4f153d1d",
+      platform: "playstation-self-container",
+      targetCompatibility: "unverified",
+      warnings: ["PlayStation SELF container signature detected. This bounded inspector does not decrypt or validate signatures, embedded ELF, imports, title ID or game-update compatibility."]
+    };
+  }
+  if (hasMagic(bytes, SCE_MAGIC)) {
     return {
       format: "sce-container",
       status: "opaque-console-container",
