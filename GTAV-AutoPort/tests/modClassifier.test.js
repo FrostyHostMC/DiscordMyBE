@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { auditModFiles } from "../src/core/modClassifier.js";
+import "../src/core/registeredFormatAdapters.js";
 const f=(path,bytes=new Uint8Array(),size=bytes.length)=>({path,extension:path.includes(".")?path.slice(path.lastIndexOf(".")).toLowerCase():"",bytes,size});
 test("classifies broad GTA V resource families without assuming vehicles",()=>{const r=auditModFiles([f("stream/interior.ydr"),f("stream/interior.ybn"),f("stream/interior.ytd"),f("stream/interior.ymap"),f("stream/interior.ytyp"),f("anim/dance.ycd"),f("audio/sounds.awc"),f("scripts/ped.ysc")]);assert.equal(r.summary.fileCount,8);assert.equal(r.summary.familyCounts["rage-resource"],6);assert.equal(r.summary.familyCounts["audio-resource"],1);assert.equal(r.summary.familyCounts["game-script"],1);});
 test("flags PC native plugins as not directly portable",()=>{const r=auditModFiles([f("plugins/ScriptHookV.dll"),f("plugins/trainer.asi"),f("tool.exe")]);assert.equal(r.summary.pcNativePlugins,3);assert.equal(r.summary.attentionCount,3);assert.ok(r.warnings.every(w=>w.message.includes("Windows/PC native code")));});
