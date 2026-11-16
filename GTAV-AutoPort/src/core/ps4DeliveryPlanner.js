@@ -99,7 +99,15 @@ function routeFor(path, conversion, archive, binaryInspection, textureConversion
       requirements: ["Parse using the correct metadata format", "Map supported fields without dropping unknown fields", "Validate game-build-specific names and references"]
     };
   }
-  if (ext === ".dds" && textureConversion?.status === "ps4-texture-storage-candidate") {\n    return {\n      route: "ps4-texture-storage-candidate-only",\n      status: "partial-conversion",\n      reason: "AutoPort converted the supported BC texture mip payload into PS4 Thin1DThin storage order and verified an untile round trip. This is only the texture allocation payload, not a complete RSC7/YTD texture dictionary or installable game resource.",\n      requirements: ["Build the PS4 RSC7/YTD texture object and view metadata", "Bind the texture name and references in the containing dictionary", "Insert into a verified PS4 RPF and validate on CUSA00419 / GTA V 1.57"]\n    };\n  }\n  if (SOURCE_ASSET_EXTENSIONS.has(ext)) {
+  if (ext === ".dds" && textureConversion?.status === "ps4-texture-storage-candidate") {
+    return {
+      route: "ps4-texture-storage-candidate-only",
+      status: "partial-conversion",
+      reason: "AutoPort converted the supported BC texture mip payload into PS4 Thin1DThin storage order and verified an untile round trip. This is only the texture allocation payload, not a complete RSC7/YTD texture dictionary or installable game resource.",
+      requirements: ["Build the PS4 RSC7/YTD texture object and view metadata", "Bind the texture name and references in the containing dictionary", "Insert into a verified PS4 RPF and validate on CUSA00419 / GTA V 1.57"]
+    };
+  }
+  if (SOURCE_ASSET_EXTENSIONS.has(ext)) {
     return {
       route: "source-asset-conversion",
       status: "converter-required",
@@ -123,7 +131,8 @@ function routeFor(path, conversion, archive, binaryInspection, textureConversion
 export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInspections = [], textureConversions = [], target = {} } = {}) {
   if (!Array.isArray(files)) throw new Error("files must be an array.");
   const conversionByPath = new Map(conversions.filter((item) => item?.sourcePath).map((item) => [item.sourcePath.toLowerCase(), item]));
-  const archiveByPath = new Map(archiveInspections.filter((item) => item?.sourcePath).map((item) => [item.sourcePath.toLowerCase(), item]));\n  const textureByPath = new Map(textureConversions.filter((item) => item?.sourcePath).map((item) => [item.sourcePath.toLowerCase(), item]));
+  const archiveByPath = new Map(archiveInspections.filter((item) => item?.sourcePath).map((item) => [item.sourcePath.toLowerCase(), item]));
+  const textureByPath = new Map(textureConversions.filter((item) => item?.sourcePath).map((item) => [item.sourcePath.toLowerCase(), item]));
   const items = files.filter((file) => typeof file?.path === "string").map((file) => {
     const path = file.path;
     const conversion = conversionByPath.get(path.toLowerCase()) || null;
