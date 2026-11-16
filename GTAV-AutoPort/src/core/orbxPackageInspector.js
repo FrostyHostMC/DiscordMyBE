@@ -3,6 +3,8 @@ const ORBX_CONFIG_NAME = "orbx.ini";
 const ORBX_LOG_NAME = "rpf_log.txt";
 const ORBX_INSTRUCTIONS_NAME = "Instructions.txt";
 const MAX_INI_BYTES = 64 * 1024;
+const MAX_LOG_BYTES = 1024 * 1024;
+const MAX_LOG_SIGNALS = 100;
 
 function normalizedPath(value) {
   return String(value || "").replaceAll(String.fromCharCode(92), "/").replace(/^\.\//, "").toLowerCase();
@@ -93,6 +95,43 @@ function parseIniFile(file) {
   };
 }
 
+function parseRuntimeLog(file) {
+  const bytes = fileBytes(file);
+  if (!bytes) return { status: "not-provided", lineCount: 0, signals: [] };
+  if (bytes.byteLength > MAX_LOG_BYTES) {
+    return { status: "too-large-to-inspect", byteLength: bytes.byteLength, lineCount: 0, signals: [] };
+  }
+
+  const text = new TextDecoder("utf-8").decode(bytes).replace(/^\\uFEFF/, "");
+  if (text.includes("\\u0000")) {
+    return { status: "not-plain-text", byteLength: bytes.byteLength, lineCount: 0, signals: [] };
+  }
+
+  const lines = text.split(/\\r?\\n/);
+  const signals = [];
+  const signalPattern = /\\b(error|failed|failure|unsupported|not supported|version|crc|warning|warn|cannot|missing|invalid|denied|exception|unable)\\b/i;
+  for (const [index, rawLine] of lines.entries()) {
+    const line = rawLine.trim();
+    if (!line || !signalPattern.test(line)) continue;
+    if (signals.length >= MAX_LOG_SIGNALS) break;
+    signals.push({
+      line: index + 1,
+      category: /error|failed|failure|exception|unable|cannot|denied|invalid/i.test(line) ? "error"
+        : /unsupported|not supported|version/i.test(line) ? "compatibility"
+          : /crc/i.test(line) ? "crc"
+            : "warning",
+      text: line.slice(0, 300)
+    });
+  }
+
+  return {
+    status: signals.length ? "parsed-with-signals" : "parsed-no-obvious-signals",
+    byteLength: bytes.byteLength,
+    lineCount: lines.length,
+    signals
+  };
+}
+
 function extensionOf(path) {
   const name = String(path || "").split("/").at(-1).toLowerCase();
   const index = name.lastIndexOf(".");
@@ -115,7 +154,7 @@ export function inspectOrbxPackage(files = []) {
   const pluginFiles = findByBasename(files, ORBX_PLUGIN_NAME);
   const configFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_CONFIG_NAME);
   const configFiles = configFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
-  const logFiles = findByBasename(files, ORBX_LOG_NAME);
+  const logFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_LOG_NAME);\n  const logFiles = logFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
   const instructionFiles = findByBasename(files, ORBX_INSTRUCTIONS_NAME);
   const rpfFiles = files
     .filter((file) => normalizedPath(file?.path).endsWith(".rpf"))
@@ -143,7 +182,7 @@ export function inspectOrbxPackage(files = []) {
   const duplicatePlugin = pluginFiles.length > 1;
   const duplicateConfig = configFiles.length > 1;
   const detected = pluginPresent && configPresent;
-  const iniAnalysis = configFileRecords.length === 1 ? parseIniFile(configFileRecords[0]) : {
+  const runtimeLogAnalysis = logFileRecords.length === 1 ? parseRuntimeLog(logFileRecords[0]) : {\n    status: logFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",\n    lineCount: 0,\n    signals: []\n  };\n  const iniAnalysis = configFileRecords.length === 1 ? parseIniFile(configFileRecords[0]) : {
     status: configFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",
     sections: [],
     settings: [],
@@ -163,7 +202,7 @@ export function inspectOrbxPackage(files = []) {
   if (iniAnalysis.status === "not-provided") warnings.push("The INI file was inventoried but its bytes were not supplied, so its settings could not be parsed.");
   if (iniAnalysis.status === "parsed-with-warnings") warnings.push("The INI contains duplicate keys or malformed lines; inspect the reported line numbers before installing it.");
   if (iniAnalysis.status === "not-plain-text") warnings.push("The INI bytes contain NUL characters and were not treated as a plain-text configuration.");
-  if (iniAnalysis.status === "too-large-to-inspect") warnings.push("The INI exceeds the safe parser size limit and was not parsed.");
+  if (iniAnalysis.status === "too-large-to-inspect") warnings.push("The INI exceeds the safe parser size limit and was not parsed.");\n  if (iniAnalysis.status === "parsed" && iniAnalysis.settings.length === 0) warnings.push("The INI is readable but contains no settings; confirm this is the intended ORBX configuration before staging it.");\n  if (runtimeLogAnalysis.status === "parsed-with-signals") warnings.push("The ORBX runtime log contains diagnostic lines worth reviewing; see runtimeLog.analysis.signals for bounded excerpts and line numbers.");\n  if (runtimeLogAnalysis.status === "too-large-to-inspect") warnings.push("The ORBX runtime log exceeds the safe parser size limit and was not parsed.");\n  if (runtimeLogAnalysis.status === "not-plain-text") warnings.push("The ORBX runtime log contains NUL characters and was not treated as plain text.");
   if (repeatedFolderPaths.length) warnings.push("The package contains repeated adjacent folder names. Check the archive's enclosing folders and copy the contents from the inner package root rather than preserving accidental duplicate nesting.");
   if (rpfFiles.length === 0) warnings.push("No actual .rpf archive files were found in the imported file list.");
   if (rpfPathMarkers.length) warnings.push("Files ending in .rpf.txt were found. These are path-marker/text files, not RPF archives, and must not be counted as archive payloads.");
@@ -190,7 +229,7 @@ export function inspectOrbxPackage(files = []) {
         contentsInspected: iniAnalysis.status === "parsed" || iniAnalysis.status === "parsed-with-warnings",
         iniAnalysis
       },
-      runtimeLog: { name: ORBX_LOG_NAME, present: logFiles.length > 0, files: logFiles },
+      runtimeLog: { name: ORBX_LOG_NAME, present: logFiles.length > 0, files: logFiles, analysis: runtimeLogAnalysis },
       instructions: { name: ORBX_INSTRUCTIONS_NAME, present: instructionFiles.length > 0, files: instructionFiles },
       resourceArchives: rpfFiles,
       gtaResourceTreeFileCount: gtaResourceFiles,
