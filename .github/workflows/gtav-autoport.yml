@@ -77,3 +77,48 @@ jobs:
       - name: Build and test portable runtime core
         working-directory: GTAV-AutoPort
         run: cmake --build build/native-runtime --parallel 2 && ctest --test-dir build/native-runtime --output-on-failure
+
+  build-ps4-pkg:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: GTAV-AutoPort/ps4-app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make curl libicu-dev clang lld imagemagick python3
+      - name: Install libssl1.1 for OpenOrbis package tool
+        run: |
+          base="https://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
+          ver="$(curl -fsSL "$base" | grep -oE 'libssl1\.1_1\.1\.1f-[0-9a-z.~+]+_amd64\.deb' | sed -E 's/^libssl1\.1_(.*)_amd64\.deb$/\1/' | sort -V | tail -1)"
+          test -n "$ver"
+          curl -fL "$base/libssl1.1_\${ver}_amd64.deb" -o "$RUNNER_TEMP/libssl1.1.deb"
+          sudo dpkg -i "$RUNNER_TEMP/libssl1.1.deb" || sudo apt-get install -f -y
+      - name: Install pinned OpenOrbis v0.5.4
+        run: |
+          curl -fL --retry 3 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o "$RUNNER_TEMP/oo.tar.gz"
+          mkdir -p "$RUNNER_TEMP/oo"
+          tar -xzf "$RUNNER_TEMP/oo.tar.gz" -C "$RUNNER_TEMP/oo"
+          ROOT="$(dirname "$(find "$RUNNER_TEMP/oo" -name link.x -type f | head -1)")"
+          test -f "$ROOT/link.x"
+          echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
+          echo "$ROOT/bin/linux" >> "$GITHUB_PATH"
+      - name: Generate PS4 icon
+        run: convert -background none sce_sys/icon0.svg -resize 512x512! PNG24:sce_sys/icon0.png
+      - name: Build native EBOOT and installable PKG
+        run: |
+          make clean
+          make
+          test -s eboot.bin
+          test -s IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
+      - name: Upload PS4 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoPort-PS4-PKG
+          path: |
+            GTAV-AutoPort/ps4-app/*.pkg
+            GTAV-AutoPort/ps4-app/eboot.bin
+          if-no-files-found: error
+          retention-days: 30

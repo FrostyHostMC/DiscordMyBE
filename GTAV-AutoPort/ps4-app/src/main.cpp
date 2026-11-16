@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <cctype>
 static const int W=1920,H=1080;
 static const Color BG={10,13,22}, PANEL={19,25,39}, WHITE={235,241,250}, MUTED={139,154,176}, CYAN={45,205,220}, GREEN={74,205,137}, RED={238,103,103};
 struct Entry{std::string name;bool dir;unsigned long long size;};
