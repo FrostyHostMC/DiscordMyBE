@@ -6,7 +6,7 @@ A candidate is included only when RageKit conversion succeeds and its own output
 
 ## Important compatibility boundary
 
-The RageKit writer produces GTA V PC Legacy-format candidates. This is not a PS4 resource encoder. The bundle explicitly reports zero PS4-ready files and `installable: false` until a real CUSA00419 / GTA V 1.73 adapter and exact-build tests exist. It does not convert Windows ASI/DLL plugins into Orbis PRX binaries.
+The RageKit writer produces GTA V PC Legacy-format candidates. This is not a PS4 resource encoder. The bundle explicitly reports zero PS4-ready files and `installable: false` until a real CUSA00419 / GTA V 1.57 adapter and exact-build tests exist. It does not convert Windows ASI/DLL plugins into Orbis PRX binaries.
 
 ## Workflow
 
