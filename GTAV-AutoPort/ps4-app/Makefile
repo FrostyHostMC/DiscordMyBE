@@ -1,5 +1,5 @@
 TITLE := Project V PS4 Manager
-VERSION := 01.11
+VERSION := 01.12
 TITLE_ID := AUPT00001
 CONTENT_ID := IV0000-AUPT00001_00-AUTOPORTPS400000
 
@@ -38,7 +38,7 @@ $(INTDIR)/%.o: src/%.cpp
 eboot.bin: $(OBJECTS)
 	mkdir -p $(INTDIR)
 	$(LD) $(OBJECTS) -o $(INTDIR)/autoport.elf $(LDFLAGS)
-	$(TOOLBIN)/create-fself -in=$(INTDIR)/autoport.elf -out=$(INTDIR)/autoport.oelf --eboot "eboot.bin" --paid 0x3800000000000011
+	$(TOOLBIN)/create-fself -in=$(INTDIR)/autoport.elf -out=$(INTDIR)/autoport.oelf --eboot "eboot.bin" --ptype=fake --paid 0x3800000000000011
 	@test -s eboot.bin
 
 sce_sys/param.sfo: Makefile
