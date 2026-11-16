@@ -1,6 +1,7 @@
 #include "../src/platform/library.h"
 #include "../src/platform/goldhen_config.h"
 #include "../src/platform/compatibility_profiles.h"
+#include "../../project-v-runtime/include/projectv/signature_gate.h"
 
 #include <cassert>
 #include <cstdio>
@@ -31,6 +32,21 @@ static std::string readFile(const std::string& path) {
 }
 
 int main() {
+    const std::uint8_t image[] = {0x90, 0x48, 0x89, 0xE5, 0x90, 0xCC, 0x48, 0x89, 0xE5};
+    const std::uint8_t signature[] = {0x48, 0x89, 0xE5};
+    std::size_t matchOffset = 99;
+    assert(ProjectV::findUniquePattern(image, sizeof(image), signature, "xxx", 3, 0, matchOffset) == ProjectV::ScanResult::Ambiguous);
+    const std::uint8_t uniqueImage[] = {0x90, 0x48, 0x89, 0xE5, 0x90};
+    assert(ProjectV::findUniquePattern(uniqueImage, sizeof(uniqueImage), signature, "xxx", 3, 0, matchOffset) == ProjectV::ScanResult::Found);
+    assert(matchOffset == 1);
+    assert(ProjectV::findUniquePattern(uniqueImage, sizeof(uniqueImage), signature, "xxx", 3, -2, matchOffset) == ProjectV::ScanResult::OffsetOutOfRange);
+    assert(ProjectV::findUniquePattern(uniqueImage, sizeof(uniqueImage), signature, "xxz", 3, 0, matchOffset) == ProjectV::ScanResult::InvalidInput);
+    const std::uint8_t expected[] = {0x48, 0x89, 0xE5};
+    assert(ProjectV::validatePatchWindow(uniqueImage, sizeof(uniqueImage), 1, expected, 3, 3));
+    assert(!ProjectV::validatePatchWindow(uniqueImage, sizeof(uniqueImage), 1, expected, 3, 5));
+    const std::uint8_t wrong[] = {0x90, 0x90, 0x90};
+    assert(!ProjectV::validatePatchWindow(uniqueImage, sizeof(uniqueImage), 1, wrong, 3, 3));
+
     assert(ProjectV::profileCount() == 4);
     assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157) == 0);
     assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V157) == 1);
@@ -116,6 +132,6 @@ int main() {
     unlink(config.c_str());
     unlink(backup.c_str());
     rmdir(root.c_str());
-    std::puts("Project V profile and PS4 platform host regression tests passed");
+    std::puts("Project V signature, profile and PS4 platform host regression tests passed");
     return 0;
 }
