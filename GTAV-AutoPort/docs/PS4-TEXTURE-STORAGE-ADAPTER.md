@@ -13,6 +13,12 @@ The new ps4TextureLayout.js module adds a bounded first-stage PS4 texture storag
 
 The prep manifest and delivery plan call this a partial conversion, never a PS4-ready resource. Unsupported DDS files remain preserved and receive a reason in reports/ps4-texture-storage.json.
 
+## What a complete YTD writer still needs
+
+The reviewed PS4 Legacy texture-dictionary reference uses RSC7 version 13, a 144-byte texture object and one 8-byte view record per mip. The stock object carries fields beyond the pixel allocation: name/hash, format word and mip count, tile mode/index, allocation-size flags, graphics pointer/size and the mip-view pointer. A complete writer must rebuild the dictionary hash/value tables, preserve reviewed donor-object fields, serialize each mip view, place system/graphics pages, emit the RSC7 page flags/compressed payload and independently read the output back.
+
+AutoPort currently creates none of those dictionary structures. A future writer must obtain raw 144-byte object and per-mip view templates from lawful CUSA00419 / 1.57 retail resources, preserve unknown donor fields, validate all pointers/page bounds, and pass a separate PS4 texture reader before it can produce a YTD candidate.
+
 ## Hard boundary
 
 This is not a complete GTA V YTD writer. It does not yet:
