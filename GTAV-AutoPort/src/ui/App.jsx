@@ -63,6 +63,8 @@ function formatBytes(bytes) {
 
 export default function App() {
   const zipInput = useRef(null);
+  const [targetTitleId, setTargetTitleId] = useState(PS4_TARGET.titleId);
+  const activeTarget = PS4_TARGETS[targetTitleId] || PS4_TARGET;
   const folderInput = useRef(null);
   const [archive, setArchive] = useState(null);
   const [modAudit, setModAudit] = useState(null);
@@ -107,7 +109,7 @@ export default function App() {
     return () => Object.values(urls).forEach((url) => URL.revokeObjectURL(url));
   }, [nativeReports]);
 
-  const compatibility = useMemo(() => assessPs4Compatibility({ target: PS4_TARGET }), []);
+  const compatibility = useMemo(() => assessPs4Compatibility({ target: activeTarget }), [activeTarget]);
 
   const visibleFiles = useMemo(() => {
     if (!archive) return [];
@@ -119,7 +121,7 @@ export default function App() {
     try {
       const result = await work();
       setArchive(result);
-      setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
+      setMenuReport(inspectMenuRelatedFiles(result.files, activeTarget.titleId));
       setScriptModReport(inspectScriptModPackages(result.files));
       setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
       setPedObjectReport(inspectPedObjectPacks(result.files));
@@ -128,7 +130,7 @@ export default function App() {
       setDocumentation(inspectModDocumentation(result.files));
       const gfxReport = inspectScaleformAssets(result.files);
       setScaleformReport(gfxReport.summary.files ? gfxReport : null);
-      const generatedPlan = buildUniversalPortPlan({ files: result.files });
+      const generatedPlan = buildUniversalPortPlan({ files: result.files, target: activeTarget });
       if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("Project V could not build a complete port plan for this import.");
       setPortPlan(generatedPlan);
       const contentXml = result.files.filter((file) => file.path.split("/").at(-1).toLowerCase() === "content.xml");
@@ -186,13 +188,13 @@ export default function App() {
       const result = await buildPs4AfrPackage({
         files: selected,
         mappings,
-        target: PS4_TARGET,
+        target: activeTarget,
         attestations: {
           ps4ResourceBuildVerified: ps4BuildConfirmed,
           destinationPathsVerified: ps4PathsConfirmed,
         },
       });
-      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), `GTAV-Project V-${PS4_TARGET.titleId}-AFR-Overlay.zip`, "application/zip");
+      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), `GTAV-Project V-${activeTarget.titleId}-AFR-Overlay.zip`, "application/zip");
       setPackageStatus("Created a staging package with " + result.manifest.entries.length + " unchanged PS4 RPF archive(s).");
     } catch (err) {
       setError(err?.message || "Could not create the AFR package.");
@@ -249,6 +251,7 @@ export default function App() {
         files: archive.files,
         metadata,
         assetChecks,
+        target: activeTarget,
       });
       setManifest(built);
     } catch (err) {
@@ -277,16 +280,16 @@ export default function App() {
           <span className="tag success"><ShieldCheck size={13}/> NO PKG REQUIRED</span>
         </div>
         <div className="audit-grid">
-          <div className="audit-card"><b>{PS4_TARGETS.CUSA00419.titleId}</b><span>US · GTA V 1.57</span></div>
-          <div className="audit-card"><b>{PS4_TARGETS.CUSA00411.titleId}</b><span>EU · GTA V 1.57</span></div>
-          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>Recorded PS4 firmware</span></div>
-          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>Recorded GoldHEN version</span></div>
+          <label className="target-profile-picker">Active region / title ID<select value={targetTitleId} onChange={(event) => setTargetTitleId(event.target.value)}><option value="CUSA00419">US · CUSA00419 · GTA V 1.57</option><option value="CUSA00411">EU · CUSA00411 · GTA V 1.57</option></select></label>
+          <div className="audit-card"><b>{activeTarget.titleId}</b><span>{activeTarget.region} active profile</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>US-recorded PS4 firmware</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>US-recorded GoldHEN version</span></div>
         </div>
         <div className="notice"><CheckCircle2 size={18}/><div><b>Regional title-ID recognition is separate from executable compatibility.</b><p>The workspace maps CUSA00419 to the US profile and CUSA00411 to the EU profile. This is profile selection for analysis and manifests—not live detection of a running PS4 game. The actual GoldHEN plugin must independently fingerprint each regional executable and validate every hook before enabling it.</p></div></div>
-        <p className="native-disclaimer">Both profiles target GTA V 1.57, but US and EU executable signatures, resource references, and runtime hooks are not interchangeable. EU support is a recognized target profile only; both regional resource adapters and live plugin hooks remain unverified.</p>
+        <p className="native-disclaimer">Both profiles target GTA V 1.57, but US and EU executable signatures, resource references, and runtime hooks are not interchangeable. The selected profile is used in this workspace analysis, port plan, compatibility report, and AFR manifest. Regional resource adapters and live plugin hooks remain unverified.</p>
       </section>
       <section className="hero" id="workspace">
-        <div className="hero-copy"><div className="eyebrow">PROJECT V MOD INTAKE</div><h2>Prepare mods for PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
+        <div className="hero-copy"><div className="eyebrow">PROJECT V MOD INTAKE</div><h2>Prepare mods for PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget(activeTarget)}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
           <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,.7z,application/zip,application/x-7z-compressed,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <div className="import-actions">
@@ -331,14 +334,14 @@ export default function App() {
           <div className="audit-grid">
             <div className="audit-card"><b>{menuReport.synapse.summary.catalogItems}</b><span>catalog entries</span></div>
             <div className="audit-card"><b>{menuReport.synapse.summary.catalogFiles}</b><span>JSON catalogs</span></div>
-            <div className="audit-card"><b>{menuReport.synapse.summary.targetPluginEntries}</b><span>{PS4_TARGET.titleId} plugins</span></div>
+            <div className="audit-card"><b>{menuReport.synapse.summary.targetPluginEntries}</b><span>{activeTarget.titleId} plugins</span></div>
             <div className="audit-card"><b>{menuReport.synapse.summary.settingsValues}</b><span>menu settings</span></div>
           </div>
           <div className="file-row"><ShieldCheck size={14}/><span className="file-name"><b>Synapse SPRX</b><small>{menuReport.synapse.sprxHeader.format} · {formatBytes(menuReport.synapse.sprxHeader.bytes)} · header {menuReport.synapse.sprxHeader.signature || "unavailable"}</small></span><span className="file-ext">{menuReport.synapse.sprxHeader.isPs4SelfContainer?"SELF HEADER":"UNVERIFIED"}</span></div>
           <h4>Menu data catalogs</h4>
           {menuReport.synapse.catalogs.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path.split("/").at(-1)}</b><small>{item.categoryCount} categories · {item.itemCount} entries{item.duplicateCount ? " · " + item.duplicateCount + " duplicate values" : ""}</small></span><span className="file-ext">{item.state==="empty-placeholder"?"EMPTY PLACEHOLDER":item.state==="valid-json"?"VALID JSON":"CHECK FILE"}</span></div>)}
           <h4>GoldHEN plugin configuration</h4>
-          {menuReport.synapse.plugins.map((plugin)=><div className="file-row" key={plugin.titleId+plugin.path}><ShieldCheck size={14}/><span className="file-name"><b>{plugin.path}</b><small>Title {plugin.titleId}{plugin.titleId===PS4_TARGET.titleId?" · target title":""}</small></span><span className="file-ext">{plugin.extension.toUpperCase()}</span></div>)}
+          {menuReport.synapse.plugins.map((plugin)=><div className="file-row" key={plugin.titleId+plugin.path}><ShieldCheck size={14}/><span className="file-name"><b>{plugin.path}</b><small>Title {plugin.titleId}{plugin.titleId===activeTarget.titleId?" · target title":""}</small></span><span className="file-ext">{plugin.extension.toUpperCase()}</span></div>)}
           <h4>Menu settings</h4>
           {menuReport.synapse.settings.sections.map((section)=><div className="native-summary" key={section.name}><b>{section.name}</b>{section.settings.map((setting)=><div className="file-row" key={setting.key}><span className="file-name">{setting.key}</span><span className="file-ext">{setting.value}</span></div>)}</div>)}
           {menuReport.synapse.warnings.map((warning)=><div className="audit-warning" key={warning}><AlertTriangle size={14}/><span>{warning}</span></div>)}
