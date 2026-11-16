@@ -97,6 +97,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl libicu-dev clang lld llvm imagemagick python3
+      - name: Install .NET runtime for LibOrbisPkg
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 6.0.x
       - name: Download and verify OpenOrbis v0.5.4
         run: |
           curl -fL --retry 3 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o "$RUNNER_TEMP/openorbis.tar.gz"
@@ -121,10 +125,14 @@ jobs:
       - name: Generate 512x512 application icon
         run: convert -background none sce_sys/icon0.svg -resize 512x512! PNG24:sce_sys/icon0.png
       - name: Build unsigned PS4 application package
+        env:
+          DOTNET_ROLL_FORWARD: Major
         run: |
           make clean
           make
           test -s eboot.bin
+          test -s sce_sys/param.sfo
+          test -s pkg.gp4
           test -s IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
           "$OO_PS4_TOOLCHAIN/bin/linux/PkgTool.Core" pkg_validate --verbose IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
           sha256sum eboot.bin IV0000-AUPT00001_00-AUTOPORTPS400000.pkg | tee SHA256SUMS.txt
