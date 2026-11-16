@@ -323,5 +323,5 @@ test("finds identical bytes shared by a loose file and an extracted RPF member",
   const group = result.manifest.duplicateContentGroups.find((item) => item.references.length === 2);
   assert.ok(group);
   assert.deepEqual(group.references.map((item) => item.source), ["imported-file", "extracted-rpf-entry"]);
-  assert.ok(group.references.some((item) => item.path.endsWith("! /shared.dat") || item.path.endsWith("!/shared.dat")));
+  assert.ok(group.references.some((item) => item.path.endsWith("!/shared.dat")));
 });
