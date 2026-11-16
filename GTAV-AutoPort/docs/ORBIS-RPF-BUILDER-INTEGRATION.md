@@ -32,7 +32,7 @@ run `build.bat` on Windows. The executable and support DLLs are not redistribute
 
 The sample selects the Orbis platform and creates an uncompressed RPF archive.
 That does not prove arbitrary PC resources become PS4-compatible. AutoPort keeps
-`verifiedOnConsole: false` and `installable: false`. For CUSA00419 / GTA V 1.73,
+`verifiedOnConsole: false` and `installable: false`. For CUSA00419 / GTA V 1.57,
 archive layout, resource encodings, DLC registration, runtime hooks and console
 acceptance remain separate validation gates.
 
