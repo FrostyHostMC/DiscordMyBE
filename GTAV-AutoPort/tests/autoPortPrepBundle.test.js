@@ -340,6 +340,8 @@ test("reuses a hash-identical DDS conversion while writing separate per-path out
   assert.equal(result.manifest.summary.textureConversionCacheHits, 1);
   assert.equal(result.manifest.textureConversions[0].cacheHit, false);
   assert.equal(result.manifest.textureConversions[1].cacheHit, true);
+  const cachedPlanItem = result.manifest.deliveryPlan.items.find((item) => item.path === "textures/copy/second.dds");
+  assert.equal(cachedPlanItem.textureConversion.cacheHit, true);
   assert.equal(result.manifest.textureConversions[0].sourceSha256, result.manifest.textureConversions[1].sourceSha256);
   assert.equal(result.manifest.textureConversions[0].outputSha256, result.manifest.textureConversions[1].outputSha256);
   assert.notEqual(result.manifest.textureConversions[0].outputPath, result.manifest.textureConversions[1].outputPath);
