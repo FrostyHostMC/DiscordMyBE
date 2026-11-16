@@ -20,7 +20,7 @@ There are 1,794 populated catalog entries in total. The inspected JSON catalogs 
 
 The supplied `settings.ini` defines menu position, information box, side placement, open/noclip button combinations, rainbow theme, ESP RGB values, god mode and no-ragdoll defaults.
 
-The separately supplied `synapse.sprx` begins with bytes `4f 15 3d 1d`, the PS4 SELF container signature. This identifies the container signature only; it does not prove that the executable is valid, disclose its internal implementation, or establish compatibility with GTA V 1.73.
+The separately supplied `synapse.sprx` begins with bytes `4f 15 3d 1d`, the PlayStation SELF container signature. This identifies the container signature only; it does not prove that the executable is valid, disclose its internal implementation, or establish compatibility with GTA V 1.57.
 
 ## Findings and required menu work
 
@@ -50,11 +50,11 @@ To add a real XML loader to Synapse, we need its editable source project or a do
 
 ## Compatibility policy
 
-No PRX or XML pack is marked compatible with CUSA00419 update 1.73 until the exact menu binary, GoldHEN loading, title/update identity and on-console test evidence are recorded. PC ASI/DLL binaries must never be copied into the PS4 plugin list.
+No PRX or XML pack is marked compatible with CUSA00419 update 1.57 until the exact menu binary, GoldHEN loading, title/update identity and on-console test evidence are recorded. PC ASI/DLL binaries must never be copied into the PS4 plugin list.
 ## Script-mod intake and Home Invasion-style behavior
 
 `src/core/scriptModPackages.js` groups runtime files with XML/INI/JSON configuration in the same folder. It identifies PC runtime inputs (`.asi`, `.dll`, `.cs`, `.lua`, `.js`) separately from console plugin candidates (`.prx`, `.sprx`) and parses XML configuration signals such as house/location entries, HomeType fields, coordinates, markers, alert/police settings, masks, rewards and resident/ped settings.
 
 The Home Invasion 2.0 example is a useful behavior-porting test: its PC package pairs a .NET DLL with an XML configuration. AutoPort can inspect the configuration and inventory the DLL, but cannot translate the DLL into a GoldHEN plugin automatically. Gameplay such as interior entry, resident AI, detection, police dispatch and robbery rewards requires a separate PS4-native implementation. XML fields are data candidates only; they do not execute those behaviors.
 
-This analyzer is an intake/reporting stage, not an XML exporter or PRX compiler. A real native plugin still needs editable implementation source, a documented runtime interface, Orbis build tooling, and exact GTA V CUSA00419 / 1.73 validation.
+This analyzer is an intake/reporting stage, not an XML exporter or PRX compiler. A real native plugin still needs editable implementation source, a documented runtime interface, Orbis build tooling, and exact GTA V CUSA00419 / 1.57 validation.
