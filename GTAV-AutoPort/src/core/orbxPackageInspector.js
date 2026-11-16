@@ -154,7 +154,8 @@ export function inspectOrbxPackage(files = []) {
   const pluginFiles = findByBasename(files, ORBX_PLUGIN_NAME);
   const configFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_CONFIG_NAME);
   const configFiles = configFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
-  const logFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_LOG_NAME);\n  const logFiles = logFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
+  const logFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_LOG_NAME);
+  const logFiles = logFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
   const instructionFiles = findByBasename(files, ORBX_INSTRUCTIONS_NAME);
   const rpfFiles = files
     .filter((file) => normalizedPath(file?.path).endsWith(".rpf"))
