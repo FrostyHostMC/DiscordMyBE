@@ -21,9 +21,10 @@
 - [x] Add an OpenOrbis v0.5.4 build pipeline that emits an unsigned PS4 PKG artifact.
 - [x] Add controller navigation for USB 0, USB 1, `/data`, and the staged import library.
 - [x] Add safe single-file staging with temporary copy, byte-count verification, atomic rename, collision-safe destination names and JSONL receipts.
-- [ ] Add bounded ZIP/7z/OIV extraction with traversal, symlink, duplicate-path and expanded-size protections.
-- [ ] Add shared mod-manifest parsing, compatibility labels and import inventory details.
-- [ ] Add reversible GoldHEN plugin configuration management and backup/restore.
+- [ ] Add bounded native ZIP/OIV extraction with traversal, symlink, duplicate-path and expanded-size protections; desktop intake is not PS4 extraction.
+- [x] Add a bounded read-only PS4 staged-library inventory module (UI integration and SHA-256 manifests remain pending).
+- [ ] Add shared mod-manifest parsing, compatibility labels, tags and full import inventory details.
+- [x] Add reusable GoldHEN plugin config validation, preview, backup, explicit entry-add and restore APIs (controller UI integration and fixture validation remain pending).
 - [ ] Connect validated desktop conversion outputs to the PS4 import/install pipeline.
 - [ ] Perform console validation only after the user chooses to test; no physical-console test is claimed yet.
 
