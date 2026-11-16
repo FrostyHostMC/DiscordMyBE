@@ -93,7 +93,7 @@ export function inspectScaleformAssets(files = []) {
       "Header inspection does not decompile or validate the Scaleform movie body.",
       "Changing GFX/CFX to FWS/CWS is only an editor handoff; it does not compile a game-ready GFX file.",
       "A game-ready Scaleform GFX build normally requires a compatible GFxExport toolchain.",
-      "The public PS4 GTA V GFX Loader inspected by AutoPort hard-codes a GTA V 1.46 hook and is not validated for GTA V 1.73.",
+      "The public PS4 GTA V GFX Loader inspected by AutoPort hard-codes a GTA V 1.46 hook and is not validated for GTA V 1.57 (either regional title ID).",
     ],
   };
 }

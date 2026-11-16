@@ -153,7 +153,7 @@ export function translateMenyooVehicleXml(input, sourcePath = "vehicle.xml") {
       withVehicleProperties: vehicles.filter((vehicle) => vehicle.vehicleProperties != null).length,
       sourcePlacementsCapped: placements.length === MAX_PLACEMENTS,
     },
-    target: { titleId: "CUSA00419", updateVersion: "1.73", menuAdapter: "unverified" },
+    target: { titleId: "CUSA00419", updateVersion: "1.57", menuAdapter: "unverified" },
     exportContract: {
       format: "autoport-menyoo-vehicle-pack",
       fileName: "autoport-vehicles.json",

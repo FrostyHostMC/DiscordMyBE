@@ -58,7 +58,7 @@ export function inspectGtaDlcManifest(input, sourcePath = "content.xml") {
     summary: { entryCount: entries.length, dataFiles: entries.filter((entry) => entry.fileType).length, fileTypes, disabledFiles: disabledFiles.length },
     limitations: [
       "This is a read-only manifest inspection; no mount or install instructions are executed.",
-      "PC DLC mount paths and resource names are not assumed to match PS4 CUSA00411 update 1.73.",
+      "PC DLC mount paths and resource names are not assumed to match PS4 CUSA00419 or CUSA00411 update 1.57.",
       "The referenced resources must be inspected and validated independently.",
     ],
   };

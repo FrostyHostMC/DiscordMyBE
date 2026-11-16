@@ -121,7 +121,7 @@ export function buildVehiclePortReport({ files, modelName }) {
   return {
     schemaVersion: 1,
     format: "autoport-vehicle-port-report",
-    target: { titleId: "CUSA00419", update: "1.73", edition: "PS4" },
+    target: { titleId: "CUSA00419", update: "1.57", edition: "PS4" },
     modelName: target,
     metadata: { vehicle, handling: handlingMatches[0].node, variations: variationMatches.map(({ node }) => node), carcols: carcols.parsed, vehicleLayouts: layouts.parsed },
     references: {

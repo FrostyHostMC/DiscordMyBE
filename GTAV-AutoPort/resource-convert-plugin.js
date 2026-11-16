@@ -62,7 +62,7 @@ export function resourceConvertPlugin() {
           info: info.stdout.slice(0, 16000),
           sourceEdition: "auto-detected-by-RageKit", targetEdition: "GTA V PC Legacy resource format",
           ps4Compatibility: "unverified", installable: false,
-          warnings: ["This is a GTA V PC Legacy-format candidate, not a certified PS4 resource.", "CUSA00419 update 1.73 resource layout, streaming references and console runtime behavior still require validation."]
+          warnings: ["This is a GTA V PC Legacy-format candidate, not a certified PS4 resource.", "CUSA00419 / CUSA00411 GTA V 1.57 resource layout, streaming references and console runtime behavior still require validation."]
         };
         res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify(result));
       } catch (error) { res.statusCode = 400; res.setHeader("Content-Type", "application/json"); res.end(JSON.stringify({ error: error.message || "Resource conversion failed." })); }

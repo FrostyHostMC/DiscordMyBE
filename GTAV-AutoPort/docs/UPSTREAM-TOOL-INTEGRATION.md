@@ -1,6 +1,6 @@
 # Upstream tool integration register
 
-Last reviewed: 2026-11-14
+Last reviewed: 2026-11-15
 
 This register separates actual runtime/build dependencies from research references. AutoPort does not vendor upstream source by copying arbitrary files into this repository. Where possible it pins a version and fetches the dependency at build time so upstream licensing, provenance, and updates remain visible.
 
@@ -13,7 +13,7 @@ This register separates actual runtime/build dependencies from research referenc
 - Integration: `native-engine/CMakeLists.txt` uses CMake FetchContent with the exact `v0.3.1` tag and builds the `rk` CLI.
 - AutoPort adapter: `ragekit-plugin.js` invokes `rk info` and `rk roundtrip` through local Vite middleware; `src/core/ragekit.js` selects supported file families.
 - Use: inspect and read/write-round-trip supported RAGE resources and RPF archives on the source-side toolchain.
-- Boundary: upstream documents GTA V Legacy and Enhanced support. This is not a PS4 1.73 encoder. A successful round-trip only establishes that this backend parsed and rewrote that particular input.
+- Boundary: upstream documents GTA V Legacy and Enhanced support. This is not a PS4 1.57 encoder. A successful round-trip only establishes that this backend parsed and rewrote that particular input.
 
 ## Evaluated, not yet integrated as a runtime dependency
 
@@ -42,13 +42,13 @@ This register separates actual runtime/build dependencies from research referenc
 
 - Repository: https://github.com/AICyberGuardian/GoldSantos
 - Its README describes a CUSA00411 GTA V v1.56 GoldHEN-oriented modding suite, staged asset redirection, RPF tooling, and LAN deployment scripts.
-- Decision: inspect its architecture and scripts for reusable concepts, but do not copy its payloads or treat its claims as verified for GTA V 1.73. The documented game build is 1.56, so its offsets, paths, resource assumptions, and PRX code are not drop-in compatible with the target.
+- Decision: older 1.56 research only. Do not copy its payloads or treat its offsets, paths, resource assumptions or PRX code as drop-in compatible with either requested 1.57 regional target.
 
 ### InsulinEngine/InsulinGTAV
 
 - Repository: https://github.com/InsulinEngine/InsulinGTAV
-- Its README describes an OpenOrbis-built GoldHEN PRX plugin for CUSA00411.
-- Decision: native PS4 plugin build-system reference only. The repository's associated target evidence is GTA V 1.57, not 1.73. Do not deploy its PRX to the user's game or infer that it ports PC ASI/DLL behavior.
+- Its README describes an OpenOrbis-built GoldHEN PRX plugin for EU title ID CUSA00411.
+- Decision: native PS4 plugin build-system and EU CUSA00411 1.57 research reference only. Do not reuse its executable identity, addresses, offsets, hooks or PRX for US CUSA00419. Do not infer that it ports PC ASI/DLL behavior.
 
 ### OpenIV
 
@@ -58,13 +58,13 @@ This register separates actual runtime/build dependencies from research referenc
 
 ## Runtime architecture decision
 
-1. Keep the browser UI as the front end, but run native engines through a local desktop/helper process. A browser page cannot directly spawn arbitrary native executables.
+1. Keep the browser UI as the desktop front end, and run native engines through a local desktop/helper process. A browser page cannot directly spawn arbitrary native executables.
 2. Keep RageKit as the primary source-side parser/writer. Add another backend only behind an explicit adapter when it demonstrably covers a missing format.
 3. Keep archive operations separate from resource conversion. Repacking an RPF does not transform a PC resource into a PS4 resource.
-4. Build a PS4-specific target adapter only from lawful, user-owned CUSA00411 / 1.73 reference files and independently validated format evidence.
+4. Build PS4-specific regional adapters only from lawful, user-owned CUSA00419 (US) and CUSA00411 (EU) GTA V 1.57 reference files and independently validated format evidence. Never share offsets or fingerprints across regions without evidence.
 5. Treat PC ASI, DLL, EXE, ScriptHookV, .NET and Windows API-dependent behavior as separate reimplementation work. They are not converted by copying files or changing extensions.
-6. Never emit an installable PS4 package while the target resource writer, dependency validation, deployment path, and rollback checks are unverified.
+6. Never emit an installable PS4 mod package while the target resource writer, dependency validation, deployment path, and rollback checks are unverified.
 
 ## What this means for the first in-game test
 
-The project is not ready to claim an installable mod yet. RageKit's native build is working in CI, but its current integration is a source-side inspection/round-trip check. GoldSantos and InsulinGTAV target older game updates. The remaining blocker is a validated CUSA00411 / 1.73 PS4 resource pipeline and deployment method—not the lack of another generic PC RAGE parser.
+RageKit's native build is working in CI, but its current integration is a source-side inspection/round-trip check. GoldSantos is an older 1.56 reference; InsulinGTAV is a CUSA00411 1.57 regional reference. The remaining blocker is independently validated resource/runtime compatibility for each requested 1.57 title ID—not the lack of another generic PC RAGE parser.
