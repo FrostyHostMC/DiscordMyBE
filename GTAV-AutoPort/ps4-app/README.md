@@ -1,5 +1,31 @@
-Project V PS4 Manager is the controller-driven homebrew companion for GTA V mod intake and Project V profile management. It browses `/mnt/usb0`, `/mnt/usb1`, `/data`, the Project V import library at `/data/ProjectV/imports`, and the legacy AutoPort staging folder for migration. It inventories GTA V resources, configuration files, RPF archives, PC plugin binaries and GoldHEN PRX files for intake. Select a file to copy it into `/data/ProjectV/imports`; imports use a temporary `.part` file, verify copied byte count, flush and atomically rename into place, avoid overwriting existing imports, and append a JSONL receipt. The original source file and GTA V game files are never modified.
+# AutoPort PS4 Manager
 
-The profile selector keeps four combinations separate: GTA V 1.57 US (`CUSA00419`), 1.57 EU (`CUSA00411`), 1.73 US (`CUSA00419`), and 1.73 EU (`CUSA00411`). Every profile currently reports unverified. Selecting a profile does not enable runtime hooks. Hook activation remains blocked until an exact matching executable fingerprint, unique hook signatures, and runtime validation are recorded.
+The controller-driven PS4 homebrew companion for GTA V mod intake and Project V profile management. It browses USB 0, USB 1, `/data`, the Project V import library at `/data/ProjectV/imports`, and the legacy AutoPort staging folder for migration. It inventories supported GTA V resource/configuration files and copies selected files into the import library using a temporary `.part` file, byte-count verification, flush, atomic rename, collision-safe names and JSONL import receipts. The original source files and GTA V game files are never modified.
 
-This milestone stages files and selects compatibility profiles only: it does not unpack archives, convert PC resources, install AFR overlays, modify `plugins.ini`, or patch GTA V. Build requires OpenOrbis v0.5.4 and produces an unsigned homebrew PKG for a GoldHEN-enabled PS4. Console behavior remains untested until a user chooses to test it.
+## Package identity
+
+- Display name: Project V PS4 Manager
+- Title ID: `AUPT00001`
+- Content ID: `IV0000-AUPT00001_00-AUTOPORTPS400000`
+- Package: unsigned OpenOrbis homebrew PKG
+- Toolchain: OpenOrbis PS4 Toolchain v0.5.4 (LLVM 18)
+- Build artifact: `AutoPort-PS4-PKG` in the GitHub Actions run
+
+## Compatibility profiles
+
+The profile selector keeps four GTA V title/update combinations separate:
+
+- GTA V 1.57 US — `CUSA00419` (primary development target)
+- GTA V 1.57 EU — `CUSA00411`
+- GTA V 1.56 US — `CUSA00419` (community profile)
+- GTA V 1.56 EU — `CUSA00411` (community profile)
+
+Every profile currently reports unverified. Selecting a profile does not enable runtime hooks. Hook activation remains blocked until an exact matching executable fingerprint, unique hook signatures, and runtime validation are recorded.
+
+## Current app boundary
+
+This PKG is the PS4-side staging and library companion. It does not convert PC YFT/YTD/YDR resources, unpack ZIP/7z/OIV archives on-console, install a Project V PRX, deploy AFR overlays, or modify `plugins.ini` automatically. Those actions remain separate gated features; the app must not imply they are complete.
+
+## Build
+
+The repository's `.github/workflows/gtav-autoport.yml` workflow builds the EBOOT and PKG with the pinned OpenOrbis v0.5.4 toolchain, validates the resulting package with `PkgTool.Core pkg_validate`, and uploads the PKG, EBOOT and SHA-256 manifest as the `AutoPort-PS4-PKG` artifact. The PKG is unsigned homebrew and requires a compatible jailbroken PS4/GoldHEN environment. Physical-console installation and runtime behavior are not represented as verified until tested on hardware.
