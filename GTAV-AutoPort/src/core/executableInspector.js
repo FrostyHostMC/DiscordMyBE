@@ -1,6 +1,7 @@
 const MAX_PROGRAM_HEADERS = 256;
 const ELF_MAGIC = [0x7f, 0x45, 0x4c, 0x46];
 const SCE_MAGIC = [0x53, 0x43, 0x45, 0x00];
+const SELF_MAGIC = [0x4f, 0x15, 0x3d, 0x1d];
 
 function bytesOf(value) {
   if (value instanceof Uint8Array) return value;
@@ -144,7 +145,7 @@ function inspectPe(bytes) {
 export function inspectExecutableHeader(file) {
   const bytes = bytesOf(file?.bytes ?? file);
   if (!bytes) return { format: "unknown", status: "unavailable", error: "Executable inspection requires byte data." };
-  if (hasMagic(bytes, SCE_MAGIC)) {
+  if (hasMagic(bytes, SELF_MAGIC)) {\n    return {\n      format: "self-container",\n      status: "opaque-console-container",\n      magic: "4f153d1d",\n      platform: "playstation-self-container",\n      targetCompatibility: "unverified",\n      warnings: ["PlayStation SELF container signature detected. This bounded inspector does not decrypt or validate signatures, embedded ELF, imports, title ID or game-update compatibility."]\n    };\n  }\n  if (hasMagic(bytes, SCE_MAGIC)) {
     return {
       format: "sce-container",
       status: "opaque-console-container",
