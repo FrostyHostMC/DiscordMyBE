@@ -22,7 +22,7 @@
 - [x] Add controller navigation for USB 0, USB 1, `/data`, and the staged import library.
 - [x] Add safe single-file staging with temporary copy, byte-count verification, atomic rename, collision-safe destination names and JSONL receipts.
 - [ ] Add bounded native ZIP/OIV extraction with traversal, symlink, duplicate-path and expanded-size protections; desktop intake is not PS4 extraction.
-- [x] Add a bounded read-only PS4 staged-library inventory module (UI integration and SHA-256 manifests remain pending).
+- [x] Add a bounded read-only PS4 staged-library inventory module (UI integration and SHA-256 manifests remain pending).\n- [x] Add Linux host regression tests for staged-library scanning, hidden-file/symlink exclusion, traversal limits, GoldHEN path validation, config preview, backup and restore.
 - [ ] Add shared mod-manifest parsing, compatibility labels, tags and full import inventory details.
 - [x] Add reusable GoldHEN plugin config validation, preview, backup, explicit entry-add and restore APIs (controller UI integration and fixture validation remain pending).
 - [ ] Connect validated desktop conversion outputs to the PS4 import/install pipeline.
