@@ -6,7 +6,7 @@ AutoPort now inspects executable bytes for native plugin candidates instead of t
 
 - **PE (MZ):** validates the DOS-to-PE header offset, PE signature, machine, section count, optional-header width and selected metadata flags. A PE image named .prx/.sprx is flagged as a Windows binary mismatch.
 - **ELF:** validates class, byte order, version, declared header size and bounded program-header table; reports machine, object type, entry point, flags and load-segment summaries. ELF64 little-endian x86-64 is only a CPU-architecture match clue.
-- **Sony SCE:** recognizes the SCE container magic but deliberately treats the payload as opaque.
+- **PlayStation SELF / Sony SCE:** recognizes the PS4 SELF magic (4F 15 3D 1D) and SCE container magic, but deliberately treats both payloads as opaque.
 
 The same evidence is attached to mod inventory and the PS4 delivery plan. A PE or wrong-architecture ELF can be blocked early; a readable x86-64 ELF remains target-validation-required.
 
