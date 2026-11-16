@@ -3,14 +3,13 @@ name: GTAV AutoPort CI
 on:
   workflow_dispatch:
   push:
-    branches: [project/gtav-autoport]
+    branches: [main]
     paths:
       - "GTAV-AutoPort/**"
       - ".github/workflows/gtav-autoport.yml"
-  pull_request:
-    paths:
-      - "GTAV-AutoPort/**"
-      - ".github/workflows/gtav-autoport.yml"
+
+permissions:
+  contents: read
 
 jobs:
   verify-web:
@@ -19,43 +18,116 @@ jobs:
       run:
         working-directory: GTAV-AutoPort
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: GTAV-AutoPort/package-lock.json
       - name: Install dependencies
         run: npm install
       - name: Run JavaScript tests
         run: npm test
-      - name: Build web application
+      - name: Build web workbench
         run: npm run build
 
   verify-native:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - name: Test native resource inspector
         working-directory: GTAV-AutoPort/native-inspector
-        run: cargo test
+        run: cargo test --locked
       - name: Build native resource inspector
         working-directory: GTAV-AutoPort/native-inspector
-        run: cargo build --release
+        run: cargo build --release --locked
 
   verify-ragekit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up CMake
-        uses: lukka/get-cmake@latest
-      - name: Configure pinned ragekit backend
+      - uses: actions/checkout@v4
+      - uses: lukka/get-cmake@latest
+      - name: Configure pinned RageKit backend
         working-directory: GTAV-AutoPort
         run: cmake -S native-engine -B build/ragekit -DCMAKE_BUILD_TYPE=Release
-      - name: Build ragekit CLI backend
+      - name: Build RageKit CLI backend
         working-directory: GTAV-AutoPort
         run: cmake --build build/ragekit --config Release --target rk --parallel 2
+      - name: Exercise nested RPF listing and extraction
+        working-directory: GTAV-AutoPort
+        run: |
+          RK_BIN="$(find build/ragekit -type f -name rk -perm -111 | head -n 1)"
+          test -n "$RK_BIN"
+          node scripts/rpf-cli-integration.mjs "$RK_BIN"
+
+  verify-runtime-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure portable runtime core
+        working-directory: GTAV-AutoPort
+        run: cmake -S native-runtime -B build/native-runtime -DCMAKE_BUILD_TYPE=Release
+      - name: Build and test portable runtime core
+        working-directory: GTAV-AutoPort
+        run: cmake --build build/native-runtime --parallel 2 && ctest --test-dir build/native-runtime --output-on-failure
+
+  verify-ps4-app-host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile PS4 platform modules with host compiler
+        working-directory: GTAV-AutoPort/ps4-app
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Isrc/platform \
+            tests/platform_host_tests.cpp \
+            src/platform/library.cpp src/platform/goldhen_config.cpp \
+            src/platform/compatibility_profiles.cpp \
+            ../project-v-runtime/src/signature_gate.cpp \
+            -o "$RUNNER_TEMP/ps4-platform-tests"
+      - name: Run PS4 platform regression tests
+        run: "$RUNNER_TEMP/ps4-platform-tests"
+
+  build-ps4-pkg:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: GTAV-AutoPort/ps4-app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y make curl libicu-dev clang lld llvm imagemagick python3
+      - name: Download and verify OpenOrbis v0.5.4
+        run: |
+          curl -fL --retry 3 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o "$RUNNER_TEMP/openorbis.tar.gz"
+          echo "3c7cd5bb593ca74fa1c13fd59f3938dc0fc07985167f7275063019e63abe4526  $RUNNER_TEMP/openorbis.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/openorbis"
+          tar -xzf "$RUNNER_TEMP/openorbis.tar.gz" -C "$RUNNER_TEMP/openorbis"
+          LINKER_SCRIPT="$(find "$RUNNER_TEMP/openorbis" -name link.x -type f -print -quit)"
+          test -n "$LINKER_SCRIPT"
+          TOOLCHAIN_ROOT="$(dirname "$LINKER_SCRIPT")"
+          test -x "$TOOLCHAIN_ROOT/bin/linux/create-fself"
+          test -x "$TOOLCHAIN_ROOT/bin/linux/PkgTool.Core"
+          echo "OO_PS4_TOOLCHAIN=$TOOLCHAIN_ROOT" >> "$GITHUB_ENV"
+          echo "$TOOLCHAIN_ROOT/bin/linux" >> "$GITHUB_PATH"
+      - name: Generate 512x512 application icon
+        run: convert -background none sce_sys/icon0.svg -resize 512x512! PNG24:sce_sys/icon0.png
+      - name: Build unsigned PS4 application package
+        run: |
+          make clean
+          make
+          test -s eboot.bin
+          test -s IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
+          sha256sum eboot.bin IV0000-AUPT00001_00-AUTOPORTPS400000.pkg | tee SHA256SUMS.txt
+      - name: Upload PS4 package and build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoPort-PS4-PKG
+          path: |
+            GTAV-AutoPort/ps4-app/IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
+            GTAV-AutoPort/ps4-app/eboot.bin
+            GTAV-AutoPort/ps4-app/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 90
