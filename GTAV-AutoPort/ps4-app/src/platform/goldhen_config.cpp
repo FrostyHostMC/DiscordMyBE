@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <algorithm>
+#include <cctype>
 
 namespace AutoPort {
 static bool readLines(const std::string& path, std::vector<std::string>& lines, std::string& error) {
@@ -59,7 +60,7 @@ bool validateGoldHENPluginEntry(const std::string& titleId,const std::string& pl
     }
     std::string lower=pluginPath;
     std::transform(lower.begin(),lower.end(),lower.begin(),[](unsigned char c){return (char)tolower(c);});
-    if(lower.size()<4 || (lower.substr(lower.size()-4)!=".prx" && lower.substr(lower.size()-5)!=".sprx")){
+    if(lower.size()<5 || (lower.substr(lower.size()-4)!=".prx" && lower.substr(lower.size()-5)!=".sprx")){
         error="Only .prx and .sprx plugin paths are accepted";return false;
     }
     return true;
@@ -102,6 +103,10 @@ bool addGoldHENPluginEntry(const std::string& configPath,const std::string& titl
     std::string preview;
     if(!previewGoldHENPluginEntry(configPath,titleId,pluginPath,preview,error))return false;
     if(preview.find("already exists")!=std::string::npos)return true;
+    struct stat pluginInfo{};
+    if(lstat(pluginPath.c_str(),&pluginInfo)!=0 || !S_ISREG(pluginInfo.st_mode) || S_ISLNK(pluginInfo.st_mode)){
+        error="Plugin binary is missing or is not a regular file";return false;
+    }
     std::vector<std::string> lines;
     if(!readLines(configPath,lines,error))return false;
     bool section=false, sectionFound=false;
@@ -114,6 +119,8 @@ bool addGoldHENPluginEntry(const std::string& configPath,const std::string& titl
     }
     if(!lines.empty()&&!lines.back().empty())lines.emplace_back("");
     lines.emplace_back("["+titleId+"]");lines.emplace_back(pluginPath);
+    std::string backupPath;
+    if(access(configPath.c_str(),F_OK)==0 && !backupGoldHENConfig(configPath,backupPath,error))return false;
     return writeAtomic(configPath,lines,error);
 }
 bool restoreGoldHENConfig(const std::string& configPath,const std::string& backupPath,std::string& error) {
