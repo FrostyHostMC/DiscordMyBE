@@ -1,3 +1,4 @@
+import { inspectExecutableHeader } from "./executableInspector.js";
 const ORBX_PLUGIN_NAME = "orbx.prx";
 const ORBX_CONFIG_NAME = "orbx.ini";
 const ORBX_LOG_NAME = "rpf_log.txt";
@@ -151,7 +152,13 @@ function hasRepeatedAdjacentFolder(path) {
 export function inspectOrbxPackage(files = []) {
   if (!Array.isArray(files)) throw new Error("files must be an array.");
 
-  const pluginFiles = findByBasename(files, ORBX_PLUGIN_NAME);
+  const pluginFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_PLUGIN_NAME);
+  const pluginFiles = pluginFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
+  const pluginBinaryAnalysis = pluginFileRecords.length === 1 ? inspectExecutableHeader(pluginFileRecords[0]) : {
+    format: "unknown",
+    status: pluginFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",
+    targetCompatibility: "unverified"
+  };
   const configFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_CONFIG_NAME);
   const configFiles = configFileRecords.map((file) => ({ path: String(file.path), bytes: fileSize(file) }));
   const logFileRecords = files.filter((file) => normalizedPath(file?.path).split("/").at(-1) === ORBX_LOG_NAME);
@@ -203,6 +210,10 @@ export function inspectOrbxPackage(files = []) {
   if (!pluginPresent) warnings.push("ORBX plugin binary orbx.prx was not found in the imported files.");
   if (!configPresent) warnings.push("ORBX configuration orbx.ini was not found; do not create an empty replacement because the required keys and values have not been verified.");
   if (duplicatePlugin) warnings.push("Multiple orbx.prx files were found. Select the matching package copy instead of installing an arbitrary duplicate.");
+  if (pluginBinaryAnalysis.format === "pe" && pluginBinaryAnalysis.status === "header-inspected") warnings.push("The ORBX orbx.prx file has a Windows PE header; it is not a PS4-native PRX candidate.");
+  if (pluginBinaryAnalysis.format === "elf" && pluginBinaryAnalysis.status === "header-inspected" && !pluginBinaryAnalysis.architectureCompatibleWithPs4Cpu) warnings.push("The ORBX plugin ELF architecture does not match the PS4 x86-64 CPU.");
+  if (pluginBinaryAnalysis.format === "elf" && pluginBinaryAnalysis.status === "header-inspected" && pluginBinaryAnalysis.architectureCompatibleWithPs4Cpu) warnings.push("The ORBX plugin ELF header matches x86-64 only; Orbis ABI, SELF/PRX packaging, imports, GoldHEN loading and exact game-build compatibility remain unverified.");
+  if (pluginBinaryAnalysis.format === "self-container" || pluginBinaryAnalysis.format === "sce-container") warnings.push("The ORBX plugin has a Sony SELF/SCE container signature, but its signature, embedded ELF, imports and target compatibility have not been validated.");
   if (duplicateConfig) warnings.push("Multiple orbx.ini files were found. Compare their package paths before staging one.");
   if (pluginPresent && configPresent) warnings.push("The plugin and INI are both present, but filename presence does not validate PRX architecture, GoldHEN loading, game hooks, or graphics-resource compatibility.");
   if (iniAnalysis.status === "not-provided") warnings.push("The INI file was inventoried but its bytes were not supplied, so its settings could not be parsed.");
@@ -229,6 +240,7 @@ export function inspectOrbxPackage(files = []) {
         name: ORBX_PLUGIN_NAME,
         present: pluginPresent,
         files: pluginFiles,
+        binaryInspection: pluginBinaryAnalysis,
         suggestedGoldHENPluginPath: pluginPresent ? "/data/GoldHEN/plugins/orbx.prx" : null
       },
       configuration: {
