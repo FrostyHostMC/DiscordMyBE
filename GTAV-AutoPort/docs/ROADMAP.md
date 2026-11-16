@@ -17,6 +17,13 @@
 - [ ] Produce reversible PS4 Story Mode package with backups and rollback only after exact-target validation.
 
 
+## Project V PS4 manager
+- [x] Rebrand the native PS4 companion UI and package title as Project V while retaining the existing package identity for in-place updates.
+- [x] Add separate selectable metadata profiles for GTA V 1.57 US/EU and 1.73 US/EU.
+- [x] Keep all runtime hook activation locked until exact executable fingerprints, unique signatures and matching validation evidence exist.
+- [ ] Replace the staging-only screen with full Project V library, manifest, plugin preview and reversible deployment workflows.
+- [ ] Port and harden the Project V runtime hooks against each exact retail executable profile.
+
 ## Native PS4 companion app
 - [x] Add an OpenOrbis v0.5.4 build pipeline that emits an unsigned PS4 PKG artifact.
 - [x] Add controller navigation for USB 0, USB 1, `/data`, and the staged import library.
@@ -76,7 +83,7 @@
 - EU: CUSA00411 / GTA V 1.57.
 - Keep executable fingerprints, hook signatures, offsets, and validation evidence separate by region. Never infer US compatibility from EU evidence or vice versa.
 
-## Phase 3 — first PS4 vehicle conversion
+## Project V runtime compatibility research\n- [x] Inspect public Project V 1.3.2 source for version-sensitive hooks and unsafe scan handling.\n- [x] Document uninitialized address, unchecked signature scans, Makefile variable typo and toolchain include-path concerns.\n- [ ] Obtain and inspect the exact Project V v1.2 archive and PRX; do not replace it based only on source lineage.\n- [ ] Build independent executable fingerprints and hook maps for all four profiles.\n\n## Phase 3 — first PS4 vehicle conversion
 - [x] Record requested regional profiles: CUSA00419 (US) and CUSA00411 (EU), both GTA V 1.57 · PS4 Story Mode (console/build compatibility still unverified).
 - [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
 - [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
