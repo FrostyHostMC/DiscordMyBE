@@ -7,10 +7,6 @@ on:
     paths:
       - "GTAV-AutoPort/**"
       - ".github/workflows/gtav-autoport.yml"
-  pull_request:
-    paths:
-      - "GTAV-AutoPort/**"
-      - ".github/workflows/gtav-autoport.yml"
 
 jobs:
   verify-web:
