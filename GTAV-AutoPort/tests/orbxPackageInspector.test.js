@@ -103,3 +103,33 @@ test("detects repeated package-folder nesting and reports supporting log files",
   assert.equal(report.components.runtimeLog.present, true);
   assert.ok(report.warnings.some((message) => message.includes("repeated adjacent folder names")));
 });
+
+
+test("extracts bounded diagnostic signals from an uploaded ORBX runtime log", () => {
+  const log = new TextEncoder().encode([
+    "ORBX startup",
+    "Plugin version 1.4 initialized",
+    "ERROR: unsupported game version",
+    "CRC warning: skipped checked file",
+    "All done"
+  ].join("\n"));
+  const report = inspectOrbxPackage([
+    { path: "orbx.prx", size: 100 },
+    { path: "orbx.ini", bytes: new TextEncoder().encode("[Files]\nLoadMETA=true\n") },
+    { path: "orbx/rpf_log.txt", bytes: log }
+  ]);
+  const analysis = report.components.runtimeLog.analysis;
+  assert.equal(analysis.status, "parsed-with-signals");
+  assert.equal(analysis.lineCount, 5);
+  assert.deepEqual(analysis.signals.map((item) => item.category), ["compatibility", "crc"]);
+  assert.equal(analysis.signals[0].line, 3);
+  assert.ok(report.warnings.some((message) => message.includes("diagnostic lines")));
+});
+
+test("does not parse oversized ORBX runtime logs", () => {
+  const report = inspectOrbxPackage([
+    { path: "orbx/rpf_log.txt", bytes: new Uint8Array(1024 * 1024 + 1) }
+  ]);
+  assert.equal(report.components.runtimeLog.analysis.status, "too-large-to-inspect");
+  assert.equal(report.components.runtimeLog.analysis.signals.length, 0);
+});
