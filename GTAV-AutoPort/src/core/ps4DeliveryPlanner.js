@@ -37,7 +37,7 @@ function routeFor(path, conversion, archive) {
     return {
       route: "validate-orbis-plugin",
       status: "target-validation-required",
-      reason: "A PRX/SPRX extension does not prove that the binary targets Orbis, CUSA00419, or GTA V 1.73.",
+      reason: "A PRX/SPRX extension does not prove that the binary targets Orbis, the selected title ID, or the selected GTA V update.",
       requirements: ["Verify ELF/PRX platform and architecture", "Verify GoldHEN loader compatibility", "Validate title ID, update build and plugin offsets"]
     };
   }
@@ -124,7 +124,7 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
   for (const item of items) counts[item.status] = (counts[item.status] || 0) + 1;
   const targetId = String(target?.titleId || target?.cusa || "").toUpperCase();
   const update = String(target?.updateVersion || target?.gameUpdate || "");
-  const exactTargetSpecified = targetId === "CUSA00419" && update === "1.73";
+  const exactTargetSpecified = Boolean(targetId && update);
   return {
     schemaVersion: 1,
     status: "strategy-only",
@@ -151,7 +151,7 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     blockers: [
       "No validated Orbis RPF writer is currently invoked by the automatic preparation pipeline.",
       "Project V support is not assumed: loader version, accepted resource types and loading paths must be verified against a known-good PS4 test.",
-      "CUSA00419 / GTA V 1.73 compatibility has not been established by an on-console test.",
+      "Compatibility with the selected title ID and GTA V update has not been established by an on-console test.",
       "PC Legacy round-trip verification is not PS4 resource validation."
     ],
     limitations: [
