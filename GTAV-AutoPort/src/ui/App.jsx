@@ -336,7 +336,7 @@ export default function App() {
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
       {archive && <section className="panel results-panel">
-        <div className="panel-head"><div><div className="eyebrow">ONE-CLICK MOD PREPARATION</div><h3>Build automatic preparation bundle</h3><p>Convert every eligible YFT, YDR, YDD and YTD resource in this import, keep all originals, and download one organized ZIP with a manifest and per-file PS4 delivery plan.</p></div><span className="tag warning"><AlertTriangle size={13}/> PC LEGACY ONLY</span></div>
+        <div className="panel-head"><div><div className="eyebrow">ONE-CLICK MOD PREPARATION</div><h3>Build automatic preparation bundle</h3><p>Create PC Legacy candidates for eligible YFT, YDR, YDD and YTD resources, plus partial PS4 texture-storage payloads for supported DDS files. Keep all originals and download one organized ZIP with hashes, sidecars and a per-file delivery plan.</p></div><span className="tag warning"><AlertTriangle size={13}/> PC LEGACY ONLY</span></div>
         <button className="primary-button" onClick={buildPrepBundle} disabled={busy}><ArrowDownToLine size={15}/> Build automatic prep ZIP</button>
         {prepBundleStatus && <p className="native-disclaimer">{prepBundleStatus}</p>}
         <p className="native-disclaimer">This automates source preparation; it does not certify the output for PS4. The bundle labels PC Legacy candidates separately and explicitly keeps PS4-ready count at zero until a CUSA00419 / GTA V 1.57 writer is validated.</p>
