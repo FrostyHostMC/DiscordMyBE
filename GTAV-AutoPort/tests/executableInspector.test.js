@@ -72,3 +72,12 @@ test("rejects malformed MZ files and unknown binaries conservatively", () => {
   assert.equal(inspectExecutableHeader(new Uint8Array([0x4d, 0x5a])).status, "truncated");
   assert.equal(inspectExecutableHeader(new Uint8Array([1, 2, 3])).status, "unrecognized");
 });
+
+
+test("recognizes the PlayStation SELF container magic without decrypting it", () => {
+  const result = inspectExecutableHeader(new Uint8Array([0x4f, 0x15, 0x3d, 0x1d, 1, 2, 3, 4]));
+  assert.equal(result.format, "self-container");
+  assert.equal(result.status, "opaque-console-container");
+  assert.equal(result.magic, "4f153d1d");
+  assert.equal(result.targetCompatibility, "unverified");
+});
