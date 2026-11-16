@@ -50,14 +50,14 @@ int main() {
     assert(ProjectV::profileCount() == 4);
     assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157) == 0);
     assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V157) == 1);
-    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V173) == 2);
-    assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V173) == 3);
-    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V173) !=
+    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V156) == 2);
+    assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V156) == 3);
+    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V156) !=
            ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157));
     for (unsigned int i = 0; i < ProjectV::profileCount(); ++i) {
         assert(!ProjectV::hooksMayBeEnabled(ProjectV::profileAt(i)));
     }
-    assert(ProjectV::findProfile("CUSA99999", ProjectV::GameVersion::V173) == -1);
+    assert(ProjectV::findProfile("CUSA99999", ProjectV::GameVersion::V156) == -1);
 
     char templatePath[] = "/tmp/autoport-ps4-host-tests-XXXXXX";
     char* made = mkdtemp(templatePath);
