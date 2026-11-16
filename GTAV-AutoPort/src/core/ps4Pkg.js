@@ -1,3 +1,5 @@
+import { resolvePs4Target } from "./target.js";
+
 const PKG_MAGIC = 0x7f434e54;
 const PARAM_SFO_ID = 0x1000;
 const MAX_ENTRIES = 100000;

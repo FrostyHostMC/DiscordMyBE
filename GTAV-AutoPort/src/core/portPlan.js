@@ -5,7 +5,7 @@ const ROUTES = Object.freeze({
   ".fx": { family: "reshade-shader", stage: "shader-source-analysis", source: "reshade-static-analyzer", target: "ps4-native-renderer-adaptation-required", risk: "PC-ReShade-runtime-and-renderer-data-are-not-available-on-PS4" },
   ".fxh": { family: "reshade-shader-include", stage: "shader-dependency-analysis", source: "reshade-static-analyzer", target: "dependency-resolution-and-PS4-translation-required", risk: "HLSL-include-and-runtime-semantics" },
   ".hlsl": { family: "shader-source", stage: "shader-source-analysis", source: "static-hlsl-inspection", target: "ps4-native-renderer-adaptation-required", risk: "shader-model-and-renderer-interface-mismatch" },
-  ".gfx": { family: "scaleform-gfx", stage: "scaleform-analysis", source: "scaleform-header-inspector", target: "ps4-gfx-loader-build-unverified", risk: "GTA-1.46-loader-does-not-prove-1.73-hook-compatibility" },
+  ".gfx": { family: "scaleform-gfx", stage: "scaleform-analysis", source: "scaleform-header-inspector", target: "ps4-gfx-loader-build-unverified", risk: "GTA-1.46-loader-does-not-prove-1.57-hook-compatibility" },
   ".swf": { family: "scaleform-swf", stage: "scaleform-authoring", source: "scaleform-header-inspector", target: "gfXexport-and-runtime-validation-required", risk: "SWF-needs-GFx-export-and-PS4-runtime-validation" },
   ".fla": { family: "scaleform-source", stage: "scaleform-authoring", source: "external-authoring-project", target: "scaleform-export-required", risk: "ActionScript-version-and-GFx-export-settings" },
   ".as": { family: "scaleform-source", stage: "scaleform-authoring", source: "actionscript-source-review", target: "scaleform-compile-and-runtime-validation-required", risk: "ActionScript-2-and-GTA-Scaleform-API-compatibility" },
@@ -52,7 +52,7 @@ const ROUTES = Object.freeze({
 });
 
 const OUTPUT_CONTRACTS = Object.freeze({
-  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "RageKit PC Legacy candidate writer is available; PS4-specific resource encoding, dependencies and CUSA00419 / 1.73 validation remain unverified" },
+  fragment: { artifacts: ["model.yft", "model_hi.yft (when the source has a high-detail LOD)", "model.ytd", "model.ybn (when collision is separate)"], inputs: ["complete mesh/material data", "skeleton and bone mapping", "LOD definitions", "collision and texture dependencies", "vehicle or ped metadata when applicable"], gate: "RageKit PC Legacy candidate writer is available; PS4-specific resource encoding, dependencies and CUSA00419 / CUSA00411 GTA V 1.57 validation remain unverified" },
   drawable: { artifacts: ["model.ydr or model.ydd", "model.ytd", "referenced materials and shaders"], inputs: ["mesh and material source", "texture images", "material/shader mapping"], gate: "RageKit PC Legacy drawable/YDD writers are available; PS4 resource encoding and target-build validation remain unverified" },
   "drawable-dictionary": { artifacts: ["model.ydd", "referenced drawable, skeleton, shader and texture resources"], inputs: ["drawable dictionary entries", "referenced models", "skeleton and texture dependencies"], gate: "RageKit PC Legacy YDD writer is available; PS4 dictionary layout and target-build validation remain unverified" },
   "texture-dictionary": { artifacts: ["model.ytd"], inputs: ["source images or DDS", "texture names and hashes", "mip chain", "target compression/format"], gate: "RageKit PC Legacy YTD writer is available; PS4 texture formats, mipmaps and console encoding remain unverified" },
@@ -159,7 +159,7 @@ export function buildUniversalPortPlan({ files = [], target = PS4_TARGET } = {})
       "This plan does not rewrite or package any resource.",
       "Filename co-location is a candidate relationship, not proof of a game dependency.",
       "PC Legacy/Enhanced writer support is not PS4 writer support.",
-      "Exact CUSA00419 / GTA V 1.73 resources and executable compatibility remain unverified.",
+      "Exact regional CUSA00419 and CUSA00411 / GTA V 1.57 resources and executable compatibility remain unverified.",
       "PC ASI/DLL and runtime-dependent scripts need separate PS4-native behavior implementations.",
     ],
   };

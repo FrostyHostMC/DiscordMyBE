@@ -19,8 +19,11 @@ const scalar = (value) => {
 const first = (object, names) => {
   if (!object || typeof object !== "object") return undefined;
   const wanted = new Set(names.map((name) => name.toLowerCase()));
-  const key = Object.keys(object).find((name) => wanted.has(name.toLowerCase()));
-  return key ? object[key] : undefined;
+  for (const name of names) {
+    const key = Object.keys(object).find((candidate) => candidate.toLowerCase() === name.toLowerCase());
+    if (key) return object[key];
+  }
+  return undefined;
 };
 const number = (value) => {
   const raw = scalar(value);
