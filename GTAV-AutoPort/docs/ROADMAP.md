@@ -1,81 +1,105 @@
-# Roadmap
+# AutoPort roadmap
 
-## Product-wide scope — universal mod intake and porting
-- [x] Add automatic mod-family inventory audit with conservative signatures, unknown-file retention and PC plugin/script warnings.
-- [x] Research broad read/write engines and document candidate backend strategy.
-- [ ] Prototype ragekit behind a versioned native-engine adapter; compare FiveFury as supplemental coverage.
-- [ ] Add independent fixture tests for every backend and format before enabling write paths.
-- [x] Set product direction to general GTA V PC-to-PS4 Story Mode mod porting, not vehicle-only conversion.
-- [x] Define mod-family taxonomy and compatibility outcome classes.
-- [ ] Build extensible signature/content classifier for known and unknown mod resources.
-- [ ] Add universal project resource graph and provenance/hash model. Filename-based candidate relationships are now exposed separately and marked unverified.
-- [ ] Add typed, versioned platform-neutral resource IR.
-- [ ] Implement per-family decoder/adapter/validator plugins. The initial routing/work-plan registry exists; actual format writers remain pending.
-- [ ] Implement exact-target PS4 adapters for each supported resource family.
-- [ ] Classify PC runtime plugins/scripts and provide PS4-native reimplementation path only where technically feasible.
-- [x] Generate per-mod support matrix, family-specific adaptation plan and blocker report (planning only; no conversion output).
-- [ ] Produce reversible PS4 Story Mode package with backups and rollback only after exact-target validation.
+## Active target
 
+- User-confirmed console: PS4 with GoldHEN.
+- User-confirmed game target: Grand Theft Auto V, US title ID CUSA00419, update 1.57, Story Mode.
+- Target identity is recorded, not independently re-verified. Resource compatibility, plugin offsets, archive destinations and console installability remain unverified.
+- GTA Online is out of scope.
 
-## Phase 0 — workspace
-- [x] Isolated folder and development branch created.
-- [x] React/Vite workbench UI.
-- [x] Root GitHub Actions workflow scoped to AutoPort folder.
-- [ ] Tauri desktop shell and native command integration.
+## Current capability snapshot
 
-## Phase 1 — intake and vehicle metadata
-- [x] ZIP archive intake and file inventory.
-- [x] Extracted-folder intake.
-- [x] Reject absolute/traversal paths, symlinks, duplicate paths, and oversized archives.
-- [x] Parse GTA V vehicle and handling metadata.
-- [x] Select exactly one target vehicle entry.
-- [x] Resolve matching handling ID.
-- [x] Detect duplicate metadata basenames and ambiguous vehicle assets.
-- [x] Check expected model and texture dependencies.
-- [x] Produce downloadable SHA-256 conversion manifest.
-- [ ] Deep dependency resolution across DLC metadata.
-- [ ] Run automated tests against the supplied real Crown Victoria fixture in a local Rust environment.
+- [x] Local-first React/Vite workbench and ZIP/folder intake.
+- [x] Preserve imported originals and reject unsafe paths, symlinks, duplicate archive paths and oversized inputs.
+- [x] Inventory/classify broad GTA V mod families and retain unknown files.
+- [x] Build dependency and candidate-relationship reports with ambiguity/missing-reference handling.
+- [x] Inspect supported PC RPF7 OPEN archives recursively with bounded depth, archive count, file count, expanded bytes and path lengths.
+- [x] Keep encrypted/unsupported RPF variants unchanged rather than guessing at their structure.
+- [x] Run RageKit PC Legacy resource candidates through a round-trip gate; label outputs PC Legacy only.
+- [x] Generate per-file PS4 delivery plans and automatic preparation ZIP reports.
+- [x] Audit ORBX package components, parse supplied INI bytes and extract bounded diagnostic excerpts from supplied runtime logs.
+- [x] Inspect PE, ELF and Sony SCE executable signatures; report architecture clues without claiming Orbis compatibility.
+- [x] Prototype DDS BC1/BC3/BC5 conversion into PS4 Thin1DThin texture storage with byte-for-byte untile round-trip tests.
+- [x] Build explicit GoldHEN AFR overlay plans for already-built PS4 RPFs when the user supplies exact mappings and attestations.
+- [ ] Complete an end-to-end PS4 RSC7/YTD texture dictionary writer and verify it against CUSA00419 retail fixtures.
+- [ ] Integrate a real Orbis RPF writer into the local pipeline and validate its output independently.
+- [ ] Validate a supported PS4 runtime/loader path for CUSA00419 / 1.57.
+- [ ] Produce a reversible, installable Story Mode package only after all target gates pass.
 
-## Phase 2 — native resource inspection
-- [x] Basic RSC7 header inspection.
-- [x] Native Rust YFT fragment parser adapter.
-- [x] Native Rust YTD texture dictionary parser and DDS inspection export.
-- [x] YFT drawable/LOD/geometry/triangle and physics-child report.
-- [x] Connect native YFT/YTD JSON reports to the workbench UI.
-- [x] Automatically invoke native inspection for imported YFT/YTD assets during local development and load reports/previews without a separate report import.
-- [x] Display YFT structure metrics for multiple LOD resources and YTD texture previews.
-- [x] Add a Windows file-picker launcher that runs the native inspector on a selected YFT/YTD pair and opens the report folder.
-- [x] Add a one-click local web workbench launcher.
-- [ ] Replace the browser workbench launchers with a signed Tauri desktop installer and bundled native inspector.
-- [ ] Inspect and validate RSC7 page flags and resource boundaries independently.
-- [ ] Add real fixture integration tests (fixture binaries remain outside the repository).
-- [ ] Inspect material/shader references and external texture dictionary dependencies.
+## Phase 1 — intake and source analysis
 
-## Phase 3 — universal vehicle conversion foundation
-- [x] Define a vehicle-agnostic conversion architecture and versioned intermediate-representation requirements.
-- [x] Implement initial generic inventory and explicit model/texture/handling dependency graph with missing/ambiguous reporting.
-- [ ] Expand dependency graph across variations, carcols, mod kits, audio, layout, collision, LOD and damage assets.
-- [ ] Implement source decoders that populate the intermediate representation without dropping unsupported constructs.
-- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.73.
-- [ ] Implement PS4 YFT/YTD encoders and validate round-trip against independent readers and game runtime.
+- [x] ZIP and extracted-folder intake.
+- [x] Safe relative path normalization and archive extraction limits.
+- [x] File-family classification and conservative binary signature detection.
+- [x] Vehicle and handling metadata parsing, model/texture candidate mapping and conversion manifest.
+- [x] Recursive supported PC RPF7 OPEN extraction with provenance.
+- [ ] Deep DLC metadata and load-order resolution.
+- [ ] Expand dependency graph across variations, carcols, mod kits, audio, layouts, collision, LOD and damage resources.
+- [ ] Add archive duplicate-content detection by hash, not just path.
 
-## Phase 3 — first PS4 vehicle conversion
-- [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
-- [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
-- [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
-- [ ] Determine PS4 YFT/YTD resource differences from verified retail PS4 files.
-- [ ] Implement a real PS4-compatible YFT writer or conversion adapter.
-- [ ] Implement/verify a PS4-compatible YTD writer and texture encoding path.
-- [ ] Validate model/texture references and target title ID.
-- [ ] Generate loose output and deployment package only after all gates pass.
-- [ ] Test on a backed-up PS4 Story Mode installation.
+## Phase 2 — binary and resource inspection
 
-## Phase 4 — expand
-- [ ] More vehicle replacements.
-- [ ] Add-on vehicle support only after dependency and DLC handling is solved.
-- [ ] Additional asset categories with dedicated fixtures and regression tests.
+- [x] RSC7 signature and basic resource inspection.
+- [x] Native Rust YFT fragment and YTD texture dictionary read-only parser.
+- [x] YFT drawable/LOD/geometry/triangle and physics-child reports.
+- [x] YTD texture metadata and DDS inspection export.
+- [x] Executable header inspection for PE, ELF and SCE containers.
+- [x] DDS BC1/BC3/BC5 PS4 texture storage prototype with generated-fixture round trips.
+- [ ] Inspect and validate RSC7 page flags, resource boundaries and pointer graphs independently.
+- [ ] Inspect shader/material references and external texture dictionary dependencies.
+- [ ] Add real retail fixture integration tests for CUSA00419 1.57 (fixture hashes and provenance required).
+- [ ] Validate PS4 Thin1DThin swizzle against known-good CUSA00419 texture bytes and console rendering.
 
-## Non-goals
-- GTA Online.
-- Universal automatic conversion claims for arbitrary mods.
-- Renaming PC files or repacking them as a substitute for conversion.
+## Phase 3 — universal intermediate representation
+
+- [x] Define vehicle-agnostic conversion architecture and versioned adapter registry.
+- [x] Keep unknown/ambiguous files preserved and conversion authorization separate from recognition.
+- [ ] Add typed, versioned platform-neutral resource IR for geometry, skeletons, materials, textures, collision, metadata and audio.
+- [ ] Implement source decoders that preserve unsupported constructs and report lossy fields explicitly.
+- [ ] Implement deterministic dependency graph IDs and hash-based provenance for every resource.
+- [ ] Add independent fixture corpus and adapter conformance tests.
+
+## Phase 4 — PS4 resource conversion
+
+- [x] Implement experimental BC1/BC3/BC5 block tiling for PS4 Thin1DThin storage payloads only.
+- [ ] Build complete PS4 RSC7/YTD texture dictionary serialization, including texture objects, mip views, names and resource-page layout.
+- [ ] Implement PS4 YFT/YDR/YDD/YBN adapters from verified source decoders and exact-build reference templates.
+- [ ] Implement PS4 map/archetype/metadata adapters with schema-aware translation (never extension-only renaming).
+- [ ] Implement audio conversion only after format-specific decoding, encoding and game reference validation.
+- [ ] Validate each writer by independent readback, hashes, structural invariants and target game tests.
+- [ ] Do not mark any resource PS4-ready based solely on PC Legacy round-trip or a storage-payload round-trip.
+
+## Phase 5 — archive and package delivery
+
+- [x] Plan per-file delivery routes and report explicit blockers.
+- [x] Generate AFR staging packages for complete, already-built PS4 RPFs only, with explicit mappings, SHA-256 and required user attestations.
+- [x] Generate Orbis RPF build recipes as a separate script-generation helper.
+- [ ] Integrate a supported Orbis RPF writer runtime with capability checks, sandboxed execution, timeouts and output readback.
+- [ ] Add target-specific RPF path mapping from verified retail game references.
+- [ ] Produce a reversible deployment package with backups and rollback instructions.
+- [ ] Keep install/deploy disabled until exact CUSA00419 1.57 tests pass.
+
+## Phase 6 — runtime-dependent PC mods
+
+- [x] Identify PC ASI/DLL/EXE and distinguish them from PS4-native module signatures.
+- [x] Define an abstract portable native behavior blueprint/runtime core.
+- [ ] Build a minimal PS4-native GoldHEN runtime using a supported Orbis toolchain.
+- [ ] Add fail-closed title/build identity checks and safe disable/logging.
+- [ ] Reimplement selected PC mod behaviors through documented, tested native feature adapters.
+- [ ] Never execute untrusted mod scripts or load PC binaries on PS4.
+
+## Next high-value implementation order
+
+1. Finish and independently validate the PS4 texture dictionary writer using the existing BC storage prototype.
+2. Integrate a real Orbis RPF builder behind a sandboxed adapter and validate its output.
+3. Add a hash-addressed resource graph and exact target fixture manifest.
+4. Select one low-risk resource family (texture replacement) for an end-to-end CUSA00419 1.57 test.
+5. Only then expand to models, vehicles, peds, maps, scripts and runtime plugins.
+
+## Non-goals and hard rules
+
+- No GTA Online support.
+- No claiming universal conversion for arbitrary mods.
+- No renaming YMT to OMT or relabeling PC RPF/YFT/YTD files as PS4.
+- No bundling proprietary SDKs, game assets, unlicensed tools or third-party binaries.
+- No generated PRX or console installation claim without a reproducible Orbis build and on-console validation.
