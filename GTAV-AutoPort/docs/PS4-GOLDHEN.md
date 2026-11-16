@@ -6,7 +6,7 @@ GoldHEN plugins are native PS4-side modules. Windows PC `.asi` and `.dll` plugin
 
 ## Current first target profile
 
-The user has specified **CUSA00411 · GTA V 1.73 · PS4 Story Mode** as the first test target. This is recorded as a user-confirmed target label, not an independently verified compatibility result. The region/build mapping, exact executable/build fingerprint, resource formats, and GoldHEN redirection paths still require confirmation against the console and trusted retail files. Do not infer PS4 compatibility from the title ID or version label alone.
+The user has specified **CUSA00419 · GTA V 1.57 · PS4 Story Mode** as the first test target. This is recorded as a user-confirmed target label, not an independently verified compatibility result. The region/build mapping, exact executable/build fingerprint, resource formats, and GoldHEN redirection paths still require confirmation against the console and trusted retail files. Do not infer PS4 compatibility from the title ID or version label alone.
 
 ## Target profile required before deployment
 - GTA V title ID (never assume a sample CUSA identifier is correct).
