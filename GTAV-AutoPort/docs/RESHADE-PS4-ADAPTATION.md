@@ -25,6 +25,6 @@ This means DYNA is not a standalone color preset:
 The linked 7z archive could not be fetched by the current build environment. Its member list, shader source, preset values and bundled binaries have NOT been inspected. Do not mark DYNA converted based only on its web description.
 
 ## Current target status
-Target: PS4 CUSA00411, GTA V 1.73, Story Mode. No verified DYNA-compatible PS4 shader loader or 1.73 renderer hook is currently available in this pipeline. The older public GFX loader in the Scaleform research is a different system and is not a ReShade shader injector.
+Target: PS4 CUSA00419, GTA V 1.57, Story Mode. No verified DYNA-compatible PS4 shader loader or 1.57 renderer hook is currently available in this pipeline. The older public GFX loader in the Scaleform research is a different system and is not a ReShade shader injector.
 
 Next step: import DYNA.7z into AutoPort (or provide its extracted contents) so the analyzer can inspect the real files and dependency closure. Only then can individual effects be mapped to supported PS4-native visual resources or explicitly marked non-portable. No fake install package or guessed destination paths should be generated.
