@@ -54,4 +54,25 @@ bool validatePatchWindow(const std::uint8_t* image, std::size_t imageSize,
         return false;
     return std::memcmp(image + patchOffset, expected, expectedSize) == 0;
 }
+
+bool validateRequiredHookSet(const std::uint8_t* image, std::size_t imageSize,
+                             const RequiredHookCheck* hooks, std::size_t hookCount) {
+    if (!image || !hooks || hookCount == 0) return false;
+
+    for (std::size_t i = 0; i < hookCount; ++i) {
+        const RequiredHookCheck& hook = hooks[i];
+        if (hook.scan != ScanResult::Found ||
+            !validatePatchWindow(image, imageSize, hook.patchOffset, hook.expected,
+                                 hook.expectedSize, hook.patchSize))
+            return false;
+
+        const std::size_t end = hook.patchOffset + hook.patchSize;
+        for (std::size_t j = 0; j < i; ++j) {
+            const std::size_t previousEnd = hooks[j].patchOffset + hooks[j].patchSize;
+            if (hook.patchOffset < previousEnd && hooks[j].patchOffset < end)
+                return false;
+        }
+    }
+    return true;
+}
 }
