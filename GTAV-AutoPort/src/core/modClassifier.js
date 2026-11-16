@@ -91,6 +91,7 @@ function classifyOne(file) {
     "rage-resource": ["rage-resource", "RAGE resource (signature identified)", "inspection-required"],
     "rage-archive": ["archive", "RAGE archive (signature identified)", "archive-inspection-required"],
     texture: ["texture-source", "Texture container (signature identified)", "asset-adapter-required"],
+    "ps4-texture-storage-candidate": ["texture-source", "Compressed DDS texture (signature identified)", "partial-ps4-texture-storage-only"],
     image: ["texture-source", "Image asset (signature identified)", "asset-adapter-required"],
     audio: ["audio-source", "Audio container (signature identified)", "asset-adapter-required"],
     "windows-executable": ["pc-native-plugin", "Windows executable (signature identified)", "not-directly-portable"],
@@ -103,6 +104,7 @@ function classifyOne(file) {
   if ([".asi", ".dll", ".exe", ".sys"].includes(extension) || (family === "pc-native-plugin" && signature === "MZ")) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
   if ([".gfx", ".swf", ".fla", ".as", ".ttf", ".otf"].includes(extension)) warnings.push("Scaleform graphics/font assets need a compatible GFx authoring/export workflow and an exact-build PS4 loader; file identification alone is not a playable graphics mod.");
   if (extension === ".prx" || extension === ".sprx") warnings.push("A PRX/SPRX is platform-native code; verify Orbis target, loader, title ID and exact game build.");
+  if (formatDetection.match?.role === "ps4-texture-storage-candidate") warnings.push("This DDS can produce a partial PS4 texture-storage payload only; a complete RSC7/YTD dictionary and exact-build validation are still required.");
   if (binaryInspection?.format === "pe" && [".prx", ".sprx"].includes(extension)) warnings.push("Binary inspection found a Windows PE image inside a PRX/SPRX-named file; it is not a valid Orbis plugin candidate.");
   if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && !binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF machine/class/byte order does not match the expected PS4 x86-64 architecture.");
   if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF CPU architecture matches x86-64, but Orbis ABI, SELF/PRX packaging, imports and game-build compatibility remain unverified.");
@@ -116,6 +118,7 @@ function classifyOne(file) {
     const compatible = (signatureRole === "rage-resource" && extensionFamily === "rage-resource")
       || (signatureRole === "rage-archive" && extensionFamily === "archive")
       || (signatureRole === "texture" && extensionFamily === "texture-source")
+      || (signatureRole === "ps4-texture-storage-candidate" && extensionFamily === "texture-source")
       || (signatureRole === "image" && extensionFamily === "texture-source")
       || (signatureRole === "audio" && extensionFamily === "audio-source")
       || (signatureRole === "windows-executable" && extensionFamily === "pc-native-plugin")
