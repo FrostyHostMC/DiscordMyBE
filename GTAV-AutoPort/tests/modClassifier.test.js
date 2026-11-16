@@ -20,3 +20,19 @@ test("handles Windows-style paths and flags extension/signature conflicts",()=>{
 test("detects Windows PE binaries masquerading as PRX files",()=>{const bytes=new Uint8Array(512);const v=new DataView(bytes.buffer);bytes.set([0x4d,0x5a]);v.setUint32(0x3c,0x80,true);v.setUint32(0x80,0x00004550,true);v.setUint16(0x84,0x8664,true);v.setUint16(0x86,2,true);v.setUint16(0x94,0xf0,true);v.setUint16(0x98,0x20b,true);const r=auditModFiles([f("plugins/not-really-a-prx.prx",bytes)]);assert.equal(r.files[0].binaryInspection.format,"pe");assert.ok(r.files[0].warnings.some(w=>w.includes("Windows PE image inside a PRX/SPRX-named file")));});
 
 test("reports PS4 CPU architecture evidence without claiming an ELF plugin is compatible",()=>{const bytes=new Uint8Array(128);bytes.set([0x7f,0x45,0x4c,0x46,2,1,1,9]);const v=new DataView(bytes.buffer);v.setUint16(16,3,true);v.setUint16(18,62,true);v.setUint32(20,1,true);v.setUint16(52,64,true);const r=auditModFiles([f("plugins/candidate.sprx",bytes)]);assert.equal(r.files[0].binaryInspection.machineName,"x86-64");assert.equal(r.files[0].binaryInspection.architectureCompatibleWithPs4Cpu,true);assert.equal(r.files[0].binaryInspection.targetCompatibility,"unverified");assert.ok(r.files[0].warnings.some(w=>w.includes("Orbis ABI")));});
+
+
+test("classifies DDS content as a partial PS4 texture candidate without an extension conflict",()=>{
+ const r=auditModFiles([f("textures/vehicle.dds",new Uint8Array([0x44,0x44,0x53,0x20]))]);
+ assert.equal(r.files[0].family,"texture-source");
+ assert.equal(r.files[0].formatDetection.selectedAdapterId,"ps4-thin1dthin-dds-storage");
+ assert.ok(r.files[0].warnings.some(w=>w.includes("partial PS4 texture-storage payload")));
+ assert.ok(!r.files[0].warnings.some(w=>w.includes("does not agree")));
+});
+
+test("infers a compressed texture family from DDS content without a known extension",()=>{
+ const r=auditModFiles([f("payload/opaque.bin",new Uint8Array([0x44,0x44,0x53,0x20]))]);
+ assert.equal(r.files[0].family,"texture-source");
+ assert.equal(r.files[0].classificationBasis,"content-signature");
+ assert.equal(r.files[0].formatDetection.selectedAdapterId,"ps4-thin1dthin-dds-storage");
+});
