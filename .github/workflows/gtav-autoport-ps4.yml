@@ -1,0 +1,46 @@
+name: AutoPort PS4 PKG
+on:
+  workflow_dispatch:
+  push:
+    branches: [project/gtav-autoport]
+    paths:
+      - "GTAV-AutoPort/ps4-app/**"
+      - ".github/workflows/gtav-autoport-ps4.yml"
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: GTAV-AutoPort/ps4-app
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install host tools
+        run: sudo apt-get update && sudo apt-get install -y make curl libicu-dev clang lld imagemagick python3
+      - name: Install OpenOrbis v0.5.4
+        run: |
+          curl -fL --retry 3 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o "$RUNNER_TEMP/oo.tar.gz"
+          mkdir -p "$RUNNER_TEMP/oo"
+          tar -xzf "$RUNNER_TEMP/oo.tar.gz" -C "$RUNNER_TEMP/oo"
+          ROOT="$(dirname "$(find "$RUNNER_TEMP/oo" -name link.x -type f | head -1)")"
+          test -f "$ROOT/link.x"
+          echo "OO_PS4_TOOLCHAIN=$ROOT" >> "$GITHUB_ENV"
+          echo "$ROOT/bin/linux" >> "$GITHUB_PATH"
+      - name: Generate 512px package icon
+        run: convert -background none sce_sys/icon0.svg -resize 512x512! PNG24:sce_sys/icon0.png
+      - name: Build EBOOT and PKG
+        run: |
+          make clean
+          make
+          test -s eboot.bin
+          test -s IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
+      - name: Upload PKG
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoPort-PS4-PKG
+          path: |
+            GTAV-AutoPort/ps4-app/*.pkg
+            GTAV-AutoPort/ps4-app/eboot.bin
+          if-no-files-found: error
+          retention-days: 30
