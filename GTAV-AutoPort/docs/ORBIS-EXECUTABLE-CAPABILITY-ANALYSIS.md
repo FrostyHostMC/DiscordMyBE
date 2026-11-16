@@ -77,7 +77,7 @@ The TOC/name region immediately after the header is not plaintext. The observed 
 
 ## Next reverse-engineering targets
 
-1. Compare the supplied sample against known-good PS4 1.73 RPFs from the user's own installation.
+1. Compare the supplied sample against known-good PS4 1.57 RPFs from the user's own installation.
 2. Determine whether the Orbis marker is a distinct TOC cipher or an alternate serialization of the standard RPF7 tables.
 3. Trace the executable's platform-specific pack initialization and save path (especially `set_platform("orbis")` plus `start_uncompressed_pack`).
 4. Build a byte-exact round-trip fixture before enabling any Orbis write path.
