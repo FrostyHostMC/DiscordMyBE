@@ -43,6 +43,7 @@ function inspectElf(bytes) {
   const sectionHeaderEntrySize = view.getUint16(is64 ? 58 : 46, littleEndian);
   const sectionHeaderCount = view.getUint16(is64 ? 60 : 48, littleEndian);
   if (version !== 1 || declaredHeaderSize < headerSize) return { format: "elf", status: "invalid-header", error: "ELF version or declared header size is invalid." };
+  if (![entryPoint, programHeaderOffset, sectionHeaderOffset].every(Number.isSafeInteger)) return { format: "elf", status: "invalid-header", error: "ELF header contains a 64-bit address or offset outside JavaScript safe-integer range." };
   if (programHeaderCount > MAX_PROGRAM_HEADERS) return { format: "elf", status: "unsupported-header-table", error: "ELF program-header count exceeds the inspection limit." };
   const minimumProgramHeaderSize = is64 ? 56 : 32;
   if (programHeaderCount && programHeaderEntrySize < minimumProgramHeaderSize) {
@@ -52,7 +53,7 @@ function inspectElf(bytes) {
   if (programHeaderCount) {
     const tableBytes = programHeaderEntrySize * programHeaderCount;
     if (!Number.isSafeInteger(programHeaderOffset) || programHeaderOffset < headerSize
-      || !Number.isSafeInteger(tableBytes) || programHeaderOffset + tableBytes > bytes.length) {
+      || !Number.isSafeInteger(tableBytes) || !Number.isSafeInteger(programHeaderOffset + tableBytes) || programHeaderOffset + tableBytes > bytes.length) {
       return { format: "elf", status: "header-only", error: "Program-header table is outside the supplied inspection bytes." };
     }
     for (let index = 0; index < programHeaderCount; index++) {
@@ -65,7 +66,7 @@ function inspectElf(bytes) {
       if (![offset, fileSize, memorySize].every(Number.isSafeInteger) || offset < 0 || fileSize < 0 || memorySize < fileSize) {
         return { format: "elf", status: "invalid-program-header", error: "ELF segment contains an invalid size or offset." };
       }
-      if (offset + fileSize < offset) return { format: "elf", status: "invalid-program-header", error: "ELF segment range overflows." };
+      if (!Number.isSafeInteger(offset + fileSize) || offset + fileSize < offset) return { format: "elf", status: "invalid-program-header", error: "ELF segment range overflows JavaScript safe-integer bounds." };
       programHeaders.push({ type: segmentType, offset, fileSize, memorySize, flags: segmentFlags });
     }
   }
