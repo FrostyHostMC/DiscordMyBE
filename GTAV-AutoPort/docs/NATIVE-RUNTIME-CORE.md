@@ -8,7 +8,7 @@ The portable core is compiled and tested in CI with a fake host. This proves the
 
 ## What is still missing for PS4
 
-The abstract `GameApi` must be implemented by a separate Orbis/GoldHEN adapter. That adapter needs supported PS4 SDK headers/toolchain, GTA V CUSA00419 / update 1.73 native-call mappings, safe model streaming and entity lifecycle handling, and validated hooks. No game addresses or native hashes are hardcoded in this portable layer.
+The abstract `GameApi` must be implemented by a separate Orbis/GoldHEN adapter. That adapter needs supported PS4 SDK headers/toolchain, GTA V CUSA00419 / update 1.57 native-call mappings, safe model streaming and entity lifecycle handling, and validated hooks. No game addresses or native hashes are hardcoded in this portable layer.
 
 The current output is a host-side runtime core, not a `.prx`/`.sprx`. It must not be installed as a GoldHEN plugin. PC ScriptHookV, .NET, NativeUI, Lua or Windows API behavior still needs to be translated into explicit `Action` sequences and backed by real PS4 host methods.
 ## Executing compiled action plans
@@ -17,4 +17,4 @@ The current output is a host-side runtime core, not a `.prx`/`.sprx`. It must no
 
 `native-runtime` now includes `PlanExecutor`, which resolves symbolic entity IDs returned by spawn actions into runtime handles before dispatching later transform, attachment and vehicle-property actions. The executor stops at the first failed action and exposes `clear()` for lifecycle cleanup. Its fake-host tests verify ordering and reference resolution.
 
-The JSON plan is not yet loaded by the C++ layer and the fake host is not GTA V. A JSON parser/bridge, model streaming, cleanup on partial failure, and the CUSA00419/1.73 Orbis implementation remain necessary.
+The JSON plan is not yet loaded by the C++ layer and the fake host is not GTA V. A JSON parser/bridge, model streaming, cleanup on partial failure, and the CUSA00419/1.57 Orbis implementation remain necessary.
