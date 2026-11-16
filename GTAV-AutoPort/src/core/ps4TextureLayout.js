@@ -44,7 +44,8 @@ export function inspectDdsTexture(input) {
   if ((caps2 & 0x00000200) || (caps2 & 0x00200000)) {
     return { status: "unsupported-texture-shape", width, height, mipCount, error: "Cubemap and volume DDS textures are not supported by this single-slice encoder." };
   }
-  if ((pixelFlags & 0x4) === 0) return { status: "unsupported-pixel-format", width, height, mipCount, error: "DDS pixel format does not declare a FourCC-compressed surface." };\n  let dataOffset = 128;
+  if ((pixelFlags & 0x4) === 0) return { status: "unsupported-pixel-format", width, height, mipCount, error: "DDS pixel format does not declare a FourCC-compressed surface." };
+  let dataOffset = 128;
   let dxgiFormat = null;
   let resourceDimension = null;
   let arraySize = 1;
