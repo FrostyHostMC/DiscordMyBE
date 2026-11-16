@@ -1,7 +1,7 @@
 # Universal GTA V PC-to-PS4 Story Mode mod-port architecture
 
 ## Product goal
-GTAV AutoPort is a general-purpose porting platform for GTA V PC mods to the user's PS4 Story Mode target (currently user-specified as CUSA00419 (US) / update 1.73; not independently verified). It is not vehicle-only. Vehicles are one asset family; the Crown Victoria is only an early intake/inspection fixture.
+GTAV AutoPort is a general-purpose porting platform for GTA V PC mods to the user's PS4 Story Mode target (currently user-specified as CUSA00419 (US) / update 1.57; not independently verified). It is not vehicle-only. Vehicles are one asset family; the Crown Victoria is only an early intake/inspection fixture.
 
 The long-term intake goal is broad: accept arbitrary legally supplied PC mod archives/folders, identify contents, analyze dependencies, and route each component through the correct source decoder and PS4 target adapter. "Universal" describes the architecture and breadth of supported categories, not a promise that every mod can automatically be translated. Every format and feature needs an explicit support state and verified conversion path.
 
@@ -52,7 +52,7 @@ Adapters are independent by resource family and source/target version. Each decl
 Adding a resource family means adding decoders, IR mapping, target adapters where feasible, validators and fixtures—not a one-off special case in the main pipeline.
 
 ## PS4 evidence and limitations
-The target label CUSA00419 (US) / GTA V 1.73 is user-supplied and not independently verified. Obtain lawful, unmodified reference resources from the exact target installation and record provenance/hashes before claiming compatibility. Determine actual GoldHEN version and file-redirection capabilities separately.
+The target label CUSA00419 (US) / GTA V 1.57 is user-supplied and not independently verified. Obtain lawful, unmodified reference resources from the exact target installation and record provenance/hashes before claiming compatibility. Determine actual GoldHEN version and file-redirection capabilities separately.
 
 PC ASI/DLL/EXE plugins, ScriptHookV scripts and Windows/.NET runtime dependencies are not interchangeable with PS4 native plugins. A PC script may be reimplemented only when behavior is understood and an appropriate PS4-native runtime/API exists. Never package PC binaries as PS4 plugins.
 
@@ -69,4 +69,4 @@ Current project capabilities: intake, metadata inspection, read-only PC YFT/YTD 
 
 
 ## Research-driven backend strategy (2026-11-13)
-See [FORMAT-RESEARCH.md](FORMAT-RESEARCH.md) for detailed tool comparison. Evaluate ragekit first as the broad native read/write engine, FiveFury as supplemental format research, and keep rage-formats as the current read-only YFT/YTD inspector. Keep RPF archive operations separate from payload conversion. No candidate currently establishes PS4 CUSA00419 / 1.73 write compatibility.
+See [FORMAT-RESEARCH.md](FORMAT-RESEARCH.md) for detailed tool comparison. Evaluate ragekit first as the broad native read/write engine, FiveFury as supplemental format research, and keep rage-formats as the current read-only YFT/YTD inspector. Keep RPF archive operations separate from payload conversion. No candidate currently establishes PS4 CUSA00419 / 1.57 write compatibility.
