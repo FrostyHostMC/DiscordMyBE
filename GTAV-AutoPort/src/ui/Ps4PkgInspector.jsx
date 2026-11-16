@@ -24,7 +24,7 @@ export default function Ps4PkgInspector() {
 
   return <section className="panel">
     <div className="panel-head">
-      <div><div className="eyebrow">PS4 REFERENCE EVIDENCE</div><h3>Inspect your base-game and 1.73 PKGs</h3><p>Reads local package headers and readable PARAM.SFO metadata only. The large encrypted game payload is not uploaded or extracted.</p></div>
+      <div><div className="eyebrow">PS4 REFERENCE EVIDENCE</div><h3>Inspect your base-game and 1.57 update PKGs</h3><p>Reads local package headers and readable PARAM.SFO metadata only. The large encrypted game payload is not uploaded or extracted.</p></div>
       <span className="tag warning"><FileSearch size={13}/> READ-ONLY</span>
     </div>
     <label className="secondary-button" style={{display:"inline-flex",cursor:"pointer",alignItems:"center",gap:8}}>
@@ -43,6 +43,6 @@ export default function Ps4PkgInspector() {
       <p className="native-disclaimer">Content ID: {report.contentId || "not present"}. {report.inspection}</p>
       {report.warning && <div className="audit-warning"><AlertTriangle size={14}/><span>{report.warning}</span></div>}
     </div>)}
-    <div className="notice"><AlertTriangle size={18}/><div><b>Metadata inspection is not package extraction.</b><p>AutoPort does not decrypt, unpack, modify, rebuild, or install either PKG. This report alone cannot prove resource compatibility with GTA V 1.73.</p></div></div>
+    <div className="notice"><AlertTriangle size={18}/><div><b>Metadata inspection is not package extraction.</b><p>AutoPort does not decrypt, unpack, modify, rebuild, or install either PKG. This report alone cannot prove resource compatibility with GTA V 1.57.</p></div></div>
   </section>;
 }

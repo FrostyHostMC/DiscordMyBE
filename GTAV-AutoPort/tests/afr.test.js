@@ -37,5 +37,5 @@ test("rejects duplicate AFR destination paths", () => {
 });
 
 test("validates the target title ID before creating plugin configuration", () => {
-  assert.throws(() => buildAfrPluginIniSnippet({ titleId: "CUSA0041", updateVersion: "1.73", mode: "Story Mode" }), /valid CUSA/i);
+  assert.throws(() => buildAfrPluginIniSnippet({ titleId: "CUSA0041", updateVersion: "1.57", mode: "Story Mode" }), /valid CUSA/i);
 });
