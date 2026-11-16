@@ -11,7 +11,7 @@ test("requires an imported mod", async () => {
 test("keeps the PS4 gate closed when there are no convertible resources", async () => {
   const result = await buildAutomaticPrepBundle({
     sourceName: "metadata-only",
-    target: { titleId: "CUSA00419", updateVersion: "1.73" },
+    target: { titleId: "CUSA00419", updateVersion: "1.57" },
     reports: { "port-plan": { summary: { fileCount: 1 } } },
     files: [{ path: "vehicles.meta", bytes: new TextEncoder().encode("<CVehicleModelInfo__InitDataList/>") }]
   });
