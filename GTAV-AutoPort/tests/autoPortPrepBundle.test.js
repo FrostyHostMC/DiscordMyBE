@@ -289,3 +289,24 @@ test("converts supported DDS files discovered inside recursively extracted RPF a
   assert.ok(archive.file("AutoPort-Prep/rpf-extracted/cars/sample/dlc.rpf/textures/car_diffuse.dds"));
   assert.ok(archive.file("AutoPort-Prep/ps4-texture-storage-candidates/" + sourcePath + ".ps4tex.bin"));
 });
+
+
+test("groups duplicate imported content by SHA-256 without deleting either source file", async () => {
+  const shared = new Uint8Array([0x42, 0x59, 0x54, 0x45, 0x50, 0x52, 0x49, 0x53, 0x4f, 0x4e]);
+  const result = await buildAutomaticPrepBundle({
+    files: [
+      { path: "assets/first.dat", bytes: shared },
+      { path: "assets/copy/second.dat", bytes: shared.slice() }
+    ]
+  });
+  assert.equal(result.manifest.summary.duplicateContentGroups, 1);
+  assert.equal(result.manifest.duplicateContentGroups[0].references.length, 2);
+  assert.equal(result.manifest.duplicateContentGroups[0].references[0].sha256, undefined);
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.ok(archive.file("AutoPort-Prep/source-original/assets/first.dat"));
+  assert.ok(archive.file("AutoPort-Prep/source-original/assets/copy/second.dat"));
+  const report = JSON.parse(await archive.file("AutoPort-Prep/reports/duplicate-content.json").async("string"));
+  assert.equal(report.length, 1);
+  assert.equal(report[0].references.length, 2);
+  assert.match(report[0].sha256, /^[a-f0-9]{64}$/);
+});
