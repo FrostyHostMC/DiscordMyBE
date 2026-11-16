@@ -296,7 +296,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
         outputBytes: converted.bytes.byteLength,
         sourceSha256,
         outputSha256,
-        roundTripVerified: converted.roundTripVerified,
+        roundTripVerified: converted.roundtripVerified,
         warnings: converted.inspection.warnings
       });
     } catch (error) {
