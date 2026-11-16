@@ -22,6 +22,12 @@ function asBytes(value) {
   return null;
 }
 
+async function sha256(bytes) {
+  if (!globalThis.crypto?.subtle) return null;
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
+}
+
 function extension(path) {
   const name = String(path || "").split("/").at(-1);
   const index = name.lastIndexOf(".");
@@ -239,6 +245,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       mipCount: null,
       outputPath: null,
       outputBytes: 0,
+      sourceSha256: null,
+      outputSha256: null,
       roundTripVerified: false,
       installable: false,
       error: null
@@ -252,10 +260,13 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       } else {
         const outputPath = sourcePath + ".ps4tex.bin";
         const sidecarPath = outputPath + ".json";
+        const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.storage)]);
         ps4TextureRoot.file(outputPath, converted.storage);
         ps4TextureRoot.file(sidecarPath, JSON.stringify({
           sourcePath,
           outputPath,
+          sourceSha256,
+          outputSha256,
           format: converted.layout.format,
           formatCode: converted.layout.formatCode,
           width: converted.layout.width,
@@ -279,6 +290,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
           mipCount: converted.layout.mipCount,
           outputPath,
           outputBytes: converted.storage.byteLength,
+          sourceSha256,
+          outputSha256,
           roundTripVerified: converted.roundTripVerified,
           warnings: converted.inspection.warnings
         });
