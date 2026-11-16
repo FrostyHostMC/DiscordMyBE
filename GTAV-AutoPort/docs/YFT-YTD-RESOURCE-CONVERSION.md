@@ -4,7 +4,7 @@
 
 AutoPort now exposes a bounded local conversion action for `.yft`, `.ytd`, `.ydr` and `.ydd` resources through the pinned RageKit v0.3.1 CLI. The route asks RageKit to write the resource in GTA V PC Legacy edition format, then parses the output with `rk info` and runs `rk roundtrip` on the output. It reports source/output SHA-256 values and whether the second round-trip is byte-exact. The source file is never overwritten.
 
-RageKit documents readers and writers for YFT fragments, YTD texture dictionaries, YDR drawables, YDD drawable dictionaries and YBN collision resources, including cross-edition Legacy/Enhanced conversion. Its documentation describes validation against PC Legacy and Enhanced game files and CodeWalker; it does not establish PS4 CUSA00419 update 1.73 compatibility. See [RageKit's format coverage](https://github.com/RatPrez/ragekit) and [Enhanced/Legacy conversion notes](https://github.com/RatPrez/ragekit/blob/main/docs/enhanced.md).
+RageKit documents readers and writers for YFT fragments, YTD texture dictionaries, YDR drawables, YDD drawable dictionaries and YBN collision resources, including cross-edition Legacy/Enhanced conversion. Its documentation describes validation against PC Legacy and Enhanced game files and CodeWalker; it does not establish PS4 CUSA00419 update 1.57 compatibility. See [RageKit's format coverage](https://github.com/RatPrez/ragekit) and [Enhanced/Legacy conversion notes](https://github.com/RatPrez/ragekit/blob/main/docs/enhanced.md).
 
 ## What the output is
 
@@ -12,7 +12,7 @@ The downloadable result is a **GTA V PC Legacy-format candidate**. It is not lab
 
 ## Remaining PS4 work
 
-- Establish the exact PS4 CUSA00419 / 1.73 YFT and YTD resource versions, page flags, compression and texture encodings from a user-owned target resource fixture.
+- Establish the exact PS4 CUSA00419 / 1.57 YFT and YTD resource versions, page flags, compression and texture encodings from a user-owned target resource fixture.
 - Compare PC Legacy output against a known-good PS4 resource and implement a separate PS4 writer/adapter if the layouts differ.
 - Validate YFT drawable/physics/LOD/bone/glass structures and all referenced YTD/shader/material resources.
 - Validate YTD formats, mip chains, texture dimensions, sampler expectations and all material references.
