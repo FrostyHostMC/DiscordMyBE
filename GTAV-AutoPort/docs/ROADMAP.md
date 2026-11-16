@@ -83,7 +83,14 @@
 - EU: CUSA00411 / GTA V 1.57.
 - Keep executable fingerprints, hook signatures, offsets, and validation evidence separate by region. Never infer US compatibility from EU evidence or vice versa.
 
-## Project V runtime compatibility research\n- [x] Inspect public Project V 1.3.2 source for version-sensitive hooks and unsafe scan handling.\n- [x] Document uninitialized address, unchecked signature scans, Makefile variable typo and toolchain include-path concerns.\n- [ ] Obtain and inspect the exact Project V v1.2 archive and PRX; do not replace it based only on source lineage.\n- [ ] Build independent executable fingerprints and hook maps for all four profiles.\n\n## Phase 3 — first PS4 vehicle conversion
+## Project V runtime compatibility research
+- [x] Inspect public Project V 1.3.2 source for version-sensitive hooks and unsafe scan handling.
+- [x] Document uninitialized address, unchecked signature scans, Makefile variable typo and toolchain include-path concerns.
+- [x] Correct target matrix: GTA V 1.57 on PS4 system software 14.00 is primary; 1.56 is secondary.
+- [ ] Obtain and inspect the exact Project V v1.2 archive and PRX; do not replace it based only on source lineage.
+- [ ] Build independent executable fingerprints and hook maps for 1.57 US/EU and 1.56 US/EU.
+
+## Phase 3 — first PS4 vehicle conversion
 - [x] Record requested regional profiles: CUSA00419 (US) and CUSA00411 (EU), both GTA V 1.57 · PS4 Story Mode (console/build compatibility still unverified).
 - [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
 - [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
