@@ -65,14 +65,27 @@ jobs:
   verify-runtime-core:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
       - name: Configure portable runtime core
         working-directory: GTAV-AutoPort
         run: cmake -S native-runtime -B build/native-runtime -DCMAKE_BUILD_TYPE=Release
       - name: Build and test portable runtime core
         working-directory: GTAV-AutoPort
         run: cmake --build build/native-runtime --parallel 2 && ctest --test-dir build/native-runtime --output-on-failure
+
+  verify-ps4-app-host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile native PS4 platform modules with host compiler
+        working-directory: GTAV-AutoPort/ps4-app
+        run: |
+          g++ -std=c++17 -Wall -Wextra -Werror -Isrc/platform \
+            tests/platform_host_tests.cpp \
+            src/platform/library.cpp src/platform/goldhen_config.cpp \
+            -o "$RUNNER_TEMP/ps4-platform-tests"
+      - name: Run PS4 platform regression tests
+        run: "$RUNNER_TEMP/ps4-platform-tests"
 
   build-ps4-pkg:
     runs-on: ubuntu-22.04
