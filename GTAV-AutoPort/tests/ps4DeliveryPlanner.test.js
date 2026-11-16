@@ -123,3 +123,11 @@ test("keeps x86-64 ELF plugin candidates unverified pending Orbis checks", () =>
   assert.match(plan.items[0].reason, /Orbis ABI/);
   assert.equal(plan.summary.installable, false);
 });
+
+
+test("treats a PlayStation SELF header as opaque target-validation evidence", () => {
+  const plan = buildPs4DeliveryPlan({ files: [{ path: "plugins/candidate.sprx", bytes: new Uint8Array([0x4f, 0x15, 0x3d, 0x1d, 1, 2, 3, 4]) }] });
+  assert.equal(plan.items[0].status, "target-validation-required");
+  assert.equal(plan.items[0].binaryInspection.format, "self-container");
+  assert.match(plan.items[0].reason, /Sony SCE executable container/);
+});
