@@ -4,7 +4,6 @@ import { analyzeModDependencies } from "./modDependencyGraph.js";
 import { extractOpenRpf7, inspectOpenRpf7 } from "./rpf7OpenInspector.js";
 import { buildPs4DeliveryPlan } from "./ps4DeliveryPlanner.js";
 import { inspectOrbxPackage } from "./orbxPackageInspector.js";
-import { convertDdsToPs4TextureStorage } from "./ps4TextureLayout.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -195,7 +194,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       return { file, inspection: { status: "unrecognized", selectedAdapterId: null, match: null, candidates: [], probeErrors: [{ adapterId: null, error: error?.message || "Format inspection failed." }] } };
     }
   });
-  const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert"));
+  const eligible = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("convert") && !inspection.match?.capabilities.includes("ps4-texture-storage"));
+  const eligibleTexture = inspected.filter(({ inspection }) => inspection.status === "recognized" && inspection.match?.capabilities.includes("ps4-texture-storage"));
 
   for (const file of normalizedFiles) {
     const relative = safePath(file.path);
@@ -234,7 +234,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   }
 
   const textureConversions = [];
-  for (const file of analysisFiles.filter((item) => extension(item.path) === ".dds")) {
+  for (const { file, inspection } of eligibleTexture) {
     const sourcePath = safePath(file.path);
     const record = {
       sourcePath,
@@ -253,15 +253,12 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     };
     try {
       if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
-      const converted = convertDdsToPs4TextureStorage(file.bytes);
-      if (converted.status !== "ps4-texture-storage-candidate") {
-        record.error = converted.inspection?.error || "DDS format is not supported by the PS4 texture storage adapter.";
-        record.inspectionStatus = converted.inspection?.status || "unknown";
-      } else {
+      const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
+      {
         const outputPath = sourcePath + ".ps4tex.bin";
         const sidecarPath = outputPath + ".json";
-        const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.storage)]);
-        ps4TextureRoot.file(outputPath, converted.storage);
+        const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.bytes)]);
+        ps4TextureRoot.file(outputPath, converted.bytes);
         ps4TextureRoot.file(sidecarPath, JSON.stringify({
           sourcePath,
           outputPath,
@@ -277,19 +274,19 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
           alignmentBytes: converted.layout.alignmentBytes,
           storageBytes: converted.layout.storageBytes,
           mips: converted.layout.mips,
-          roundTripVerified: converted.roundTripVerified,
+          roundTripVerified: converted.roundtripVerified,
           installable: false,
           targetCompatibility: converted.targetCompatibility,
           warnings: converted.inspection.warnings
         }, null, 2));
         Object.assign(record, {
-          status: converted.status,
+          status: "ps4-texture-storage-candidate",
           format: converted.layout.format,
           width: converted.layout.width,
           height: converted.layout.height,
           mipCount: converted.layout.mipCount,
           outputPath,
-          outputBytes: converted.storage.byteLength,
+          outputBytes: converted.bytes.byteLength,
           sourceSha256,
           outputSha256,
           roundTripVerified: converted.roundTripVerified,
