@@ -102,14 +102,14 @@ function parseRuntimeLog(file) {
     return { status: "too-large-to-inspect", byteLength: bytes.byteLength, lineCount: 0, signals: [] };
   }
 
-  const text = new TextDecoder("utf-8").decode(bytes).replace(/^\\uFEFF/, "");
-  if (text.includes("\\u0000")) {
+  const text = new TextDecoder("utf-8").decode(bytes).replace(/^\uFEFF/, "");
+  if (text.includes("\u0000")) {
     return { status: "not-plain-text", byteLength: bytes.byteLength, lineCount: 0, signals: [] };
   }
 
-  const lines = text.split(/\\r?\\n/);
+  const lines = text.split(/\r?\n/);
   const signals = [];
-  const signalPattern = /\\b(error|failed|failure|unsupported|not supported|version|crc|warning|warn|cannot|missing|invalid|denied|exception|unable)\\b/i;
+  const signalPattern = /\b(error|failed|failure|unsupported|not supported|version|crc|warning|warn|cannot|missing|invalid|denied|exception|unable)\b/i;
   for (const [index, rawLine] of lines.entries()) {
     const line = rawLine.trim();
     if (!line || !signalPattern.test(line)) continue;
