@@ -6,17 +6,17 @@ AutoPort now scans readable `.cs`, `.lua` and `.js` source files for common GTA 
 
 The exported blueprint lists each source file, matched API tokens and small source excerpts, detected behavior types, PC dependencies, and the host API surface a native implementation would need.
 
-A portable C++17 runtime core now defines and validates a first set of typed actions (spawn, transforms, attachments, vehicle properties, wanted level, rewards, ped tasks, health and explosions). Its `GameApi` remains abstract; the Orbis/GoldHEN implementation and GTA V 1.73 native mappings are not present. See [Native runtime core](NATIVE-RUNTIME-CORE.md).
+A portable C++17 runtime core now defines and validates a first set of typed actions (spawn, transforms, attachments, vehicle properties, wanted level, rewards, ped tasks, health and explosions). Its `GameApi` remains abstract; the Orbis/GoldHEN implementation and GTA V 1.57 native mappings are not present. See [Native runtime core](NATIVE-RUNTIME-CORE.md).
 
 ## What it cannot do
 
 - A compiled `.dll` or `.asi` is not source code. The blueprint intentionally does not pretend it can recover full program logic from an opaque binary.
 - Pattern matches are not full control-flow analysis. They identify evidence for a developer to inspect; they do not prove that a feature is fully understood.
 - ScriptHookV, ScriptHookVDotNet, NativeUI, Windows APIs and .NET services are not PS4 runtime APIs.
-- The blueprint is not compiled into an Orbis PRX and does not include GTA V 1.73 memory addresses, offsets or hooks.
+- The blueprint is not compiled into an Orbis PRX and does not include GTA V 1.57 memory addresses, offsets or hooks.
 
 ## Native runtime completion requirements
 
-To turn a blueprint into working PS4 gameplay, each behavior needs a tested implementation against a documented native host interface: entity creation, model streaming, transforms, ped tasks, wanted/police state, rewards, weapons, effects, input, scheduling and cleanup. Each call must be verified against the exact CUSA00419 / 1.73 build; unsupported actions must fail safely.
+To turn a blueprint into working PS4 gameplay, each behavior needs a tested implementation against a documented native host interface: entity creation, model streaming, transforms, ped tasks, wanted/police state, rewards, weapons, effects, input, scheduling and cleanup. Each call must be verified against the exact CUSA00419 / 1.57 build; unsupported actions must fail safely.
 
 An Orbis SDK/toolchain, source code or a precise behavior specification, and a safe way to validate on the target console are required before building and signing a real plugin. The current output is a behavior blueprint only.
