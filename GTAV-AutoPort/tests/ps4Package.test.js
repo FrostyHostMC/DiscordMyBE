@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { buildPs4AfrPackage } from "../src/core/ps4Package.js";
 
-const target = { titleId: "CUSA00411", game: "Grand Theft Auto V", updateVersion: "1.73", mode: "Story Mode" };
+const target = { titleId: "CUSA00411", game: "Grand Theft Auto V", updateVersion: "1.57", mode: "Story Mode" };
 const rpf = { path: "update.rpf", bytes: new Uint8Array([82,80,70,55,1,2,3,4]) };
 
 test("refuses packaging without PS4 resource and exact path attestations", async () => {
@@ -24,7 +24,7 @@ test("creates a target-specific AFR handoff while preserving source archive byte
     attestations: { ps4ResourceBuildVerified: true, destinationPathsVerified: true }
   });
   assert.equal(result.manifest.target.titleId, "CUSA00411");
-  assert.equal(result.manifest.target.updateVersion, "1.73");
+  assert.equal(result.manifest.target.updateVersion, "1.57");
   assert.equal(result.manifest.conversionPerformed, false);
   assert.equal(result.manifest.entries[0].status, "staged-unchanged-ps4-rpf");
   assert.equal(result.manifest.entries[0].sha256.length, 64);
