@@ -76,3 +76,50 @@ test("keeps ORBX .rpf.txt path markers out of archive conversion", () => {
   assert.equal(plan.items[0].status, "marker-review-required");
   assert.equal(plan.items[1].route, "preserve-and-identify-archive");
 });
+
+
+function elfHeader({ machine = 62, is64 = true } = {}) {
+  const bytes = new Uint8Array(128);
+  bytes.set([0x7f, 0x45, 0x4c, 0x46, is64 ? 2 : 1, 1, 1, 0]);
+  const view = new DataView(bytes.buffer);
+  view.setUint16(16, 3, true);
+  view.setUint16(18, machine, true);
+  view.setUint32(20, 1, true);
+  view.setUint16(is64 ? 52 : 40, is64 ? 64 : 52, true);
+  return bytes;
+}
+
+function peHeader() {
+  const bytes = new Uint8Array(256);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0x4d, 0x5a]);
+  view.setUint32(0x3c, 0x80, true);
+  view.setUint32(0x80, 0x00004550, true);
+  view.setUint16(0x84, 0x8664, true);
+  view.setUint16(0x86, 3, true);
+  view.setUint16(0x94, 0xf0, true);
+  view.setUint16(0x98, 0x20b, true);
+  return bytes;
+}
+
+test("uses binary evidence to reject a Windows PE disguised as a PS4 PRX", () => {
+  const plan = buildPs4DeliveryPlan({ files: [{ path: "plugins/fake.prx", bytes: peHeader() }] });
+  assert.equal(plan.items[0].status, "blocked-binary-mismatch");
+  assert.equal(plan.items[0].binaryInspection.format, "pe");
+  assert.match(plan.items[0].reason, /Windows PE header/);
+});
+
+test("blocks a PRX candidate with a non-PS4 ELF architecture", () => {
+  const plan = buildPs4DeliveryPlan({ files: [{ path: "plugins/wrong-arch.sprx", bytes: elfHeader({ machine: 40 }) }] });
+  assert.equal(plan.items[0].status, "blocked-binary-mismatch");
+  assert.equal(plan.items[0].binaryInspection.machineName, "ARM");
+  assert.match(plan.items[0].reason, /does not match the PS4 x86-64/);
+});
+
+test("keeps x86-64 ELF plugin candidates unverified pending Orbis checks", () => {
+  const plan = buildPs4DeliveryPlan({ files: [{ path: "plugins/candidate.prx", bytes: elfHeader() }] });
+  assert.equal(plan.items[0].status, "target-validation-required");
+  assert.equal(plan.items[0].binaryInspection.architectureCompatibleWithPs4Cpu, true);
+  assert.match(plan.items[0].reason, /Orbis ABI/);
+  assert.equal(plan.summary.installable, false);
+});
