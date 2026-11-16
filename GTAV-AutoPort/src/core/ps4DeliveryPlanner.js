@@ -137,6 +137,7 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     const path = file.path;
     const conversion = conversionByPath.get(path.toLowerCase()) || null;
     const archive = archiveByPath.get(path.toLowerCase()) || null;
+    const textureConversion = textureByPath.get(path.toLowerCase()) || null;
     const binaryInspection = /\\.(asi|dll|exe|sys|prx|sprx|elf)$/i.test(path)
       ? inspectExecutableHeader(file.bytes)
       : null;
@@ -145,7 +146,8 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
       bytes: Number.isFinite(file.bytes?.byteLength) ? file.bytes.byteLength : Number(file.size) || 0,
       sourceArchive: file.sourceArchive || null,
       binaryInspection,
-      ...routeFor(path, conversion, archive, binaryInspection)
+      textureConversion: textureConversion ? { status: textureConversion.status, outputPath: textureConversion.outputPath || null, format: textureConversion.format || null, roundTripVerified: textureConversion.roundTripVerified === true } : null,
+      ...routeFor(path, conversion, archive, binaryInspection, textureConversion)
     };
   });
   const counts = {};
