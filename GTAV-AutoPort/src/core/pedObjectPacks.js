@@ -102,7 +102,7 @@ export function inspectPedObjectPacks(files = []) {
   const objectCandidates = unboundResources.filter((resource) => resource.resourceKind === "model-or-fragment" || resource.resourceKind === "texture-dictionary" || [".ybn", ".ymap", ".ytyp"].includes(resource.extension)).map((resource) => ({ ...resource, relatedSameStem: resources.filter((peer) => peer.stem === resource.stem && peer.path !== resource.path).map((peer) => peer.path), dependencyConfidence: "filename-and-pack-co-location-only" }));
   for (const config of spawnConfigs) if (config.valid && config.modelReferences) {
     config.modelReferences = config.modelReferences.map((reference) => {
-      const matching = resources.filter((resource) => resource.stem === reference.value.toLowerCase());
+      const matching = resources.filter((resource) => resource.stem === reference.value.toLowerCase() && (MODEL_EXTENSIONS.has(resource.extension) || TEXTURE_EXTENSIONS.has(resource.extension)));
       const modelCandidates = matching.filter((resource) => MODEL_EXTENSIONS.has(resource.extension));
       const candidates = matching.map((resource) => resource.path);
       return { ...reference, resourceCandidates: candidates, resolution: modelCandidates.length === 1 ? "candidate-resolved-by-name-only" : modelCandidates.length ? "ambiguous" : "missing" };
