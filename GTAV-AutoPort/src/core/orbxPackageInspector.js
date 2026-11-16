@@ -183,7 +183,12 @@ export function inspectOrbxPackage(files = []) {
   const duplicatePlugin = pluginFiles.length > 1;
   const duplicateConfig = configFiles.length > 1;
   const detected = pluginPresent && configPresent;
-  const runtimeLogAnalysis = logFileRecords.length === 1 ? parseRuntimeLog(logFileRecords[0]) : {\n    status: logFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",\n    lineCount: 0,\n    signals: []\n  };\n  const iniAnalysis = configFileRecords.length === 1 ? parseIniFile(configFileRecords[0]) : {
+  const runtimeLogAnalysis = logFileRecords.length === 1 ? parseRuntimeLog(logFileRecords[0]) : {
+    status: logFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",
+    lineCount: 0,
+    signals: []
+  };
+  const iniAnalysis = configFileRecords.length === 1 ? parseIniFile(configFileRecords[0]) : {
     status: configFileRecords.length > 1 ? "ambiguous-multiple-files" : "not-available",
     sections: [],
     settings: [],
@@ -203,7 +208,11 @@ export function inspectOrbxPackage(files = []) {
   if (iniAnalysis.status === "not-provided") warnings.push("The INI file was inventoried but its bytes were not supplied, so its settings could not be parsed.");
   if (iniAnalysis.status === "parsed-with-warnings") warnings.push("The INI contains duplicate keys or malformed lines; inspect the reported line numbers before installing it.");
   if (iniAnalysis.status === "not-plain-text") warnings.push("The INI bytes contain NUL characters and were not treated as a plain-text configuration.");
-  if (iniAnalysis.status === "too-large-to-inspect") warnings.push("The INI exceeds the safe parser size limit and was not parsed.");\n  if (iniAnalysis.status === "parsed" && iniAnalysis.settings.length === 0) warnings.push("The INI is readable but contains no settings; confirm this is the intended ORBX configuration before staging it.");\n  if (runtimeLogAnalysis.status === "parsed-with-signals") warnings.push("The ORBX runtime log contains diagnostic lines worth reviewing; see runtimeLog.analysis.signals for bounded excerpts and line numbers.");\n  if (runtimeLogAnalysis.status === "too-large-to-inspect") warnings.push("The ORBX runtime log exceeds the safe parser size limit and was not parsed.");\n  if (runtimeLogAnalysis.status === "not-plain-text") warnings.push("The ORBX runtime log contains NUL characters and was not treated as plain text.");
+  if (iniAnalysis.status === "too-large-to-inspect") warnings.push("The INI exceeds the safe parser size limit and was not parsed.");
+  if (iniAnalysis.status === "parsed" && iniAnalysis.settings.length === 0) warnings.push("The INI is readable but contains no settings; confirm this is the intended ORBX configuration before staging it.");
+  if (runtimeLogAnalysis.status === "parsed-with-signals") warnings.push("The ORBX runtime log contains diagnostic lines worth reviewing; see runtimeLog.analysis.signals for bounded excerpts and line numbers.");
+  if (runtimeLogAnalysis.status === "too-large-to-inspect") warnings.push("The ORBX runtime log exceeds the safe parser size limit and was not parsed.");
+  if (runtimeLogAnalysis.status === "not-plain-text") warnings.push("The ORBX runtime log contains NUL characters and was not treated as plain text.");
   if (repeatedFolderPaths.length) warnings.push("The package contains repeated adjacent folder names. Check the archive's enclosing folders and copy the contents from the inner package root rather than preserving accidental duplicate nesting.");
   if (rpfFiles.length === 0) warnings.push("No actual .rpf archive files were found in the imported file list.");
   if (rpfPathMarkers.length) warnings.push("Files ending in .rpf.txt were found. These are path-marker/text files, not RPF archives, and must not be counted as archive payloads.");
