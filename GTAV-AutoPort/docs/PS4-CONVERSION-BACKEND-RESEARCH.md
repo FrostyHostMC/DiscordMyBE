@@ -14,7 +14,7 @@ Upstream references:
 
 ## Important target boundary
 
-The upstream repository explicitly supports PS4 **CUSA00411 01.57** only. Its build manifest pins executable identity, native addresses, loader hooks, custom-pack runtime, and target resources to that exact update. It refuses unknown title IDs and versions. The user-confirmed AutoPort target is **CUSA00419 GTA V 1.73**, so the 1.57 plugin, offsets, runtime pack loader and compatibility claims must not be reused as if they supported 1.73.
+The upstream repository explicitly supports PS4 **CUSA00411 01.57** only. Its build manifest pins executable identity, native addresses, loader hooks, custom-pack runtime, and target resources to that exact update. It refuses unknown title IDs and versions. The user-confirmed AutoPort target is **CUSA00419 GTA V 1.57**, so the 1.57 plugin, offsets, runtime pack loader and compatibility claims must not be reused as if they supported 1.73.
 
 The converters also rely on templates extracted from the user's own matching game build. A 1.57 template cache is not evidence for 1.73. The upstream documentation describes retrieving templates from the console while GTA is running and hashing them against build-specific pins.
 
@@ -30,12 +30,12 @@ The converters also rely on templates extracted from the user's own matching gam
 ## What this means for the first playable test
 
 - The upstream project proves that PC-to-PS4 asset conversion is technically achievable for a pinned PS4 build, including texture, vehicle and ped workflows.
-- It does **not** currently provide a verified ready-to-install package for CUSA00419 1.73.
+- It does **not** currently provide a verified ready-to-install package for CUSA00419 1.57.
 - AutoPort must report this as a known backend candidate with a target-version mismatch, not claim that a converted output can already be installed on the user's current game.
 
 
 ## US target correction — CUSA00419
 
-The active AutoPort target is the user's US-region **CUSA00419**, not CUSA00411. The earlier 01.57 backend reference remains a separate CUSA00411-specific research target and is **not** a CUSA00419/1.73 compatibility proof. Do not reuse its executable identity, offsets, PRX, resource templates, or custom-pack loader for CUSA00419. The user's report that some 01.57 mod menus still run is useful compatibility evidence for those specific menus, but it does not establish compatibility for other 01.57 binaries or assets.
+The active AutoPort target is the user's US-region **CUSA00419**, not CUSA00411. The earlier 01.57 backend reference remains a separate CUSA00411-specific research target and is **not** a CUSA00419/1.57 compatibility proof. Do not reuse its executable identity, offsets, PRX, resource templates, or custom-pack loader for CUSA00419. The user's report that some 01.57 mod menus still run is useful compatibility evidence for those specific menus, but it does not establish compatibility for other 01.57 binaries or assets.
 
-The exact active target metadata is maintained in `src/core/target.js`. The user confirmed the US title ID from their own base-game PKG and reports the game update as 1.73. AutoPort still requires independent PKG metadata inspection and exact-build resource/runtime evidence; `verifiedAgainstConsole` remains false and resource compatibility remains unverified.
+The exact active target metadata is maintained in `src/core/target.js`. The user confirmed the US title ID from their own base-game PKG and corrected the installed game update to 1.57. AutoPort still requires independent PKG metadata inspection and exact-build resource/runtime evidence; `verifiedAgainstConsole` remains false and resource compatibility remains unverified.
