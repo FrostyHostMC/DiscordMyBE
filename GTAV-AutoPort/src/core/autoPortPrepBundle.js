@@ -242,7 +242,6 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       adapterId: inspection.selectedAdapterId,
       adapterVersion: adapterInfo?.version || null,
       inspectionStatus: inspection.status,
-      adapterVersion: null,
       status: "not-converted",
       format: null,
       width: null,
