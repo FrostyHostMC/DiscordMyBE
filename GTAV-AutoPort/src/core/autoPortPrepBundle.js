@@ -268,7 +268,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
       const sourceSha256 = await sha256(file.bytes);
       record.sourceSha256 = sourceSha256;
-      const cached = sourceSha256 ? textureCache.get(sourceSha256) : null;
+      const cacheKey = sourceSha256 ? [inspection.selectedAdapterId, adapterInfo?.version || "unknown", sourceSha256].join(":") : null;
+      const cached = cacheKey ? textureCache.get(cacheKey) : null;
       let converted;
       let outputSha256;
       let cacheHit = false;
@@ -280,8 +281,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       } else {
         converted = await registeredFormatAdapterRegistry.convert(inspection, file);
         outputSha256 = await sha256(converted.bytes);
-        if (sourceSha256 && outputSha256 && textureCacheBytes + converted.bytes.byteLength <= maxTextureCacheBytes) {
-          textureCache.set(sourceSha256, { converted, outputSha256 });
+        if (cacheKey && outputSha256 && textureCacheBytes + converted.bytes.byteLength <= maxTextureCacheBytes) {
+          textureCache.set(cacheKey, { converted, outputSha256 });
           textureCacheBytes += converted.bytes.byteLength;
         }
       }
