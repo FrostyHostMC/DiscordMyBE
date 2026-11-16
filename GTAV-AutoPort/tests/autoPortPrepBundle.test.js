@@ -230,6 +230,11 @@ test("automatically creates experimental PS4 texture storage candidates from sup
   assert.equal(texturePlan.route, "ps4-texture-storage-candidate-only");
   assert.equal(texturePlan.status, "partial-conversion");
   assert.equal(texturePlan.textureConversion.roundTripVerified, true);
+  assert.equal(texturePlan.textureConversion.mipCount, 4);
+  assert.equal(texturePlan.textureConversion.maxMipCount, 6);
+  assert.equal(texturePlan.textureConversion.missingMipLevels, 2);
+  assert.match(texturePlan.textureConversion.sourceSha256, /^[a-f0-9]{64}$/);
+  assert.match(texturePlan.textureConversion.outputSha256, /^[a-f0-9]{64}$/);
   const archive = await JSZip.loadAsync(result.blob);
   const outputPath = "AutoPort-Prep/ps4-texture-storage-candidates/textures/vehicle_diffuse.dds.ps4tex.bin";
   const output = new Uint8Array(await archive.file(outputPath).async("uint8array"));
