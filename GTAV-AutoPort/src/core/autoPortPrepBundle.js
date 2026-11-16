@@ -254,43 +254,43 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     try {
       if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
       const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
-        const outputPath = sourcePath + ".ps4tex.bin";
-        const sidecarPath = outputPath + ".json";
-        const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.bytes)]);
-        ps4TextureRoot.file(outputPath, converted.bytes);
-        ps4TextureRoot.file(sidecarPath, JSON.stringify({
-          sourcePath,
-          outputPath,
-          sourceSha256,
-          outputSha256,
-          format: converted.layout.format,
-          formatCode: converted.layout.formatCode,
-          width: converted.layout.width,
-          height: converted.layout.height,
-          mipCount: converted.layout.mipCount,
-          tileMode: converted.layout.tileMode,
-          tileIndex: converted.layout.tileIndex,
-          alignmentBytes: converted.layout.alignmentBytes,
-          storageBytes: converted.layout.storageBytes,
-          mips: converted.layout.mips,
-          roundTripVerified: converted.roundtripVerified,
-          installable: false,
-          targetCompatibility: converted.targetCompatibility,
-          warnings: converted.inspection.warnings
-        }, null, 2));
-        Object.assign(record, {
-          status: "ps4-texture-storage-candidate",
-          format: converted.layout.format,
-          width: converted.layout.width,
-          height: converted.layout.height,
-          mipCount: converted.layout.mipCount,
-          outputPath,
-          outputBytes: converted.bytes.byteLength,
-          sourceSha256,
-          outputSha256,
-          roundTripVerified: converted.roundTripVerified,
-          warnings: converted.inspection.warnings
-        });
+      const outputPath = sourcePath + ".ps4tex.bin";
+      const sidecarPath = outputPath + ".json";
+      const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.bytes)]);
+      ps4TextureRoot.file(outputPath, converted.bytes);
+      ps4TextureRoot.file(sidecarPath, JSON.stringify({
+        sourcePath,
+        outputPath,
+        sourceSha256,
+        outputSha256,
+        format: converted.layout.format,
+        formatCode: converted.layout.formatCode,
+        width: converted.layout.width,
+        height: converted.layout.height,
+        mipCount: converted.layout.mipCount,
+        tileMode: converted.layout.tileMode,
+        tileIndex: converted.layout.tileIndex,
+        alignmentBytes: converted.layout.alignmentBytes,
+        storageBytes: converted.layout.storageBytes,
+        mips: converted.layout.mips,
+        roundTripVerified: converted.roundtripVerified,
+        installable: false,
+        targetCompatibility: converted.targetCompatibility,
+        warnings: converted.inspection.warnings
+      }, null, 2));
+      Object.assign(record, {
+        status: "ps4-texture-storage-candidate",
+        format: converted.layout.format,
+        width: converted.layout.width,
+        height: converted.layout.height,
+        mipCount: converted.layout.mipCount,
+        outputPath,
+        outputBytes: converted.bytes.byteLength,
+        sourceSha256,
+        outputSha256,
+        roundTripVerified: converted.roundTripVerified,
+        warnings: converted.inspection.warnings
+      });
     } catch (error) {
       record.error = error?.message || "DDS texture conversion failed.";
     }
