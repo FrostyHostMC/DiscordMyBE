@@ -1,5 +1,6 @@
 #include "../src/platform/library.h"
 #include "../src/platform/goldhen_config.h"
+#include "../src/platform/compatibility_profiles.h"
 
 #include <cassert>
 #include <cstdio>
@@ -30,6 +31,18 @@ static std::string readFile(const std::string& path) {
 }
 
 int main() {
+    assert(ProjectV::profileCount() == 4);
+    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157) == 0);
+    assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V157) == 1);
+    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V173) == 2);
+    assert(ProjectV::findProfile("CUSA00411", ProjectV::GameVersion::V173) == 3);
+    assert(ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V173) !=
+           ProjectV::findProfile("CUSA00419", ProjectV::GameVersion::V157));
+    for (unsigned int i = 0; i < ProjectV::profileCount(); ++i) {
+        assert(!ProjectV::hooksMayBeEnabled(ProjectV::profileAt(i)));
+    }
+    assert(ProjectV::findProfile("CUSA99999", ProjectV::GameVersion::V173) == -1);
+
     char templatePath[] = "/tmp/autoport-ps4-host-tests-XXXXXX";
     char* made = mkdtemp(templatePath);
     assert(made != nullptr);
@@ -103,6 +116,6 @@ int main() {
     unlink(config.c_str());
     unlink(backup.c_str());
     rmdir(root.c_str());
-    std::puts("PS4 companion host regression tests passed");
+    std::puts("Project V profile and PS4 platform host regression tests passed");
     return 0;
 }
