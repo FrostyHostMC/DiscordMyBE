@@ -15,7 +15,7 @@ if %NODE_MAJOR% LSS 20 (
   exit /b 1
 )
 if not exist "node_modules" (
-  echo Installing AutoPort dependencies...
+  echo Installing Project V dependencies...
   call npm install
   if errorlevel 1 (echo Dependency installation failed.& pause & exit /b 1)
 )
@@ -33,6 +33,6 @@ if defined GTAV_AUTOPORT_RK (echo Native RageKit engine detected.) else (
   echo Native engine unavailable; intake and planning remain available.
   echo Install CMake 3.20+ and Visual Studio C++ Build Tools, then relaunch for native inspection.
 )
-echo Starting GTAV AutoPort. Keep this window open.
+echo Starting GTAV Project V. Keep this window open.
 call npm run dev -- --host 127.0.0.1 --open
 pause
