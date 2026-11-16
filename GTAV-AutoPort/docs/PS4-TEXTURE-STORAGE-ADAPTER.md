@@ -9,7 +9,7 @@ The new ps4TextureLayout.js module adds a bounded first-stage PS4 texture storag
 3. Computes per-mip 4x4 compression-block extents and reports whether the supplied DDS contains the full possible mip chain; it never invents missing mip levels.
 4. Reorders BC blocks into the PS4 Legacy Thin1DThin 8x8 microtile storage layout (tile mode 0x800001, tile index 13).
 5. Untiles the generated allocation and compares every byte with the source mip payload.
-6. Writes the storage payload and a JSON sidecar into ps4-texture-storage-candidates/ in the automatic prep ZIP.
+6. Writes the storage payload and a JSON sidecar into ps4-texture-storage-candidates/ in the automatic prep ZIP. The sidecar records adapter ID/version, requested title/update, source/output SHA-256, mip completeness, layout metadata and warnings.
 
 The prep manifest and delivery plan call this a partial conversion, never a PS4-ready resource. Unsupported DDS files remain preserved and receive a reason in reports/ps4-texture-storage.json.
 
