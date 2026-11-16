@@ -67,12 +67,8 @@ specific mod package.
 
 ## Writer-driven automatic preparation
 
-The preparation ZIP now asks the registered adapter registry which imported files
-have a conversion-capable adapter. It no longer owns a separate extension allowlist.
-The RageKit PC Legacy resource writer is registered as one format adapter; its
-format-specific supported resource extensions live with that adapter, not in the
-general bundle orchestration code. This keeps the bundle generic as additional
-writers are registered.
+The preparation ZIP now asks the registered adapter registry which imported files have a conversion-capable adapter. It no longer owns a separate extension allowlist for conversion eligibility. The RageKit PC Legacy resource writer is registered as one adapter; its supported resource families live with that adapter, not in the general bundle orchestration code.
 
-The RageKit adapter remains a PC Legacy writer. Its output is never promoted to
-PS4-ready or installable status, even when its own output round-trip check succeeds.
+A second adapter, ps4-thin1dthin-dds-storage, recognizes DDS by content signature and produces an experimental PS4 texture storage payload for supported BC1/BC3/BC5 formats. The bundle routes this capability to a separate partial-output folder and report rather than mixing it with PC Legacy candidates.
+
+The RageKit adapter remains a PC Legacy writer. Its output is never promoted to PS4-ready or installable status, even when its own output round-trip check succeeds. The PS4 texture adapter verifies only the storage-layout round trip; its output is not a complete RSC7/YTD resource and is also never marked installable.
