@@ -11,6 +11,7 @@
 
 - [x] Local-first React/Vite workbench and ZIP/folder intake.
 - [x] Preserve imported originals and reject unsafe paths, symlinks, duplicate archive paths and oversized inputs.
+- [x] Hash imported files and extracted RPF entries, then group identical content without deleting or merging sources.
 - [x] Inventory/classify broad GTA V mod families and retain unknown files.
 - [x] Build dependency and candidate-relationship reports with ambiguity/missing-reference handling.
 - [x] Inspect supported PC RPF7 OPEN archives recursively with bounded depth, archive count, file count, expanded bytes and path lengths.
