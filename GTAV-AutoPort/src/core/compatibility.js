@@ -1,7 +1,7 @@
 import { PS4_TARGET } from "./target.js";
 
 const REQUIRED_EVIDENCE = [
-  ["console", "Target profile recorded (user-reported or research reference)", "Verify the installed title ID and update directly on the console."],
+  ["console", "Target profile recorded (user-reported)", "Verify the installed title ID and update directly on the console."],
   ["goldhen", "GoldHEN version recorded (user-reported)", "Verify runtime plugin loading and enabled features on-console."],
   ["yftReference", "Verified PS4 YFT reference available", "Inspect a legally obtained YFT from the exact target game build."],
   ["ytdReference", "Verified PS4 YTD reference available", "Inspect a legally obtained YTD from the exact target game build."],
