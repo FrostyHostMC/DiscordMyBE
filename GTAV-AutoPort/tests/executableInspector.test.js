@@ -81,3 +81,12 @@ test("recognizes the PlayStation SELF container magic without decrypting it", ()
   assert.equal(result.magic, "4f153d1d");
   assert.equal(result.targetCompatibility, "unverified");
 });
+
+
+test("rejects ELF64 addresses outside JavaScript safe-integer bounds", () => {
+  const bytes = elf64();
+  new DataView(bytes.buffer).setBigUint64(24, 0x20000000000000n, true);
+  const result = inspectExecutableHeader(bytes);
+  assert.equal(result.status, "invalid-header");
+  assert.match(result.error, /safe-integer range/);
+});
