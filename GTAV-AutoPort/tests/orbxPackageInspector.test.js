@@ -109,7 +109,7 @@ test("extracts bounded diagnostic signals from an uploaded ORBX runtime log", ()
   const log = new TextEncoder().encode([
     "ORBX startup",
     "Plugin version 1.4 initialized",
-    "ERROR: unsupported game version",
+    "Unsupported game version",
     "CRC warning: skipped checked file",
     "All done"
   ].join("\n"));
