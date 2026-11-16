@@ -191,3 +191,64 @@ test("exports bounded ORBX runtime-log diagnostics in the automatic prep report"
   assert.equal(audit.components.runtimeLog.analysis.signals[0].category, "error");
   assert.equal(audit.installReview.runtimeCompatibilityVerified, false);
 });
+
+
+function makeDdsFixture({ width = 16, height = 16, fourCC = "DXT1", mipCount = 1 } = {}) {
+  const blockBytes = fourCC === "DXT1" ? 8 : 16;
+  const payloadBytes = Array.from({ length: mipCount }, (_, level) =>
+    Math.ceil(Math.max(1, width >> level) / 4) * Math.ceil(Math.max(1, height >> level) / 4) * blockBytes
+  ).reduce((sum, size) => sum + size, 0);
+  const bytes = new Uint8Array(128 + payloadBytes);
+  bytes.set([0x44, 0x44, 0x53, 0x20]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(4, 124, true);
+  view.setUint32(8, 0x81007, true);
+  view.setUint32(12, height, true);
+  view.setUint32(16, width, true);
+  view.setUint32(28, mipCount, true);
+  view.setUint32(76, 32, true);
+  view.setUint32(80, 4, true);
+  for (let index = 0; index < 4; index++) bytes[84 + index] = fourCC.charCodeAt(index);
+  view.setUint32(112, 0x1000, true);
+  for (let index = 128; index < bytes.length; index++) bytes[index] = (index * 29 + 7) & 0xff;
+  return bytes;
+}
+
+test("automatically creates experimental PS4 texture storage candidates from supported DDS files", async () => {
+  const dds = makeDdsFixture({ width: 32, height: 16, fourCC: "DXT5", mipCount: 4 });
+  const result = await buildAutomaticPrepBundle({
+    target: { titleId: "CUSA00419", updateVersion: "1.57" },
+    files: [{ path: "textures/vehicle_diffuse.dds", bytes: dds }]
+  });
+  assert.equal(result.manifest.summary.ps4TextureStorageCandidates, 1);
+  assert.equal(result.manifest.summary.ps4ReadyFiles, 0);
+  assert.equal(result.manifest.summary.installable, false);
+  const texturePlan = result.manifest.deliveryPlan.items.find((item) => item.path === "textures/vehicle_diffuse.dds");
+  assert.equal(texturePlan.route, "ps4-texture-storage-candidate-only");
+  assert.equal(texturePlan.status, "partial-conversion");
+  assert.equal(texturePlan.textureConversion.roundTripVerified, true);
+  const archive = await JSZip.loadAsync(result.blob);
+  const outputPath = "AutoPort-Prep/ps4-texture-storage-candidates/textures/vehicle_diffuse.dds.ps4tex.bin";
+  const output = new Uint8Array(await archive.file(outputPath).async("uint8array"));
+  const sidecar = JSON.parse(await archive.file(outputPath + ".json").async("string"));
+  const report = JSON.parse(await archive.file("AutoPort-Prep/reports/ps4-texture-storage.json").async("string"));
+  assert.equal(output.length, sidecar.storageBytes);
+  assert.equal(sidecar.format, "BC3");
+  assert.equal(sidecar.tileIndex, 13);
+  assert.equal(sidecar.installable, false);
+  assert.equal(report[0].status, "ps4-texture-storage-candidate");
+  assert.ok(archive.file("AutoPort-Prep/source-original/textures/vehicle_diffuse.dds"));
+});
+
+test("records unsupported DDS formats without generating a misleading PS4 texture output", async () => {
+  const result = await buildAutomaticPrepBundle({
+    files: [{ path: "textures/unsupported.dds", bytes: makeDdsFixture({ fourCC: "DXT3" }) }]
+  });
+  assert.equal(result.manifest.summary.ps4TextureStorageCandidates, 0);
+  assert.equal(result.manifest.summary.ps4ReadyFiles, 0);
+  assert.equal(result.manifest.textureConversions[0].status, "not-converted");
+  assert.match(result.manifest.textureConversions[0].error, /Only BC1/);
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.equal(archive.file("AutoPort-Prep/ps4-texture-storage-candidates/textures/unsupported.dds.ps4tex.bin"), null);
+  assert.ok(archive.file("AutoPort-Prep/source-original/textures/unsupported.dds"));
+});
