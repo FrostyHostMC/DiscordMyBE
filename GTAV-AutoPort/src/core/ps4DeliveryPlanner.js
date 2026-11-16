@@ -1,3 +1,4 @@
+import { inspectExecutableHeader } from "./executableInspector.js";
 const PC_NATIVE_EXTENSIONS = new Set([".asi", ".dll", ".exe", ".sys"]);
 const PS4_NATIVE_EXTENSIONS = new Set([".prx", ".sprx"]);
 const RAGE_RESOURCE_EXTENSIONS = new Set([
@@ -14,7 +15,7 @@ function extension(path) {
   return dot < 0 ? "" : name.slice(dot).toLowerCase();
 }
 
-function routeFor(path, conversion, archive) {
+function routeFor(path, conversion, archive, binaryInspection) {
   const normalized = String(path || "").split(String.fromCharCode(92)).join("/").toLowerCase();
   const ext = extension(path);
   if (normalized.endsWith(".rpf.txt")) {
@@ -34,11 +35,25 @@ function routeFor(path, conversion, archive) {
     };
   }
   if (PS4_NATIVE_EXTENSIONS.has(ext)) {
+    const peImage = binaryInspection?.format === "pe" && binaryInspection.status === "header-inspected";
+    const wrongElfArchitecture = binaryInspection?.format === "elf"
+      && binaryInspection.status === "header-inspected"
+      && !binaryInspection.architectureCompatibleWithPs4Cpu;
+    const readableElf = binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected";
+    const opaqueSce = binaryInspection?.format === "sce-container" && binaryInspection.status === "opaque-console-container";
     return {
       route: "validate-orbis-plugin",
-      status: "target-validation-required",
-      reason: "A PRX/SPRX extension does not prove that the binary targets Orbis, the selected title ID, or the selected GTA V update.",
-      requirements: ["Verify ELF/PRX platform and architecture", "Verify GoldHEN loader compatibility", "Validate title ID, update build and plugin offsets"]
+      status: peImage || wrongElfArchitecture ? "blocked-binary-mismatch" : "target-validation-required",
+      reason: peImage
+        ? "The file has a Windows PE header, so it is not a PS4 PRX/SPRX even though its extension says otherwise."
+        : wrongElfArchitecture
+          ? "The ELF header reports " + binaryInspection.machineName + " / " + binaryInspection.class + "-bit, which does not match the PS4 x86-64 CPU architecture."
+          : readableElf
+            ? "The ELF header is readable and reports 64-bit little-endian x86-64, but that is only a CPU-architecture clue; Orbis ABI, SELF/PRX packaging, imports, GoldHEN loading, title ID and update compatibility remain unverified."
+            : opaqueSce
+              ? "A Sony SCE executable container signature is present, but this inspector does not decrypt or validate its SELF/SPRX signature, imports, title ID or game-update compatibility."
+              : "A PRX/SPRX extension alone does not prove that the binary targets Orbis, the selected title ID, or the selected GTA V update.",
+      requirements: ["Verify Orbis ABI and PRX/SELF packaging", "Verify GoldHEN loader compatibility", "Validate title ID, update build and plugin offsets"]
     };
   }
   if (ext === ".rpf") {
@@ -113,11 +128,15 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     const path = file.path;
     const conversion = conversionByPath.get(path.toLowerCase()) || null;
     const archive = archiveByPath.get(path.toLowerCase()) || null;
+    const binaryInspection = /\\.(asi|dll|exe|sys|prx|sprx|elf)$/i.test(path)
+      ? inspectExecutableHeader(file.bytes)
+      : null;
     return {
       path,
       bytes: Number.isFinite(file.bytes?.byteLength) ? file.bytes.byteLength : Number(file.size) || 0,
       sourceArchive: file.sourceArchive || null,
-      ...routeFor(path, conversion, archive)
+      binaryInspection,
+      ...routeFor(path, conversion, archive, binaryInspection)
     };
   });
   const counts = {};
