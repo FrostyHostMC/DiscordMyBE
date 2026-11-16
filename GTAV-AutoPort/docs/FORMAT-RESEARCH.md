@@ -44,12 +44,12 @@ Assessment: strong artist-facing fallback and geometry/material inspection tool,
 ## PS4-specific findings
 
 ### OpenIV
-OpenIV's 2018 PS4 announcement described Orbis support as beta and said it could open archives, textures, models, collision bounds, navmeshes and audio, but did not provide openFormats editing/export for PS4 at that time. This is historical evidence of platform-specific RAGE resource differences, not a current specification for GTA V 1.73.
+OpenIV's 2018 PS4 announcement described Orbis support as beta and said it could open archives, textures, models, collision bounds, navmeshes and audio, but did not provide openFormats editing/export for PS4 at that time. This is historical evidence of platform-specific RAGE resource differences, not a current specification for GTA V 1.57.
 
 ### GoldHEN native runtime
 GoldHEN's Plugins SDK is an MIT-licensed Orbis PRX hook/patch SDK requiring the OpenOrbis PS4 toolchain and LLVM. It can support separately engineered PS4-native runtime plugins; it does not load Windows ASI/DLL files as-is.
 
-A public project, InsulinEngine/InsulinGTAV, documents a CUSA00411 v1.57 GoldHEN plugin built with OpenOrbis. This is evidence that native work exists for the same title ID, but not a compatibility proof for CUSA00419 and not a universal PC script/plugin bridge.
+A public project, InsulinEngine/InsulinGTAV, documents a CUSA00411 v1.57 GoldHEN plugin built with OpenOrbis. This is evidence that native work exists for the same reported game update but a different title ID (CUSA00411), not a compatibility proof for CUSA00419 and not a universal PC script/plugin bridge.
 
 ## Architecture decision
 1. Keep current Rust inspector for safe, automatic, read-only YFT/YTD reports.
