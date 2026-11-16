@@ -30,7 +30,7 @@
 
 ## 2026-11-14 — First gated GoldHEN AFR package writer
 - Added a ZIP package writer for complete RPF7 archives that are already built for PS4; source bytes are preserved and SHA-256 hashes are included.
-- Added a CUSA00411 / GTA V 1.73 package handoff with the correct AFR staging directory shape, a mergeable plugins.ini snippet, manifest and installation notes.
+- Added a CUSA00419 / GTA V 1.73 package handoff with the correct AFR staging directory shape, a mergeable plugins.ini snippet, manifest and installation notes.
 - Added strict attestations for PS4 resource-build compatibility and exact /app0 destination-path verification; rejects PC/non-RPF inputs, unsafe paths and duplicate destinations.
 - Added an export panel to the app. This is a staging workflow only: it does not convert PC RPF/YFT/YTD assets or prove the user's 1.73 AFR file-open path.
 - Added regression tests for package gates, path safety, RPF signatures, duplicate destinations and generated ZIP output.
@@ -51,7 +51,7 @@
 - Classified .gfx, .swf, .fla, .as, .ttf and .otf files and routed them through dedicated Scaleform/font stages in the port plan.
 - Added a graphics workbench panel showing detected movies, header validity, compression, version, and editor-copy action.
 - Documented GFxExport requirements and the public PS4 GFX loader's exact 1.46-only hard-coded font-library hook.
-- Kept CUSA00411 / GTA V 1.73 graphics deployment blocked until a version-specific PS4 loader and platform-compatible GFx export path are validated.
+- Kept CUSA00419 / GTA V 1.73 graphics deployment blocked until a version-specific PS4 loader and platform-compatible GFx export path are validated.
 - Added parser, editor-copy, classifier and routing regression tests.
 
 ## 2026-11-14 — PS4 GTA V GFX Loader research
@@ -64,7 +64,7 @@
 - Documented Project V as an existing community PS4 GTA V plugin path supporting a subset of PC mods, based on the Modded Warfare demonstration and listed example mods.
 - Clarified GoldHEN PRX plugin loading versus AFR file redirection and distinguished both from PC ASI/DLL execution and RPF asset conversion.
 - Added a two-track output strategy: Project V-supported mod data and separately validated AFR overlays, with native PS4 PRX adapters for runtime behavior.
-- Recorded that the linked MediaFire Project V v1.2 ZIP has not yet been inspected and that CUSA00411 GTA V 1.73 compatibility remains unverified.
+- Recorded that the linked MediaFire Project V v1.2 ZIP has not yet been inspected and that CUSA00419 GTA V 1.73 compatibility remains unverified.
 
 ## 2026-11-14 — Read-only PS4 PKG reference inspection
 - Added local browser-side PS4 PKG header and metadata-table inspection for the user's original base-game and GTA V 1.73 update packages.
@@ -74,7 +74,7 @@
 
 ## 2026-11-14 — PS4 source-build guide assessment
 - Reviewed the supplied community PS4 source-build guide and recorded its actual scope: full ORBIS game/update rebuild, not a general PC mod converter.
-- Flagged the explicit target mismatch (guide: firmware 9–11, 12 not recommended; GTA V 1.46; legacy ORBIS/VS2017 toolchain vs user target firmware 14.00 / CUSA00411 / GTA V 1.73).
+- Flagged the explicit target mismatch (guide: firmware 9–11, 12 not recommended; GTA V 1.46; legacy ORBIS/VS2017 toolchain vs user target firmware 14.00 / CUSA00419 / GTA V 1.73).
 - Captured useful architecture implications for PS4-specific executable, shader, script, RPF-container and package stages without treating old instructions as a valid 1.73 recipe.
 - Added provenance/security cautions: do not disable antivirus, run opaque installers, or automate downloads of unverified proprietary source bundles.
 - Kept PS4 resource writers and deployment locked pending exact-build reference evidence.
@@ -85,7 +85,7 @@
 - Classified `.txt` and `.md` readmes/instructions as documentation rather than unknown file types; routes them to a manual instruction-review stage.
 - Added defensive validation for incomplete port-plan and native-engine reports, plus a guarded export action to prevent a null summary from crashing the UI.
 - Added regression tests for documentation classification/planning and DLC manifest parsing.
-- Kept PS4 path mapping and CUSA00411 / GTA V 1.73 compatibility locked pending exact-build reference evidence.
+- Kept PS4 path mapping and CUSA00419 / GTA V 1.73 compatibility locked pending exact-build reference evidence.
 
 ## 2026-11-14 — Real nested RPF CLI integration test
 - Added a CI integration script that builds a synthetic nested RPF archive with the pinned RageKit CLI, lists root and nested entries through the real TSV command, and extracts a nested file through `rk rpf cat`.
@@ -95,7 +95,7 @@
 - Researched the official GoldHEN Application File Redirector (AFR) mapping documented by GoldHEN: game `/app0/...` paths map under `/data/GoldHEN/AFR/<title-id>/...`.
 - Added a guarded planner that accepts only explicit PS4 `/app0` mappings, validates CUSA title IDs, rejects traversal/encoded separators/Windows paths and duplicate destinations, and produces review-only staging paths.
 - Added a mergeable per-title `plugins.ini` snippet generator; it does not install `afr.prx` or modify a user's existing config.
-- Kept deployment disabled because exact CUSA00411 / GTA V 1.73 path access and AFR behavior on the user's console are not yet validated.
+- Kept deployment disabled because exact CUSA00419 / GTA V 1.73 path access and AFR behavior on the user's console are not yet validated.
 - Added regression tests and a deployment research note.
 
 ## 2026-11-14 — Native nested RPF archive inventory
@@ -234,7 +234,7 @@
 All notable GTAV AutoPort changes are recorded here. Every development update must also refresh the latest-update summary in README.md.
 
 ## 2026-11-13 — First PS4 target profile recorded
-- Added a dedicated profile for the user-specified CUSA00411 / GTA V 1.73 / PS4 Story Mode target.
+- Added a dedicated profile for the user-specified CUSA00419 / GTA V 1.73 / PS4 Story Mode target.
 - Included the target profile in exported analysis manifests and displayed it in the workbench.
 - Added target profile regression tests and explicit unverified-compatibility flags.
 - Updated GoldHEN deployment notes and roadmap; exact console build and resource compatibility remain to be verified.
