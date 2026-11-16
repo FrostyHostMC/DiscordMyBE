@@ -16,6 +16,7 @@ test("keeps the PS4 gate closed when there are no convertible resources", async 
     files: [{ path: "vehicles.meta", bytes: new TextEncoder().encode("<CVehicleModelInfo__InitDataList/>") }]
   });
   assert.equal(result.manifest.summary.importedFiles, 1);
+  assert.match(result.manifest.sourceFiles[0].sha256, /^[a-f0-9]{64}$/);
   assert.equal(result.manifest.summary.convertibleCandidates, 0);
   assert.equal(result.manifest.summary.ps4ReadyFiles, 0);
   assert.equal(result.manifest.summary.installable, false);
