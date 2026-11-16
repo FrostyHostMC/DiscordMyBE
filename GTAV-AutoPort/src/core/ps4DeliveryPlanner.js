@@ -146,7 +146,7 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
       bytes: Number.isFinite(file.bytes?.byteLength) ? file.bytes.byteLength : Number(file.size) || 0,
       sourceArchive: file.sourceArchive || null,
       binaryInspection,
-      textureConversion: textureConversion ? { status: textureConversion.status, outputPath: textureConversion.outputPath || null, format: textureConversion.format || null, roundTripVerified: textureConversion.roundTripVerified === true } : null,
+      textureConversion: textureConversion ? { status: textureConversion.status, outputPath: textureConversion.outputPath || null, format: textureConversion.format || null, mipCount: textureConversion.mipCount ?? null, maxMipCount: textureConversion.maxMipCount ?? null, missingMipLevels: textureConversion.missingMipLevels ?? null, hasFullMipChain: textureConversion.hasFullMipChain === true, sourceSha256: textureConversion.sourceSha256 || null, outputSha256: textureConversion.outputSha256 || null, roundTripVerified: textureConversion.roundTripVerified === true } : null,
       ...routeFor(path, conversion, archive, binaryInspection, textureConversion)
     };
   });
