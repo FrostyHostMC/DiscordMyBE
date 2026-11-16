@@ -3,7 +3,7 @@
 ## Product requirement
 GTAV AutoPort is a general vehicle-mod porting workbench, not a converter for the first Glendale fixture. Glendale is only the first regression fixture. No model name, texture dictionary name, handling ID, vehicle make, file count, LOD count, or source archive layout may be hardcoded as a conversion assumption.
 
-The source goal is any legally supplied GTA V PC vehicle mod archive or extracted folder. The initial target is the user's GTA V PS4 Story Mode installation, recorded as CUSA00411 / update 1.73 but not independently verified. Replacement and add-on vehicles are distinct project types: replacement is the first implementation target; add-on requires additional DLC/archive/manifest/dependency work and must not be mislabeled as supported until validated.
+The source goal is any legally supplied GTA V PC vehicle mod archive or extracted folder. The initial target is the user's GTA V PS4 Story Mode installation, recorded as CUSA00411 / update 1.57 but not independently verified. Replacement and add-on vehicles are distinct project types: replacement is the first implementation target; add-on requires additional DLC/archive/manifest/dependency work and must not be mislabeled as supported until validated.
 
 ## Required pipeline
 1. Intake and provenance: safely inventory archive entries, preserve relative paths, hashes, source metadata and licensing/provenance notes. Never modify source files.
@@ -41,7 +41,7 @@ OpenIV's original PS4 announcement described Orbis support as beta and stated th
 - https://openiv.com/bugs/changelog_page.php?project_id=1
 - https://github.com/VIRUXE/rage-formats
 
-Before implementation can be validated, obtain legally accessible, unmodified PS4 reference resources from the exact CUSA00411 / GTA V 1.73 installation, with provenance and hashes. At minimum: a base-game vehicle YFT (including high LOD/damage parts where present), matching YTD, relevant collision/metadata, and corresponding retail archive context. Record actual GoldHEN version and file-redirection capability separately; GoldHEN plugin version is not a substitute for game-build identification.
+Before implementation can be validated, obtain legally accessible, unmodified PS4 reference resources from the exact CUSA00411 / GTA V 1.57 installation, with provenance and hashes. At minimum: a base-game vehicle YFT (including high LOD/damage parts where present), matching YTD, relevant collision/metadata, and corresponding retail archive context. Record actual GoldHEN version and file-redirection capability separately; GoldHEN plugin version is not a substitute for game-build identification.
 
 ## Universal compatibility policy
 - Never hardcode glendale, GLENDALE, BENEFAC, a fixed number of YFTs, or one texture dictionary.
