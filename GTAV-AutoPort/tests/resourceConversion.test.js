@@ -39,4 +39,6 @@ test("accepts drawable and collision resources through the same Legacy adapter",
   } finally { globalThis.fetch = originalFetch; }
 });
 
-test("rejects YBN because the RageKit edition-convert command does not support it", async () => {\n  await assert.rejects(() => convertLegacyResourceCandidate({ path: "collision.ybn", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR and YDD/);\n});\n
+test("rejects YBN because the RageKit edition-convert command does not support it", async () => {
+  await assert.rejects(() => convertLegacyResourceCandidate({ path: "collision.ybn", bytes: new Uint8Array([1]) }), /Only YFT, YTD, YDR and YDD/);
+});

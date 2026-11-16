@@ -5,7 +5,7 @@ import { compileMenyooNativeActionPlan } from "../src/core/nativeActionPlan.js";
 const report = {
   validXml: true,
   format: "menyoo-spooner-vehicle-xml",
-  target: { titleId: "CUSA00419", updateVersion: "1.73" },
+  target: { titleId: "CUSA00419", updateVersion: "1.57" },
   vehicles: [{
     id: "vehicle-1", modelName: "adder", modelHash: { raw: "0xB779A091", unsigned32: 3078201489 },
     transform: { position: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 0, z: 90 }, heading: 90 },

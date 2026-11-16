@@ -89,13 +89,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make curl libicu-dev clang lld imagemagick python3
-      - name: Install libssl1.1 for OpenOrbis package tool
-        run: |
-          base="https://security.ubuntu.com/ubuntu/pool/main/o/openssl/"
-          ver="$(curl -fsSL "$base" | grep -oE 'libssl1\.1_1\.1\.1f-[0-9a-z.~+]+_amd64\.deb' | sed -E 's/^libssl1\.1_(.*)_amd64\.deb$/\1/' | sort -V | tail -1)"
-          test -n "$ver"
-          curl -fL "$base/libssl1.1_\${ver}_amd64.deb" -o "$RUNNER_TEMP/libssl1.1.deb"
-          sudo dpkg -i "$RUNNER_TEMP/libssl1.1.deb" || sudo apt-get install -f -y
       - name: Install pinned OpenOrbis v0.5.4
         run: |
           curl -fL --retry 3 https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz -o "$RUNNER_TEMP/oo.tar.gz"
