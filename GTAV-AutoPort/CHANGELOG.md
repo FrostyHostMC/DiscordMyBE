@@ -1,3 +1,12 @@
+## 2026-11-15 — Regional target profile hardening
+- Added separate GTA V 1.57 profile records for US CUSA00419 and EU CUSA00411.
+- Added strict title-ID resolution; unknown IDs return no profile instead of falling back to a guessed target.
+- Kept US-only firmware/GoldHEN evidence on the US record; the EU profile does not inherit it.
+- Made compatibility reports region-aware and explicitly state that title-ID recognition is not executable, hook, resource, or deployment validation.
+- Updated the target regression tests to match the active 1.57 profile and added regional-isolation cases.
+- Updated the workspace UI to show both profile records and explain that the desktop app does not live-detect a running PS4 game.
+- This is desktop-workspace hardening only. The actual GoldHEN PRX has not been modified or built, and neither region's runtime hooks are verified.
+
 ## 2026-11-14 — Per-resource diagnostics in the workbench
 - The port-plan panel now shows each imported resource's expected output files, required source inputs, and exact PS4 conversion gate.
 - This makes the diagnostics useful for deciding what the app must generate for vehicles, peds, weapons, textures, maps and runtime plugins.
