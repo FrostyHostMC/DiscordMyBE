@@ -109,7 +109,15 @@ jobs:
           test -n "$LINKER_SCRIPT"
           TOOLCHAIN_ROOT="$(dirname "$LINKER_SCRIPT")"
           test -x "$TOOLCHAIN_ROOT/bin/linux/create-fself"
+          test -x "$TOOLCHAIN_ROOT/bin/linux/create-gp4"
           test -x "$TOOLCHAIN_ROOT/bin/linux/PkgTool.Core"
+          RIGHT_SPRX="$(find "$TOOLCHAIN_ROOT" -path "*/sce_sys/about/right.sprx" -type f -print -quit)"
+          if [ -n "$RIGHT_SPRX" ]; then
+            mkdir -p sce_sys/about
+            cp "$RIGHT_SPRX" sce_sys/about/right.sprx
+          else
+            echo "OpenOrbis right.sprx was not present; continuing without optional about resource."
+          fi
           echo "OO_PS4_TOOLCHAIN=$TOOLCHAIN_ROOT" >> "$GITHUB_ENV"
           echo "$TOOLCHAIN_ROOT/bin/linux" >> "$GITHUB_PATH"
       - name: Generate 512x512 application icon
@@ -120,6 +128,7 @@ jobs:
           make
           test -s eboot.bin
           test -s IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
+          "$OO_PS4_TOOLCHAIN/bin/linux/PkgTool.Core" pkg_validate --verbose IV0000-AUPT00001_00-AUTOPORTPS400000.pkg
           sha256sum eboot.bin IV0000-AUPT00001_00-AUTOPORTPS400000.pkg | tee SHA256SUMS.txt
       - name: Upload PS4 package and build evidence
         uses: actions/upload-artifact@v4
