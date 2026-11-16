@@ -133,3 +133,27 @@ test("does not parse oversized ORBX runtime logs", () => {
   assert.equal(report.components.runtimeLog.analysis.status, "too-large-to-inspect");
   assert.equal(report.components.runtimeLog.analysis.signals.length, 0);
 });
+
+
+test("flags a Windows PE binary disguised as the ORBX PRX", () => {
+  const bytes = new Uint8Array(512);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0x4d, 0x5a]);
+  view.setUint32(0x3c, 0x80, true);
+  view.setUint32(0x80, 0x00004550, true);
+  view.setUint16(0x84, 0x8664, true);
+  view.setUint16(0x86, 2, true);
+  view.setUint16(0x94, 0xf0, true);
+  view.setUint16(0x98, 0x20b, true);
+  const report = inspectOrbxPackage([{ path: "orbx.prx", bytes }]);
+  assert.equal(report.components.plugin.binaryInspection.format, "pe");
+  assert.ok(report.warnings.some((message) => message.includes("Windows PE header")));
+  assert.equal(report.installReview.runtimeCompatibilityVerified, false);
+});
+
+test("recognizes an opaque PlayStation SELF ORBX plugin without claiming it is valid", () => {
+  const report = inspectOrbxPackage([{ path: "orbx.prx", bytes: new Uint8Array([0x4f, 0x15, 0x3d, 0x1d, 0, 0, 0, 0]) }]);
+  assert.equal(report.components.plugin.binaryInspection.format, "self-container");
+  assert.equal(report.components.plugin.binaryInspection.targetCompatibility, "unverified");
+  assert.ok(report.warnings.some((message) => message.includes("Sony SELF/SCE container")));
+});
