@@ -90,7 +90,9 @@ test("records extracted archive entry provenance and detected format in the mani
   const archiveRecord = result.manifest.archiveInspections[0];
   assert.equal(archiveRecord.sourcePath, "cars/sample/dlc.rpf");
   assert.equal(archiveRecord.entries.length, 1);
-  assert.deepEqual(archiveRecord.entries[0], {
+  const { sha256: entrySha256, ...entryWithoutHash } = archiveRecord.entries[0];
+  assert.match(entrySha256, /^[a-f0-9]{64}$/);
+  assert.deepEqual(entryWithoutHash, {
     path: "stream/preview.png",
     archivePath: "cars/sample/dlc.rpf/stream/preview.png",
     analysisPath: "rpf-extracted/cars/sample/dlc.rpf/stream/preview.png",
