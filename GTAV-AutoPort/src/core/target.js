@@ -9,7 +9,7 @@ export const PS4_TARGET = Object.freeze({
   contentId: "UP1004-CUSA00419_00-GTAVDIGITALDOWNL",
   publisherId: "UP1004",
   game: "Grand Theft Auto V",
-  updateVersion: "1.73",
+  updateVersion: "1.57",
   mode: "Story Mode",
   source: "user-confirmed",
   verifiedAgainstConsole: false,
