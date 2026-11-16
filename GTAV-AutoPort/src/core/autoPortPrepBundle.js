@@ -236,9 +236,12 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const textureConversions = [];
   for (const { file, inspection } of eligibleTexture) {
     const sourcePath = safePath(file.path);
+    const adapterInfo = registeredFormatAdapterRegistry.list().find((item) => item.id === inspection.selectedAdapterId);
     const record = {
       sourcePath,
-      adapterId: null,
+      adapterId: inspection.selectedAdapterId,
+      adapterVersion: adapterInfo?.version || null,
+      inspectionStatus: inspection.status,
       adapterVersion: null,
       status: "not-converted",
       format: null,
