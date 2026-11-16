@@ -238,6 +238,8 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     const sourcePath = safePath(file.path);
     const record = {
       sourcePath,
+      adapterId: null,
+      adapterVersion: null,
       status: "not-converted",
       format: null,
       width: null,
