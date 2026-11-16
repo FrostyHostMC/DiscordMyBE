@@ -38,7 +38,7 @@ Do not assume Project V handles vehicle DLC archives, arbitrary YFT/YTD conversi
 - The Modded Warfare video and its description provide the Project V feature claim and named example mods.
 - Official GoldHEN docs establish the PRX plugin loader and AFR mechanism, not the internal capabilities of Project V.
 - Community reports describe some Project V mods being version-sensitive. Treat GTA V update compatibility as per-build, not universal.
-- User's target is CUSA00419 (US), GTA V 1.73, PS4 firmware 14.00, GoldHEN 2.4b18.13 (user-provided; not independently validated). No compatibility claim is made for that combination.
+- User's target is CUSA00419 (US), GTA V 1.57, PS4 firmware 14.00, GoldHEN 2.4b18.13 (user-provided; not independently validated). No compatibility claim is made for that combination.
 
 ## Next implementation work
 
@@ -60,9 +60,9 @@ Static source inspection confirms this is a **narrow runtime file-redirection ho
 - `hooks.cpp` intercepts requests whose path contains `font_lib_efigs` and redirects that request to `/data/font_lib_efigs_ps4.gfx`; other paths pass through unchanged.
 - The release is an ELF named `GFX_LOADER.elf`, published 2023-07-06. Its release notes say to inject it before or at the beginning of the intro using the linked ELF Injector.
 
-**AutoPort implications:** this is useful proof of a PS4-side hook pattern for one specific GFX asset path, and a concrete example of a native runtime adapter that could be generalized only after per-build analysis. It is not evidence that arbitrary PC graphics packs, ReShade/ENB shaders, arbitrary `.gfx` files, or GTA V 1.73 are supported. The hard-coded address and signature are build-specific; blindly applying this 1.46 ELF to 1.73 risks a crash or memory corruption.
+**AutoPort implications:** this is useful proof of a PS4-side hook pattern for one specific GFX asset path, and a concrete example of a native runtime adapter that could be generalized only after per-build analysis. It is not evidence that arbitrary PC graphics packs, ReShade/ENB shaders, arbitrary `.gfx` files, or GTA V 1.57 are supported. The hard-coded address and signature are build-specific; blindly applying this 1.46 ELF to 1.57 risks a crash or memory corruption.
 
-Keep this project as a research reference, not a bundled binary or deployable adapter. A future AutoPort GFX adapter should identify the target build, resolve/verify the relevant function signature and file-open call, validate the replacement asset format, and fail closed when any check does not match. Do not reuse the 1.46 address on the user's CUSA00419 / GTA V 1.73 target without independent executable-level validation.
+Keep this project as a research reference, not a bundled binary or deployable adapter. A future AutoPort GFX adapter should identify the target build, resolve/verify the relevant function signature and file-open call, validate the replacement asset format, and fail closed when any check does not match. Do not reuse the 1.46 address on the user's CUSA00419 / GTA V 1.57 target without independent executable-level validation.
 
 Sources:
 - Repository and README: https://github.com/rfoodxmodz/PS4-GTAV-GFX-LOADER
