@@ -21,7 +21,8 @@
 - [x] Audit ORBX package components, inspect supplied orbx.prx PE/ELF/SELF headers, parse supplied INI bytes and extract bounded diagnostic excerpts from supplied runtime logs.
 - [x] Inspect PE, ELF, PlayStation SELF and Sony SCE executable signatures; report architecture clues without claiming Orbis compatibility.
 - [x] Record bounded SHA-256 provenance for original files, extracted RPF entries and generated texture candidates.
-- [x] Prototype DDS BC1/BC3/BC5 conversion into PS4 Thin1DThin texture storage with byte-for-byte untile round-trip tests.\n- [x] Reuse hash-identical DDS conversions through a bounded cache while emitting a distinct output/sidecar for every source path.
+- [x] Prototype DDS BC1/BC3/BC5 conversion into PS4 Thin1DThin texture storage with byte-for-byte untile round-trip tests.
+- [x] Reuse hash-identical DDS conversions through a bounded cache while emitting a distinct output/sidecar for every source path.
 - [x] Build explicit GoldHEN AFR overlay plans for already-built PS4 RPFs when the user supplies exact mappings and attestations.
 - [ ] Complete an end-to-end PS4 RSC7/YTD texture dictionary writer and verify it against CUSA00419 retail fixtures.
 - [ ] Integrate a real Orbis RPF writer into the local pipeline and validate its output independently.
