@@ -30,4 +30,4 @@ A known-good XML preset that the user has successfully loaded on the target cons
 - XML size is capped at 8 MiB and placement count at 5,000.
 - Invalid XML returns an explicit parse failure.
 - Source placement objects are retained to prevent data loss while mappings expand.
-- The translator does not write YFT/YTD, compile PRX, modify the menu binary, or claim CUSA00419 / update 1.73 runtime validation.
+- The translator does not write YFT/YTD, compile PRX, modify the menu binary, or claim CUSA00419 / update 1.57 runtime validation.
