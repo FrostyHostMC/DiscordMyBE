@@ -12,6 +12,6 @@ The first package writer produces a GoldHEN AFR handoff for **complete, already-
 
 ## Explicitly not implemented
 
-This is **not yet a PC-to-PS4 resource converter**. It does not convert PC YFT/YTD/YDR/YBN resources, construct PS4 RPF archives, generate SPRX binaries, or validate the user's CUSA00411 / 1.73 AFR file-open path. The app must keep those cases blocked rather than exporting a misleading "ready" package.
+This is **not yet a PC-to-PS4 resource converter**. It does not convert PC YFT/YTD/YDR/YBN resources, construct PS4 RPF archives, generate SPRX binaries, or validate the user's CUSA00419 / 1.57 AFR file-open path. The app must keep those cases blocked rather than exporting a misleading "ready" package.
 
-The next genuine conversion milestone is a PS4-specific RAGE resource writer and a verified 1.73 archive/container insertion path. A PC RAGE round-trip is not sufficient evidence.
+The next genuine conversion milestone is a PS4-specific RAGE resource writer and a verified 1.57 archive/container insertion path. A PC RAGE round-trip is not sufficient evidence.
