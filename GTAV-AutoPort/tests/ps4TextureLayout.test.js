@@ -69,3 +69,29 @@ test("rejects DX10 sRGB and signed-normalized variants until their metadata is p
 test("requires the DDS FourCC pixel-format flag",()=>{
  const bytes=dds();new DataView(bytes.buffer).setUint32(80,0,true);assert.equal(inspectDdsTexture(bytes).status,"unsupported-pixel-format");
 });
+
+
+test("matches the expected 8x8 Morton microtile block ordering",()=>{
+ const layout=createPs4TextureLayout(32,32,1,"BC1");
+ const input=Uint8Array.from({length:64*8},(_,i)=>Math.floor(i/8));
+ const tiled=tilePs4TextureMips([input],layout);
+ const firstByteAt=(block)=>tiled[block*8];
+ assert.equal(firstByteAt(0),0);
+ assert.equal(firstByteAt(1),1);   // x=1, y=0
+ assert.equal(firstByteAt(2),8);   // x=0, y=1
+ assert.equal(firstByteAt(4),2);   // x=2, y=0
+ assert.equal(firstByteAt(8),16);  // x=0, y=2
+ assert.equal(firstByteAt(16),4);  // x=4, y=0
+ assert.equal(firstByteAt(32),32); // x=0, y=4
+});
+
+test("places adjacent 8x8 microtiles at the expected tile-row and tile-column offsets",()=>{
+ const layout=createPs4TextureLayout(64,64,1,"BC1");
+ const input=Uint8Array.from({length:16*16*8},(_,i)=>Math.floor(i/8)&0xff);
+ const tiled=tilePs4TextureMips([input],layout);
+ const blockByte=(tileIndex)=>tiled[tileIndex*64*8];
+ assert.equal(blockByte(0),0);
+ assert.equal(blockByte(64),8);   // second tile column begins at source x=8
+ assert.equal(blockByte(128),128); // second tile row begins at source y=8
+ assert.equal(blockByte(192),136); // second row, second column
+});
