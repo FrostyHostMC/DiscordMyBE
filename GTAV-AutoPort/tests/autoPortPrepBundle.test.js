@@ -262,3 +262,25 @@ test("records unsupported DDS formats without generating a misleading PS4 textur
   assert.equal(archive.file("AutoPort-Prep/ps4-texture-storage-candidates/textures/unsupported.dds.ps4tex.bin"), null);
   assert.ok(archive.file("AutoPort-Prep/source-original/textures/unsupported.dds"));
 });
+
+
+test("converts supported DDS files discovered inside recursively extracted RPF archives", async () => {
+  const dds = makeDdsFixture({ width: 16, height: 16, fourCC: "DXT1", mipCount: 3 });
+  const rpf = buildOpenRpf7([{ path: "textures/car_diffuse.dds", bytes: dds }]).bytes;
+  const result = await buildAutomaticPrepBundle({
+    target: { titleId: "CUSA00419", updateVersion: "1.57" },
+    files: [{ path: "cars/sample/dlc.rpf", bytes: rpf }]
+  });
+  const sourcePath = "rpf-extracted/cars/sample/dlc.rpf/textures/car_diffuse.dds";
+  assert.equal(result.manifest.summary.rpfRawFilesAnalyzed, 1);
+  assert.equal(result.manifest.summary.ps4TextureStorageCandidates, 1);
+  assert.equal(result.manifest.textureConversions[0].sourcePath, sourcePath);
+  assert.equal(result.manifest.textureConversions[0].roundTripVerified, true);
+  const item = result.manifest.deliveryPlan.items.find((entry) => entry.path === sourcePath);
+  assert.equal(item.status, "partial-conversion");
+  assert.equal(item.route, "ps4-texture-storage-candidate-only");
+  const archive = await JSZip.loadAsync(result.blob);
+  assert.ok(archive.file("AutoPort-Prep/source-original/cars/sample/dlc.rpf"));
+  assert.ok(archive.file("AutoPort-Prep/rpf-extracted/cars/sample/dlc.rpf/textures/car_diffuse.dds"));
+  assert.ok(archive.file("AutoPort-Prep/ps4-texture-storage-candidates/" + sourcePath + ".ps4tex.bin"));
+});
