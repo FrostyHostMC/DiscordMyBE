@@ -18,4 +18,4 @@ The existing dependency graph links the selected model's YFT/high-LOD YFT and TX
 
 ## PS4 gate
 
-This stage is metadata extraction and mapping only. It does not rewrite metadata into a PS4 DLC, create missing audio banks, rebuild camera handlers, or certify vehicle physics. Resource writers, exact target schemas, reference resolution and in-game CUSA00419 / 1.73 validation remain required.
+This stage is metadata extraction and mapping only. It does not rewrite metadata into a PS4 DLC, create missing audio banks, rebuild camera handlers, or certify vehicle physics. Resource writers, exact target schemas, reference resolution and in-game CUSA00419 / 1.57 validation remain required.
