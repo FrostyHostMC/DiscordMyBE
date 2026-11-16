@@ -22,7 +22,7 @@ It advertises loading main-game RPFs, DLC RPFs, XML, OMT, META, DAT, GXT2 and GF
 
 Source: https://ko-fi.com/s/8b1c775f83
 
-This is the vendor's published claim, not an independent test matrix. The listing does not publish the complete INI schema, a source release for `orbx.prx`, a compatibility statement for every title ID, or a 1.73 test. A version not named in the listing is **unlisted**, not proof that it is technically impossible to use.
+This is the vendor's published claim, not an independent test matrix. The listing does not publish the complete INI schema, a source release for `orbx.prx`, a compatibility statement for every title ID, or a 1.57 test. A version not named in the listing is **unlisted**, not proof that it is technically impossible to use.
 
 ## User-supplied archive
 
@@ -53,7 +53,7 @@ The package's nested vendor folder layout must be flattened carefully during ins
 ## Compatibility interpretation
 
 - A PRX extension is not proof that a binary is an Orbis PRX or that its hooks match the running game.
-- The vendor's published version list is useful evidence, but absence of 1.73 from that list is not itself a technical diagnosis.
+- The vendor's published version list is useful evidence, but absence of 1.57 from that list is not itself a technical diagnosis.
 - Do not patch a version string, bypass a version check, change executable offsets, or fabricate an INI schema without source/debug evidence.
 - First distinguish a missing configuration path, malformed INI, plugin load failure, hook/build mismatch, and resource parsing failure using the actual error and `rpf_log.txt`.
 - Keep the graphics archives separate from the loader binary. If the loader fails before reading assets, changing textures or repacking RPFs will not repair that initialization failure.
@@ -96,6 +96,6 @@ The ORBX audit now:
 - Distinguishes `.rpf.txt` path markers from real `.rpf` files.
 - Counts resource file extensions and records marker samples.
 - Detects repeated adjacent package folder names.
-- Reports the presence and paths of `rpf_log.txt` and `Instructions.txt`.
+- Reports the presence and paths of `rpf_log.txt` and `Instructions.txt`.\n- Parses a supplied `rpf_log.txt` up to 1 MiB and extracts bounded error, compatibility, CRC and warning excerpts with line numbers; it never treats the excerpts as proof of a specific root cause.
 
 A parsed INI is not considered valid for ORBX merely because it is syntactically parseable. `runtimeCompatibilityVerified` remains false.
