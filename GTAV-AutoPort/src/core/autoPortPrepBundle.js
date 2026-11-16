@@ -257,7 +257,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     orbxPackageAudit,
     limitations: [
       "Converted outputs are GTA V PC Legacy-format candidates, not certified PS4 resources.",
-      "CUSA00419 / GTA V 1.73 resource encoding and in-game behavior are not verified.",
+      "CUSA00419 / GTA V 1.57 resource encoding and in-game behavior are not verified.",
       "PC ASI/DLL/EXE plugins and runtime-dependent scripts are preserved as source only; they are not executable PS4 plugins.",
       "Supported PC RPF7 OPEN archives are extracted as raw files and included in dependency analysis and format classification; extraction itself does not decode or convert payloads.",
       "Encrypted or Orbis/PS4 RPF variants are preserved unchanged when the OPEN inspector cannot validate them.",
@@ -285,7 +285,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "7. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
-    "The target CUSA00419 / GTA V 1.73 writer and runtime still require exact-build validation.",
+    "The target CUSA00419 / GTA V 1.57 writer and runtime still require exact-build validation.",
     "Never copy these files over original game files without a verified, reversible deployment plan."
   ].join("\n"));
   const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
