@@ -59,3 +59,13 @@ test("enforces dimension, mip, payload and allocation limits",()=>{
  assert.throws(()=>createPs4TextureLayout(16,16,1,"BC7"),/format/);
  assert.throws(()=>tilePs4TextureMips([new Uint8Array(1)],createPs4TextureLayout(4,4,1,"BC1")),/payload length/);
 });
+
+
+test("rejects DX10 sRGB and signed-normalized variants until their metadata is preserved",()=>{
+ const srgb=dds({width:8,height:8,dx10:true});new DataView(srgb.buffer).setUint32(128,72,true);assert.equal(inspectDdsTexture(srgb).status,"unsupported-format");
+ const snorm=dds({width:8,height:8,dx10:true});new DataView(snorm.buffer).setUint32(128,84,true);assert.equal(inspectDdsTexture(snorm).status,"unsupported-format");
+});
+
+test("requires the DDS FourCC pixel-format flag",()=>{
+ const bytes=dds();new DataView(bytes.buffer).setUint32(80,0,true);assert.equal(inspectDdsTexture(bytes).status,"unsupported-pixel-format");
+});
