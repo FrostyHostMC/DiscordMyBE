@@ -236,6 +236,10 @@ test("automatically creates experimental PS4 texture storage candidates from sup
   assert.equal(sidecar.format, "BC3");
   assert.equal(sidecar.tileIndex, 13);
   assert.equal(sidecar.installable, false);
+  assert.match(sidecar.sourceSha256, /^[a-f0-9]{64}$/);
+  assert.match(sidecar.outputSha256, /^[a-f0-9]{64}$/);
+  assert.equal(report[0].sourceSha256, sidecar.sourceSha256);
+  assert.equal(report[0].outputSha256, sidecar.outputSha256);
   assert.equal(report[0].status, "ps4-texture-storage-candidate");
   assert.ok(archive.file("AutoPort-Prep/source-original/textures/vehicle_diffuse.dds"));
 });
