@@ -9,7 +9,7 @@ import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
 import { inspectNativeReports } from "../core/nativeReports.js";
 import { inspectNativeAssetsAutomatically } from "../core/autoNative.js";
-import { PS4_TARGET, describeTarget } from "../core/target.js";
+import { PS4_TARGET, PS4_TARGETS, describeTarget } from "../core/target.js";
 import { assessPs4Compatibility } from "../core/compatibility.js";
 import { auditModFiles } from "../core/modClassifier.js";
 import { buildUniversalPortPlan } from "../core/portPlan.js";
@@ -273,17 +273,17 @@ export default function App() {
 
       <section className="panel target-evidence-panel">
         <div className="panel-head">
-          <div><div className="eyebrow">TARGET PROFILE</div><h3>PS4 game verification</h3><p>Project V uses a shared target profile. You do not need to upload your base-game or update PKG files.</p></div>
+          <div><div className="eyebrow">TARGET PROFILES</div><h3>US and EU GTA V 1.57 profiles</h3><p>Project V recognizes both regional title IDs. You do not need to upload your base-game or update PKG files for ordinary source-mod inspection.</p></div>
           <span className="tag success"><ShieldCheck size={13}/> NO PKG REQUIRED</span>
         </div>
         <div className="audit-grid">
-          <div className="audit-card"><b>{PS4_TARGET.titleId}</b><span>US title ID</span></div>
-          <div className="audit-card"><b>{PS4_TARGET.updateVersion}</b><span>Target update</span></div>
-          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>System firmware</span></div>
-          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>GoldHEN version</span></div>
+          <div className="audit-card"><b>{PS4_TARGETS.CUSA00419.titleId}</b><span>US · GTA V 1.57</span></div>
+          <div className="audit-card"><b>{PS4_TARGETS.CUSA00411.titleId}</b><span>EU · GTA V 1.57</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>Recorded PS4 firmware</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>Recorded GoldHEN version</span></div>
         </div>
-        <div className="notice"><CheckCircle2 size={18}/><div><b>Shared profile; local confirmation only when needed.</b><p>The title ID and versions you supplied are saved as the project target. Project V can perform source-mod inspection and format conversion without reading a game PKG. If a particular adapter later needs game-specific reference data, it will request only the smallest relevant local sample or a generated fingerprint report—not the full game package. No game files are uploaded.</p></div></div>
-        <p className="native-disclaimer">Compatibility with CUSA00419 update 1.57 remains unverified until the relevant runtime/resource adapter has been tested. The target profile does not unlock unsupported conversion or deployment steps.</p>
+        <div className="notice"><CheckCircle2 size={18}/><div><b>Regional title-ID recognition is separate from executable compatibility.</b><p>The workspace maps CUSA00419 to the US profile and CUSA00411 to the EU profile. This is profile selection for analysis and manifests—not live detection of a running PS4 game. The actual GoldHEN plugin must independently fingerprint each regional executable and validate every hook before enabling it.</p></div></div>
+        <p className="native-disclaimer">Both profiles target GTA V 1.57, but US and EU executable signatures, resource references, and runtime hooks are not interchangeable. EU support is a recognized target profile only; both regional resource adapters and live plugin hooks remain unverified.</p>
       </section>
       <section className="hero" id="workspace">
         <div className="hero-copy"><div className="eyebrow">PROJECT V MOD INTAKE</div><h2>Prepare mods for PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
@@ -302,7 +302,7 @@ export default function App() {
         <div className="panel-head"><div><div className="eyebrow">IN-APP WALKTHROUGH</div><h3>Guided porting assistant</h3><p>Project V explains each stage and tells you what to do next. Your current stage is <b>{guideStep} of 5</b>.</p></div><button className="secondary-button guide-toggle" onClick={() => setGuideOpen((value) => !value)}>{guideOpen ? "Hide guide" : "Show guide"}</button></div>
         {guideOpen && <>
           <div className="guide-progress"><span style={{width: `${guideStep * 20}%`}}/></div>
-          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP, OIV, 7z file or its extracted folder. Project V will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00419 / 1.57 resource writer and deployment checks must pass before packaging."}</p></div>
+          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP, OIV, 7z file or its extracted folder. Project V will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00419 or CUSA00411 / 1.57 resource writer and deployment checks must pass before packaging."}</p></div>
           <div className="guide-steps">
             <div className={guideStep >= 1 ? "guide-step current" : "guide-step"}><b>01 · Import</b><p>Import ZIP, OIV, 7z archive or extracted folder. Files remain local.</p></div>
             <div className={guideStep >= 2 ? "guide-step current" : "guide-step"}><b>02 · Identify</b><p>Automatic inventory, mod-family classification, and PC-only plugin warnings.</p></div>
@@ -311,7 +311,7 @@ export default function App() {
             <div className={guideStep >= 5 ? "guide-step current" : "guide-step"}><b>05 · Validate & deploy</b><p>Requires exact-build PS4 conversion, package validation, and reversible deployment.</p></div>
           </div>
           <details className="guide-details"><summary>First-run setup: let Project V prepare its tools</summary><p>Run <b>START-AUTOPORT.bat</b> from the GTAV-Project V folder. It installs web dependencies and attempts to build the pinned RageKit engine when CMake and a C++ build toolchain are available. CMake FetchContent downloads the pinned upstream source during that build. Keep the launcher window open while using the app.</p><p>If the native build cannot run, install Git, CMake 3.20+, and Visual Studio Build Tools with the Desktop development with C++ workload, then launch again. File inventory and planning still work without the native engine.</p></details>
-          <details className="guide-details"><summary>What Project V can and cannot do today</summary><p>Available: ZIP/folder intake, broad mod classification, dependency candidates, vehicle metadata analysis, YFT/YTD inspection, and RageKit source-side parsing/round-trip checks. Not yet available: a proven PS4 $1.57 resource encoder, universal PC script/plugin translation, verified RPF installation layout, or tested PS4 install package.</p><p>PC ASI/DLL/EXE and ScriptHookV/.NET mods need separate PS4-native implementations where feasible. Never install a PC binary on the console.</p></details>
+          <details className="guide-details"><summary>What Project V can and cannot do today</summary><p>Available: ZIP/folder intake, broad mod classification, dependency candidates, vehicle metadata analysis, YFT/YTD inspection, and RageKit source-side parsing/round-trip checks. Not yet available: a proven PS4 GTA V 1.57 resource encoder, universal PC script/plugin translation, verified RPF installation layout, or tested PS4 install package.</p><p>PC ASI/DLL/EXE and ScriptHookV/.NET mods need separate PS4-native implementations where feasible. Never install a PC binary on the console.</p></details>
         </>}
       </section>
 
