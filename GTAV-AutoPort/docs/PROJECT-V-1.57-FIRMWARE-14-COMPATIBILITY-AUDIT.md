@@ -48,6 +48,12 @@ The public source is not proof that the user's v1.2 PRX is identical. Preserve t
 
 Firmware 14.00 must not be written into the game-version field or treated as proof of GoldHEN plugin compatibility. Confirm the exact GoldHEN release and plugin loader behavior for this firmware independently.
 
+For firmware 14.00, the relevant GoldHEN beta is **v2.4b18.13**, whose release announcement says it adds 14.00 support. The official GoldHEN plugin repository's setup guidance says plugin loading requires GoldHEN 2.3 or newer and that plugin loading must be enabled in the Plugins Menu. This means the 14.00 payload requirement and the Project V PRX's game-version compatibility are separate gates. The exact GoldHEN build actually installed on the console still needs to be identified; do not assume an older 2.4b18 binary supports 14.00.
+
+References:
+- GoldHEN v2.4b18.13 release announcement: https://ko-fi.com/s/e694c36022
+- GoldHEN plugin setup: https://github.com/GoldHEN/GoldHEN_Plugins_Repository
+
 ## 1.57 adaptation plan
 
 1. Preserve and inspect the exact ProjectV v1.2 archive and PRX.
