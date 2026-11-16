@@ -11,7 +11,7 @@ EXTRA_LIBS := $(filter-out $(CORE_LIBS),$(ALL_STUBS))
 LDFLAGS := -m elf_x86_64 -pie --script $(TOOLCHAIN)/link.x --eh-frame-hdr -L$(TOOLCHAIN)/lib $(CORE_LIBS) --as-needed $(EXTRA_LIBS) --no-as-needed $(TOOLCHAIN)/lib/crt1.o
 CFLAGS := --target=x86_64-pc-freebsd12-elf -fPIC -funwind-tables -c -O2 -isysroot $(TOOLCHAIN) -isystem $(TOOLCHAIN)/include
 CXXFLAGS := $(CFLAGS) -isystem $(TOOLCHAIN)/include/c++/v1
-SOURCES := src/main.cpp src/platform/graphics.cpp
+SOURCES := src/main.cpp src/platform/graphics.cpp src/platform/library.cpp src/platform/goldhen_config.cpp
 OBJECTS := $(patsubst src/%.cpp,$(INTDIR)/%.o,$(SOURCES))
 FILES := eboot.bin sce_sys/param.sfo sce_sys/icon0.png $(wildcard sce_sys/about/*) $(wildcard sce_module/*) $(shell find assets -type f 2>/dev/null)
 all: $(CONTENT_ID).pkg
