@@ -35,7 +35,7 @@ The automatic preparation stage now follows supported PC RPF7 OPEN archives recu
 - The planner does not execute Lua recipes, external executables, mod scripts,
   XML instructions or plugin binaries.
 - It does not rename YMT to OMT automatically.
-- It records CUSA00419 / 1.73 as the requested target but does not mark that
+- It records CUSA00419 / 1.57 as the requested target but does not mark that
   target verified merely because the target fields are present.
 - The Orbis builder remains explicitly not integrated; Project V remains unconfigured.
 - GoldHEN AFR configuration and explicit-mapping overlay planning already exist in `src/core/afr.js`; this planner reports that capability without claiming console deployment.
@@ -58,7 +58,7 @@ OpenIV 3.2 later documents support for specific PSO-backed YMT files and XML
 command editing for supported PSO files. This is evidence that some metadata
 can be edited through a PSO-aware workflow; it is not evidence that arbitrary
 YMT files can be renamed to OMT, that every YMT is supported, or that an edited
-PC-side file is automatically accepted by a PS4 1.73 loader.
+PC-side file is automatically accepted by a PS4 1.57 loader.
 
 References:
 - https://openiv.com/?cat=11
