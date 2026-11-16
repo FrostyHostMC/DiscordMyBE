@@ -138,7 +138,9 @@ export function buildPs4DeliveryPlan({ files = [], conversions = [], archiveInsp
     const conversion = conversionByPath.get(path.toLowerCase()) || null;
     const archive = archiveByPath.get(path.toLowerCase()) || null;
     const textureConversion = textureByPath.get(path.toLowerCase()) || null;
-    const binaryInspection = /\\.(asi|dll|exe|sys|prx|sprx|elf)$/i.test(path)
+    const binaryInspection = [".asi", ".dll", ".exe", ".sys", ".prx", ".sprx", ".elf"].includes(extension(path))
+      ? inspectExecutableHeader(file.bytes)
+      : null;
       ? inspectExecutableHeader(file.bytes)
       : null;
     return {
