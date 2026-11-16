@@ -22,7 +22,7 @@ function asBytes(value) {
 }
 
 async function sha256(bytes) {
-  if (!globalThis.crypto?.subtle) return null;
+  if (!(bytes instanceof Uint8Array) || bytes.byteLength > 128 * 1024 * 1024 || !globalThis.crypto?.subtle) return null;
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
   return [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
 }
@@ -146,6 +146,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
           archivePath,
           analysisPath,
           size: entry.bytes.length,
+          sha256: await sha256(entry.bytes),
           extracted: true,
           formatStatus: "not-inspected"
         });
