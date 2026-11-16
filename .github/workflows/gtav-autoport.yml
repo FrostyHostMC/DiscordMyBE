@@ -1,4 +1,4 @@
-name: GTAV AutoPort CI
+name: Project V PS4 Manager CI
 
 on:
   workflow_dispatch:
@@ -118,7 +118,7 @@ jobs:
       - name: Upload PS4 package
         uses: actions/upload-artifact@v4
         with:
-          name: AutoPort-PS4-PKG
+          name: ProjectV-PS4-PKG
           path: |
             GTAV-AutoPort/ps4-app/*.pkg
             GTAV-AutoPort/ps4-app/eboot.bin
