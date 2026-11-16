@@ -1,6 +1,6 @@
 # GTA V mod-port format research and backend selection
 
-Research checked 2026-11-13. This records public tool capabilities and gaps for the user's CUSA00411 / GTA V 1.73 PS4 Story Mode target. A tool's ability to read/write PC or Enhanced assets is not evidence of PS4 compatibility.
+Research checked 2026-11-13. This records public tool capabilities and gaps for the user's CUSA00419 / GTA V 1.57 PS4 Story Mode target. A tool's ability to read/write PC or Enhanced assets is not evidence of PS4 compatibility.
 
 ## Best reuse candidates
 
@@ -20,7 +20,7 @@ Requires Python 3.11+; a Windows x64 wheel is published.
 
 Published scope includes YMAP, YTYP, YMF, GTXD, YDR/YDD/YFT/YTD, YBN/YND/YNV, YCD/YED/CUT, AWC/REL/GXT2, RPF7, DLC metadata and PSO/RBF. Some variants remain partially understood, particularly YFT, REL, YED and YMT; console CDR and PS3 RPF support is focused on reading/extraction. Version 0.5.1 is described as the last planned feature release of the Python implementation, with core development moving to .NET.
 
-Assessment: useful broad format research, fixtures and supplemental inspection. No PS4 1.73 writer claim is documented.
+Assessment: useful broad format research, fixtures and supplemental inspection. No PS4 1.57 writer claim is documented.
 
 ### Existing rage-formats Rust crate — keep as current inspector
 Repository: https://github.com/VIRUXE/rage-formats
@@ -49,7 +49,7 @@ OpenIV's 2018 PS4 announcement described Orbis support as beta and said it could
 ### GoldHEN native runtime
 GoldHEN's Plugins SDK is an MIT-licensed Orbis PRX hook/patch SDK requiring the OpenOrbis PS4 toolchain and LLVM. It can support separately engineered PS4-native runtime plugins; it does not load Windows ASI/DLL files as-is.
 
-A public project, InsulinEngine/InsulinGTAV, documents a CUSA00411 v1.57 GoldHEN plugin built with OpenOrbis. This is evidence that native work exists for the same title ID, but not a compatibility proof for 1.73 and not a universal PC script/plugin bridge.
+A public project, InsulinEngine/InsulinGTAV, documents a CUSA00411 v1.57 GoldHEN plugin built with OpenOrbis. This is evidence that native work exists for the same title ID, but not a compatibility proof for CUSA00419 and not a universal PC script/plugin bridge.
 
 ## Architecture decision
 1. Keep current Rust inspector for safe, automatic, read-only YFT/YTD reports.
@@ -57,7 +57,7 @@ A public project, InsulinEngine/InsulinGTAV, documents a CUSA00411 v1.57 GoldHEN
 3. Add a native-engine abstraction so ragekit, FiveFury and existing Rust parsers can be called as independently versioned backends.
 4. Evaluate ragekit first for broad Legacy resource decoding/writing and round-trip validation; evaluate FiveFury as supplemental format coverage. Neither backend may emit "PS4-ready" by default.
 5. Keep archive handling separate from payload conversion: RPF repacking cannot repair PC-only resource layout.
-6. Add a PS4-specific adapter only after obtaining lawful, unmodified resources from exact CUSA00411 / 1.73 and validating the executable/build fingerprint.
+6. Add a PS4-specific adapter only after obtaining lawful, unmodified resources from exact CUSA00419 / 1.57 and validating the executable/build fingerprint.
 7. Treat PC ASI/DLL/EXE, ScriptHookV, .NET and Windows API-dependent mods as behavior-reimplementation projects. A PS4 PRX requires separate native code, API compatibility and target-build validation.
 
 ## Important limits
