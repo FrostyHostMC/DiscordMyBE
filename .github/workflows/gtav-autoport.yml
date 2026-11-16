@@ -84,6 +84,7 @@ jobs:
             tests/platform_host_tests.cpp \
             src/platform/library.cpp src/platform/goldhen_config.cpp \
             src/platform/compatibility_profiles.cpp \
+            ../project-v-runtime/src/signature_gate.cpp \
             -o "$RUNNER_TEMP/ps4-platform-tests"
       - name: Run PS4 platform regression tests
         run: "$RUNNER_TEMP/ps4-platform-tests"
