@@ -20,6 +20,6 @@ XML, JSON and INI configuration is parsed for model references, position/rotatio
 - Resolve skeletons, cloth, animation dictionaries, expression sets, scenario/relationship data and audio references.
 - Resolve object archetypes, collision bounds, material/texture references, YMAP placements and streaming bounds.
 - Implement verified spawn/menu actions for peds and objects, including transforms, scenarios, AI and cleanup.
-- Produce target-compatible resources and validate them in GTA V Story Mode on CUSA00419 update 1.73.
+- Produce target-compatible resources and validate them in GTA V Story Mode on CUSA00419 update 1.57.
 
 The exported `autoport-ped-object-pack` is an analysis/interchange report, not a PS4-ready content pack.
