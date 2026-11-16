@@ -59,9 +59,10 @@ int main() {
         {ProjectV::ScanResult::NotFound, 4, secondExpected, 1, 1}
     };
     assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), missingHook, 2));
+    const std::uint8_t mismatchedExpected[] = {0xCC};
     const ProjectV::RequiredHookCheck mismatchedHook[] = {
         {ProjectV::ScanResult::Found, 1, expected, 3, 3},
-        {ProjectV::ScanResult::Found, 4, wrong, 1, 1}
+        {ProjectV::ScanResult::Found, 4, mismatchedExpected, 1, 1}
     };
     assert(!ProjectV::validateRequiredHookSet(uniqueImage, sizeof(uniqueImage), mismatchedHook, 2));
     const ProjectV::RequiredHookCheck overlappingHooks[] = {
