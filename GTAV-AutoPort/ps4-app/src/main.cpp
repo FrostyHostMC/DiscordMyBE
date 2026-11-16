@@ -60,4 +60,49 @@ return true;
 }
 static void activate(){if(items.empty())return;Entry e=items[selected];if(e.dir){if(e.name==".."){auto p=path.find_last_of('/');if(p!=std::string::npos&&p>0)path=path.substr(0,p);}else path+="/"+e.name;scan();return;}if(root==3){status="THIS FILE IS ALREADY IN THE IMPORT LIBRARY";return;}if(importFile(e))status=receiptOk?"IMPORTED SAFELY - ORIGINAL LEFT UNCHANGED":"IMPORTED - RECEIPT COULD NOT BE SAVED";else if(status.empty())status="IMPORT FAILED - CHECK STORAGE";}
 static void draw(Scene2D&s){s.FrameBufferFill(BG);s.DrawRectangle(0,0,W,112,PANEL);s.DrawRectangle(48,40,12,46,CYAN);drawText(s,82,38,"PROJECT V",WHITE,6);drawText(s,470,55,"PS4 MOD MANAGER  /  LIBRARY",MUTED,3);s.DrawRectangle(48,142,1824,126,PANEL);drawText(s,82,166,"IMPORT / STAGING",CYAN,4);drawText(s,82,218,path,WHITE,3);s.DrawRectangle(48,294,1180,610,PANEL);s.DrawRectangle(1260,294,612,610,PANEL);drawText(s,82,324,"SUPPORTED FILES  /  FOLDERS",MUTED,3);int first=(selected/10)*10;for(int i=first;i<(int)items.size()&&i<first+10;i++){int y=374+(i-first)*48;if(i==selected)s.DrawRectangle(68,y-9,1138,40,{27,42,61});drawText(s,90,y,(items[i].dir?"> ":"")+items[i].name,i==selected?CYAN:WHITE,3);if(!items[i].dir)drawText(s,1000,y,std::to_string(items[i].size/1024)+" KB",MUTED,2);}drawText(s,1294,328,"CONTROLS",CYAN,4);drawText(s,1294,396,"UP DOWN  SELECT",WHITE,2);drawText(s,1294,440,"CROSS  OPEN / STAGE FILE",WHITE,2);drawText(s,1294,484,"CIRCLE  PARENT FOLDER",WHITE,2);drawText(s,1294,528,"SQUARE  NEXT STORAGE / LIBRARY",WHITE,2);drawText(s,1294,572,"TRIANGLE  RESCAN",WHITE,2);drawText(s,1294,616,"LEFT RIGHT  CHANGE GTA V PROFILE",WHITE,2);drawText(s,1294,674,"ACTIVE PROFILE",MUTED,2);drawText(s,1294,710,ProjectV::profileAt(profileIndex).label,CYAN,3);drawText(s,1294,750,"HOOKS LOCKED - BUILD UNVERIFIED",RED,2);drawText(s,1294,782,"PS4 SYSTEM SOFTWARE TARGET 14.00",WHITE,2);drawText(s,1294,822,"IMPORT DESTINATION",MUTED,2);drawText(s,1294,854,"/DATA/PROJECTV/IMPORTS",GREEN,2);drawText(s,1294,886,"GAME FILES ARE NEVER OVERWRITTEN",MUTED,2);s.DrawRectangle(48,930,1824,92,PANEL);drawText(s,82,962,status.substr(0,90),status.find("FAILED")!=std::string::npos?RED:WHITE,2);s.DrawRectangle(48,1044,1824,3,CYAN);}
-int main(){Scene2D scene(W,H,4);if(!scene.Init((size_t)W*H*4*2,2))for(;;)sceKernelUsleep(1000000);scePadInit();pad=scePadOpen(0x10000000,ORBIS_PAD_PORT_TYPE_STANDARD,0,nullptr);scan();uint32_t old=0;for(;;){OrbisPadData d{};if(pad>=0)scePadReadState(pad,&d);uint32_t press=d.buttons&~old;old=d.buttons;if(press&ORBIS_PAD_BUTTON_UP&&selected>0)selected--;if(press&ORBIS_PAD_BUTTON_DOWN&&selected+1<(int)items.size())selected++;if(press&ORBIS_PAD_BUTTON_LEFT){profileIndex=(profileIndex+ProjectV::profileCount()-1)%ProjectV::profileCount();status="PROFILE CHANGED - RUNTIME HOOKS REMAIN LOCKED";}if(press&ORBIS_PAD_BUTTON_RIGHT){profileIndex=(profileIndex+1)%ProjectV::profileCount();status="PROFILE CHANGED - RUNTIME HOOKS REMAIN LOCKED";}if(press&ORBIS_PAD_BUTTON_CROSS)activate();if(press&ORBIS_PAD_BUTTON_CIRCLE){if(path!=roots[root]){auto p=path.find_last_of('/');if(p!=std::string::npos&&p>0)path=path.substr(0,p);scan();}}if(press&ORBIS_PAD_BUTTON_TRIANGLE)scan();if(press&ORBIS_PAD_BUTTON_SQUARE){root=(root+1)%5;path=roots[root];scan();}scene.SetActiveFrameBuffer(frame%2);draw(scene);scene.SubmitFlip(frame);scene.FrameWait(frame);scene.FrameBufferSwap();frame++;sceKernelUsleep(16000);}return 0;}
+static void startupLog(const char* message){
+mkdir("/data/ProjectV",0777);
+FILE* f=fopen("/data/ProjectV/manager-startup.log","a");
+if(!f)return;
+fprintf(f,"%s\\n",message);
+fflush(f);
+fsync(fileno(f));
+fclose(f);
+}
+int main(){
+startupLog("BOOT: main entered");
+Scene2D scene(W,H,4);
+if(!scene.Init((size_t)W*H*4*2,2)){
+startupLog("BOOT ERROR: graphics initialization failed");
+return 1;
+}
+startupLog("BOOT: graphics initialized");
+int padInitResult=scePadInit();
+startupLog(padInitResult==0?"BOOT: pad subsystem initialized":"BOOT WARNING: pad subsystem initialization failed");
+pad=scePadOpen(0x10000000,ORBIS_PAD_PORT_TYPE_STANDARD,0,nullptr);
+startupLog(pad>=0?"BOOT: controller opened":"BOOT WARNING: controller open failed");
+scan();
+uint32_t old=0;
+for(;;){
+OrbisPadData d{};
+if(pad>=0)scePadReadState(pad,&d);
+uint32_t press=d.buttons&~old;
+old=d.buttons;
+if(press&ORBIS_PAD_BUTTON_UP&&selected>0)selected--;
+if(press&ORBIS_PAD_BUTTON_DOWN&&selected+1<(int)items.size())selected++;
+if(press&ORBIS_PAD_BUTTON_LEFT){profileIndex=(profileIndex+ProjectV::profileCount()-1)%ProjectV::profileCount();status="PROFILE CHANGED - RUNTIME HOOKS REMAIN LOCKED";}
+if(press&ORBIS_PAD_BUTTON_RIGHT){profileIndex=(profileIndex+1)%ProjectV::profileCount();status="PROFILE CHANGED - RUNTIME HOOKS REMAIN LOCKED";}
+if(press&ORBIS_PAD_BUTTON_CROSS)activate();
+if(press&ORBIS_PAD_BUTTON_CIRCLE){if(path!=roots[root]){auto p=path.find_last_of('/');if(p!=std::string::npos&&p>0)path=path.substr(0,p);scan();}}
+if(press&ORBIS_PAD_BUTTON_TRIANGLE)scan();
+if(press&ORBIS_PAD_BUTTON_SQUARE){root=(root+1)%5;path=roots[root];scan();}
+scene.SetActiveFrameBuffer(frame%2);
+draw(scene);
+scene.SubmitFlip(frame);
+scene.FrameWait(frame);
+scene.FrameBufferSwap();
+frame++;
+sceKernelUsleep(16000);
+}
+return 0;
+}
