@@ -106,7 +106,7 @@ function classifyOne(file) {
   if (binaryInspection?.format === "pe" && [".prx", ".sprx"].includes(extension)) warnings.push("Binary inspection found a Windows PE image inside a PRX/SPRX-named file; it is not a valid Orbis plugin candidate.");
   if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && !binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF machine/class/byte order does not match the expected PS4 x86-64 architecture.");
   if (binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected" && binaryInspection.architectureCompatibleWithPs4Cpu) warnings.push("ELF CPU architecture matches x86-64, but Orbis ABI, SELF/PRX packaging, imports and game-build compatibility remain unverified.");
-  if (binaryInspection?.format === "sce-container") warnings.push("Sony SCE container signature detected; signature, encryption, imports and target compatibility are not validated.");
+  if (["sce-container", "self-container"].includes(binaryInspection?.format)) warnings.push("Sony SELF/SCE container signature detected; signature, encryption, imports and target compatibility are not validated.");
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");
   if (signature === "MZ" && ![".dll", ".exe", ".asi"].includes(extension)) warnings.push("Detected a Windows PE executable signature despite the file extension.");
