@@ -6,7 +6,7 @@ The new ps4TextureLayout.js module adds a bounded first-stage PS4 texture storag
 
 1. Reads DDS headers and validates header sizes, dimensions, mip counts, texture shape and payload bounds.
 2. Recognizes legacy DXT1/BC1, DXT5/BC3 and ATI2/BC5, plus matching DX10 BC1/BC3/BC5 DXGI formats.
-3. Computes per-mip 4x4 compression-block extents.
+3. Computes per-mip 4x4 compression-block extents and reports whether the supplied DDS contains the full possible mip chain; it never invents missing mip levels.
 4. Reorders BC blocks into the PS4 Legacy Thin1DThin 8x8 microtile storage layout (tile mode 0x800001, tile index 13).
 5. Untiles the generated allocation and compares every byte with the source mip payload.
 6. Writes the storage payload and a JSON sidecar into ps4-texture-storage-candidates/ in the automatic prep ZIP.
