@@ -95,3 +95,9 @@ test("places adjacent 8x8 microtiles at the expected tile-row and tile-column of
  assert.equal(blockByte(128),128); // second tile row begins at source y=8
  assert.equal(blockByte(192),136); // second row, second column
 });
+
+
+test("maps DX10 BC3 and BC5 UNORM to their PS4 storage formats",()=>{
+ const bc3=dds({width:8,height:8,format:"DXT5",dx10:true});new DataView(bc3.buffer).setUint32(128,77,true);assert.equal(inspectDdsTexture(bc3).format,"BC3");
+ const bc5=dds({width:8,height:8,format:"ATI2",dx10:true});new DataView(bc5.buffer).setUint32(128,83,true);assert.equal(inspectDdsTexture(bc5).format,"BC5");
+});
