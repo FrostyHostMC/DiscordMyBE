@@ -15,7 +15,9 @@ test("builds a universal plan for multiple asset families", () => {
   assert.equal(plan.resources.find((item) => item.path.endsWith(".yft")).family, "fragment");
   assert.equal(plan.resources.find((item) => item.path.endsWith(".ymap")).family, "map-placement");
   assert.equal(plan.resources.find((item) => item.path.endsWith(".asi")).status, "behavior-reimplementation");
-  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).status, "manual-format-identification");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).family, "documentation");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).stage, "documentation-review");
+  assert.equal(plan.resources.find((item) => item.path.endsWith(".txt")).status, "analysis-or-authoring-only");
   assert.equal(plan.summary.installable, false);
 });
 
@@ -28,8 +30,8 @@ test("marks same-basename asset groupings as unverified candidate relationships"
 
 test("keeps PS4 target explicit and does not claim conversion output", () => {
   const plan = buildUniversalPortPlan({ files: [file("model.yft")] });
-  assert.equal(plan.target.titleId, "CUSA00411");
-  assert.equal(plan.target.updateVersion, "1.73");
+  assert.equal(plan.target.titleId, "CUSA00419");
+  assert.equal(plan.target.updateVersion, "1.57");
   assert.equal(plan.summary.conversionOutputsWritten, 0);
   assert.equal(plan.resources[0].status, "blocked-pending-target-adapter");
 });
@@ -39,4 +41,21 @@ test("empty imports produce an empty but safe plan", () => {
   assert.equal(plan.summary.fileCount, 0);
   assert.equal(plan.summary.blockedCount, 0);
   assert.equal(plan.summary.installable, false);
+});
+
+test("declares concrete output artifacts and target gates for each source family", () => {
+  const plan = buildUniversalPortPlan({ files: [
+    file("cars/sultan.yft"), file("textures/sultan.png"), file("peds/cop.ydd"),
+    file("weapons/rifle.ydr"), file("plugins/trainer.asi"), file("scripts/trainer.lua")
+  ] });
+  const fragment = plan.resources.find((item) => item.extension === ".yft");
+  assert.ok(fragment.outputContract.artifacts.some((item) => item.includes("model.yft")));
+  assert.ok(fragment.outputContract.artifacts.some((item) => item.includes("model.ytd")));
+  assert.match(fragment.outputContract.gate, /PS4-specific resource encoding.*remain unverified/);
+  const texture = plan.resources.find((item) => item.extension === ".png");
+  assert.deepEqual(texture.outputContract.artifacts, ["model.ytd"]);
+  assert.match(texture.outputContract.gate, /PS4 YTD writer/);
+  const plugin = plan.resources.find((item) => item.extension === ".asi");
+  assert.match(plugin.outputContract.artifacts[0], /No direct PS4 binary output/);
+  assert.match(plugin.outputContract.gate, /Orbis PRX/);
 });

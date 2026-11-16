@@ -8,6 +8,34 @@ const parser = new XMLParser({
   isArray: (name) => name === "Item",
 });
 
+const VEHICLE_FIELD_GROUPS = Object.freeze({
+  identity: ["modelName", "txdName", "handlingId", "gameName", "vehicleMakeName", "vehicleClass", "type", "plateType", "vehicleType", "layout", "wheelType", "dashboardType", "displayName", "name", "vehicleClass"],
+  audio: ["audioNameHash"],
+  camera: ["cameraName", "cameraHash", "firstPersonDrivebyData", "aimCameraName", "bonnetCameraName", "povCameraName"],
+  layoutAndAnimation: ["animConvRoofDictName", "animConvRoofName", "animConvRoofWindowsAffected", "expressionDictName", "expressionName", "coverBoundOffsets", "bonnetCameraName", "povCameraName"],
+  appearanceAndEquipment: ["flags", "vehicleFlags", "modKit", "extras", "wheelScale", "wheelScaleRear", "dirtLevelMin", "dirtLevelMax", "envEffScale", "seatOffsetDistX", "seatOffsetDistY", "seatOffsetDistZ", "steerWheelMult", "damageMapScale", "damageOffsetScale"],
+  streaming: ["lodDistances", "minSeatHeight", "maxNum", "frequency", "scenarioLayout", "populationGroup", "spawnFrequency", "lightSettings", "sirenSettings"],
+});
+const HANDLING_FIELD_GROUPS = Object.freeze({
+  massAndAero: ["fMass", "fInitialDragCoeff", "fDownforceModifier", "fPercentSubmerged"],
+  drivetrain: ["fDriveBiasFront", "nInitialDriveGears", "fInitialDriveForce", "fDriveInertia", "fClutchChangeRateScaleUpShift", "fClutchChangeRateScaleDownShift", "fInitialDriveMaxFlatVel"],
+  brakesAndSteering: ["fBrakeForce", "fBrakeBiasFront", "fHandBrakeForce", "fSteeringLock"],
+  traction: ["fTractionCurveMax", "fTractionCurveMin", "fTractionCurveLateral", "fTractionSpringDeltaMax", "fLowSpeedTractionLossMult", "fTractionLossMult", "fTractionBiasFront", "fTractionBiasRear", "fCamberStiffnesss"],
+  suspension: ["fSuspensionForce", "fSuspensionCompDamp", "fSuspensionReboundDamp", "fSuspensionUpperLimit", "fSuspensionLowerLimit", "fSuspensionRaise", "fSuspensionBiasFront", "fSuspensionBiasRear", "fAntiRollBarForce", "fAntiRollBarBiasFront", "fAntiRollBarBiasRear", "fRollCentreHeightFront", "fRollCentreHeightRear"],
+  damageAndOther: ["fCollisionDamageMult", "fWeaponDamageMult", "fDeformationDamageMult", "fEngineDamageMult", "fPetrolTankVolume", "fOilVolume", "nMonetaryValue", "fSeatOffsetDistX", "fSeatOffsetDistY", "fSeatOffsetDistZ", "fPopUpLightRotation"],
+});
+function pickFields(source, groups) {
+  const result = {};
+  for (const [group, names] of Object.entries(groups)) {
+    const fields = {};
+    for (const name of new Set(names)) if (source && Object.hasOwn(source, name)) fields[name] = source[name];
+    if (Object.keys(fields).length) result[group] = fields;
+  }
+  return result;
+}
+function referenceStatus(value) {
+  return value ? { value: text(value), resolution: "game-reference-not-yet-resolved" } : null;
+}
 function asArray(value) {
   if (value == null) return [];
   return Array.isArray(value) ? value : [value];
@@ -81,6 +109,13 @@ export function inspectVehicleMetadata({ vehiclesXml, handlingXml, modelName }) 
     handlingId,
     vehicleEntry: vehicle,
     handlingEntry: handlingMatches[0],
+    mappedSettings: {
+      vehicle: pickFields(vehicle, VEHICLE_FIELD_GROUPS),
+      handling: pickFields(handlingMatches[0], HANDLING_FIELD_GROUPS),
+    },
+    audioReference: referenceStatus(vehicle.audioNameHash),
+    cameraReference: referenceStatus(vehicle.cameraName || vehicle.cameraHash || vehicle.firstPersonDrivebyData),
+    unmodifiedSourceMetadata: { vehicleEntry: vehicle, handlingEntry: handlingMatches[0], preservation: "all-source-fields-retained" },
     dependencies: {
       modelFiles: [`${model}.yft`, `${model}_hi.yft`],
       textureFiles: txdName ? [`${txdName}.ytd`] : [],

@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Local-first PC GTA V to PS4 Story Mode conversion workbench",
+  "description": "Project V desktop workspace for GTA V PS4 mod analysis, resource inspection and packaging",
   "scripts": {
     "test": "node --test",
     "dev": "vite",
@@ -16,7 +16,8 @@
     "jszip": "^3.10.1",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "7zip-bin": "^5.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",

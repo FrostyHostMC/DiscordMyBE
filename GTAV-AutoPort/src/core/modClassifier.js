@@ -1,5 +1,14 @@
 const EXTENSIONS = {
   ".rpf": ["archive", "RAGE archive", "archive-adapter-required"],
+  ".fx": ["reshade-shader", "ReShade HLSL effect source", "ps4-renderer-adaptation-required"],
+  ".fxh": ["reshade-shader-include", "ReShade HLSL include", "shader-dependency-resolution-required"],
+  ".hlsl": ["shader-source", "HLSL shader source", "ps4-renderer-adaptation-required"],
+  ".gfx": ["scaleform-graphics", "Scaleform GFx movie", "scaleform-runtime-validation-required"],
+  ".swf": ["scaleform-graphics", "Flash / Scaleform source movie", "scaleform-export-required"],
+  ".fla": ["scaleform-source", "Flash authoring project", "scaleform-authoring-required"],
+  ".as": ["scaleform-source", "ActionScript source", "scaleform-authoring-required"],
+  ".ttf": ["font-source", "TrueType font", "scaleform-font-export-required"],
+  ".otf": ["font-source", "OpenType font", "scaleform-font-export-required"],
   ".yft": ["rage-resource", "RAGE fragment", "source-parser-available"],
   ".ydr": ["rage-resource", "RAGE drawable", "source-parser-available"],
   ".ydd": ["rage-resource", "RAGE drawable dictionary", "source-parser-available"],
@@ -22,6 +31,8 @@ const EXTENSIONS = {
   ".xml": ["metadata", "XML configuration/metadata", "metadata-adapter-required"],
   ".ini": ["configuration", "INI configuration", "configuration-review"],
   ".cfg": ["configuration", "Configuration", "configuration-review"],
+  ".txt": ["documentation", "Mod documentation / instructions", "manual-review"],
+  ".md": ["documentation", "Markdown documentation", "manual-review"],
   ".json": ["configuration", "JSON configuration/manifest", "configuration-review"],
   ".toml": ["configuration", "TOML configuration", "configuration-review"],
   ".lua": ["script-source", "Lua script", "behavior-reimplementation-required"],
@@ -79,6 +90,7 @@ function classifyOne(file) {
   const signature = signatureOf(file.bytes);
   const warnings = [];
   if ([".asi", ".dll", ".exe", ".sys"].includes(extension)) warnings.push("Windows/PC native code cannot be copied to PS4 as a working plugin.");
+  if ([".gfx", ".swf", ".fla", ".as", ".ttf", ".otf"].includes(extension)) warnings.push("Scaleform graphics/font assets need a compatible GFx authoring/export workflow and an exact-build PS4 loader; file identification alone is not a playable graphics mod.");
   if (extension === ".prx") warnings.push("A PRX is platform-native code; verify Orbis target, loader, title ID and exact game build.");
   if (extension === ".ysc") warnings.push("Compiled game scripts require matching runtime/native compatibility and are not source-code translations.");
   if (family === "unknown") warnings.push("No adapter has been assigned. Preserve this file and inspect its content before deciding whether it is required.");

@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 const MAX_ENTRIES = 5000;
 const MAX_UNCOMPRESSED_BYTES = 512 * 1024 * 1024;
@@ -37,9 +38,49 @@ function validateInventoryPaths(paths) {
   }
 }
 
-function summarize(sourceName, files) {
+
+function inspectOpenIvAssembly(file) {
+  const xml = new TextDecoder("utf-8").decode(file.bytes);
+  const validation = XMLValidator.validate(xml);
+  if (validation !== true) {
+    return { path: file.path, validXml: false, error: validation.err?.msg || "Invalid XML", operations: [] };
+  }
+  const document = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", parseTagValue: false, trimValues: true }).parse(xml);
+  const metadata = document?.package?.metadata || document?.metadata || {};
+  const operations = [];
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, child] of Object.entries(value)) {
+      const tag = key.toLowerCase();
+      if (["add", "replace", "delete", "copy", "move"].includes(tag)) {
+        const entries = Array.isArray(child) ? child : [child];
+        for (const entry of entries) {
+          if (entry && typeof entry === "object") {
+            operations.push({ action: tag, attributes: Object.fromEntries(Object.entries(entry).filter(([name]) => name.startsWith("@_"))) });
+          } else operations.push({ action: tag, value: String(entry) });
+        }
+      }
+      if (child && typeof child === "object") visit(child);
+    }
+  };
+  visit(document);
+  const value = (entry) => typeof entry === "string" || typeof entry === "number" ? String(entry) : "";
+  return {
+    path: file.path,
+    validXml: true,
+    name: value(metadata.name),
+    version: value(metadata.version),
+    author: value(metadata.author),
+    description: value(metadata.description),
+    operations,
+    operationCount: operations.length,
+  };
+}
+
+function summarize(sourceName, files, packageInfo = {}) {
   return {
     sourceName,
+    ...packageInfo,
     files,
     inventory: files.map(({ path, size, extension }) => ({ path, size, extension })),
     totalBytes: files.reduce((sum, item) => sum + item.size, 0),
@@ -47,8 +88,8 @@ function summarize(sourceName, files) {
 }
 
 export async function inspectZipArchive(file) {
-  if (!file || !file.name?.toLowerCase().endsWith(".zip")) {
-    throw new Error("Choose a ZIP archive. RAR and 7z support is not available in this build.");
+  if (!file || !/\.(zip|oiv)$/i.test(file.name || "")) {
+    throw new Error("Choose a ZIP or OpenIV OIV package. Use the local 7z extractor for .7z archives.");
   }
   const zip = await JSZip.loadAsync(file, { checkCRC32: true, createFolders: false });
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);
@@ -81,7 +122,23 @@ export async function inspectZipArchive(file) {
     }
     files.push({ path, bytes, size: bytes.byteLength, extension: extensionOf(path) });
   }
-  return summarize(file.name, files);
+  const isOpenIv = file.name.toLowerCase().endsWith(".oiv");
+  const assemblyFiles = files.filter((item) => item.path.split("/").at(-1).toLowerCase() === "assembly.xml");
+  const assemblies = assemblyFiles.map(inspectOpenIvAssembly);
+  const packageInfo = {
+    containerFormat: isOpenIv ? "openiv-oiv" : "zip",
+    packageMetadata: isOpenIv ? {
+      type: "OpenIV OIV",
+      assemblyFiles: assemblyFiles.map((item) => item.path),
+      assemblies,
+      assemblyDetected: assemblyFiles.length > 0,
+      status: assemblyFiles.length > 0 ? "manifest-found" : "manifest-missing",
+      note: assemblyFiles.length > 0
+        ? "OpenIV package manifest found. Install instructions and target paths still require interpretation and PS4-specific mapping."
+        : "OIV container opened, but no assembly.xml manifest was found. Treat contents as an ordinary archive until verified.",
+    } : null,
+  };
+  return summarize(file.name, files, packageInfo);
 }
 
 export async function inspectFolderFiles(fileList) {

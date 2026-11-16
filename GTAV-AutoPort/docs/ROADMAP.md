@@ -17,6 +17,25 @@
 - [ ] Produce reversible PS4 Story Mode package with backups and rollback only after exact-target validation.
 
 
+## Project V PS4 manager
+- [x] Rebrand the native PS4 companion UI and package title as Project V while retaining the existing package identity for in-place updates.
+- [x] Add separate selectable metadata profiles for GTA V 1.57 US/EU (primary) and 1.56 US/EU (secondary community target).
+- [x] Keep all runtime hook activation locked until exact executable fingerprints, unique signatures and matching validation evidence exist.
+- [ ] Replace the staging-only screen with full Project V library, manifest, plugin preview and reversible deployment workflows.
+- [ ] Port and harden Project V runtime hooks for GTA V 1.57 first; maintain a separate 1.56 compatibility path.
+
+## Native PS4 companion app
+- [x] Add an OpenOrbis v0.5.4 build pipeline that emits an unsigned PS4 PKG artifact.
+- [x] Add controller navigation for USB 0, USB 1, `/data`, and the staged import library.
+- [x] Add safe single-file staging with temporary copy, byte-count verification, atomic rename, collision-safe destination names and JSONL receipts.
+- [ ] Add bounded native ZIP/OIV extraction with traversal, symlink, duplicate-path and expanded-size protections; desktop intake is not PS4 extraction.
+- [x] Add a bounded read-only PS4 staged-library inventory module (UI integration and SHA-256 manifests remain pending).
+- [x] Add Linux host regression tests for staged-library scanning, hidden-file/symlink exclusion, traversal limits, GoldHEN path validation, config preview, backup and restore.
+- [ ] Add shared mod-manifest parsing, compatibility labels, tags and full import inventory details.
+- [x] Add reusable GoldHEN plugin config validation, preview, backup, explicit entry-add and restore APIs (controller UI integration and fixture validation remain pending).
+- [ ] Connect validated desktop conversion outputs to the PS4 import/install pipeline.
+- [ ] Perform console validation only after the user chooses to test; no physical-console test is claimed yet.
+
 ## Phase 0 — workspace
 - [x] Isolated folder and development branch created.
 - [x] React/Vite workbench UI.
@@ -56,11 +75,23 @@
 - [x] Implement initial generic inventory and explicit model/texture/handling dependency graph with missing/ambiguous reporting.
 - [ ] Expand dependency graph across variations, carcols, mod kits, audio, layout, collision, LOD and damage assets.
 - [ ] Implement source decoders that populate the intermediate representation without dropping unsupported constructs.
-- [ ] Obtain and hash exact-build PS4 reference resources for CUSA00411 / GTA V 1.73.
+- [ ] Obtain and hash exact-build PS4 reference resources separately for CUSA00419 (US) and CUSA00411 (EU) / GTA V 1.57.
 - [ ] Implement PS4 YFT/YTD encoders and validate round-trip against independent readers and game runtime.
 
+## Active PS4 target profiles
+- US: CUSA00419 / GTA V 1.57.
+- EU: CUSA00411 / GTA V 1.57.
+- Keep executable fingerprints, hook signatures, offsets, and validation evidence separate by region. Never infer US compatibility from EU evidence or vice versa.
+
+## Project V runtime compatibility research
+- [x] Inspect public Project V 1.3.2 source for version-sensitive hooks and unsafe scan handling.
+- [x] Document uninitialized address, unchecked signature scans, Makefile variable typo and toolchain include-path concerns.
+- [x] Correct target matrix: GTA V 1.57 on PS4 system software 14.00 is primary; 1.56 is secondary.
+- [ ] Obtain and inspect the exact Project V v1.2 archive and PRX; do not replace it based only on source lineage.
+- [ ] Build independent executable fingerprints and hook maps for 1.57 US/EU and 1.56 US/EU.
+
 ## Phase 3 — first PS4 vehicle conversion
-- [x] Record user-specified first target label: CUSA00411 · GTA V 1.73 · PS4 Story Mode (console/build compatibility still unverified).
+- [x] Record requested regional profiles: CUSA00419 (US) and CUSA00411 (EU), both GTA V 1.57 · PS4 Story Mode (console/build compatibility still unverified).
 - [x] Add evidence-based compatibility gates for console identity, GoldHEN, PS4 reference resources, adapters, and deployment/rollback.
 - [ ] Independently verify region, executable/build fingerprint, and GoldHEN configuration on the console.
 - [ ] Determine PS4 YFT/YTD resource differences from verified retail PS4 files.

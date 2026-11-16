@@ -5,6 +5,17 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+fn geometry_triangle_count(geometry: &rage_formats::ydd::DrawableGeometry) -> u64 {
+    let index_count = if geometry.indices_count > 0 {
+        geometry.indices_count as u64
+    } else {
+        geometry.index_buffer.as_ref()
+            .map(|buffer| buffer.indices_count as u64)
+            .unwrap_or(0)
+    };
+    index_count / 3
+}
+
 fn drawable_summary(drawable: &Drawable) -> Value {
     let models: usize = drawable.lods.iter().map(|lod| lod.models.len()).sum();
     let geometries: usize = drawable.lods.iter()
@@ -19,27 +30,98 @@ fn drawable_summary(drawable: &Drawable) -> Value {
     let triangles: u64 = drawable.lods.iter()
         .flat_map(|lod| lod.models.iter())
         .flat_map(|model| model.geometries.iter())
-        .map(|geometry| geometry.triangles_count as u64)
+        .map(geometry_triangle_count)
         .sum();
+
+    let lods = drawable.lods.iter().map(|lod| {
+        let geometry_details = lod.models.iter().enumerate()
+            .flat_map(|(model_index, model)| {
+                model.geometries.iter().enumerate().map(move |(geometry_index, geometry)| json!({
+                    "model_index": model_index,
+                    "geometry_index": geometry_index,
+                    "shader_id": geometry.shader_id,
+                    "vertices_count_reported": geometry.vertices_count,
+                    "vertex_stride": geometry.vertex_stride,
+                    "indices_count_reported": geometry.indices_count,
+                    "triangles_count_field": geometry.triangles_count,
+                    "triangle_count_derived_from_indices": geometry_triangle_count(geometry),
+                    "vertex_buffer_present": geometry.vertex_buffer.is_some(),
+                    "index_buffer_present": geometry.index_buffer.is_some(),
+                    "decoded_index_count": geometry.index_buffer.as_ref().map(|buffer| buffer.indices.len()).unwrap_or(0),
+                    "skeleton_binding": model.skeleton_binding,
+                    "bone_index": model.bone_index(),
+                    "is_skinned": model.is_skinned()
+                }))
+            }).collect::<Vec<_>>();
+        json!({
+            "level": lod.level.to_string(),
+            "model_count": lod.models.len(),
+            "geometry_count": geometry_details.len(),
+            "triangle_count": geometry_details.iter()
+                .map(|geometry| geometry["triangle_count_derived_from_indices"].as_u64().unwrap_or(0))
+                .sum::<u64>(),
+            "triangle_count_derived_from_indices": geometry_details.iter()
+                .map(|geometry| geometry["triangle_count_derived_from_indices"].as_u64().unwrap_or(0))
+                .sum::<u64>(),
+            "geometries": geometry_details
+        })
+    }).collect::<Vec<_>>();
+
+    let shader_group = drawable.shader_group.as_ref().map(|group| json!({
+        "texture_count": group.textures.len(),
+        "textures": group.textures.iter().map(|texture| json!({
+            "name": texture.name,
+            "name_hash": format!("0x{:08X}", texture.name_hash),
+            "width": texture.width,
+            "height": texture.height,
+            "format": texture.format.to_string(),
+            "mip_levels": texture.levels
+        })).collect::<Vec<_>>(),
+        "shader_count": group.shaders.len(),
+        "shaders": group.shaders.iter().map(|shader| json!({
+            "name_hash": format!("0x{:08X}", shader.name_hash),
+            "file_name_hash": format!("0x{:08X}", shader.file_name_hash),
+            "render_bucket": shader.render_bucket,
+            "render_bucket_mask": shader.render_bucket_mask,
+            "parameter_count": shader.parameter_count,
+            "texture_parameter_count": shader.texture_parameter_count,
+            "parameters": shader.parameters.iter().map(|parameter| json!({
+                "name_hash": format!("0x{:08X}", parameter.name_hash),
+                "data_type": parameter.data_type,
+                "value": match &parameter.value {
+                    rage_formats::ydd::ShaderParameterValue::Texture { name, name_hash } => json!({
+                        "kind": "texture",
+                        "name": name,
+                        "name_hash": format!("0x{:08X}", name_hash)
+                    }),
+                    rage_formats::ydd::ShaderParameterValue::Vectors(values) => json!({
+                        "kind": "vectors",
+                        "values": values.iter().map(|value| [value.x, value.y, value.z, value.w]).collect::<Vec<_>>()
+                    }),
+                    rage_formats::ydd::ShaderParameterValue::Pointer => json!({"kind": "pointer"}),
+                }
+            })).collect::<Vec<_>>()
+        })).collect::<Vec<_>>()
+    }));
 
     json!({
         "name": drawable.name,
         "name_hash": format!("0x{:08X}", drawable.name_hash),
-        "lods": drawable.lods.iter().map(|lod| json!({
-            "level": lod.level.to_string(),
-            "model_count": lod.models.len(),
-            "geometry_count": lod.models.iter().map(|model| model.geometries.len()).sum::<usize>(),
-            "triangle_count": lod.models.iter().flat_map(|model| model.geometries.iter()).map(|geometry| geometry.triangles_count as u64).sum::<u64>()
-        })).collect::<Vec<_>>(),
+        "lod_distances": drawable.lod_distances,
+        "render_masks": drawable.render_masks,
+        "lods": lods,
         "model_count": models,
         "geometry_count": geometries,
         "vertex_count_sum_across_lods": vertices,
         "triangle_count_sum_across_lods": triangles,
+        "triangle_count_sum_across_lods_derived_from_indices": triangles,
         "bounds": {
+            "center": [drawable.bounds.center.x, drawable.bounds.center.y, drawable.bounds.center.z],
             "sphere_radius": drawable.bounds.sphere_radius,
             "box_min": [drawable.bounds.box_min.x, drawable.bounds.box_min.y, drawable.bounds.box_min.z],
             "box_max": [drawable.bounds.box_max.x, drawable.bounds.box_max.y, drawable.bounds.box_max.z]
         },
+        "shader_group": shader_group,
         "embedded_shader_texture_count": drawable.shader_group.as_ref().map(|group| group.textures.len()).unwrap_or(0)
     })
 }
@@ -226,7 +308,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::safe_texture_filename;
+    use super::{geometry_triangle_count, safe_texture_filename};
 
     #[test]
     fn texture_filename_removes_path_separators_and_unsafe_characters() {
@@ -236,5 +318,37 @@ mod tests {
     #[test]
     fn empty_texture_name_gets_stable_fallback() {
         assert_eq!(safe_texture_filename("...", 7), "texture_7");
+    }
+
+    #[test]
+    fn triangle_count_is_derived_from_indices_when_parser_triangle_field_is_zero() {
+        let geometry = rage_formats::ydd::DrawableGeometry {
+            shader_id: 0,
+            indices_count: 0,
+            triangles_count: 0,
+            vertices_count: 4,
+            vertex_stride: 0,
+            vertex_buffer: None,
+            index_buffer: Some(rage_formats::ydd::IndexBuffer {
+                indices_count: 6,
+                indices_pointer: 0,
+                indices: vec![0, 1, 2, 0, 2, 3],
+            }),
+        };
+        assert_eq!(geometry_triangle_count(&geometry), 2);
+    }
+
+    #[test]
+    fn triangle_count_prefers_geometry_index_count() {
+        let geometry = rage_formats::ydd::DrawableGeometry {
+            shader_id: 0,
+            indices_count: 9,
+            triangles_count: 0,
+            vertices_count: 6,
+            vertex_stride: 0,
+            vertex_buffer: None,
+            index_buffer: None,
+        };
+        assert_eq!(geometry_triangle_count(&geometry), 3);
     }
 }

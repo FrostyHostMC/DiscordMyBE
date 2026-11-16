@@ -1,10 +1,151 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, open, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-const root=path.dirname(fileURLToPath(import.meta.url));
-const manifest=path.join(root,"native-inspector","Cargo.toml");
-const LIMIT=160*1024*1024;
-function run(input,output){return new Promise((resolve,reject)=>{const child=spawn("cargo",["run","--release","--quiet","--manifest-path",manifest,"--",input,output],{cwd:root,windowsHide:true,stdio:["ignore","pipe","pipe"]});let err="";child.stderr.setEncoding("utf8").on("data",x=>err+=x);child.on("error",e=>reject(new Error(e.code==="ENOENT"?"Rust Cargo was not found. Install the Rust stable toolchain for automatic native inspection.":e.message)));child.on("close",code=>code===0?resolve():reject(new Error(err.trim()||`Native inspector exited with code ${code}.`)));});}
-export function nativeInspectionPlugin(){return{name:"gtav-autoport-native-inspection",configureServer(server){server.middlewares.use("/__autoport/inspect-native",async(req,res)=>{if(req.method!=="POST"){res.statusCode=405;res.end("POST required");return;}let temp;try{const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>LIMIT*1.4)throw Error("Inspection request exceeds 160 MiB.");chunks.push(chunk);}const payload=JSON.parse(Buffer.concat(chunks).toString("utf8"));if(!Array.isArray(payload.files))throw Error("No native resources supplied.");const selected=payload.files.filter(f=>typeof f.name==="string"&&/\.(yft|ytd)$/i.test(f.name));if(!selected.length)throw Error("No YFT/YTD resources found.");temp=await mkdtemp(path.join(os.tmpdir(),"gtav-autoport-"));const outRoot=path.join(temp,"reports");await mkdir(outRoot,{recursive:true});let total=0;const output=[];for(let i=0;i<selected.length;i++){const item=selected[i],name=path.basename(item.name).replace(/[^a-zA-Z0-9_.-]/g,"_"),bytes=Buffer.from(item.data||"","base64");total+=bytes.length;if(!bytes.length||total>LIMIT)throw Error("YFT/YTD files exceed the 160 MiB limit or contain empty data.");const input=path.join(temp,`${i}-${name}`),out=path.join(outRoot,String(i));await mkdir(out,{recursive:true});await writeFile(input,bytes);await run(input,out);for(const file of await readdir(out,{recursive:true})){const absolute=path.join(out,file);let content=await readFile(absolute);if(file.endsWith("-ytd-inspection.json")){const report=JSON.parse(content.toString("utf8"));for(const texture of report.textures||[]){if(typeof texture.preview_png==="string")texture.preview_png=`${i}/${texture.preview_png}`;}content=Buffer.from(JSON.stringify(report));}output.push({path:`${i}/${file.split(path.sep).join("/")}`,data:content.toString("base64")});}}res.setHeader("Content-Type","application/json");res.end(JSON.stringify({files:output,inspected:selected.map(f=>path.basename(f.name))}));}catch(e){res.statusCode=400;res.setHeader("Content-Type","application/json");res.end(JSON.stringify({error:e.message||"Native inspection failed."}));}finally{if(temp)await rm(temp,{recursive:true,force:true});}});}};}
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+const manifest = path.join(root, "native-inspector", "Cargo.toml");
+const LIMIT = 160 * 1024 * 1024;
+
+function run(input, output) {
+  return new Promise((resolve, reject) => {
+    const child = spawn("cargo", ["run", "--release", "--quiet", "--manifest-path", manifest, "--", input, output], {
+      cwd: root,
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let err = "";
+    child.stderr.setEncoding("utf8").on("data", chunk => err += chunk);
+    child.on("error", error => reject(new Error(
+      error.code === "ENOENT"
+        ? "Rust Cargo was not found. Install the Rust stable toolchain for automatic native inspection."
+        : error.message
+    )));
+    child.on("close", code => code === 0
+      ? resolve()
+      : reject(new Error(err.trim() || `Native inspector exited with code ${code}.`))
+    );
+  });
+}
+
+// Recursively enumerate regular files only. Dirent checks prevent directories
+// from being returned; the file-handle check below is a second Windows-safe guard.
+export async function listNativeOutputFiles(directory) {
+  const files = [];
+  const entries = await readdir(directory, { withFileTypes: true });
+  for (const entry of entries) {
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listNativeOutputFiles(absolute));
+    } else if (entry.isFile()) {
+      files.push(absolute);
+    }
+    // Ignore symlinks and other special entries.
+  }
+  return files;
+}
+
+// Open and verify the actual filesystem object before reading it. This gives
+// useful path context if a native tool unexpectedly creates a directory where
+// a report file was expected, instead of surfacing a bare EISDIR error.
+export async function readNativeOutputFile(filePath) {
+  let handle;
+  try {
+    handle = await open(filePath, "r");
+    const info = await handle.stat();
+    if (!info.isFile()) {
+      throw new Error("native inspector output is not a regular file");
+    }
+    return await handle.readFile();
+  } catch (error) {
+    throw new Error(`Could not read native inspector output "${filePath}": ${error.message}`);
+  } finally {
+    await handle?.close();
+  }
+}
+
+export function nativeInspectionPlugin() {
+  return {
+    name: "gtav-autoport-native-inspection",
+    configureServer(server) {
+      server.middlewares.use("/__autoport/inspect-native", async (req, res) => {
+        if (req.method !== "POST") {
+          res.statusCode = 405;
+          res.end("POST required");
+          return;
+        }
+
+        let temp;
+        try {
+          const chunks = [];
+          let size = 0;
+          for await (const chunk of req) {
+            size += chunk.length;
+            if (size > LIMIT * 1.4) throw Error("Inspection request exceeds 160 MiB.");
+            chunks.push(chunk);
+          }
+
+          const payload = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+          if (!Array.isArray(payload.files)) throw Error("No native resources supplied.");
+          const selected = payload.files.filter(file =>
+            typeof file.name === "string" && /\.(yft|ytd)$/i.test(file.name)
+          );
+          if (!selected.length) throw Error("No YFT/YTD resources found.");
+
+          temp = await mkdtemp(path.join(os.tmpdir(), "gtav-autoport-"));
+          const outRoot = path.join(temp, "reports");
+          await mkdir(outRoot, { recursive: true });
+
+          let total = 0;
+          const output = [];
+          for (let index = 0; index < selected.length; index++) {
+            const item = selected[index];
+            const name = path.basename(item.name).replace(/[^a-zA-Z0-9_.-]/g, "_");
+            const bytes = Buffer.from(item.data || "", "base64");
+            total += bytes.length;
+            if (!bytes.length || total > LIMIT) {
+              throw Error("YFT/YTD files exceed the 160 MiB limit or contain empty data.");
+            }
+
+            const input = path.join(temp, `${index}-${name}`);
+            const out = path.join(outRoot, String(index));
+            await mkdir(out, { recursive: true });
+            await writeFile(input, bytes);
+            await run(input, out);
+
+            for (const absolute of await listNativeOutputFiles(out)) {
+              const relative = path.relative(out, absolute).split(path.sep).join("/");
+              let content = await readNativeOutputFile(absolute);
+              if (relative.endsWith("-ytd-inspection.json")) {
+                const report = JSON.parse(content.toString("utf8"));
+                for (const texture of report.textures || []) {
+                  if (typeof texture.preview_png === "string") {
+                    texture.preview_png = `${index}/${texture.preview_png}`;
+                  }
+                }
+                content = Buffer.from(JSON.stringify(report));
+              }
+              output.push({
+                path: `${index}/${relative}`,
+                data: content.toString("base64")
+              });
+            }
+          }
+
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({
+            files: output,
+            inspected: selected.map(file => path.basename(file.name))
+          }));
+        } catch (error) {
+          res.statusCode = 400;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify({ error: error.message || "Native inspection failed." }));
+        } finally {
+          if (temp) await rm(temp, { recursive: true, force: true });
+        }
+      });
+    }
+  };
+}

@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownToLine, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
+import { ArrowDownToLine, BookOpen, CarFront, CheckCircle2, FileArchive, FileText, ShieldCheck, Upload, AlertTriangle, LoaderCircle, FolderOpen } from "lucide-react";
 import { inspectZipArchive, inspectFolderFiles, classifyVehicleAssets, findByBasename } from "../core/intake.js";
+import { inspect7zArchive } from "../core/sevenZip.js";
 import { inspectVehicleMetadata, listVehicleModels } from "../core/metadata.js";
+import { buildVehiclePortReport } from "../core/vehiclePortReport.js";
 import { buildVehicleDependencyGraph } from "../core/dependencyGraph.js";
 import { inspectRsc7 } from "../core/rsc7.js";
 import { buildConversionManifest } from "../core/manifest.js";
@@ -12,9 +14,21 @@ import { assessPs4Compatibility } from "../core/compatibility.js";
 import { auditModFiles } from "../core/modClassifier.js";
 import { buildUniversalPortPlan } from "../core/portPlan.js";
 import { inspectRagekitAutomatically } from "../core/ragekit.js";
+import { inspectGtaDlcManifest } from "../core/dlcManifest.js";
+import { inspectModDocumentation } from "../core/documentation.js";
+import { inspectScaleformAssets, createEditableSwfCopy } from "../core/gfx.js";
+import { inspectReshadeMod } from "../core/reshade.js";
+import { buildPs4AfrPackage } from "../core/ps4Package.js";
+import { inspectMenuRelatedFiles } from "../core/menuPack.js";
+import { inspectScriptModPackages } from "../core/scriptModPackages.js";
+import { translateMenyooVehicleXml, buildMenyooVehiclePackExport } from "../core/menyooVehicleXml.js";
+import { compileMenyooNativeActionPlan } from "../core/nativeActionPlan.js";
+import { convertLegacyResourceCandidate } from "../core/resourceConversion.js";
+import { buildNativeBehaviorBlueprint } from "../core/nativeBehaviorBlueprint.js";
+import { inspectPedObjectPacks, buildPedObjectPackExport } from "../core/pedObjectPacks.js";
 
 const stages = [
-  ["01", "Import PC mod", "ZIP archive or extracted folder"],
+  ["01", "Import PC mod", "ZIP / OpenIV OIV / 7z archive or extracted folder"],
   ["02", "Classify mod", "Assets, scripts, plugins and dependencies"],
   ["03", "Inspect resources", "Automatic format-specific reports"],
   ["04", "Adapt resources", "Target-specific conversion adapters"],
@@ -23,6 +37,16 @@ const stages = [
 
 function downloadJson(value, filename) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function downloadBytes(bytes, filename, type = "application/octet-stream") {
+  const blob = new Blob([bytes], { type });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
@@ -48,6 +72,10 @@ export default function App() {
   const [modelName, setModelName] = useState("");
   const [availableModels, setAvailableModels] = useState([]);
   const [analysis, setAnalysis] = useState(null);
+  const [dlcManifest, setDlcManifest] = useState(null);
+  const [scaleformReport, setScaleformReport] = useState(null);
+  const [reshadeReport, setReshadeReport] = useState(null);
+  const [documentation, setDocumentation] = useState([]);
   const [manifest, setManifest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -55,6 +83,18 @@ export default function App() {
   const [nativeReports, setNativeReports] = useState(null);
   const [nativeStatus, setNativeStatus] = useState("Native reports are generated automatically after import.");
   const [previewUrls, setPreviewUrls] = useState({});
+  const [guideOpen, setGuideOpen] = useState(true);
+  const [afrMappingsText, setAfrMappingsText] = useState("{}");
+  const [ps4BuildConfirmed, setPs4BuildConfirmed] = useState(false);
+  const [ps4PathsConfirmed, setPs4PathsConfirmed] = useState(false);
+  const [packageStatus, setPackageStatus] = useState("");
+  const [menuReport, setMenuReport] = useState(null);
+  const [scriptModReport, setScriptModReport] = useState(null);
+  const [menyooVehicleReports, setMenyooVehicleReports] = useState([]);
+  const [resourceConversionStatus, setResourceConversionStatus] = useState("");
+  const [behaviorBlueprint, setBehaviorBlueprint] = useState(null);
+  const [pedObjectReport, setPedObjectReport] = useState(null);
+  const guideStep = !archive ? 1 : !modAudit ? 2 : !portPlan ? 3 : !ragekitResult ? 4 : 5;
 
   useEffect(() => {
     if (!nativeReports?.ytd?.textures) { setPreviewUrls({}); return undefined; }
@@ -75,12 +115,25 @@ export default function App() {
   }, [archive, filter]);
 
   async function loadImport(work) {
-    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
+    setBusy(true); setError(""); setAnalysis(null); setManifest(null); setArchive(null); setModAudit(null); setPortPlan(null); setDlcManifest(null); setScaleformReport(null); setReshadeReport(null); setDocumentation([]); setMenuReport(null); setScriptModReport(null); setMenyooVehicleReports([]); setBehaviorBlueprint(null); setPedObjectReport(null); setResourceConversionStatus(""); setRagekitResult(null); setRagekitStatus("Checking native RAGE engine…"); setNativeReports(null); setNativeStatus("Preparing automatic native inspection…");
     try {
       const result = await work();
       setArchive(result);
+      setMenuReport(inspectMenuRelatedFiles(result.files, PS4_TARGET.titleId));
+      setScriptModReport(inspectScriptModPackages(result.files));
+      setBehaviorBlueprint(buildNativeBehaviorBlueprint(result.files));
+      setPedObjectReport(inspectPedObjectPacks(result.files));
+      setMenyooVehicleReports(result.files.filter((file) => /\.xml$/i.test(file.path)).map((file) => { try { return translateMenyooVehicleXml(file.bytes, file.path); } catch { return null; } }).filter((report) => report?.validXml && report.summary.vehicleCount > 0));
       setModAudit(auditModFiles(result.files));
-      setPortPlan(buildUniversalPortPlan({ files: result.files }));
+      setDocumentation(inspectModDocumentation(result.files));
+      const gfxReport = inspectScaleformAssets(result.files);
+      setScaleformReport(gfxReport.summary.files ? gfxReport : null);
+      const generatedPlan = buildUniversalPortPlan({ files: result.files });
+      if (!generatedPlan?.summary || !Array.isArray(generatedPlan.resources)) throw new Error("Project V could not build a complete port plan for this import.");
+      setPortPlan(generatedPlan);
+      const contentXml = result.files.filter((file) => file.path.split("/").at(-1).toLowerCase() === "content.xml");
+      if (contentXml.length === 1) setDlcManifest(inspectGtaDlcManifest(contentXml[0].bytes, contentXml[0].path));
+      else if (contentXml.length > 1) setDlcManifest({ validXml: false, error: "Multiple content.xml files found. Separate the DLC packages before selecting a manifest.", entries: [], summary: { entryCount: 0, dataFiles: 0, fileTypes: {}, disabledFiles: 0 } });
       setFilter("all");
       const vehiclesMeta = result.files.find((file) => file.path.split("/").at(-1).toLowerCase() === "vehicles.meta");
       if (vehiclesMeta) {
@@ -100,8 +153,8 @@ export default function App() {
       const ragekitFiles = result.files.filter((file) => /\.(rpf|yft|ydr|ydd|ytd|ybn|ypt|ynv|ynd|ymap|ytyp|ycd|ysc|rel|awc|gxt2|ymf|ymt|yed|yfd|ybd|yvr|ywr|gfx)$/i.test(file.path));
       if (ragekitFiles.length) {
         setRagekitStatus("Running native RAGE read/round-trip validation…");
-        try { const nativeResult = await inspectRagekitAutomatically(result.files); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
-        catch (nativeError) { setRagekitStatus(nativeError?.message || "Native RAGE engine is not configured."); }
+        try { const nativeResult = await inspectRagekitAutomatically(result.files); if (!nativeResult?.summary || !Array.isArray(nativeResult.reports)) throw new Error("The native RAGE helper returned an incomplete report. The source inventory and port plan are still available."); setRagekitResult(nativeResult); setRagekitStatus(nativeResult.summary.parsed + " parsed · " + nativeResult.summary.byteExact + " byte-exact round trips · " + nativeResult.summary.failed + " failed."); }
+        catch (nativeError) { const message = nativeError?.message || "Native RAGE engine is not configured."; setRagekitStatus(/failed to fetch|networkerror|load failed/i.test(message) ? "RageKit helper was unreachable. Restart Project V with START-AUTOPORT.bat; source inventory and YFT/YTD inspection are still available." : message); }
       } else setRagekitStatus("No ragekit-supported RAGE resources found in this import.");
     } catch (err) {
       setError(err?.message || "Could not inspect this import.");
@@ -111,13 +164,56 @@ export default function App() {
   }
 
   function importZip(file) {
-    if (file) loadImport(() => inspectZipArchive(file));
+    if (!file) return;
+    const inspect = /\.7z$/i.test(file.name) ? inspect7zArchive : inspectZipArchive;
+    loadImport(() => inspect(file));
   }
 
   function importFolder(files) {
     if (files?.length) loadImport(() => inspectFolderFiles(files));
   }
 
+
+  async function exportAfrPackage() {
+    if (!archive) return;
+    setBusy(true); setError(""); setPackageStatus("");
+    try {
+      const mappings = JSON.parse(afrMappingsText);
+      if (!mappings || typeof mappings !== "object" || Array.isArray(mappings)) {
+        throw new Error("Mappings must be a JSON object mapping each source RPF path to an exact /app0/... destination.");
+      }
+      const selected = archive.files.filter((file) => Object.prototype.hasOwnProperty.call(mappings, file.path));
+      const result = await buildPs4AfrPackage({
+        files: selected,
+        mappings,
+        target: PS4_TARGET,
+        attestations: {
+          ps4ResourceBuildVerified: ps4BuildConfirmed,
+          destinationPathsVerified: ps4PathsConfirmed,
+        },
+      });
+      downloadBytes(new Uint8Array(await result.blob.arrayBuffer()), `GTAV-Project V-${PS4_TARGET.titleId}-AFR-Overlay.zip`, "application/zip");
+      setPackageStatus("Created a staging package with " + result.manifest.entries.length + " unchanged PS4 RPF archive(s).");
+    } catch (err) {
+      setError(err?.message || "Could not create the AFR package.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function convertLegacyCandidate(path) {
+    if (!archive) return;
+    const file = archive.files.find((item) => item.path === path);
+    if (!file) { setError('The selected resource is no longer in the current import.'); return; }
+    setBusy(true); setError(''); setResourceConversionStatus('');
+    try {
+      const result = await convertLegacyResourceCandidate(file);
+      const safeName = path.split('/').at(-1);
+      downloadBytes(result.bytes, safeName, 'application/octet-stream');
+      setResourceConversionStatus(safeName + ': GTA V PC Legacy-format candidate (' + formatBytes(result.outputBytes) + '). Internal RageKit round-trip: ' + (result.roundtripVerified ? 'passed' : 'failed') + '. PS4 compatibility remains unverified.');
+    } catch (err) { setError(err?.message || 'Legacy resource conversion failed.'); }
+    finally { setBusy(false); }
+  }
 
   async function analyzeVehicle() {
     if (!archive) return;
@@ -145,7 +241,8 @@ export default function App() {
         };
       });
       const dependencyGraph = buildVehicleDependencyGraph({ files: archive.files, metadata });
-      const result = { metadata, assetChecks, dependencyGraph };
+      const vehiclePortReport = buildVehiclePortReport({ files: archive.files, modelName: metadata.modelName });
+      const result = { metadata, assetChecks, dependencyGraph, vehiclePortReport };
       setAnalysis(result);
       const built = await buildConversionManifest({
         sourceName: archive.sourceName,
@@ -163,39 +260,139 @@ export default function App() {
 
   return <main className="shell">
     <aside className="rail">
-      <div className="brand"><span className="brand-mark"><CarFront size={19}/></span><span>AutoPort</span></div>
+      <div className="brand"><span className="brand-mark"><CarFront size={19}/></span><span>Project V</span></div>
       <div className="rail-label">WORKSPACE</div>
-      <div className="nav active"><FileArchive size={17}/> Mod Converter</div>
+      <a className="nav active" href="#workspace"><FileArchive size={17}/> Mod Library</a>
+      <a className="nav" href="#getting-started"><BookOpen size={17}/> Getting started</a>
       <div className="rail-label">PIPELINE</div>
-      <div className="nav"><ShieldCheck size={17}/> Compatibility gates</div>
+      <div className="nav"><ShieldCheck size={17}/> Compatibility</div>
       <div className="rail-foot">LOCAL WORKSPACE<br/><b>PS4 · STORY MODE</b></div>
     </aside>
     <section className="content">
-      <header><div><div className="eyebrow">GTAV AUTO PORT / WORKSPACE</div><h1>Universal mod conversion</h1><p>Import a PC GTA V mod. AutoPort inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
+      <header><div><div className="eyebrow">PROJECT V / WORKSPACE</div><h1>Project V Mod Studio</h1><p>Import a PC GTA V mod. Project V inventories its files, identifies mod families, flags PC-only runtime dependencies, and automatically inspects supported native resources.</p></div><div className="status"><i/> DEVELOPMENT BUILD</div></header>
 
-      <section className="hero">
-        <div className="hero-copy"><div className="eyebrow">UNIVERSAL PC MOD INTAKE</div><h2>PC mod → PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
-          <input ref={zipInput} className="file-input" type="file" accept=".zip,application/zip" onChange={(event) => importZip(event.target.files?.[0])}/>
+      <section className="panel target-evidence-panel">
+        <div className="panel-head">
+          <div><div className="eyebrow">TARGET PROFILE</div><h3>PS4 game verification</h3><p>Project V uses a shared target profile. You do not need to upload your base-game or update PKG files.</p></div>
+          <span className="tag success"><ShieldCheck size={13}/> NO PKG REQUIRED</span>
+        </div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{PS4_TARGET.titleId}</b><span>US title ID</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.updateVersion}</b><span>Target update</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.systemFirmware}</b><span>System firmware</span></div>
+          <div className="audit-card"><b>{PS4_TARGET.goldhenVersion}</b><span>GoldHEN version</span></div>
+        </div>
+        <div className="notice"><CheckCircle2 size={18}/><div><b>Shared profile; local confirmation only when needed.</b><p>The title ID and versions you supplied are saved as the project target. Project V can perform source-mod inspection and format conversion without reading a game PKG. If a particular adapter later needs game-specific reference data, it will request only the smallest relevant local sample or a generated fingerprint report—not the full game package. No game files are uploaded.</p></div></div>
+        <p className="native-disclaimer">Compatibility with CUSA00419 update 1.57 remains unverified until the relevant runtime/resource adapter has been tested. The target profile does not unlock unsupported conversion or deployment steps.</p>
+      </section>
+      <section className="hero" id="workspace">
+        <div className="hero-copy"><div className="eyebrow">PROJECT V MOD INTAKE</div><h2>Prepare mods for PS4 Story Mode</h2><p className="target-profile"><b>{describeTarget()}</b><span>Target supplied by you · resource compatibility not yet verified</span></p><p>Import a ZIP, OIV, 7z archive or extracted folder. Mod-family detection and the initial compatibility audit run automatically. Supported native resource reports and texture previews are generated locally. Console compatibility is never assumed.</p>
+          <input ref={zipInput} className="file-input" type="file" accept=".zip,.oiv,.7z,application/zip,application/x-7z-compressed,application/octet-stream" onChange={(event) => importZip(event.target.files?.[0])}/>
           <input ref={folderInput} className="file-input" type="file" webkitdirectory="" directory="" multiple onChange={(event) => importFolder(event.target.files)}/>
           <div className="import-actions">
-            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP mod"}</button>
+            <button className="primary-button" onClick={() => zipInput.current?.click()} disabled={busy}><Upload size={16}/>{busy ? "Working…" : "Import ZIP / OIV / 7Z mod"}</button>
             <button className="secondary-button" onClick={() => folderInput.current?.click()} disabled={busy}><FolderOpen size={16}/> Import folder</button>
           </div>
-          <span className="privacy-note">Files stay in this browser session; nothing is uploaded.</span>
+          <span className="privacy-note">Files stay on this computer and are processed by the local Project V helper; nothing is uploaded to a remote service.</span>
         </div>
-        <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>UNIVERSAL MOD PIPELINE</span></div>
+        <div className="hero-art"><div className="orb orb-one"/><div className="orb orb-two"/><CarFront size={112} strokeWidth={1.05}/><span>PROJECT V WORKFLOW</span></div>
+      </section>
+
+      <section className="panel guide-panel" id="getting-started">
+        <div className="panel-head"><div><div className="eyebrow">IN-APP WALKTHROUGH</div><h3>Guided porting assistant</h3><p>Project V explains each stage and tells you what to do next. Your current stage is <b>{guideStep} of 5</b>.</p></div><button className="secondary-button guide-toggle" onClick={() => setGuideOpen((value) => !value)}>{guideOpen ? "Hide guide" : "Show guide"}</button></div>
+        {guideOpen && <>
+          <div className="guide-progress"><span style={{width: `${guideStep * 20}%`}}/></div>
+          <div className="guide-next"><div className="eyebrow">YOUR NEXT STEP</div><b>{!archive ? "Step 1 — Import your PC mod" : !ragekitResult ? "Step 4 — Inspect source resources" : "Step 5 — Review compatibility and prepare target evidence"}</b><p>{!archive ? "Choose the mod's ZIP, OIV, 7z file or its extracted folder. Project V will inventory every file, identify content families, and preserve unknown files for review." : !ragekitResult ? "The source audit is complete. If the native engine is configured, supported RAGE resources are parsed and round-trip checked. If it is not configured, follow the setup guidance below." : "Review the report and blockers. Source-side parsing does not mean the files are PS4-ready. The exact CUSA00419 / 1.57 resource writer and deployment checks must pass before packaging."}</p></div>
+          <div className="guide-steps">
+            <div className={guideStep >= 1 ? "guide-step current" : "guide-step"}><b>01 · Import</b><p>Import ZIP, OIV, 7z archive or extracted folder. Files remain local.</p></div>
+            <div className={guideStep >= 2 ? "guide-step current" : "guide-step"}><b>02 · Identify</b><p>Automatic inventory, mod-family classification, and PC-only plugin warnings.</p></div>
+            <div className={guideStep >= 3 ? "guide-step current" : "guide-step"}><b>03 · Plan</b><p>Group resources by format and show missing adapters and dependencies.</p></div>
+            <div className={guideStep >= 4 ? "guide-step current" : "guide-step"}><b>04 · Inspect</b><p>RageKit and native inspector validate supported source formats; no PS4 conversion is implied.</p></div>
+            <div className={guideStep >= 5 ? "guide-step current" : "guide-step"}><b>05 · Validate & deploy</b><p>Requires exact-build PS4 conversion, package validation, and reversible deployment.</p></div>
+          </div>
+          <details className="guide-details"><summary>First-run setup: let Project V prepare its tools</summary><p>Run <b>START-AUTOPORT.bat</b> from the GTAV-Project V folder. It installs web dependencies and attempts to build the pinned RageKit engine when CMake and a C++ build toolchain are available. CMake FetchContent downloads the pinned upstream source during that build. Keep the launcher window open while using the app.</p><p>If the native build cannot run, install Git, CMake 3.20+, and Visual Studio Build Tools with the Desktop development with C++ workload, then launch again. File inventory and planning still work without the native engine.</p></details>
+          <details className="guide-details"><summary>What Project V can and cannot do today</summary><p>Available: ZIP/folder intake, broad mod classification, dependency candidates, vehicle metadata analysis, YFT/YTD inspection, and RageKit source-side parsing/round-trip checks. Not yet available: a proven PS4 $1.57 resource encoder, universal PC script/plugin translation, verified RPF installation layout, or tested PS4 install package.</p><p>PC ASI/DLL/EXE and ScriptHookV/.NET mods need separate PS4-native implementations where feasible. Never install a PC binary on the console.</p></details>
+        </>}
       </section>
 
       <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">PS4 COMPATIBILITY GATES</div><h3>Target validation checklist</h3><p>{compatibility.passed} of {compatibility.total} evidence gates satisfied · conversion remains locked</p></div><span className="tag warning"><AlertTriangle size={13}/> BLOCKED</span></div>
-        <div className="file-list">{compatibility.gates.map((gate) => <div className="file-row" key={gate.id}><AlertTriangle size={15}/><span className="file-name"><b>{gate.label}</b><small>{gate.nextStep}</small></span><span className="file-ext">PENDING</span></div>)}</div>
-        <div className="notice"><ShieldCheck size={19}/><div><b>Why this is locked</b><p>{compatibility.note} The next step is collecting exact-build PS4 reference evidence before implementing any resource writer.</p></div></div>
+        <div className="file-list">{compatibility.gates.map((gate) => <div className="file-row" key={gate.id}>{gate.passed ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}<span className="file-name"><b>{gate.label}</b><small>{gate.nextStep}</small></span><span className="file-ext">{gate.passed ? "RECORDED" : "PENDING"}</span></div>)}</div>
+        <div className="notice"><ShieldCheck size={19}/><div><b>Why this is locked</b><p>{compatibility.note} The remaining blockers are exact-build PS4 resource references, working conversion adapters, and a tested deployment/rollback path.</p></div></div>
       </section>
 
       {error && <div className="error-panel"><AlertTriangle size={18}/><span>{error}</span></div>}
       {busy && <div className="working"><LoaderCircle size={17}/> {nativeStatus}</div>}
       {!busy && <div className="privacy-note">{nativeStatus}</div>}
 
+      {menuReport && (menuReport.summary.hasSynapsePack || menuReport.summary.xmlFiles > 0) && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">GOLDHEN MENU / XML ADAPTER</div><h3>Menu package and vehicle XML inspection</h3><p>{menuReport.summary.xmlFiles} XML file(s) · {menuReport.summary.validVehicleXml} valid · {menuReport.summary.detectedMenyooXml} Menyoo/Spooner preset(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> INSPECTED ONLY</span></div>
+        {menuReport.synapse && <>
+          <div className="audit-grid">
+            <div className="audit-card"><b>{menuReport.synapse.summary.catalogItems}</b><span>catalog entries</span></div>
+            <div className="audit-card"><b>{menuReport.synapse.summary.catalogFiles}</b><span>JSON catalogs</span></div>
+            <div className="audit-card"><b>{menuReport.synapse.summary.targetPluginEntries}</b><span>{PS4_TARGET.titleId} plugins</span></div>
+            <div className="audit-card"><b>{menuReport.synapse.summary.settingsValues}</b><span>menu settings</span></div>
+          </div>
+          <div className="file-row"><ShieldCheck size={14}/><span className="file-name"><b>Synapse SPRX</b><small>{menuReport.synapse.sprxHeader.format} · {formatBytes(menuReport.synapse.sprxHeader.bytes)} · header {menuReport.synapse.sprxHeader.signature || "unavailable"}</small></span><span className="file-ext">{menuReport.synapse.sprxHeader.isPs4SelfContainer?"SELF HEADER":"UNVERIFIED"}</span></div>
+          <h4>Menu data catalogs</h4>
+          {menuReport.synapse.catalogs.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path.split("/").at(-1)}</b><small>{item.categoryCount} categories · {item.itemCount} entries{item.duplicateCount ? " · " + item.duplicateCount + " duplicate values" : ""}</small></span><span className="file-ext">{item.state==="empty-placeholder"?"EMPTY PLACEHOLDER":item.state==="valid-json"?"VALID JSON":"CHECK FILE"}</span></div>)}
+          <h4>GoldHEN plugin configuration</h4>
+          {menuReport.synapse.plugins.map((plugin)=><div className="file-row" key={plugin.titleId+plugin.path}><ShieldCheck size={14}/><span className="file-name"><b>{plugin.path}</b><small>Title {plugin.titleId}{plugin.titleId===PS4_TARGET.titleId?" · target title":""}</small></span><span className="file-ext">{plugin.extension.toUpperCase()}</span></div>)}
+          <h4>Menu settings</h4>
+          {menuReport.synapse.settings.sections.map((section)=><div className="native-summary" key={section.name}><b>{section.name}</b>{section.settings.map((setting)=><div className="file-row" key={setting.key}><span className="file-name">{setting.key}</span><span className="file-ext">{setting.value}</span></div>)}</div>)}
+          {menuReport.synapse.warnings.map((warning)=><div className="audit-warning" key={warning}><AlertTriangle size={14}/><span>{warning}</span></div>)}
+        </>}
+        {menuReport.vehicleXml.map((item)=><div className="native-summary" key={item.path}><div className="file-row"><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.format} · {item.modelHash ? "model hash " + item.modelHash : "no model hash found"}</small></span><span className="file-ext">{item.validXml?"VALID XML":"INVALID"}</span></div>{item.validXml && <p className="native-disclaimer">{item.attachmentNodes} attachment-related node(s) · {item.taskSequenceNodes} task-sequence node(s) · {item.note}</p>}{!item.validXml && <div className="audit-warning"><AlertTriangle size={14}/><span>{item.error}</span></div>}</div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>GoldHEN loads plugins; the menu/runtime defines the supported data formats.</b><p>Project V inventories GoldHEN plugin entries, Synapse-style JSON catalogs and vehicle XML separately. It does not patch the compiled Synapse SPRX or claim that Menyoo XML is directly loadable by Synapse. A menu-side XML adapter needs the menu source or a confirmed loader schema.</p></div></div>
+        <button className="secondary-button" onClick={()=>downloadJson(menuReport,"gtav-autoport-menu-xml-report.json")}><ArrowDownToLine size={15}/> Export menu / XML report</button>
+      </section>}
+
+      {menyooVehicleReports.length > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">MENYOO / SPOONER VEHICLE TRANSLATOR</div><h3>Saved vehicles, placement and attachments</h3><p>{menyooVehicleReports.reduce((sum, report) => sum + report.summary.vehicleCount, 0)} vehicle(s) · {menyooVehicleReports.reduce((sum, report) => sum + report.summary.attachmentCount, 0)} attachment(s) translated into Project V's intermediate format</p></div><span className="tag warning"><AlertTriangle size={13}/> RUNTIME ADAPTER REQUIRED</span></div>
+        {menyooVehicleReports.map((report) => <div className="native-summary" key={report.sourcePath}>
+          <h4>{report.sourcePath}</h4>
+          <div className="audit-grid"><div className="audit-card"><b>{report.summary.vehicleCount}</b><span>vehicles</span></div><div className="audit-card"><b>{report.summary.attachmentCount}</b><span>attachments</span></div><div className="audit-card"><b>{report.summary.withPosition}</b><span>with placement</span></div><div className="audit-card"><b>{report.summary.withVehicleProperties}</b><span>with vehicle properties</span></div></div>
+          {report.vehicles.map((vehicle) => <div className="file-row" key={vehicle.id}><CarFront size={14}/><span className="file-name"><b>{vehicle.modelName || vehicle.modelHash.raw || vehicle.id}</b><small>Hash {vehicle.modelHash.raw || "not supplied"} · {vehicle.attachments.length} attachment(s) · {vehicle.transform.position ? "position parsed" : "position missing"}</small></span><span className="file-ext">DATA ONLY</span></div>)}
+          <button className="secondary-button" onClick={()=>downloadJson(buildMenyooVehiclePackExport(report),report.sourcePath.split("/").at(-1).replace(/\.xml$/i,"")+".autoport-vehicles.json")}><ArrowDownToLine size={15}/> Export translated vehicle pack</button>
+          <button className="secondary-button" onClick={()=>downloadJson(compileMenyooNativeActionPlan(report),report.sourcePath.split("/").at(-1).replace(/\.xml$/i,"")+".native-action-plan.json")}><ArrowDownToLine size={15}/> Export native action plan</button>
+        </div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Translation preserves source placement and attachment data.</b><p>This intermediate export is not yet a working Synapse XML file or PS4 spawn package. The menu's XML loader schema is undocumented, and attachment/property actions still need a native runtime adapter and on-console validation.</p></div></div>
+      </section>}
+
+      {pedObjectReport?.summary.resourceFiles > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">PED / OBJECT PACK MAPPING</div><h3>Models, assets, spawn data and dependencies</h3><p>{pedObjectReport.summary.resourceFiles} resource(s) · {pedObjectReport.summary.pedEntries} ped metadata entry(s) · {pedObjectReport.summary.objectAssetCandidates} object asset candidate(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> DEPENDENCIES UNVERIFIED</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{pedObjectReport.summary.pedMetadataFiles}</b><span>ped metadata files</span></div><div className="audit-card"><b>{pedObjectReport.summary.missingPedModels}</b><span>ped models missing</span></div><div className="audit-card"><b>{pedObjectReport.summary.spawnConfigFiles}</b><span>spawn configs</span></div><div className="audit-card"><b>{pedObjectReport.summary.validSpawnConfigs}</b><span>valid configs</span></div></div>
+        {pedObjectReport.peds.map((ped) => <div className="file-row" key={ped.metadataPath + ped.modelName}><CarFront size={14}/><span className="file-name"><b>{ped.modelName}</b><small>{ped.txdName || "No TXD name"} · model {ped.dependencyStatus.model} · texture {ped.dependencyStatus.texture}</small></span><span className="file-ext">PED</span></div>)}
+        {pedObjectReport.objectCandidates.map((item) => <div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.resourceKind} · {item.relatedSameStem.length} same-name peer(s), not confirmed dependencies</small></span><span className="file-ext">OBJECT</span></div>)}
+        {pedObjectReport.spawnConfigs.map((config) => <div className="native-summary" key={config.path}><h4>{config.path} · {config.format.toUpperCase()}</h4>{!config.valid ? <div className="audit-warning"><AlertTriangle size={14}/><span>{config.error}</span></div> : <><div className="audit-grid">{Object.entries(config.summary).map(([key, value]) => <div className="audit-card" key={key}><b>{Array.isArray(value) ? value.length : String(value)}</b><span>{key.replaceAll(/([A-Z])/g, " $1")}</span></div>)}</div>{config.modelReferences?.length > 0 && <details><summary>Model and asset references</summary>{config.modelReferences.map((reference,index)=><div className="file-row" key={index}><span className="file-name"><b>{reference.value}</b><small>{reference.field} · {reference.resourceCandidates.length ? reference.resourceCandidates.join(", ") : "No matching resource filename"}</small></span><span className="file-ext">{reference.resolution}</span></div>)}</details>}</>}</div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Spawn data and assets are kept separate.</b><p>Ped metadata, model/texture candidates, object resources and XML/JSON/INI spawn settings are inventoried. Binary archetype references, collision, animation/cloth, scenario and runtime spawn behavior still require format-specific adapters and exact-build validation.</p></div></div>
+        <button className="secondary-button" onClick={() => downloadJson(buildPedObjectPackExport(pedObjectReport), "gtav-autoport-ped-object-pack.json")}><ArrowDownToLine size={15}/> Export ped/object pack analysis</button>
+      </section>}
+      {behaviorBlueprint?.summary.sourceFiles > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">PC SCRIPT BEHAVIOR REBUILD</div><h3>Native runtime behavior blueprint</h3><p>{behaviorBlueprint.summary.sourceFiles} editable source file(s) · {behaviorBlueprint.summary.behaviorTypes} behavior types · {behaviorBlueprint.summary.detectedOccurrences} API evidence matches</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT A PRX</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{behaviorBlueprint.summary.behaviorTypes}</b><span>behavior areas</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.nativeHostApis}</b><span>native host APIs required</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.pcRuntimeDependencies.length}</b><span>PC runtime dependencies</span></div><div className="audit-card"><b>{behaviorBlueprint.summary.sourceFiles}</b><span>source files reviewed</span></div></div>
+        {behaviorBlueprint.behaviors.map((behavior) => <div className="file-row" key={behavior.id}><FileText size={14}/><span className="file-name"><b>{behavior.id}</b><small>{behavior.area} · {behavior.occurrences} source occurrence(s)</small></span><span className="file-ext">REBUILD</span></div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Behavior requirements extracted; gameplay not recreated yet.</b><p>The blueprint identifies likely game-native actions and PC framework dependencies. A real implementation still needs source-level control-flow review, a tested CUSA00419 / 1.57 native-call adapter, Orbis SDK/toolchain, and on-console acceptance. No hook addresses or PRX payload are invented.</p></div></div>
+        <button className="secondary-button" onClick={() => downloadJson(behaviorBlueprint, "gtav-autoport-native-behavior-blueprint.json")}><ArrowDownToLine size={15}/> Export behavior blueprint</button>
+      </section>}
+      {scriptModReport?.summary.packageCount > 0 && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">SCRIPT / RUNTIME MOD AUDIT</div><h3>Configuration data vs gameplay code</h3><p>{scriptModReport.summary.packageCount} package(s) · {scriptModReport.summary.runtimeFiles} runtime file(s) · {scriptModReport.summary.configFiles} config file(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> BEHAVIOR PORT REQUIRED</span></div>
+        <div className="audit-grid"><div className="audit-card"><b>{scriptModReport.summary.pcRuntimeFiles}</b><span>PC runtime files</span></div><div className="audit-card"><b>{scriptModReport.summary.consolePlugins}</b><span>console plugins</span></div><div className="audit-card"><b>{scriptModReport.summary.xmlFiles}</b><span>XML configs</span></div><div className="audit-card"><b>{scriptModReport.summary.homeInvasionLike}</b><span>scripted gameplay mods</span></div></div>
+        {scriptModReport.packages.map((pkg)=><div className="native-summary" key={pkg.directory}><h4>{pkg.label} · {pkg.directory}</h4><div className="file-list">{pkg.runtimeFiles.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>{item.extension.toUpperCase()} · {formatBytes(item.bytes)}</small></span><span className="file-ext">{item.extension===".prx"||item.extension===".sprx"?"CONSOLE PLUGIN":"SOURCE INPUT"}</span></div>)}{pkg.configFiles.map((item)=><div className="file-row" key={item.path}><FileText size={14}/><span className="file-name"><b>{item.path}</b><small>Configuration / data file</small></span><span className="file-ext">CONFIG</span></div>)}</div>
+          {pkg.xmlReports.map((xml)=><div key={xml.path}>{!xml.validXml?<div className="audit-warning"><AlertTriangle size={14}/><span>{xml.path}: {xml.error}</span></div>:<><p className="native-disclaimer"><b>{xml.path}</b> · XML parsed · root: {xml.rootName}</p><div className="audit-grid">{Object.entries(xml.signals).filter(([,count])=>count>0).map(([name,count])=><div className="audit-card" key={name}><b>{count}</b><span>{name.replaceAll(/([A-Z])/g," $1").toLowerCase()}</span></div>)}</div></>}</div>)}
+          {pkg.notes.map((note)=><div className="audit-warning" key={note}><AlertTriangle size={14}/><span>{note}</span></div>)}
+        </div>)}
+        <div className="notice"><ShieldCheck size={18}/><div><b>Project V keeps data and runtime behavior separate.</b><p>XML/INI/JSON settings can be mapped into a proven menu schema. PC DLL/ASI/.NET/script behavior must be recreated in a PS4-native runtime or a confirmed menu action interface; this report does not generate a working plugin.</p></div></div>
+        <button className="secondary-button" onClick={()=>downloadJson(scriptModReport,"gtav-autoport-script-mod-report.json")}><ArrowDownToLine size={15}/> Export script mod report</button>
+      </section>}
+
+      {archive?.packageMetadata && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">OPENIV PACKAGE INSPECTION</div><h3>{archive.packageMetadata.type} manifest</h3><p>{archive.packageMetadata.assemblyDetected ? "Assembly manifest found and parsed without executing its instructions." : "No assembly.xml manifest found; contents are treated as an ordinary archive."}</p></div><span className="tag warning"><AlertTriangle size={13}/> REVIEW ONLY</span></div>
+        {archive.packageMetadata.assemblies?.map((assembly) => <div className="file-row" key={assembly.path}><FileText size={15}/><span className="file-name"><b>{assembly.name || assembly.path}</b><small>{[assembly.version && `Version ${assembly.version}`, assembly.author && `By ${assembly.author}`].filter(Boolean).join(" · ") || (assembly.validXml ? "Manifest parsed" : assembly.error)}</small></span><span className="file-ext">{assembly.validXml ? `${assembly.operationCount} actions` : "INVALID XML"}</span></div>)}
+        {archive.packageMetadata.assemblies?.flatMap((assembly) => assembly.operations || []).slice(0,20).map((operation,index) => <div className="audit-warning" key={operation.action+index}><FileText size={14}/><span><b>{operation.action.toUpperCase()}</b> · {Object.entries(operation.attributes || {}).map(([key,value]) => `${key.replace(/^@_/,"")}: ${value}`).join(" → ") || operation.value || "No path attributes found"}</span></div>)}
+        <div className="notice"><ShieldCheck size={19}/><div><b>Install instructions are not executed</b><p>Project V can inspect the declared source/destination operations, but PC OpenIV paths must be mapped to the PS4 title and update before any deployment is allowed.</p></div></div>
+      </section>}
       {archive && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">SOURCE IMPORT</div><h3>{archive.sourceName}</h3><p>{archive.files.length} files · {formatBytes(archive.totalBytes)} total · automatic mod audit complete</p></div><span className="tag success"><CheckCircle2 size={13}/> INSPECTED</span></div>
         <div className="file-toolbar"><span>FILE INVENTORY</span><select value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">All file types</option>{[...new Set(archive.inventory.map((f) => f.extension).filter(Boolean))].sort().map((ext) => <option key={ext} value={ext}>{ext}</option>)}</select></div>
@@ -203,6 +400,51 @@ export default function App() {
         <div className="analyzer"><label htmlFor="model-name">Optional deep vehicle metadata analysis</label><div className="analyzer-controls"><input id="model-name" list="vehicle-model-options" value={modelName} onChange={(e) => setModelName(e.target.value)} placeholder={availableModels.length ? "Choose a detected model" : "Enter model name (if this is a vehicle mod)"}/><datalist id="vehicle-model-options">{availableModels.map((model) => <option key={model} value={model}/>)}</datalist><button className="primary-button" onClick={analyzeVehicle} disabled={busy || !modelName.trim()}>Analyze vehicle metadata</button></div><p>{availableModels.length ? `${availableModels.length} vehicle model(s) detected from vehicles.meta. Select the vehicle you want to analyze.` : "Vehicle model names are discovered from the imported metadata when available. Ambiguous duplicate assets are never selected silently."}</p></div>
       </section>}
 
+
+      {reshadeReport && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">RESHADE / SHADER ANALYSIS</div><h3>PC graphics effect inventory</h3><p>{reshadeReport.summary.sourceFiles} shader source(s) · {reshadeReport.summary.presetFiles} preset(s) · {reshadeReport.summary.pcBinaries} PC binary/binaries</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT PS4 READY</span></div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{reshadeReport.summary.techniques}</b><span>techniques</span></div>
+          <div className="audit-card"><b>{reshadeReport.summary.includes}</b><span>shader includes</span></div>
+          <div className="audit-card"><b>{reshadeReport.summary.detectedEffectFamilies}</b><span>effect families</span></div>
+          <div className="audit-card"><b>{reshadeReport.missingIncludes.length}</b><span>missing includes</span></div>
+        </div>
+        {reshadeReport.detectedEffects.length > 0 && <p><b>Detected effects:</b> {reshadeReport.detectedEffects.join(", ")}</p>}
+        {reshadeReport.techniques.length > 0 && <p><b>Techniques:</b> {reshadeReport.techniques.join(", ")}</p>}
+        {reshadeReport.files.effects.map((path) => <div className="file-row" key={path}><FileText size={15}/><span className="file-name"><b>{path}</b><small>ReShade shader source — static analysis only</small></span></div>)}
+        {reshadeReport.missingIncludes.map((include) => <div className="audit-warning" key={include}><AlertTriangle size={14}/><span>Missing shader include: {include}</span></div>)}
+        {reshadeReport.requirements.map((requirement) => <div className="audit-warning" key={requirement}><AlertTriangle size={14}/><span>{requirement}</span></div>)}
+        <div className="notice"><ShieldCheck size={19}/><div><b>No PC injector files will be copied to PS4.</b><p>Project V inventories shader logic and separates effects that may be approximated from effects needing renderer hooks. It will not create a fake install package or claim that an INI preset is a converted shader.</p></div></div>
+      </section>}
+
+      {scaleformReport && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">SCALEFORM GRAPHICS WORKBENCH</div><h3>GFX / SWF asset inspection</h3><p>{scaleformReport.summary.scaleformGfx} Scaleform GFX · {scaleformReport.summary.swf} SWF · {scaleformReport.summary.invalid} invalid header(s)</p></div><span className="tag warning"><AlertTriangle size={13}/> EDITOR HANDOFF</span></div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{scaleformReport.summary.files}</b><span>graphics files</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.validHeaders}</b><span>valid headers</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.scaleformGfx}</b><span>GFX / CFX</span></div>
+          <div className="audit-card"><b>{scaleformReport.summary.payloadsVerified}</b><span>movie bodies verified</span></div>
+        </div>
+        {scaleformReport.reports.map((report) => {
+          const source = archive?.files.find((file) => file.path === report.path);
+          return <div className="native-summary" key={report.path}>
+            <div className="file-row"><FileText size={15}/><span className="file-name"><b>{report.path}</b><small>{report.format} · {report.signature} · {report.compression} · {formatBytes(report.actualBytes)}</small></span><span className="file-ext">{report.validHeader ? "HEADER OK" : "INVALID"}</span></div>
+            {report.validHeader && <p className="native-disclaimer">Movie version {report.version} · declared uncompressed size {formatBytes(report.declaredUncompressedBytes)}. {report.note}</p>}
+            {report.errors.map((message) => <div className="audit-warning" key={message}><AlertTriangle size={14}/><span>{message}</span></div>)}
+            {report.editableSwfCopyAvailable && source && <button className="secondary-button" onClick={() => { try { const copy = createEditableSwfCopy(source); downloadBytes(copy.bytes, copy.filename, "application/x-shockwave-flash"); } catch (err) { setError(err?.message || "Could not prepare the editor copy."); } }}><ArrowDownToLine size={15}/> Prepare SWF editor copy</button>}
+          </div>;
+        })}
+        <div className="notice"><ShieldCheck size={19}/><div><b>Editor handoff is not a game-ready conversion.</b><p>Project V can inspect GFX/CFX headers and create a separate SWF-compatible copy for JPEXS editing. A compatible GFxExport step is still needed to build a game-ready GFX. The public PS4 loader found so far is hard-coded for GTA V 1.46; your $1.57 hook is not yet validated.</p></div></div>
+      </section>}
+      {documentation.length > 0 && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">MOD README & INSTALL NOTES</div><h3>Instruction file review</h3><p>{documentation.length} text file(s) decoded locally · commands are never executed</p></div><span className="tag warning"><ShieldCheck size={13}/> READ ONLY</span></div>
+        {documentation.map((item)=><details className="native-summary" key={item.path}><summary>{item.path} · {item.encoding}{item.truncated ? " · preview truncated" : ""}</summary><div className="audit-grid"><div className="audit-card"><b>{formatBytes(item.bytes)}</b><span>source size</span></div><div className="audit-card"><b>{item.pathHints.length}</b><span>path hints</span></div><div className="audit-card"><b>{item.commandHints.length}</b><span>install keywords</span></div></div>{item.pathHints.length > 0 && <p className="native-disclaimer">Path hints: {item.pathHints.join(" · ")}</p>}{item.commandHints.length > 0 && <p className="native-disclaimer">Keywords: {item.commandHints.join(", ")}</p>}<pre className="text-preview">{item.preview}</pre></details>)}
+        <p className="native-disclaimer">Treat instructions as untrusted text. Project V does not run batch files, installers, scripts or commands found in mod documentation.</p>
+      </section>}
+      {dlcManifest && <section className="panel">
+        <div className="panel-head"><div><div className="eyebrow">GTA V DLC MANIFEST</div><h3>content.xml inspection</h3><p>{dlcManifest.validXml ? `${dlcManifest.summary.dataFiles} declared data file(s) across ${Object.keys(dlcManifest.summary.fileTypes).length} resource types` : dlcManifest.error}</p></div><span className="tag warning"><AlertTriangle size={13}/> READ ONLY</span></div>
+        {dlcManifest.validXml && <><div className="audit-grid"><div className="audit-card"><b>{dlcManifest.summary.entryCount}</b><span>manifest entries</span></div><div className="audit-card"><b>{dlcManifest.summary.dataFiles}</b><span>typed data files</span></div><div className="audit-card"><b>{dlcManifest.summary.disabledFiles}</b><span>disabled entries</span></div></div><div className="file-list">{dlcManifest.entries.slice(0,100).map((entry,index)=><div className="file-row" key={entry.filename || index}><FileText size={14}/><span className="file-name"><b>{entry.filename || "Unnamed entry"}</b><small>{entry.fileType || "No resource type declared"}</small></span><span className="file-ext">MANIFEST</span></div>)}</div><p className="native-disclaimer">Manifest paths are PC DLC references. Project V does not execute mount instructions or assume these paths exist in your PS4 $1.57 game.</p></>}
+      </section>}
       {modAudit && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">AUTOMATIC MOD AUDIT</div><h3>Detected mod contents</h3><p>{modAudit.summary.fileCount} files classified · {Object.keys(modAudit.summary.familyCounts).length} content families · {modAudit.summary.attentionCount} items need review</p></div><span className="tag success"><CheckCircle2 size={13}/> AUTO-ANALYZED</span></div>
         <div className="audit-grid">{Object.entries(modAudit.summary.familyCounts).sort((a,b)=>b[1]-a[1]).map(([family,count])=><div className="audit-card" key={family}><b>{count}</b><span>{family.replaceAll("-"," ")}</span></div>)}</div>
@@ -212,22 +454,41 @@ export default function App() {
         <p className="native-disclaimer">{modAudit.note}</p>
       </section>}
 
-      {portPlan && <section className="panel">
+      {portPlan?.summary && Array.isArray(portPlan.resources) && <section className="panel">
         <div className="panel-head"><div><div className="eyebrow">AUTOMATIC PORT PLAN</div><h3>Family-specific conversion worklist</h3><p>{portPlan.summary.fileCount} resources routed across {portPlan.summary.familyCount} families · {portPlan.summary.blockedCount} require an adapter or manual review</p></div><span className="tag warning"><AlertTriangle size={13}/> PLAN ONLY</span></div>
         <div className="audit-grid">
           {Object.entries(portPlan.summary.statusCounts).map(([status,count])=><div className="audit-card" key={status}><b>{count}</b><span>{status.replaceAll("-"," ")}</span></div>)}
         </div>
         <div className="file-list">{portPlan.pipeline.map((stage)=><div className="file-row" key={stage.stage}><FileText size={15}/><span className="file-name"><b>{stage.stage.replaceAll("-"," ")}</b><small>{stage.files.length} resource(s) · {stage.files.slice(0,3).join(", ")}{stage.files.length>3?" …":""}</small></span><span className="file-ext">PLANNED</span></div>)}</div>
-        {portPlan.resources.filter((item)=>item.status!=="analysis-or-authoring-only").slice(0,16).map((item)=><div className="audit-warning" key={item.path}><AlertTriangle size={14}/><span><b>{item.path}</b> — {item.status.replaceAll("-"," ")} · {item.blocker}</span></div>)}
-        <p className="native-disclaimer">This is a conversion work plan, not a conversion result. Candidate filename relationships are explicitly unverified. No resource bytes have been rewritten and no installable package exists.</p>
-        <button className="secondary-button" onClick={()=>downloadJson(portPlan,"gtav-autoport-port-plan.json")}><ArrowDownToLine size={15}/> Export port plan</button>
+        {portPlan.resources.slice(0,24).map((item)=><div className="native-summary" key={item.path}>
+          <div className="file-row"><FileText size={15}/><span className="file-name"><b>{item.path}</b><small>{item.family} · {item.status.replaceAll("-"," ")}</small></span><span className="file-ext">{item.extension || "FILE"}</span></div>
+          <div className="audit-warning"><AlertTriangle size={14}/><span>{item.blocker}</span></div>
+          <p className="native-disclaimer"><b>Expected outputs:</b> {item.outputContract?.artifacts?.join(", ") || "Format-specific output not yet defined"}</p>
+          <p className="native-disclaimer"><b>Source requirements:</b> {item.outputContract?.inputs?.join(", ") || "Inspect source dependencies"}</p>
+          <p className="native-disclaimer"><b>PS4 completion gate:</b> {item.outputContract?.gate || item.targetCapability}</p>
+          {[".yft", ".ytd", ".ydr", ".ydd"].includes(item.extension) && <button className="secondary-button" onClick={() => convertLegacyCandidate(item.path)} disabled={busy}><ArrowDownToLine size={15}/> Build PC Legacy resource candidate</button>}
+        </div>)}
+        {resourceConversionStatus && <div className="notice"><ShieldCheck size={18}/><div><b>Legacy candidate created</b><p>{resourceConversionStatus}</p></div></div>}
+        <p className="native-disclaimer">This is a conversion work plan. Legacy candidates are separate downloads; source files are never overwritten. Candidate filename relationships remain unverified, and no PS4 installable package exists.</p>
+        <button className="secondary-button" onClick={()=>portPlan?.summary ? downloadJson(portPlan,"gtav-autoport-port-plan.json") : setError("The port plan is incomplete. Re-import the mod after the latest Project V update.")} disabled={!portPlan?.summary}><ArrowDownToLine size={15}/> Export port plan</button>
+      </section>}
+      {archive && archive.files.some((file) => /\.rpf$/i.test(file.path)) && <section className="panel results-panel">
+        <div className="panel-head"><div><div className="eyebrow">GOLDHEN PACKAGE BUILDER</div><h3>Stage verified PS4 RPF overlays</h3><p>Creates a title-specific AFR folder, plugins.ini snippet, hashes and install notes. This does not convert PC archives.</p></div><span className="tag warning"><AlertTriangle size={13}/> STRICT GATES</span></div>
+        <p className="native-disclaimer">Only select complete RPF archives that are already built for PS4. A PC RPF with an RPF7 header is not automatically PS4-compatible. Map each source archive to the exact game file path that you have verified for CUSA00419 / 1.57.</p>
+        <label className="field-label" htmlFor="afr-mappings">Exact source-to-game path mappings (JSON)</label>
+        <textarea id="afr-mappings" rows={5} value={afrMappingsText} onChange={(event) => setAfrMappingsText(event.target.value)} spellCheck="false" placeholder={'{\n  "update.rpf": "/app0/update/update.rpf"\n}'}/>
+        <div className="check-row"><label><input type="checkbox" checked={ps4BuildConfirmed} onChange={(event) => setPs4BuildConfirmed(event.target.checked)}/> I verified these complete RPF archives are PS4-target builds, not PC archives.</label></div>
+        <div className="check-row"><label><input type="checkbox" checked={ps4PathsConfirmed} onChange={(event) => setPs4PathsConfirmed(event.target.checked)}/> I verified every destination path for CUSA00419 / GTA V 1.57.</label></div>
+        <button className="primary-button" onClick={exportAfrPackage} disabled={busy || !ps4BuildConfirmed || !ps4PathsConfirmed}><ArrowDownToLine size={15}/> Build GoldHEN AFR staging ZIP</button>
+        {packageStatus && <p className="native-disclaimer">{packageStatus}</p>}
+        <p className="native-disclaimer">This first package writer preserves RPF bytes unchanged. It cannot turn PC vehicle, ped, weapon or texture resources into PS4 resources. Do not attest compatibility unless you have independently verified it.</p>
       </section>}
       {ragekitResult && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">NATIVE RAGE RESOURCE ENGINE</div><h3>Read and round-trip validation</h3><p>{ragekitResult.summary.parsed} parsed · {ragekitResult.summary.byteExact} byte-exact · {ragekitResult.summary.failed} failed</p></div><span className="tag success"><CheckCircle2 size={13}/> ENGINE RAN</span></div>
-        <div className="audit-grid"><div className="audit-card"><b>{ragekitResult.summary.files}</b><span>resource candidates</span></div><div className="audit-card"><b>{ragekitResult.summary.parsed}</b><span>parsed</span></div><div className="audit-card"><b>{ragekitResult.summary.byteExact}</b><span>byte-exact</span></div><div className="audit-card"><b>{ragekitResult.summary.failed}</b><span>failed</span></div><div className="audit-card"><b>{ragekitResult.summary.rewrittenDifferent || 0}</b><span>rewrites differ</span></div></div>
-        {ragekitResult.reports.map((report)=><div className="native-summary" key={report.path}><div className="file-row"><FileText size={15}/><span className="file-name"><b>{report.path}</b><small>{report.roundtripStatus || "not processed"}</small></span><span className="file-ext">{report.roundtripByteExact?"BYTE-EXACT":report.parsed?"PARSED":"FAILED"}</span></div>{report.error && <div className="audit-warning"><AlertTriangle size={14}/><span>{report.error}</span></div>}{report.info && <details><summary>Native parser details</summary><pre className="native-output">{report.info}</pre></details>}</div>)}
+        <div className="audit-grid"><div className="audit-card"><b>{ragekitResult.summary.files}</b><span>resource candidates</span></div><div className="audit-card"><b>{ragekitResult.summary.parsed}</b><span>parsed</span></div><div className="audit-card"><b>{ragekitResult.summary.byteExact}</b><span>byte-exact</span></div><div className="audit-card"><b>{ragekitResult.summary.failed}</b><span>failed</span></div><div className="audit-card"><b>{ragekitResult.summary.rewrittenDifferent || 0}</b><span>rewrites differ</span></div><div className="audit-card"><b>{ragekitResult.summary.archives || 0}</b><span>RPF archives</span></div><div className="audit-card"><b>{ragekitResult.summary.archiveEntries || 0}</b><span>archive entries indexed</span></div></div>
+        {ragekitResult.reports.map((report)=><div className="native-summary" key={report.path}><div className="file-row"><FileText size={15}/><span className="file-name"><b>{report.path}</b><small>{report.roundtripStatus || "not processed"}</small></span><span className="file-ext">{report.archive?"ARCHIVE":report.roundtripByteExact?"BYTE-EXACT":report.parsed?"PARSED":"FAILED"}</span></div>{report.error && <div className="audit-warning"><AlertTriangle size={14}/><span>{report.error}</span></div>}{report.archive && <><div className="audit-grid"><div className="audit-card"><b>{report.archive.summary.entryCount}</b><span>entries</span></div><div className="audit-card"><b>{report.archive.summary.resourceCount}</b><span>RAGE resources</span></div><div className="audit-card"><b>{report.archive.summary.encryptedEntryCount}</b><span>encrypted entries</span></div><div className="audit-card"><b>{report.archive.resourceInspection.parsed}</b><span>nested resources parsed</span></div><div className="audit-card"><b>{report.archive.resourceInspection.byteExact}</b><span>nested byte-exact</span></div><div className="audit-card"><b>{formatBytes(report.archive.resourceInspection.extractedBytes)}</b><span>resources inspected</span></div></div><details><summary>Browse nested archive inventory</summary><div className="file-list">{report.archive.entries.slice(0,300).map((entry)=><div className="file-row" key={entry.path}><FileText size={14}/><span className="file-name">{entry.path}</span><span className="file-ext">{entry.extension || entry.kind}</span><span className="file-size">{formatBytes(entry.size)}</span></div>)}</div>{report.archive.entries.length>300 && <p className="native-disclaimer">Showing first 300 of {report.archive.entries.length} entries. The full inventory is included in the exported report.</p>}</details>{report.archive.resourceReports?.length>0 && <details><summary>Inspect supported resources inside this archive</summary>{report.archive.resourceReports.map((resource)=><div className="native-summary" key={resource.path}><div className="file-row"><FileText size={14}/><span className="file-name"><b>{resource.path}</b><small>{resource.status}</small></span><span className="file-ext">{resource.roundtripByteExact?"BYTE-EXACT":resource.parsed?"PARSED":"REVIEW"}</span></div>{resource.error && <div className="audit-warning"><AlertTriangle size={14}/><span>{resource.error}</span></div>}{resource.info && <details><summary>Resource parser details</summary><pre className="native-output">{resource.info}</pre></details>}</div>)}</details>}</>}{report.info && <details><summary>Native parser details</summary><pre className="native-output">{report.info}</pre></details>}</div>)}
         <p className="native-disclaimer">A byte-exact PC round trip does not establish PS4 compatibility or make an installable mod.</p>
-        <button className="secondary-button" onClick={()=>downloadJson(ragekitResult,"gtav-autoport-ragekit-validation.json")}><ArrowDownToLine size={15}/> Export native validation report</button>
+        <button className="secondary-button" onClick={()=>downloadJson(ragekitResult,"project-v-ragekit-validation.json")}><ArrowDownToLine size={15}/> Export native validation report</button>
       </section>}
       {ragekitStatus && <p className="native-disclaimer">{ragekitStatus}</p>}
       {nativeReports && <section className="panel results-panel">
@@ -258,14 +519,26 @@ export default function App() {
 
       {analysis && <section className="panel results-panel">
         <div className="panel-head"><div><div className="eyebrow">ANALYSIS RESULT</div><h3>{analysis.metadata.modelName} · Vehicle replacement</h3><p>Handling reference: {analysis.metadata.handlingId} · Texture dictionary: {analysis.metadata.txdName}</p></div><span className="tag warning"><AlertTriangle size={13}/> NOT CONVERTED</span></div>
+        <div className="audit-grid">
+          <div className="audit-card"><b>{analysis.metadata.audioReference?.value || "—"}</b><span>audio name reference</span></div>
+          <div className="audit-card"><b>{analysis.metadata.cameraReference?.value || "—"}</b><span>camera reference</span></div>
+          <div className="audit-card"><b>{Object.values(analysis.metadata.mappedSettings.vehicle).reduce((sum, group) => sum + Object.keys(group).length, 0)}</b><span>vehicle fields mapped</span></div>
+          <div className="audit-card"><b>{Object.values(analysis.metadata.mappedSettings.handling).reduce((sum, group) => sum + Object.keys(group).length, 0)}</b><span>handling fields mapped</span></div>
+        </div>
+        <details className="metadata-details"><summary>Mapped vehicle and handling settings</summary>
+          {Object.entries(analysis.metadata.mappedSettings.vehicle).map(([group, fields]) => <div className="native-summary" key={"vehicle-" + group}><h4>Vehicle · {group}</h4>{Object.entries(fields).map(([key, value]) => <div className="file-row" key={key}><span className="file-name"><b>{key}</b><small>{typeof value === "object" ? JSON.stringify(value) : String(value)}</small></span></div>)}</div>)}
+          {Object.entries(analysis.metadata.mappedSettings.handling).map(([group, fields]) => <div className="native-summary" key={"handling-" + group}><h4>Handling · {group}</h4>{Object.entries(fields).map(([key, value]) => <div className="file-row" key={key}><span className="file-name"><b>{key}</b><small>{typeof value === "object" ? JSON.stringify(value) : String(value)}</small></span></div>)}</div>)}
+          <div className="audit-warning"><AlertTriangle size={14}/><span>Audio and camera names are references, not proof that their banks or runtime camera handlers are present on the PS4 target. Full source metadata is retained in the export.</span></div>
+        </details>
+        <div className="native-summary"><div className="eyebrow">CROSS-FILE VEHICLE PORT RESOLUTION</div><h4>{analysis.vehiclePortReport.validation.readyForResourceConversion ? "Source dependency set resolved" : "Source dependency gaps detected"}</h4><div className="audit-grid"><div className="audit-card"><b>{analysis.vehiclePortReport.validation.requiredMissing.length}</b><span>required assets missing</span></div><div className="audit-card"><b>{analysis.vehiclePortReport.validation.unresolved.length}</b><span>unresolved checks</span></div><div className="audit-card"><b>{analysis.vehiclePortReport.references.variationKitReferences.length}</b><span>variation kit references</span></div><div className="audit-card"><b>{analysis.vehiclePortReport.references.audio.matchingFiles.length}</b><span>audio candidate files</span></div></div>{analysis.vehiclePortReport.validation.requiredMissing.map((item)=><div className="audit-warning" key={item}><AlertTriangle size={14}/><span>Missing required source asset: {item}</span></div>)}{analysis.vehiclePortReport.validation.unresolved.map((item)=><div className="audit-warning" key={item}><AlertTriangle size={14}/><span>{item}</span></div>)}<details><summary>Resolved source references</summary><pre className="native-output">{JSON.stringify(analysis.vehiclePortReport.references,null,2)}</pre></details><button className="secondary-button" onClick={()=>downloadJson(analysis.vehiclePortReport,`${analysis.metadata.modelName}-vehicle-port-report.json`)}><ArrowDownToLine size={15}/> Export cross-file port report</button></div>
         <div className="notice"><FileText size={19}/><div><b>Dependency inventory</b><p>{analysis.dependencyGraph.summary.resolved} resolved · {analysis.dependencyGraph.summary.missing} missing · {analysis.dependencyGraph.summary.ambiguous} ambiguous references across {analysis.dependencyGraph.summary.fileCount} imported files. This is an initial metadata-linked graph; full DLC and resource dependency resolution remains future work.</p></div></div><div className="asset-grid">{analysis.assetChecks.map((asset) => <div className="asset-card" key={asset.name}><div className="asset-top"><span>{asset.name}</span>{asset.present && !asset.ambiguous ? <CheckCircle2 size={15}/> : <AlertTriangle size={15}/>}</div><b>{asset.ambiguous ? "Ambiguous" : asset.present ? "Found" : "Missing"}</b><small>{asset.path || "No unique matching path"}</small><small>{asset.present ? formatBytes(asset.size) : "Required asset not found"}</small><small>{asset.resource?.valid ? `RSC7 v${asset.resource.version} · ${asset.resource.fixtureVersionMatch ? "matches Glendale sample" : "not a sample match"}` : asset.resource?.reason || asset.resource?.status || "Not inspected"}</small></div>)}</div>
         <div className="notice"><ShieldCheck size={19}/><div><b>Metadata and header inspection only. PS4 conversion has not passed.</b><p>RSC7 identifies a resource container, not its target platform. No decompression, geometry or texture decoding, rewriting, or deployment is performed. No installable package is generated.</p></div></div>
-        {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-autoport-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
+        {manifest && <button className="secondary-button" onClick={() => downloadJson(manifest, `${analysis.metadata.modelName}-project-v-manifest.json`)}><ArrowDownToLine size={15}/> Export conversion manifest</button>}
       </section>}
 
-      <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Universal conversion pipeline</h3></div><span className="muted">5 stages</span></div>
+      <div className="section-head"><div><div className="eyebrow">WORKFLOW</div><h3>Project V workflow</h3></div><span className="muted">5 stages</span></div>
       <div className="stages">{stages.map(([n,title,desc])=><article className="stage" key={n}><div className="stage-number">{n}</div><h4>{title}</h4><p>{desc}</p><span className="stage-state">{n==="01"?"AVAILABLE":n==="02"?"METADATA ANALYSIS":n==="03"?"NATIVE REPORTS":"PLANNED"}</span></article>)}</div>
-      <footer>GTAV AUTOPORT <span>·</span> LOCAL-FIRST <span>·</span> NO GTA ONLINE SUPPORT</footer>
+      <footer>PROJECT V <span>·</span> LOCAL-FIRST <span>·</span> NO GTA ONLINE SUPPORT</footer>
     </section>
   </main>;
 }

@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 3.20)
+project(gtav_autoport_runtime_core LANGUAGES CXX)
+
+add_library(autoport_runtime_core STATIC src/dispatcher.cpp src/plan_executor.cpp)
+target_include_directories(autoport_runtime_core PUBLIC include)
+target_compile_features(autoport_runtime_core PUBLIC cxx_std_17)
+
+add_executable(autoport_runtime_core_test tests/dispatcher_test.cpp)
+target_link_libraries(autoport_runtime_core_test PRIVATE autoport_runtime_core)
+enable_testing()
+add_test(NAME autoport_runtime_core_test COMMAND autoport_runtime_core_test)
