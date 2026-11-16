@@ -254,7 +254,6 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     try {
       if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
       const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
-      {
         const outputPath = sourcePath + ".ps4tex.bin";
         const sidecarPath = outputPath + ".json";
         const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.bytes)]);
@@ -292,7 +291,6 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
           roundTripVerified: converted.roundTripVerified,
           warnings: converted.inspection.warnings
         });
-      }
     } catch (error) {
       record.error = error?.message || "DDS texture conversion failed.";
     }
