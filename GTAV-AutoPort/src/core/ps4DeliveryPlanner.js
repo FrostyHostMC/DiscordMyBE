@@ -40,7 +40,7 @@ function routeFor(path, conversion, archive, binaryInspection, textureConversion
       && binaryInspection.status === "header-inspected"
       && !binaryInspection.architectureCompatibleWithPs4Cpu;
     const readableElf = binaryInspection?.format === "elf" && binaryInspection.status === "header-inspected";
-    const opaqueSce = binaryInspection?.format === "sce-container" && binaryInspection.status === "opaque-console-container";
+    const opaqueSce = ["sce-container", "self-container"].includes(binaryInspection?.format) && binaryInspection.status === "opaque-console-container";
     return {
       route: "validate-orbis-plugin",
       status: peImage || wrongElfArchitecture ? "blocked-binary-mismatch" : "target-validation-required",
