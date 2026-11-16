@@ -31,7 +31,7 @@ static std::string extensionOf(const std::string& name) {
     std::transform(e.begin(), e.end(), e.begin(), [](unsigned char c){ return (char)tolower(c); });
     return e;
 }
-static bool walk(const std::string& root, const std::string& current, unsigned int depth,
+static bool walk(const std::string& current, unsigned int depth,
                  unsigned int maxDepth, unsigned int maxItems, std::vector<LibraryItem>& out) {
     if (depth > maxDepth || out.size() >= maxItems) return true;
     DIR* d = opendir(current.c_str());
@@ -54,7 +54,7 @@ static bool walk(const std::string& root, const std::string& current, unsigned i
         } else if (!item.directory) continue;
         out.push_back(item);
         if (item.directory && depth < maxDepth)
-            if (!walk(root, full, depth + 1, maxDepth, maxItems, out)) { closedir(d); return false; }
+            if (!walk(full, depth + 1, maxDepth, maxItems, out)) { closedir(d); return false; }
     }
     closedir(d);
     return true;
@@ -66,7 +66,7 @@ bool scanLibrary(const std::string& root, std::vector<LibraryItem>& out, std::st
     if (lstat(root.c_str(), &st) != 0 || !S_ISDIR(st.st_mode) || S_ISLNK(st.st_mode)) {
         error = "Library root is missing or is not a real directory"; return false;
     }
-    if (!walk(root, root, 0, maxDepth, maxItems, out)) {
+    if (!walk(root, 0, maxDepth, maxItems, out)) {
         out.clear(); error = "Could not read the complete library inventory"; return false;
     }
     std::sort(out.begin(), out.end(), [](const LibraryItem& a, const LibraryItem& b) {
