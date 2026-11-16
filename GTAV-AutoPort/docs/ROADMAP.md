@@ -19,10 +19,10 @@
 
 ## Project V PS4 manager
 - [x] Rebrand the native PS4 companion UI and package title as Project V while retaining the existing package identity for in-place updates.
-- [x] Add separate selectable metadata profiles for GTA V 1.57 US/EU and 1.73 US/EU.
+- [x] Add separate selectable metadata profiles for GTA V 1.57 US/EU (primary) and 1.56 US/EU (secondary community target).
 - [x] Keep all runtime hook activation locked until exact executable fingerprints, unique signatures and matching validation evidence exist.
 - [ ] Replace the staging-only screen with full Project V library, manifest, plugin preview and reversible deployment workflows.
-- [ ] Port and harden the Project V runtime hooks against each exact retail executable profile.
+- [ ] Port and harden Project V runtime hooks for GTA V 1.57 first; maintain a separate 1.56 compatibility path.
 
 ## Native PS4 companion app
 - [x] Add an OpenOrbis v0.5.4 build pipeline that emits an unsigned PS4 PKG artifact.
