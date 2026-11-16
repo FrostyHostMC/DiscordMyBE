@@ -19,7 +19,7 @@ creation, Project V loading and GoldHEN plugin deployment.
 | `resource-loader-compatibility` | YFT, YTD, YDR, YDD, YBN, YMAP, YTYP, YMT, etc. | Require a format-specific parser and a verified target loading/conversion route |
 | `metadata-translation-review` | META, XML, INI, scripts/config | Parse and translate the internal format; extension renaming is not conversion |
 | `pso-metadata-edit-review` | YMT, YMF, YTYP, YMAP, PSO | Identify the exact binary PSO variant; only use file-specific, tested metadata editing |
-| `source-asset-conversion` | FBX, OBJ, DDS, PNG, WAV, etc. | Require game-compatible resource export and validation |
+| `ps4-texture-storage-candidate-only` | Supported BC1/BC3/BC5 DDS | Experimental PS4 Thin1DThin mip-storage payload with byte-exact untile verification; not a complete RSC7/YTD resource |\n| `source-asset-conversion` | FBX, OBJ, PNG, JPEG, WAV, unsupported DDS, etc. | Require game-compatible resource export and validation |
 | `preserve-and-review` | Unknown | Keep source and require a format adapter before conversion |
 
 ## Nested archive handling
@@ -37,7 +37,7 @@ The automatic preparation stage now follows supported PC RPF7 OPEN archives recu
 - It does not rename YMT to OMT automatically.
 - It records CUSA00419 / 1.57 as the requested target but does not mark that
   target verified merely because the target fields are present.
-- The Orbis builder remains explicitly not integrated; Project V remains unconfigured.
+- The DDS texture stage can emit experimental PS4 Thin1DThin storage candidates for supported BC1/BC3/BC5 inputs; full YTD dictionary serialization remains missing.\n- The Orbis builder remains explicitly not integrated; Project V remains unconfigured.
 - GoldHEN AFR configuration and explicit-mapping overlay planning already exist in `src/core/afr.js`; this planner reports that capability without claiming console deployment.
 
 ## Next implementation boundary
