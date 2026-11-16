@@ -1,3 +1,11 @@
+## 2026-11-15 — PS4 PKG build pipeline hardened on main
+- Made `main` the canonical AutoPort branch and enabled the full AutoPort CI workflow, including the OpenOrbis PS4 PKG build and artifact upload.
+- Replaced the hand-written GP4 generator invocation with OpenOrbis `create-gp4`, retained LibOrbisPkg package creation, and added `pkg_validate` plus SHA-256 output to the build.
+- Pinned and verifies the OpenOrbis v0.5.4 LLVM 18 archive before compiling.
+- Corrected the PS4 manager profile documentation to GTA V 1.57 primary / 1.56 community; the app still keeps all four regional profiles unverified until executable and runtime evidence exists.
+- Reduced the PS4 framebuffer direct-memory request to the two actual 1080p buffers instead of reserving 192 MiB.
+- The PKG remains a homebrew staging/manager app. It does not contain a completed PC-to-PS4 resource converter or Project V PRX, and console execution remains unverified until the package is built and tested on hardware.
+
 ## 2026-11-14 — Per-resource diagnostics in the workbench
 - The port-plan panel now shows each imported resource's expected output files, required source inputs, and exact PS4 conversion gate.
 - This makes the diagnostics useful for deciding what the app must generate for vehicles, peds, weapons, textures, maps and runtime plugins.
