@@ -6,7 +6,7 @@ It validates the RPF7 magic, OPEN marker, entry table bounds (250,000 entries by
 
 ## Compatibility boundary
 
-The inspector intentionally rejects non-OPEN markers. In particular, it does not interpret the supplied Orbis sample's `0x0FFEFFFF` marker as OPEN and does not attempt to decrypt or decode its TOC. This inspector is not a PS4/Orbis archive reader and does not establish installability on CUSA00419 / GTA V 1.73.
+The inspector intentionally rejects non-OPEN markers. In particular, it does not interpret the supplied Orbis sample's `0x0FFEFFFF` marker as OPEN and does not attempt to decrypt or decode its TOC. This inspector is not a PS4/Orbis archive reader and does not establish installability on CUSA00419 / GTA V 1.57.
 
 ## Tests
 
