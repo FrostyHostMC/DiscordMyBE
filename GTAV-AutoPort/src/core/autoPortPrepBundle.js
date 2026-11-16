@@ -235,6 +235,10 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   }
 
   const textureConversions = [];
+  const textureCache = new Map();
+  const maxTextureCacheBytes = 128 * 1024 * 1024;
+  let textureCacheBytes = 0;
+  let textureCacheHits = 0;
   for (const { file, inspection } of eligibleTexture) {
     const sourcePath = safePath(file.path);
     const adapterInfo = registeredFormatAdapterRegistry.list().find((item) => item.id === inspection.selectedAdapterId);
@@ -253,6 +257,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       hasFullMipChain: false,
       outputPath: null,
       outputBytes: 0,
+      cacheHit: false,
       sourceSha256: null,
       outputSha256: null,
       roundTripVerified: false,
@@ -261,10 +266,27 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     };
     try {
       if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
-      const converted = await registeredFormatAdapterRegistry.convert(inspection, file);
+      const sourceSha256 = await sha256(file.bytes);
+      record.sourceSha256 = sourceSha256;
+      const cached = sourceSha256 ? textureCache.get(sourceSha256) : null;
+      let converted;
+      let outputSha256;
+      let cacheHit = false;
+      if (cached) {
+        converted = cached.converted;
+        outputSha256 = cached.outputSha256;
+        cacheHit = true;
+        textureCacheHits += 1;
+      } else {
+        converted = await registeredFormatAdapterRegistry.convert(inspection, file);
+        outputSha256 = await sha256(converted.bytes);
+        if (sourceSha256 && outputSha256 && textureCacheBytes + converted.bytes.byteLength <= maxTextureCacheBytes) {
+          textureCache.set(sourceSha256, { converted, outputSha256 });
+          textureCacheBytes += converted.bytes.byteLength;
+        }
+      }
       const outputPath = sourcePath + ".ps4tex.bin";
       const sidecarPath = outputPath + ".json";
-      const [sourceSha256, outputSha256] = await Promise.all([sha256(file.bytes), sha256(converted.bytes)]);
       ps4TextureRoot.file(outputPath, converted.bytes);
       ps4TextureRoot.file(sidecarPath, JSON.stringify({
         sourcePath,
@@ -272,6 +294,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
         target: target ? { titleId: target.titleId || target.cusa || null, updateVersion: target.updateVersion || target.gameUpdate || null } : null,
         adapterId: converted.adapterId,
         adapterVersion: converted.adapterVersion,
+        cacheHit,
         sourceSha256,
         outputSha256,
         format: converted.layout.format,
@@ -306,6 +329,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
         hasFullMipChain: converted.inspection.hasFullMipChain,
         outputPath,
         outputBytes: converted.bytes.byteLength,
+        cacheHit,
         sourceSha256,
         outputSha256,
         roundTripVerified: converted.roundtripVerified,
@@ -355,6 +379,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       convertibleCandidates: eligible.length,
       convertedPcLegacyCandidates: conversions.filter((item) => item.status === "pc-legacy-candidate").length,
       ps4TextureStorageCandidates: textureConversions.filter((item) => item.status === "ps4-texture-storage-candidate").length,
+      textureConversionCacheHits: textureCacheHits,
       duplicateContentGroups: duplicateContentGroups.length,
       failedCandidates: conversions.filter((item) => item.status === "failed").length,
       originalFilesPreserved: sourceManifest.length,
@@ -370,6 +395,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     dependencies: dependencyGraph.summary,
     conversions,
     textureConversions,
+    textureConversionCacheHits: textureCacheHits,
     duplicateContentGroups,
     archiveInspections,
     deliveryPlan,
