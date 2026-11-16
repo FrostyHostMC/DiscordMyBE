@@ -4,6 +4,7 @@ import { analyzeModDependencies } from "./modDependencyGraph.js";
 import { extractOpenRpf7, inspectOpenRpf7 } from "./rpf7OpenInspector.js";
 import { buildPs4DeliveryPlan } from "./ps4DeliveryPlanner.js";
 import { inspectOrbxPackage } from "./orbxPackageInspector.js";
+import { convertDdsToPs4TextureStorage } from "./ps4TextureLayout.js";
 
 function safePath(value) {
   const normalized = String(value || "").replaceAll("\\", "/");
@@ -39,6 +40,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   const root = zip.folder("AutoPort-Prep");
   const originalRoot = root.folder("source-original");
   const candidateRoot = root.folder("pc-legacy-candidates");
+  const ps4TextureRoot = root.folder("ps4-texture-storage-candidates");
   const sourceManifest = [];
   const conversions = [];
   const archiveInspections = [];
@@ -225,7 +227,69 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     onProgress({ completed, total: eligible.length, current: relative, status: record.status });
   }
 
-  const deliveryPlan = buildPs4DeliveryPlan({ files: analysisFiles, conversions, archiveInspections, target });
+  const textureConversions = [];
+  for (const file of analysisFiles.filter((item) => extension(item.path) === ".dds")) {
+    const sourcePath = safePath(file.path);
+    const record = {
+      sourcePath,
+      status: "not-converted",
+      format: null,
+      width: null,
+      height: null,
+      mipCount: null,
+      outputPath: null,
+      outputBytes: 0,
+      roundTripVerified: false,
+      installable: false,
+      error: null
+    };
+    try {
+      if (!(file.bytes instanceof Uint8Array)) throw new Error("DDS file bytes are unavailable.");
+      const converted = convertDdsToPs4TextureStorage(file.bytes);
+      if (converted.status !== "ps4-texture-storage-candidate") {
+        record.error = converted.inspection?.error || "DDS format is not supported by the PS4 texture storage adapter.";
+        record.inspectionStatus = converted.inspection?.status || "unknown";
+      } else {
+        const outputPath = sourcePath + ".ps4tex.bin";
+        const sidecarPath = outputPath + ".json";
+        ps4TextureRoot.file(outputPath, converted.storage);
+        ps4TextureRoot.file(sidecarPath, JSON.stringify({
+          sourcePath,
+          outputPath,
+          format: converted.layout.format,
+          formatCode: converted.layout.formatCode,
+          width: converted.layout.width,
+          height: converted.layout.height,
+          mipCount: converted.layout.mipCount,
+          tileMode: converted.layout.tileMode,
+          tileIndex: converted.layout.tileIndex,
+          alignmentBytes: converted.layout.alignmentBytes,
+          storageBytes: converted.layout.storageBytes,
+          mips: converted.layout.mips,
+          roundTripVerified: converted.roundTripVerified,
+          installable: false,
+          targetCompatibility: converted.targetCompatibility,
+          warnings: converted.inspection.warnings
+        }, null, 2));
+        Object.assign(record, {
+          status: converted.status,
+          format: converted.layout.format,
+          width: converted.layout.width,
+          height: converted.layout.height,
+          mipCount: converted.layout.mipCount,
+          outputPath,
+          outputBytes: converted.storage.byteLength,
+          roundTripVerified: converted.roundTripVerified,
+          warnings: converted.inspection.warnings
+        });
+      }
+    } catch (error) {
+      record.error = error?.message || "DDS texture conversion failed.";
+    }
+    textureConversions.push(record);
+  }
+
+  const deliveryPlan = buildPs4DeliveryPlan({ files: analysisFiles, conversions, archiveInspections, textureConversions, target });
   const orbxPackageAudit = inspectOrbxPackage(analysisFiles);
 
   const manifest = {
@@ -239,6 +303,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       importedFiles: sourceManifest.length,
       convertibleCandidates: eligible.length,
       convertedPcLegacyCandidates: conversions.filter((item) => item.status === "pc-legacy-candidate").length,
+      ps4TextureStorageCandidates: textureConversions.filter((item) => item.status === "ps4-texture-storage-candidate").length,
       failedCandidates: conversions.filter((item) => item.status === "failed").length,
       originalFilesPreserved: sourceManifest.length,
       rpfArchivesInspected: archiveInspections.length,
@@ -252,6 +317,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     sourceFiles: sourceManifest,
     dependencies: dependencyGraph.summary,
     conversions,
+    textureConversions,
     archiveInspections,
     deliveryPlan,
     orbxPackageAudit,
@@ -260,6 +326,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
       "CUSA00419 / GTA V 1.57 resource encoding and in-game behavior are not verified.",
       "PC ASI/DLL/EXE plugins and runtime-dependent scripts are preserved as source only; they are not executable PS4 plugins.",
       "Supported PC RPF7 OPEN archives are extracted as raw files and included in dependency analysis and format classification; extraction itself does not decode or convert payloads.",
+      "DDS BC1/BC3/BC5 texture candidates may be tiled into experimental PS4 Thin1DThin storage and round-trip checked; this is not a complete RSC7/YTD dictionary and is not installable.",
       "Encrypted or Orbis/PS4 RPF variants are preserved unchanged when the OPEN inspector cannot validate them.",
       "Do not overwrite original game files. Review the included report and use a reversible deployment method only after target validation."
     ]
@@ -269,6 +336,7 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
   reportRoot.file("dependency-graph.json", JSON.stringify(dependencyGraph, null, 2));
   reportRoot.file("ps4-delivery-plan.json", JSON.stringify(deliveryPlan, null, 2));
   reportRoot.file("orbx-package-audit.json", JSON.stringify(orbxPackageAudit, null, 2));
+  reportRoot.file("ps4-texture-storage.json", JSON.stringify(textureConversions, null, 2));
   for (const [name, value] of Object.entries(reports)) {
     if (value !== undefined && value !== null) reportRoot.file(name.replace(/[^a-zA-Z0-9._-]/g, "_") + ".json", JSON.stringify(value, null, 2));
   }
@@ -281,8 +349,10 @@ export async function buildAutomaticPrepBundle({ sourceName = "pc-mod", files = 
     "3. rpf-extracted/ contains raw files extracted from supported PC RPF7 OPEN archives; original RPF files remain preserved.",
     "4. reports/dependency-graph.json lists detected file references, resolved targets, missing references and ambiguous matches.",
     "5. reports/ps4-delivery-plan.json explains the per-file PS4 route, blockers and required validation.",
-    "6. reports/orbx-package-audit.json checks for the ORBX PRX, INI and resource tree when present.",
-    "7. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
+    "6. ps4-texture-storage-candidates/ contains experimental BC1/BC3/BC5 PS4-tiled texture allocation payloads, with JSON sidecars; these are not complete YTD resources.",
+    "7. reports/orbx-package-audit.json checks for the ORBX PRX, INI and resource tree when present.",
+    "8. reports/ps4-texture-storage.json records supported and rejected DDS conversions.",
+    "9. autoport-manifest.json records conversion, archive inspection and delivery planning results.",
     "",
     "IMPORTANT: This is not a PS4 install package. PC Legacy output is not proof of PS4 compatibility.",
     "The target CUSA00419 / GTA V 1.57 writer and runtime still require exact-build validation.",
