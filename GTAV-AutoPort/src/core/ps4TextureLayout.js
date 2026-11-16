@@ -13,9 +13,9 @@ function ascii(bytes, offset, length) { return String.fromCharCode(...bytes.suba
 function isMagic(bytes) { return bytes.length >= 4 && DDS_MAGIC.every((value, index) => bytes[index] === value); }
 
 function decodeFormat(fourCC, dxgiFormat) {
-  if (fourCC === "DXT1" || [71, 72].includes(dxgiFormat)) return "BC1";
-  if (fourCC === "DXT5" || [77, 78].includes(dxgiFormat)) return "BC3";
-  if (["ATI2", "BC5U", "BC5S"].includes(fourCC) || [83, 84].includes(dxgiFormat)) return "BC5";
+  if (fourCC === "DXT1" || dxgiFormat === 71) return "BC1";
+  if (fourCC === "DXT5" || dxgiFormat === 77) return "BC3";
+  if (["ATI2", "BC5U"].includes(fourCC) || dxgiFormat === 83) return "BC5";
   return null;
 }
 
@@ -44,7 +44,7 @@ export function inspectDdsTexture(input) {
   if ((caps2 & 0x00000200) || (caps2 & 0x00200000)) {
     return { status: "unsupported-texture-shape", width, height, mipCount, error: "Cubemap and volume DDS textures are not supported by this single-slice encoder." };
   }
-  let dataOffset = 128;
+  if ((pixelFlags & 0x4) === 0) return { status: "unsupported-pixel-format", width, height, mipCount, error: "DDS pixel format does not declare a FourCC-compressed surface." };\n  let dataOffset = 128;
   let dxgiFormat = null;
   let resourceDimension = null;
   let arraySize = 1;
