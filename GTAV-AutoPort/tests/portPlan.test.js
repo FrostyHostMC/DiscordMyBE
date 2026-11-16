@@ -31,7 +31,7 @@ test("marks same-basename asset groupings as unverified candidate relationships"
 test("keeps PS4 target explicit and does not claim conversion output", () => {
   const plan = buildUniversalPortPlan({ files: [file("model.yft")] });
   assert.equal(plan.target.titleId, "CUSA00419");
-  assert.equal(plan.target.updateVersion, "1.73");
+  assert.equal(plan.target.updateVersion, "1.57");
   assert.equal(plan.summary.conversionOutputsWritten, 0);
   assert.equal(plan.resources[0].status, "blocked-pending-target-adapter");
 });
