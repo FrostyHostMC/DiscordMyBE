@@ -322,7 +322,7 @@ function collectKeyframeEntries(
 
 
 /** GeckoLib 5 built-in easing functions, sampled into linear Bedrock keyframes. */
-function geckoEase(name: string, progress: number, args: number[] = []): number | null {
+export function geckoEase(name: string, progress: number, args: number[] = []): number | null {
   const key = name.toLowerCase().replace(/[-_\s]/g, '');
   const t = Math.max(0, Math.min(1, progress));
   const arg = args[0];
