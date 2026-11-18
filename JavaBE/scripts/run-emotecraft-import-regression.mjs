@@ -108,13 +108,13 @@ try {
       loopClip.bones.head.rotation['1.5'][1] !== 90 ||
       loopClip.bones.head.rotation['1.8'] !== undefined) {
     throw new Error('A nonzero Emotecraft returnTick was not compiled into an exact endTick-to-returnTick loop cycle.');
-    const loopTimeAt = (elapsed, intro, start, duration, delta = 0.05) =>
-      elapsed < intro ? elapsed + delta : start + ((elapsed - intro) % duration);
-    if (Math.abs(loopTimeAt(1.5, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
-        Math.abs(loopTimeAt(1.55, 1.5, 0.25, 1.25) - 0.30) > 1e-9 ||
-        Math.abs(loopTimeAt(2.8, 1.5, 0.25, 1.25) - 0.25) > 1e-9) {
-      throw new Error('The returnTick clock did not land on the exact loop point and preserve the subsequent cycle.');
-    }
+  }
+  const loopTimeAt = (elapsed, intro, start, duration, delta = 0.05) =>
+    elapsed < intro ? elapsed + delta : start + ((elapsed - intro) % duration);
+  if (Math.abs(loopTimeAt(1.5, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
+      Math.abs(loopTimeAt(1.55, 1.5, 0.25, 1.25) - 0.30) > 1e-9 ||
+      Math.abs(loopTimeAt(2.8, 1.5, 0.25, 1.25) - 0.25) > 1e-9) {
+    throw new Error('The returnTick clock did not land on the exact loop point and preserve the subsequent cycle.');
   }
 
   const fadeIn = translateJavaAnimationSet({
@@ -237,10 +237,12 @@ try {
       zeroReturnClip.bones.head.rotation['1.5'][1] !== 90 ||
       zeroReturnClip.bones.head.rotation['2'] !== undefined) {
     throw new Error('Emotecraft returnTick=1 was incorrectly shifted to tick zero or extended past endTick.');
-    const zeroReturnTimeAt = (elapsed, delta = 0.05) => elapsed < 1.5 ? elapsed + delta : 0.05 + ((elapsed - 1.5) % 1.45);
-    if (Math.abs(zeroReturnTimeAt(1.5) - 0.05) > 1e-9 || Math.abs(zeroReturnTimeAt(1.55) - 0.10) > 1e-9) {
-      throw new Error('returnTick=1 did not land on exactly 0.05 seconds after the intro.');
-    }
+  }
+  const zeroReturnTimeAt = (elapsed, delta = 0.05) =>
+    elapsed < 1.5 ? elapsed + delta : 0.05 + ((elapsed - 1.5) % 1.45);
+  if (Math.abs(zeroReturnTimeAt(1.5) - 0.05) > 1e-9 ||
+      Math.abs(zeroReturnTimeAt(1.55) - 0.10) > 1e-9) {
+    throw new Error('returnTick=1 did not land on exactly 0.05 seconds after the intro.');
   }
 
   const splitEasing = translateJavaAnimationSet({
