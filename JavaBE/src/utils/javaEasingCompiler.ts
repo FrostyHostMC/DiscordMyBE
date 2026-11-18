@@ -79,7 +79,7 @@ function descriptorParameters(descriptor: string, isStatic: boolean): Array<{ sl
 }
 
 function loadIndex(instruction: JvmInstruction): number | null {
-  const short = /^[ailfd]load_(\\d+)$/.exec(instruction.mnemonic);
+  const short = /^[ailfd]load_(\d+)$/.exec(instruction.mnemonic);
   if (short) return Number(short[1]);
   if (/^[ailfd]load$/.test(instruction.mnemonic)) return instruction.operands[0] ?? null;
   if (instruction.opcode === 0xc4 && [0x15,0x16,0x17,0x18,0x19].includes(instruction.operands[0])) return instruction.operands[1] ?? null;
@@ -87,7 +87,7 @@ function loadIndex(instruction: JvmInstruction): number | null {
 }
 
 function storeIndex(instruction: JvmInstruction): number | null {
-  const short = /^[ilfda]store_(\\d+)$/.exec(instruction.mnemonic);
+  const short = /^[ilfda]store_(\d+)$/.exec(instruction.mnemonic);
   if (short) return Number(short[1]);
   if (/^[ilfda]store$/.test(instruction.mnemonic)) return instruction.operands[0] ?? null;
   if (instruction.opcode === 0xc4 && [0x36,0x37,0x38,0x39,0x3a].includes(instruction.operands[0])) return instruction.operands[1] ?? null;
