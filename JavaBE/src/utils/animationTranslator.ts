@@ -455,7 +455,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     loop: validLoop,
     __emoteIssues: issues,
   };
-  if (validLoop && returnTick > 0) {
+  if (validLoop) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
     const loopStart = intro;
     const loopDuration = Math.round((loopDurationTick / 20) * 1000) / 1000;
