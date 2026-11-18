@@ -806,6 +806,8 @@ export function portMobAndPlayerAnimations(
     controllerClasses: controllerSignals?.controllerClasses,
     stateMachineClasses: controllerSignals?.stateMachineClasses,
     animationIds: collectedAnimationIds,
+    bytecodeClasses: controllerSignals?.bytecodeClasses,
+    entityClasses: controllerSignals?.entityClasses,
   });
   for (const [synthPath, synthJson] of Object.entries(controllerSynthesis.files)) {
     resourcePackFiles[synthPath] = synthJson;

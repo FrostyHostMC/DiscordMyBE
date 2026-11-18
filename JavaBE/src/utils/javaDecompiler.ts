@@ -1161,9 +1161,50 @@ export async function decompileAndInspectJarAsync(
       signals: Array.from(new Set([...(summary.signals ?? []), ...callEvidence, ...fieldEvidence])),
     };
   });
-  // Keep only compact diagnostics and counters in React state. Retaining the full IR for
-  // every method/instruction doubled or tripled the live object graph for large mods.
-  result.stats.jvmAnalysis = { ...jvm, classes: [] };
+  // Keep compact diagnostics for the full archive, plus complete instruction IR for classes
+  // with concrete animation/runtime evidence. The controller reconstructor needs instructions,
+  // branch targets, constant-pool references and lambda bootstrap targets; method-name summaries
+  // alone cannot recover a state graph. Retaining only this connected slice avoids pinning every
+  // method from a large mod in React state.
+  const animationEvidence = /animation|animator|controller|state.?machine|pose|emote|playeranim|keyframe|geckolib/i;
+  const runtimeEvidence = /animationcontroller|rawanimation|animationstate|playanimation|setanimation|triggeranim|stopanimation|startanimation|thenplay|thenloop|setandcontinue|setanimation|animator|keyframe|playeranimator|emotecraft|geckolib/i;
+  const classByName = new Map(jvm.classes.map((item) => [item.name, item]));
+  const selected = new Set<string>();
+  for (const item of jvm.classes) {
+    const text = [
+      item.name, item.superName ?? '', ...item.interfaces,
+      ...item.fields.map((field) => field.name + ' ' + field.descriptor),
+      ...item.methods.flatMap((method) => [
+        method.name,
+        ...method.calls.map((call) => [call.owner, call.name, call.descriptor].filter(Boolean).join('.')),
+        ...method.fieldAccesses.map((field) => [field.owner, field.name, field.descriptor].filter(Boolean).join('.')),
+        ...method.instructions.map((instruction) => String(instruction.constant?.value ?? '')),
+      ]),
+    ].join(' ');
+    if (animationEvidence.test(item.name) || runtimeEvidence.test(text)) selected.add(item.name);
+  }
+  // Pull in referenced state/enum/helper classes, without retaining unrelated dependency trees.
+  const referenced = new Set<string>();
+  for (const name of selected) {
+    const item = classByName.get(name);
+    if (!item) continue;
+    for (const method of item.methods) {
+      for (const reference of [...method.calls, ...method.fieldAccesses]) {
+        if (reference.owner && classByName.has(reference.owner)) referenced.add(reference.owner);
+        const bootstrap = reference.bootstrapMethod;
+        for (const argument of bootstrap?.arguments ?? []) {
+          const target = argument.reference?.owner;
+          if (target && classByName.has(target)) referenced.add(target);
+        }
+      }
+    }
+  }
+  for (const name of referenced) {
+    const item = classByName.get(name);
+    if (item && (item.access & 0x4000) !== 0) selected.add(name); // enum state types
+  }
+  const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
+  result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
   inspectionCache.set(entries, { key, result });
   return result;
 }

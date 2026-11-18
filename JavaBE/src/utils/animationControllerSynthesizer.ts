@@ -1,4 +1,5 @@
 import type { DecompileClassSummary } from '@/types/remaker';
+import type { JvmClassIR } from '@/utils/jvmBytecodeIR';
 
 /**
  * Conservative boundary for bytecode-only animation-controller reconstruction.
@@ -15,6 +16,8 @@ export interface ControllerSignals {
   stateMachineClasses?: string[];
   animationIds?: string[];
   entityClasses?: DecompileClassSummary[];
+  /** Full bytecode for animation-related classes and their directly referenced enum state types. */
+  bytecodeClasses?: JvmClassIR[];
 }
 
 export interface SynthesizedController {
