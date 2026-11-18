@@ -354,19 +354,14 @@ function lambdaTargetAt(method: JvmMethodIR, callIndex: number): { owner: string
   return targets.size === 1 ? [...targets.values()][0] : null;
 }
 
-function captureValuesForLambda(method: JvmMethodIR, callIndex: number): number[] | null {
-  const dynamicIndex = invokedynamicIndexBefore(method, callIndex);
-  if (dynamicIndex === null) return null;
-  const descriptor = method.instructions[dynamicIndex]?.constant?.descriptor ?? '';
-  const parameters = descriptorParameters(descriptor, true);
+function captureNumericArgumentsBefore(method: JvmMethodIR, callIndex: number, descriptor: string, isStatic: boolean): number[] | null {
+  const parameters = descriptorParameters(descriptor, isStatic);
   if (parameters.length === 0) return [];
   if (parameters.some((parameter) => !['D','F','I','J'].includes(parameter.kind))) return null;
   const values: number[] = [];
-  for (let index = dynamicIndex - 1; index >= 0 && values.length < parameters.length; index--) {
+  for (let index = callIndex - 1; index >= 0 && values.length < parameters.length; index--) {
     const instruction = method.instructions[index]; const opcode = instruction.opcode;
-    if (instruction.mnemonic.startsWith('ldc') || (opcode >= 0x02 && opcode <= 0x11)) {
-      const value = constantNumber(instruction); if (value === null) return null; values.unshift(value); continue;
-    }
+    if (instruction.mnemonic.startsWith('ldc') || (opcode >= 0x02 && opcode <= 0x11)) { const value = constantNumber(instruction); if (value === null) return null; values.unshift(value); continue; }
     if (opcode === 0xb2 && instruction.constant?.owner === 'java.lang.Math' && instruction.constant.name === 'PI') { values.unshift(Math.PI); continue; }
     if (opcode === 0xb2 && instruction.constant?.owner === 'java.lang.Math' && instruction.constant.name === 'E') { values.unshift(Math.E); continue; }
     if (opcode === 0x00) continue;
@@ -375,16 +370,28 @@ function captureValuesForLambda(method: JvmMethodIR, callIndex: number): number[
   return values.length === parameters.length ? values : null;
 }
 
-function instanceNumericFields(easingClass: JvmClassIR): Record<string, number> {
+function captureValuesForLambda(method: JvmMethodIR, callIndex: number): number[] | null {
+  const dynamicIndex = invokedynamicIndexBefore(method, callIndex);
+  if (dynamicIndex === null) return null;
+  const descriptor = method.instructions[dynamicIndex]?.constant?.descriptor ?? '';
+  return captureNumericArgumentsBefore(method, dynamicIndex, descriptor, true);
+}
+
+function instanceNumericFields(easingClass: JvmClassIR, constructorDescriptor = '()V', constructorArguments: number[] = []): Record<string, number> {
   const values: Record<string, number> = {};
-  for (const method of easingClass.methods.filter((candidate) => candidate.name === '<init>')) {
-    for (let index = 0; index < method.instructions.length; index++) {
-      const instruction = method.instructions[index];
-      if (instruction.opcode !== 0xb5 || !instruction.constant?.name) continue;
-      for (let previous = index - 1; previous >= 0 && previous >= index - 3; previous--) {
-        const value = constantNumber(method.instructions[previous]);
-        if (value !== null) { values[instruction.constant.name] = value; break; }
-      }
+  const constructor = easingClass.methods.find((candidate) => candidate.name === '<init>' && candidate.descriptor === constructorDescriptor);
+  if (!constructor) return values;
+  const parameters = descriptorParameters(constructor.descriptor, false).filter((parameter) => ['D','F','I','J'].includes(parameter.kind));
+  const locals: Record<number, number> = {};
+  parameters.forEach((parameter, index) => { if (typeof constructorArguments[index] === 'number') locals[parameter.slot] = constructorArguments[index]; });
+  for (let index = 0; index < constructor.instructions.length; index++) {
+    const instruction = constructor.instructions[index];
+    if (instruction.opcode !== 0xb5 || !instruction.constant?.name) continue;
+    for (let previous = index - 1; previous >= 0 && previous >= index - 4; previous--) {
+      const load = loadIndex(constructor.instructions[previous]);
+      if (load !== null && typeof locals[load] === 'number') { values[instruction.constant.name] = locals[load]; break; }
+      const value = constantNumber(constructor.instructions[previous]);
+      if (value !== null) { values[instruction.constant.name] = value; break; }
     }
   }
   return values;
@@ -433,13 +440,22 @@ export function buildJavaCustomEasingRegistry(classes: JvmClassIR[]): JavaEasing
             }
           }
           const easingClass = className ? byName.get(className) : undefined;
+          const constructorCallIndex = method.instructions.findIndex((instruction, index) => {
+            const owner = String(instruction.constant?.owner ?? '').replaceAll('/', '.');
+            const expected = String(className ?? '').replaceAll('/', '.');
+            return index < callIndex && index >= callIndex - 16 && instruction.opcode === 0xb7 && instruction.constant?.name === '<init>' && owner === expected;
+          });
+          const constructorCall = constructorCallIndex >= 0 ? method.instructions[constructorCallIndex].constant : undefined;
+          const constructorArgs = constructorCall ? captureNumericArgumentsBefore(method, constructorCallIndex, constructorCall.descriptor ?? '()V', false) : [];
           const candidates = easingClass?.methods.filter((candidate) =>
-            /^\(D\)D$|^\(F\)F$/.test(candidate.descriptor) &&
-            !['<init>', '<clinit>'].includes(candidate.name));
+            (candidate.descriptor === '(D)D' || candidate.descriptor === '(F)F') && !['<init>', '<clinit>'].includes(candidate.name));
           const targetMethod = candidates?.find((candidate) => /ease|apply|value/i.test(candidate.name)) ??
             (candidates?.length === 1 ? candidates[0] : undefined);
+          const fields = easingClass && constructorCall && constructorArgs
+            ? instanceNumericFields(easingClass, constructorCall.descriptor ?? '()V', constructorArgs)
+            : easingClass ? instanceNumericFields(easingClass) : {};
           register(name, className ?? item.name, targetMethod?.name ?? '<unresolved>',
-            targetMethod ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0, [], instanceNumericFields(easingClass!)) : null);
+            targetMethod && constructorArgs !== null ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0, [], fields) : null);
           continue;
         }
         const target = lambdaTargetAt(method, callIndex);

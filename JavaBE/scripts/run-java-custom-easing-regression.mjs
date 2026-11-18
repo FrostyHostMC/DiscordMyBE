@@ -154,8 +154,9 @@ try {
       { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: { index: 20, tag: 8, kind: 'String', value: 'fixture_custom_class' }, branchTargets: [] },
       { offset: 1, opcode: 0xbb, mnemonic: 'new', size: 3, operands: [], constant: { index: 21, tag: 7, kind: 'Class', value: 'fixture.CustomEase' }, branchTargets: [] },
       { offset: 4, opcode: 0x59, mnemonic: 'dup', size: 1, operands: [], branchTargets: [] },
-      { offset: 5, opcode: 0xb7, mnemonic: 'invokespecial', size: 1, operands: [], constant: { index: 22, tag: 10, kind: 'Methodref', owner: 'fixture.CustomEase', name: '<init>', descriptor: '()V' }, branchTargets: [] },
-      { offset: 8, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: { index: 23, tag: 10, kind: 'Methodref', owner: 'com.geckolib.util.GeckoLibUtil', name: 'addCustomEasingType', descriptor: '(Ljava/lang/String;Lcom/geckolib/animation/EasingType;)V' }, branchTargets: [] },
+      { offset: 5, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 4 }, branchTargets: [] },
+      { offset: 6, opcode: 0xb7, mnemonic: 'invokespecial', size: 1, operands: [], constant: { index: 22, tag: 10, kind: 'Methodref', owner: 'fixture.CustomEase', name: '<init>', descriptor: '(D)V' }, branchTargets: [] },
+      { offset: 9, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: { index: 23, tag: 10, kind: 'Methodref', owner: 'com.geckolib.util.GeckoLibUtil', name: 'addCustomEasingType', descriptor: '(Ljava/lang/String;Lcom/geckolib/animation/EasingType;)V' }, branchTargets: [] },
     ],
   };
   owner.methods.push(classRegistration);
@@ -165,15 +166,15 @@ try {
     interfaces: [], access: 0x0001, majorVersion: 61, minorVersion: 0,
     fields: [{ name: 'factor', descriptor: 'D', access: 0x0012 }],
     methods: [{
-      name: '<init>', descriptor: '()V', access: 0x0001, maxStack: 3, maxLocals: 1,
+      name: '<init>', descriptor: '(D)V', access: 0x0001, maxStack: 3, maxLocals: 3,
       instructions: [
         { offset: 0, opcode: 0x2a, mnemonic: 'aload_0', size: 1, operands: [], branchTargets: [] },
-        { offset: 1, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 4 }, branchTargets: [] },
+        { offset: 1, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
         { offset: 2, opcode: 0xb5, mnemonic: 'putfield', size: 1, operands: [], constant: { index: 40, tag: 9, kind: 'Fieldref', owner: 'fixture.CustomEase', name: 'factor', descriptor: 'D' }, branchTargets: [] },
         { offset: 3, opcode: 0xb1, mnemonic: 'return', size: 1, operands: [], branchTargets: [] },
       ],
       blocks: [{ start: 0, end: 4, instructionOffsets: [0,1,2,3], successors: [], exceptionalSuccessors: [] }],
-      calls: [], fieldAccesses: [], localVariables: [], exceptionHandlers: [], codeLength: 4, decodeWarnings: [],
+      calls: [], fieldAccesses: [], localVariables: [{ name: 'factor', descriptor: 'D', index: 1, start: 0, length: 4 }], exceptionHandlers: [], codeLength: 4, decodeWarnings: [],
     }, {
       name: 'ease', descriptor: '(D)D', access: 0x0001, maxStack: 3, maxLocals: 3,
       instructions: [
