@@ -253,6 +253,9 @@ try {
       block(70, [70,71], []),
     ], [method('fixture.AnimationState', 'isMoving'), method('fixture.AnimationState', 'isSprinting')])], references: [], bootstrapMethods: [], decodeWarnings: [],
   };
+  lambdaHandler.descriptor = '(Lfixture/AnimationState;)V';
+  lambdaController.methods[2].descriptor = '(Lfixture/AnimationState;)V';
+
   const lambdaResult = synthesizeAnimationControllersFromBytecode(['player'], {
     controllerClasses: ['fixture.LambdaController'],
     animationIds: ['animation.fixture.idle', 'animation.fixture.run', 'animation.fixture.attack_idle', 'animation.fixture.attack', 'animation.fixture.walk'],
