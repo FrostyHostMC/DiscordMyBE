@@ -69,6 +69,7 @@ const CLIP_MEMBERS = new Set([
   'name',
   'parent',
   'start_delay',
+  'loop_delay',
   'blend_weight',
   'override_previous_animation',
   'sound_effects',
@@ -327,6 +328,15 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
   const clip: BedrockAnimationClip = { bones };
   const loop = normaliseLoop(rawClip.loop);
   if (loop !== undefined) clip.loop = loop;
+
+  // Timed effect-only clips still have a real duration even when no bone channel exists.
+  for (const eventTrack of [rawClip.sound_effects, rawClip.particle_effects, rawClip.timeline]) {
+    if (!isPlainObject(eventTrack)) continue;
+    for (const timeKey of Object.keys(eventTrack)) {
+      const eventTime = Number(timeKey);
+      if (Number.isFinite(eventTime) && eventTime >= 0) result.maxTime = Math.max(result.maxTime, eventTime);
+    }
+  }
 
   const declared = Number(rawClip.animation_length ?? rawClip.length);
   if (Number.isFinite(declared) && declared > 0) {

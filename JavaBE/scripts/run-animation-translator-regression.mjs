@@ -18,7 +18,6 @@ try {
   const source = {
     animations: {
       event_only: {
-        animation_length: 1,
         loop: 'once',
         start_delay: '0.1',
         loop_delay: '0.2',
@@ -51,6 +50,7 @@ try {
   if (clip.sound_effects['0.25'][0].volume !== 0.7 || clip.sound_effects['0.25'][0].pitch !== 1.1) {
     throw new Error('Sound volume or pitch was lost.');
   }
+  if (clip.animation_length !== 0.75) throw new Error('Event-only duration was not derived from the latest timed event.');
   if (clip.start_delay !== '0.1' || clip.loop_delay !== '0.2' || clip.blend_weight !== 'query.modified_move_speed') {
     throw new Error('Source animation timing or blend weight was lost.');
   }
