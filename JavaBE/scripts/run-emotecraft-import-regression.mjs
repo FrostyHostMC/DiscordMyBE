@@ -145,13 +145,13 @@ try {
     },
   }, { fileHint: 'fixture' });
   const playerClip = playerTransforms.animations[playerTransforms.idMap.playeranimator_coordinates];
-  if (playerClip.bones.right_arm.position['0.5'].vector[0] !== 16 ||
-      playerClip.bones.right_arm.position['0.5'].vector[1] !== -32 ||
-      playerClip.bones.body.position['0.5'].vector[0] !== 32 ||
-      playerClip.bones.waist.position['0.5'].vector[0] !== -48 ||
-      Math.abs(playerClip.bones.body.rotation['0.5'].vector[0] - 57.2957795) > 0.001 ||
-      Math.abs(playerClip.bones.waist.rotation['0.5'].vector[0] + 114.591559) > 0.001 ||
-      Math.abs(playerClip.bones.right_arm.rotation['0.5'].vector[0] - 57.2957795) > 0.001) {
+  if (playerClip.bones.right_arm.position['0.5'][0] !== 16 ||
+      playerClip.bones.right_arm.position['0.5'][1] !== -32 ||
+      playerClip.bones.body.position['0.5'][0] !== 32 ||
+      playerClip.bones.waist.position['0.5'][0] !== -48 ||
+      Math.abs(playerClip.bones.body.rotation['0.5'][0] - 57.2957795) > 0.001 ||
+      Math.abs(playerClip.bones.waist.rotation['0.5'][0] + 114.591559) > 0.001 ||
+      Math.abs(playerClip.bones.right_arm.rotation['0.5'][0] - 57.2957795) > 0.001) {
     throw new Error('Emotecraft waist/torso hierarchy, limb pivot offsets, Bedrock position units, or rotation signs were not reconstructed.');
   }
 
@@ -172,10 +172,10 @@ try {
   }, { fileHint: 'fixture' });
   const scaleClip = scale.animations[scale.idMap.scale_channels];
   const scaleAtQuarter = scaleClip.bones.right_arm.scale['0.25'];
-  if (Math.abs(scaleAtQuarter.vector[0] - 1.25) > 0.001 ||
-      Math.abs(scaleAtQuarter.vector[1] - 0.875) > 0.001 ||
-      Math.abs(scaleAtQuarter.vector[2] - 1.125) > 0.001 ||
-      scaleClip.bones.right_arm.scale['1.5'].vector.some((value) => value !== 1)) {
+  if (Math.abs(scaleAtQuarter[0] - 1.25) > 0.001 ||
+      Math.abs(scaleAtQuarter[1] - 0.875) > 0.001 ||
+      Math.abs(scaleAtQuarter[2] - 1.125) > 0.001 ||
+      scaleClip.bones.right_arm.scale['1.5'].some((value) => value !== 1)) {
     throw new Error('Emotecraft per-axis scale channels or scale reset were not imported.');
   }
 
@@ -198,10 +198,10 @@ try {
   const bendVector = bendClip.bones.right_arm_bend.rotation['0.5'];
   const bendPosition = bendClip.bones.right_arm_bend.position['0.5'];
   const bendRadians = 0.5 * Math.PI / 180;
-  if (Math.abs(bendVector.vector[0] - 0.5) > 0.001 ||
-      Math.abs(bendVector.vector[1]) > 0.001 || Math.abs(bendVector.vector[2]) > 0.001 ||
-      Math.abs(bendPosition.vector[1] - 2 * (1 - Math.cos(bendRadians))) > 0.001 ||
-      Math.abs(bendPosition.vector[2] + 2 * Math.sin(bendRadians)) > 0.001) {
+  if (Math.abs(bendVector[0] - 0.5) > 0.001 ||
+      Math.abs(bendVector[1]) > 0.001 || Math.abs(bendVector[2]) > 0.001 ||
+      Math.abs(bendPosition[1] - 2 * (1 - Math.cos(bendRadians))) > 0.001 ||
+      Math.abs(bendPosition[2] + 2 * Math.sin(bendRadians)) > 0.001) {
     throw new Error('Emotecraft scalar bend angle or the generated bend-segment arc was not reconstructed.');
   }
 
@@ -220,7 +220,7 @@ try {
     },
   }, { fileHint: 'fixture' });
   const objectBend = bendObject.animations[bendObject.idMap.bend_value_object].bones.left_leg_bend.rotation['0.5'];
-  if (objectBend.vector[0] !== 45) throw new Error('PAL bend { value } keyframes were not imported.');
+  if (objectBend[0] !== 45) throw new Error('PAL bend { value } keyframes were not imported.');
 
   console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, player pivots/units, bend axes, stop reset, and nonzero returnTick looping are imported.');
 } finally {
