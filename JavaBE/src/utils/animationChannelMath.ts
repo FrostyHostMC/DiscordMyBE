@@ -61,6 +61,9 @@ interface NormalisedKeyframe {
   value: KeyframeValue;
   problems: ChannelProblem[];
   approximated: boolean;
+  /** GeckoLib easing belongs to the destination keyframe for the segment leading into it. */
+  easing?: string;
+  easingArgs?: number[];
 }
 
 const IDENTITY: Record<BedrockChannel, number> = { rotation: 0, position: 0, scale: 1 };
@@ -120,14 +123,11 @@ function normaliseLerpMode(raw: unknown, problems: ChannelProblem[]): 'linear' |
   if (raw === undefined || raw === null || raw === '') return 'linear';
   const text = String(raw).trim().toLowerCase();
   if (LERP_MODES.has(text)) return text as 'linear' | 'catmullrom';
-  // GeckoLib / Java easing names have no Bedrock keyframe equivalent; smooth easings are
-  // approximated with the engine's own smooth interpolation, linear/step ones stay linear.
-  const smooth = /catmull|bezier|smooth|sine|quad|easeinout|easeoutin|elastic|circular|back/.test(text);
   problems.push({
     kind: 'normalised',
-    detail: `interpolation "${String(raw)}" has no Bedrock keyframe equivalent; mapped to ${smooth ? 'catmullrom' : 'linear'} interpolation`,
+    detail: `interpolation "${String(raw)}" has no Bedrock keyframe equivalent; retained endpoints with linear interpolation instead of substituting an unrelated curve`,
   });
-  return smooth ? 'catmullrom' : 'linear';
+  return 'linear';
 }
 
 function normaliseVector(
@@ -174,11 +174,26 @@ function normaliseVector(
   return components;
 }
 
+function easingMetadata(raw: Record<string, unknown>): Pick<NormalisedKeyframe, 'easing' | 'easingArgs'> {
+  const interpolation = typeof raw.interpolation === 'string' ? raw.interpolation.trim() : '';
+  const lerpMode = typeof raw.lerp_mode === 'string' ? raw.lerp_mode.trim() : '';
+  const rawEasing = raw.easing ?? raw.easing_type ?? raw.easingType ?? raw.ease ??
+    (interpolation && !LERP_MODES.has(interpolation.toLowerCase()) ? interpolation : undefined) ??
+    (lerpMode.toLowerCase() === 'step' ? 'step' : undefined);
+  const easing = typeof rawEasing === 'string' && rawEasing.trim() ? rawEasing.trim() : undefined;
+  const rawArgs = raw.easing_args ?? raw.easingArgs;
+  const easingArgs = Array.isArray(rawArgs)
+    ? rawArgs.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+    : undefined;
+  return { easing, easingArgs };
+}
+
 function normaliseKeyframeObject(
   raw: Record<string, unknown>,
   channel: BedrockChannel,
   problems: ChannelProblem[],
 ): NormalisedKeyframe {
+  const easing = easingMetadata(raw);
   // GeckoLib wraps the actual value in a "vector" (or value/values/offset) member.
   for (const holder of ['vector', 'value', 'values', 'vec', 'offset']) {
     if (raw[holder] !== undefined && raw[holder] !== null) {
@@ -187,7 +202,7 @@ function normaliseKeyframeObject(
       if (nested.approximated) {
         problems.push({ kind: 'normalised', detail: `"${holder}"-wrapped keyframe unwrapped into a Bedrock channel value` });
       }
-      return { value: nested.value, problems, approximated: true };
+      return { value: nested.value, problems, approximated: true, ...easing };
     }
   }
   if (raw.x !== undefined || raw.y !== undefined || raw.z !== undefined) {
@@ -197,19 +212,20 @@ function normaliseKeyframeObject(
       problems,
     );
     problems.push({ kind: 'normalised', detail: 'x/y/z keyframe converted into a Bedrock component vector' });
-    return { value: vector, problems, approximated: true };
+    return { value: vector, problems, approximated: true, ...easing };
   }
   if (raw.pre !== undefined || raw.post !== undefined) {
     const post = normaliseKeyframe(raw.post ?? raw.pre, channel);
     const pre = normaliseKeyframe(raw.pre ?? raw.post, channel);
     problems.push(...post.problems, ...pre.problems);
-    const lerp = normaliseLerpMode(raw.lerp_mode ?? raw.easing ?? raw.interpolation ?? raw.ease, problems);
+    const rawLerp = raw.lerp_mode ?? (String(raw.interpolation ?? '').toLowerCase() === 'catmullrom' ? raw.interpolation : undefined);
+    const lerp = normaliseLerpMode(rawLerp, problems);
     const sameValue = JSON.stringify(pre.value) === JSON.stringify(post.value);
     const approximated = post.approximated || pre.approximated || problems.some((p) => p.kind === 'normalised');
     // A keyframe whose pre/post are identical only needs the array form unless the source
     // asked for a specific interpolation curve.
-    if (sameValue && lerp === 'linear') return { value: post.value, problems, approximated };
-    return { value: { pre: pre.value, post: post.value, lerp_mode: lerp }, problems, approximated };
+    if (sameValue && lerp === 'linear') return { value: post.value, problems, approximated, ...easing };
+    return { value: { pre: pre.value, post: post.value, lerp_mode: lerp }, problems, approximated, ...easing };
   }
   problems.push({ kind: 'malformed', detail: `keyframe object ${JSON.stringify(raw)} declares no readable value` });
   return { value: identityVector(channel), problems, approximated: false };
@@ -255,7 +271,7 @@ interface KeyframeEntry {
 }
 
 function looksLikeKeyframeObject(value: Record<string, unknown>): boolean {
-  return ['pre', 'post', 'vector', 'value', 'values', 'vec', 'offset', 'lerp_mode', 'easing', 'x', 'y', 'z'].some(
+  return ['pre', 'post', 'vector', 'value', 'values', 'vec', 'offset', 'lerp_mode', 'easing', 'easing_args', 'easingArgs', 'easingType', 'easing_type', 'ease', 'interpolation', 'x', 'y', 'z'].some(
     (key) => value[key] !== undefined,
   );
 }
@@ -280,7 +296,7 @@ function collectKeyframeEntries(
       }
       entries.push({
         time,
-        raw: record.value ?? record.vector ?? record.post ?? record,
+        raw: record,
         label: `@${formatSeconds(time)}s`,
       });
     }
@@ -298,6 +314,68 @@ function collectKeyframeEntries(
     return { entries, constant: false };
   }
   return { entries: [{ time: 0, raw, label: 'constant' }], constant: true };
+}
+
+
+/** GeckoLib 5 built-in easing functions, sampled into linear Bedrock keyframes. */
+function geckoEase(name: string, progress: number, args: number[] = []): number | null {
+  const key = name.toLowerCase().replace(/[-_\\s]/g, '');
+  const t = Math.max(0, Math.min(1, progress));
+  const arg = args[0];
+  const easeIn = (kind: string, value: number): number => {
+    switch (kind) {
+      case 'sine': return 1 - Math.cos(value * Math.PI / 2);
+      case 'quad': return value * value;
+      case 'cubic': return value * value * value;
+      case 'quart': return Math.pow(value, 4);
+      case 'quint': return Math.pow(value, 5);
+      case 'expo': return Math.pow(2, 10 * (value - 1));
+      case 'circ': return 1 - Math.sqrt(Math.max(0, 1 - value * value));
+      case 'back': {
+        const scale = arg === undefined ? 1.70158 : arg * 1.70158;
+        return value * value * ((scale + 1) * value - scale);
+      }
+      case 'elastic': {
+        const bounciness = arg === undefined ? 1 : arg;
+        return 1 - Math.pow(Math.cos(value * Math.PI / 2), 3) * Math.cos(value * bounciness * Math.PI);
+      }
+      case 'bounce': {
+        const b = arg === undefined ? 0.5 : arg;
+        const one = (x: number) => (121 / 16) * x * x;
+        const two = (x: number) => (121 / 4) * b * Math.pow(x - 6 / 11, 2) + 1 - b;
+        const three = (x: number) => 121 * b * b * Math.pow(x - 9 / 11, 2) + 1 - b * b;
+        const four = (x: number) => 484 * b * b * b * Math.pow(x - 10.5 / 11, 2) + 1 - b * b * b;
+        return Math.min(one(value), two(value), three(value), four(value));
+      }
+      default: return NaN;
+    }
+  };
+  if (key === 'linear' || key === 'none') return t;
+  if (key === 'step') {
+    const steps = arg === undefined ? 2 : Math.floor(arg);
+    if (steps < 2) return null;
+    return t >= 1 ? 1 : Math.floor(t * steps) / steps;
+  }
+  const match = /^ease(inout|in|out)(sine|quad|cubic|quart|quint|expo|circ|back|elastic|bounce)$/.exec(key);
+  if (!match) return null;
+  const mode = match[1];
+  const kind = match[2];
+  if (mode === 'in') return easeIn(kind, t);
+  if (mode === 'out') return 1 - easeIn(kind, 1 - t);
+  if (t < 0.5) return easeIn(kind, t * 2) / 2;
+  return 1 - easeIn(kind, (1 - t) * 2) / 2;
+}
+
+function numericVector(value: KeyframeValue, channel: BedrockChannel): number[] | null {
+  let raw: unknown = value;
+  if (isPlainObject(raw)) raw = raw.post ?? raw.pre ?? raw.vector ?? raw.value;
+  if (typeof raw === 'number') return [raw, raw, raw];
+  if (!Array.isArray(raw)) return null;
+  const values = raw.flat(Infinity as never).slice(0, 3);
+  if (values.length === 0 || values.some((part) => typeof part !== 'number' || !Number.isFinite(part))) return null;
+  if (values.length === 1) return [values[0] as number, values[0] as number, values[0] as number];
+  if (values.length === 2) return [values[0] as number, values[1] as number, IDENTITY[channel]];
+  return values as number[];
 }
 
 /**
@@ -326,7 +404,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     return { channel, ok: false, value: identityVector(channel), keyframeCount: 0, problems, approximated: false };
   }
 
-  const shaped: Array<{ time: number; value: KeyframeValue }> = [];
+  const shaped: Array<{ time: number; value: KeyframeValue; easing?: string; easingArgs?: number[] }> = [];
   let approximated = false;
   for (const entry of entries) {
     const keyframe = normaliseKeyframe(entry.raw, channel);
@@ -337,7 +415,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
       })),
     );
     approximated = approximated || keyframe.approximated;
-    shaped.push({ time: entry.time, value: keyframe.value });
+    shaped.push({ time: entry.time, value: keyframe.value, easing: keyframe.easing, easingArgs: keyframe.easingArgs });
   }
 
   if (constant) {
@@ -353,13 +431,61 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
 
   shaped.sort((a, b) => a.time - b.time);
   const keyframeMap: Record<string, unknown> = {};
+  const originalTimes = new Set(shaped.map((entry) => formatSeconds(entry.time)));
+  const sampleStep = 1 / 20; // GeckoLib evaluates animation state on Minecraft's 20 TPS clock.
+  let easingSamples = 0;
+
+  for (let index = 1; index < shaped.length; index += 1) {
+    const current = shaped[index];
+    if (!current.easing || ['linear', 'none'].includes(current.easing.toLowerCase())) continue;
+    const previous = shaped[index - 1];
+    const from = numericVector(previous.value, channel);
+    const to = numericVector(current.value, channel);
+    if (!from || !to) {
+      problems.push({
+        kind: 'unsupported',
+        detail: `GeckoLib easing "${current.easing}" could not be baked because one or both endpoint vectors contain dynamic Molang expressions; the original endpoints were retained`,
+      });
+      approximated = true;
+      continue;
+    }
+    const duration = current.time - previous.time;
+    if (!(duration > 0)) continue;
+    let recognized = true;
+    for (let time = previous.time + sampleStep; time < current.time - 0.000001; time += sampleStep) {
+      const easingProgress = (time - previous.time) / duration;
+      const eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
+      if (eased === null || !Number.isFinite(eased)) {
+        recognized = false;
+        break;
+      }
+      const timeKey = formatSeconds(time);
+      if (originalTimes.has(timeKey)) continue;
+      keyframeMap[timeKey] = from.map((value, axis) => value + (to[axis] - value) * eased);
+      easingSamples += 1;
+    }
+    if (!recognized) {
+      problems.push({
+        kind: 'unsupported',
+        detail: `GeckoLib easing "${current.easing}" is custom or has invalid arguments; its Java easing function must be recovered from the mod source, so only its endpoints were retained`,
+      });
+      approximated = true;
+      continue;
+    }
+    problems.push({
+      kind: 'normalised',
+      detail: `GeckoLib easing "${current.easing}" was baked into linear Bedrock keyframes at 20 samples per second`,
+    });
+    approximated = true;
+  }
+
   for (const entry of shaped) keyframeMap[formatSeconds(entry.time)] = entry.value;
 
   return {
     channel,
     ok: problems.length === 0,
     value: keyframeMap,
-    keyframeCount: shaped.length,
+    keyframeCount: Object.keys(keyframeMap).length,
     problems,
     approximated,
   };
