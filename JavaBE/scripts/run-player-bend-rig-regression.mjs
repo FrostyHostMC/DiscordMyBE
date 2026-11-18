@@ -43,6 +43,14 @@ try {
         arm.cubes[0].size[1] !== 6 || armBend.cubes[0].size[1] !== 6) {
       throw new Error('Bendable player cubes were not split into matching upper/lower segments.');
     }
+    if (body.cubes[0].origin[1] !== 18 || bodyBend.cubes[0].origin[1] !== 12 ||
+        arm.cubes[0].origin[1] !== -6 || armBend.cubes[0].origin[1] !== -12) {
+      throw new Error('Generated bend segments do not use the reference parent/child cube origins.');
+    }
+    if (!bodyBend.cubes[0].uv.up || !bodyBend.cubes[0].uv.down ||
+        find('jacket_bend').cubes[0].uv.up || find('jacket_bend').cubes[0].uv.down) {
+      throw new Error('Bend segment exterior caps or overlay internal caps were not preserved correctly.');
+    }
     if (find('head').parent !== 'body_bend' || find('jacket_bend').parent !== 'body_bend' ||
         find('rightSleeve_bend').parent !== 'rightArm_bend') {
       throw new Error('Player descendants or overlay layers were not re-parented with the bend segment.');
