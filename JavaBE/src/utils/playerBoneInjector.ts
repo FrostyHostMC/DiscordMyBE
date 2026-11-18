@@ -54,11 +54,10 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   const upper = clone(lower);
   lower.size[1] = halfHeight;
   upper.size[1] = halfHeight;
+  // The reference bend rig clones the half-sized child cube before shifting the parent
+  // cube's origin. The parent becomes the upper half; the child keeps the original origin
+  // and is pivoted half a cube-height lower, forming the lower half without overlap.
   lower.origin[1] = Number(lower.origin[1]) + halfHeight;
-  // Emotecraft's reference implementation creates the second cube from the already-shifted
-  // lower cube. Both halves therefore share the shifted origin; the new joint pivot supplies
-  // the relative offset. Keeping the original origin on the upper cube causes a visible seam.
-  upper.origin[1] = lower.origin[1];
 
   const sides = ['north', 'south', 'east', 'west'];
   for (const side of sides) {
@@ -72,7 +71,7 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   }
   if (drawCrossSection && lower.uv.up) lower.uv.down = clone(lower.uv.up);
   else delete lower.uv.down;
-  // The upper cube is copied from the patched lower cube in Emotecraft's implementation.
+  // Emotecraft keeps both exterior caps for the main mesh; overlay layers omit the internal caps.
   if (!drawCrossSection) {
     delete upper.uv.up;
     delete upper.uv.down;
