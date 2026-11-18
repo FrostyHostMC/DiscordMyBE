@@ -178,6 +178,29 @@ try {
     throw new Error('Emotecraft waist/torso hierarchy, limb pivot offsets, Bedrock position units, or rotation signs were not reconstructed.');
   }
 
+  const step = translateJavaAnimationSet({
+    version: 3,
+    name: 'playeranimator_step_easing',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 20,
+      degrees: true,
+      easeBeforeKeyframe: true,
+      moves: [
+        { tick: 0, head: { pitch: 0 } },
+        { tick: 20, easing: 'step', head: { pitch: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const stepClip = step.animations[step.idMap.playeranimator_step_easing];
+  if (stepClip.bones.head.rotation['0.25'][0] !== 0 ||
+      stepClip.bones.head.rotation['0.5'][0] !== 45 ||
+      stepClip.bones.head.rotation['1'][0] !== 90) {
+    throw new Error('PlayerAnimator STEP easing did not retain its source two-step curve.');
+  }
+
   const scale = translateJavaAnimationSet({
     name: 'scale_channels',
     emote: {
