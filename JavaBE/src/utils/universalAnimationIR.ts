@@ -306,7 +306,7 @@ function parseNumericComponent(raw: unknown, fallback: number): number {
   if (typeof raw === 'number') return Number.isFinite(raw) ? raw : fallback;
   if (typeof raw !== 'string') return fallback;
   const value = raw.trim();
-  if (!/^[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value)) return fallback;
+  if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
@@ -314,7 +314,7 @@ function parseNumericComponent(raw: unknown, fallback: number): number {
 function isMolangComponent(raw: unknown): raw is string {
   if (typeof raw !== 'string') return false;
   const value = raw.trim();
-  return value.length > 0 && !/^[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value);
+  return value.length > 0 && !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value);
 }
 
 /** Parses raw Vector3 or Molang array/object representation without losing zero-valued transforms. */

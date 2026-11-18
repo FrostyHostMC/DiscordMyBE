@@ -65,7 +65,7 @@ interface NormalisedKeyframe {
 
 const IDENTITY: Record<BedrockChannel, number> = { rotation: 0, position: 0, scale: 1 };
 const LERP_MODES = new Set<string>(['linear', 'catmullrom']);
-const JAVA_LEAK = /Math\\.|MathHelper|this\\.|\\bnew\\s+[A-Z]|\\bget[A-Z]\\w*\\(|\\b(?:float|double)\\b/;
+const JAVA_LEAK = /Math\.|MathHelper|this\.|\bnew\s+[A-Z]|\bget[A-Z]\w*\(|\b(?:float|double)\b/;
 
 function isJavaLeak(text: string): boolean {
   if (JAVA_LEAK.test(text)) return true;
