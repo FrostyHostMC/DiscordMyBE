@@ -101,8 +101,8 @@ function buildBendGeometry(modId: string, bendBones: string[]): {
     throw new Error('Mojang classic/slim player geometry source is malformed.');
   }
   const namespace = safeFileId(modId) || 'mod';
-  const identifier = 'geometry.javabe.player.' + namespace + '.classic';
-  const slimIdentifier = 'geometry.javabe.player.' + namespace + '.slim';
+  const identifier = 'geometry.humanoid.custom';
+  const slimIdentifier = 'geometry.humanoid.customSlim';
   const injected = new Set<string>();
 
   const splitRig = (geometry: JsonObject, isSlim: boolean): void => {
@@ -167,7 +167,7 @@ function buildBendGeometry(modId: string, bendBones: string[]): {
   return {
     identifier,
     slimIdentifier,
-    path: 'models/entity/javabe_player_' + namespace + '.geo.json',
+    path: 'models/entity/humanoid.custom.geo.json',
     json: JSON.stringify(doc, null, 2),
     injected: [...injected],
   };
