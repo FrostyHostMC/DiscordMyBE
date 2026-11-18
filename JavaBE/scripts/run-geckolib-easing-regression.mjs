@@ -50,6 +50,14 @@ try {
     throw new Error('Dynamic Molang easing endpoints were not preserved and reported.');
   }
 
+  const dynamicArgs = analyzeChannel('rotation', {
+    '0': { vector: [0, 0, 0] },
+    '1': { vector: [100, 0, 0], easing: 'easeInBack', easing_args: ['query.spring_strength'] },
+  });
+  if (!dynamicArgs.problems.some((p) => p.kind === 'unsupported' && p.detail.includes('non-literal easing arguments'))) {
+    throw new Error('Dynamic easing arguments were silently replaced by default values.');
+  }
+
   const custom = analyzeChannel('rotation', {
     '0': { vector: [0, 0, 0] },
     '1': { vector: [100, 0, 0], easing: 'custom_spring_curve' },

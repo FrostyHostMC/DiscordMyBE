@@ -64,6 +64,7 @@ interface NormalisedKeyframe {
   /** GeckoLib easing belongs to the destination keyframe for the segment leading into it. */
   easing?: string;
   easingArgs?: number[];
+  easingArgsInvalid?: boolean;
 }
 
 const IDENTITY: Record<BedrockChannel, number> = { rotation: 0, position: 0, scale: 1 };
@@ -180,12 +181,13 @@ function easingMetadata(raw: Record<string, unknown>): Pick<NormalisedKeyframe, 
   const rawEasing = raw.easing ?? raw.easing_type ?? raw.easingType ?? raw.ease ??
     (interpolation && !LERP_MODES.has(interpolation.toLowerCase()) ? interpolation : undefined) ??
     (lerpMode.toLowerCase() === 'step' ? 'step' : undefined);
-  const easing = typeof rawEasing === 'string' && rawEasing.trim() ? rawEasing.trim() : undefined;
+  const easingText = typeof rawEasing === 'string' && rawEasing.trim() ? rawEasing.trim() : undefined;
+  const easing = easingText?.toLowerCase() === 'catmullrom' ? undefined : easingText;
   const rawArgs = raw.easing_args ?? raw.easingArgs;
-  const easingArgs = Array.isArray(rawArgs)
-    ? rawArgs.map((value) => Number(value)).filter((value) => Number.isFinite(value))
-    : undefined;
-  return { easing, easingArgs };
+  const parsedArgs = Array.isArray(rawArgs) ? rawArgs.map((value) => Number(value)) : [];
+  const easingArgsInvalid = rawArgs !== undefined && (!Array.isArray(rawArgs) || parsedArgs.some((value) => !Number.isFinite(value)));
+  const easingArgs = easingArgsInvalid ? undefined : (Array.isArray(rawArgs) ? parsedArgs : undefined);
+  return { easing, easingArgs, easingArgsInvalid };
 }
 
 function normaliseKeyframeObject(
@@ -218,7 +220,9 @@ function normaliseKeyframeObject(
     const post = normaliseKeyframe(raw.post ?? raw.pre, channel);
     const pre = normaliseKeyframe(raw.pre ?? raw.post, channel);
     problems.push(...post.problems, ...pre.problems);
-    const rawLerp = raw.lerp_mode ?? (String(raw.interpolation ?? '').toLowerCase() === 'catmullrom' ? raw.interpolation : undefined);
+    const rawLerp = raw.lerp_mode ??
+      (String(raw.interpolation ?? '').toLowerCase() === 'catmullrom' ? raw.interpolation : undefined) ??
+      (String(raw.easing ?? '').toLowerCase() === 'catmullrom' ? 'catmullrom' : undefined);
     const lerp = normaliseLerpMode(rawLerp, problems);
     const sameValue = JSON.stringify(pre.value) === JSON.stringify(post.value);
     const approximated = post.approximated || pre.approximated || problems.some((p) => p.kind === 'normalised');
@@ -404,7 +408,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     return { channel, ok: false, value: identityVector(channel), keyframeCount: 0, problems, approximated: false };
   }
 
-  const shaped: Array<{ time: number; value: KeyframeValue; easing?: string; easingArgs?: number[] }> = [];
+  const shaped: Array<{ time: number; value: KeyframeValue; easing?: string; easingArgs?: number[]; easingArgsInvalid?: boolean }> = [];
   let approximated = false;
   for (const entry of entries) {
     const keyframe = normaliseKeyframe(entry.raw, channel);
@@ -415,7 +419,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
       })),
     );
     approximated = approximated || keyframe.approximated;
-    shaped.push({ time: entry.time, value: keyframe.value, easing: keyframe.easing, easingArgs: keyframe.easingArgs });
+    shaped.push({ time: entry.time, value: keyframe.value, easing: keyframe.easing, easingArgs: keyframe.easingArgs, easingArgsInvalid: keyframe.easingArgsInvalid });
   }
 
   if (constant) {
@@ -438,6 +442,14 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     const current = shaped[index];
     if (!current.easing || ['linear', 'none'].includes(current.easing.toLowerCase())) continue;
     const previous = shaped[index - 1];
+    if (current.easingArgsInvalid) {
+      problems.push({
+        kind: 'unsupported',
+        detail: `GeckoLib easing "${current.easing}" has non-literal easing arguments; its source expressions were retained in diagnostics but cannot be evaluated during conversion`,
+      });
+      approximated = true;
+      continue;
+    }
     const from = numericVector(previous.value, channel);
     const to = numericVector(current.value, channel);
     if (!from || !to) {
@@ -452,7 +464,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     if (!(duration > 0)) continue;
     let recognized = true;
     for (let time = previous.time + sampleStep; time < current.time - 0.000001; time += sampleStep) {
-      const easingProgress = (time - previous.time) / duration;
+      const easingProgress = Math.max(0, Math.min(1, Math.round(((time - previous.time) / duration) * 1e9) / 1e9));
       const eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
       if (eased === null || !Number.isFinite(eased)) {
         recognized = false;
