@@ -955,7 +955,7 @@ export function runUniversalAnimationDiscovery(
           : undefined;
 
       // Check standard top-level animation document
-      const translation = translateJavaAnimationSet(parsed, { fileHint: fileOwner || 'clip' });
+      const translation = translateJavaAnimationSet(parsed, { fileHint: fileOwner || 'clip', customEasings });
       if (Object.keys(translation.animations).length > 0) {
         const fmtName = formatVersion ? `bedrock-anim-v${formatVersion}` : 'java-animation-json';
         recordFormat(fmtName, path, formatVersion);
@@ -972,6 +972,7 @@ export function runUniversalAnimationDiscovery(
           for (const item of embedded) {
             const subTranslation = translateJavaAnimationSet(item.container, {
               fileHint: `${fileOwner}_${item.keyPath.replace(/[^a-z0-9]+/gi, '_')}`,
+              customEasings,
             });
             for (const [clipId, clip] of Object.entries(subTranslation.animations)) {
               const owner = ownerFromClipId(clipId, fileOwner, modId) || fileOwner || normaliseOwnerKey(modId);
