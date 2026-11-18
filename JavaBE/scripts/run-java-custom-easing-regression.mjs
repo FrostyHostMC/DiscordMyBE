@@ -96,6 +96,42 @@ try {
     throw new Error('A branch-based custom Java easing was not interpreted correctly: ' + JSON.stringify(piecewiseRegistry));
   }
 
+  const classRegistration = {
+    ...registration,
+    name: 'registerClassEasing',
+    instructions: [
+      { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: { index: 20, tag: 8, kind: 'String', value: 'fixture_custom_class' }, branchTargets: [] },
+      { offset: 1, opcode: 0xbb, mnemonic: 'new', size: 3, operands: [], constant: { index: 21, tag: 7, kind: 'Class', value: 'fixture.CustomEase' }, branchTargets: [] },
+      { offset: 4, opcode: 0x59, mnemonic: 'dup', size: 1, operands: [], branchTargets: [] },
+      { offset: 5, opcode: 0xb7, mnemonic: 'invokespecial', size: 1, operands: [], constant: { index: 22, tag: 10, kind: 'Methodref', owner: 'fixture.CustomEase', name: '<init>', descriptor: '()V' }, branchTargets: [] },
+      { offset: 8, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: { index: 23, tag: 10, kind: 'Methodref', owner: 'com.geckolib.util.GeckoLibUtil', name: 'addCustomEasingType', descriptor: '(Ljava/lang/String;Lcom/geckolib/animation/EasingType;)V' }, branchTargets: [] },
+    ],
+  };
+  owner.methods.push(classRegistration);
+  const customEaseClass = {
+    path: 'fixture/CustomEase.class', name: 'fixture.CustomEase',
+    superName: 'software.bernie.geckolib.animation.EasingType',
+    interfaces: [], access: 0x0001, majorVersion: 61, minorVersion: 0, fields: [],
+    methods: [{
+      name: 'ease', descriptor: '(D)D', access: 0x0001, maxStack: 4, maxLocals: 3,
+      instructions: [
+        { offset: 0, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
+        { offset: 1, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
+        { offset: 2, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+        { offset: 3, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+      ],
+      blocks: [{ start: 0, end: 4, instructionOffsets: [0,1,2,3], successors: [], exceptionalSuccessors: [] }],
+      calls: [], fieldAccesses: [], localVariables: [{ name: 'progress', descriptor: 'D', index: 1, start: 0, length: 4 }],
+      exceptionHandlers: [], codeLength: 4, decodeWarnings: [],
+    }],
+    references: [], bootstrapMethods: [], decodeWarnings: [],
+  };
+  const classRegistry = buildJavaCustomEasingRegistry([owner, customEaseClass]);
+  if (!classRegistry.functions.fixture_custom_class ||
+      Math.abs(classRegistry.functions.fixture_custom_class(0.5) - 0.25) > 0.000001) {
+    throw new Error('A registered GeckoLib EasingType subclass was not compiled from its instance method.');
+  }
+
   const result = analyzeChannel('rotation', {
     '0': { vector: [0, 0, 0] },
     '1': { vector: [100, 0, 0], easing: 'fixture_custom_quad' },

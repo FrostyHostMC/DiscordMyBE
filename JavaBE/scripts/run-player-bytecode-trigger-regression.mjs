@@ -72,9 +72,9 @@ try {
   });
   const controllerJson = JSON.parse(Object.values(controller.files)[0]);
   const machine = Object.values(controllerJson.animation_controllers)[0];
-  const stateNames = Object.keys(machine.states).filter((name) => name !== 'selector');
-  if (!stateNames[0]?.includes('attack')) {
-    throw new Error('Recovered Java source priority did not outrank the fallback concept priority: ' + stateNames.join(', '));
+  const orderedClips = Object.values(machine.states).flatMap((state) => Array.isArray(state.animations) ? state.animations : []);
+  if (orderedClips[0] !== attack.clipId) {
+    throw new Error('Recovered Java source priority did not outrank the fallback concept priority: ' + orderedClips.join(', '));
   }
 
   console.log('[PASS] Bytecode-correlated player clips recover runtime trigger calls and explicit layer priorities; the controller honors source priority over inferred concept priority.');
