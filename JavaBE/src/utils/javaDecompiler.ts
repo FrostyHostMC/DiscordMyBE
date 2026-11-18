@@ -1217,14 +1217,8 @@ export async function decompileAndInspectJarAsync(
     if (!item) continue;
     const enumState = (item.access & 0x4000) !== 0;
     const easingSubclass = /EasingType/i.test(item.superName ?? '');
-    const lambdaBody = item.methods.some((method) => method.name.startsWith('lambda
-  }
-  const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
-  result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
-  inspectionCache.set(entries, { key, result });
-  return result;
-}
-) && (/^\(D\)D$|^\(F\)F$/.test(method.descriptor)));
+    const lambdaBody = item.methods.some((method) =>
+      method.name.startsWith('lambda$') && /^\(D\)D$|^\(F\)F$/.test(method.descriptor));
     if (enumState || easingSubclass || lambdaBody) selected.add(name);
   }
   const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
