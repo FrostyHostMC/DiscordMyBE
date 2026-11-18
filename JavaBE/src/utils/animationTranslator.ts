@@ -226,7 +226,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     axis: string,
   ): Array<{ tick: number; value: number; easing: string }> => {
     const entries: Array<{ tick: number; value: number; easing: string }> = [];
-    const isBodyPart = partName === 'body' || partName === 'torso';
+    const isBodyPart = partName === 'body';
     const base = defaults[partName] ?? [0, 0, 0];
     for (const [tick, parts] of orderedFrames) {
       const part = parts.get(partName);
