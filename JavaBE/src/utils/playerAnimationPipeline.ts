@@ -4,7 +4,7 @@ import type { PlayerModEvidence } from '@/utils/playerModEvidence';
 import type { PlayerOwnerDecision } from '@/utils/playerRigClassifier';
 import { planOffhandPlayback } from '@/utils/playerOffhandResolver';
 import { planViewModels } from '@/utils/playerViewModelMapper';
-import { injectPlayerRigBones } from '@/utils/playerBoneInjector';
+import { injectPlayerRigBones, type GeometryCandidate } from '@/utils/playerBoneInjector';
 
 /**
  * Automated player animation port.
@@ -60,6 +60,7 @@ export function buildPlayerAnimationPort(options: {
   triggers: PlayerClipTrigger[];
   decisions: PlayerOwnerDecision[];
   evidence: PlayerModEvidence;
+  geometryCandidates?: GeometryCandidate[];
   onLog?: (line: string) => void;
 }): PlayerAnimationPortResult {
   const log = (line: string) => options.onLog?.(line);
@@ -68,7 +69,7 @@ export function buildPlayerAnimationPort(options: {
   const clipBones = [...new Set(Object.values(options.clips).flatMap((clip) => Object.keys(clip.bones ?? {})))];
   const bendBones = clipBones.filter((bone) => /_bend$/i.test(bone));
   const rigInjection = injectPlayerRigBones({
-    candidates: [],
+    candidates: options.geometryCandidates ?? [],
     clipBones,
     bendBones,
     needsWaistParenting: clipBones.includes('waist'),

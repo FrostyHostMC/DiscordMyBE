@@ -74,8 +74,11 @@ const JAVA_LEAK = /Math\.|MathHelper|this\.|\bnew\s+[A-Z]|\bget[A-Z]\w*\(|\b(?:f
 function isJavaLeak(text: string): boolean {
   if (JAVA_LEAK.test(text)) return true;
   // Bedrock Molang uses -> to access another entity's query/variable/temp/context scope.
-  // A Java lambda is rejected unless the right side is a recognised Molang scope member.
-  return text.includes('->') && !/(?:^|[\w.)\]])\s*->\s*(?:query|q|variable|v|temp|t|context|c)\./i.test(text);
+  // Validate every arrow independently so a valid scope access cannot mask a Java lambda.
+  const arrows = text.match(/->/g) ?? [];
+  if (arrows.length === 0) return false;
+  const validArrows = text.match(/(?:^|[\w.)\]])\s*->\s*(?:query|q|variable|v|temp|t|context|c)\./gi) ?? [];
+  return validArrows.length !== arrows.length;
 }
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {

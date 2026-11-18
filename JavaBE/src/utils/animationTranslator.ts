@@ -87,6 +87,7 @@ const CLIP_MEMBERS = new Set([
   'version',
   'settings',
   '__emoteIssues',
+  'loopTick',
 ]);
 
 function emptyStats(): AnimationTranslationStats {
@@ -789,6 +790,24 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
   if (typeof rawClip.loop_delay === 'number' || typeof rawClip.loop_delay === 'string') clip.loop_delay = rawClip.loop_delay;
   if (typeof rawClip.blend_weight === 'number' || typeof rawClip.blend_weight === 'string') clip.blend_weight = rawClip.blend_weight;
   if (typeof rawClip.anim_time_update === 'string' && rawClip.anim_time_update.trim()) clip.anim_time_update = rawClip.anim_time_update.trim();
+  const rawLoopTick = rawClip.loopTick;
+  if (rawLoopTick !== undefined && rawLoopTick !== null) {
+    const loopStart = Number(rawLoopTick);
+    const duration = Number(clip.animation_length ?? result.maxTime);
+    if (!Number.isFinite(loopStart) || loopStart < 0 || !Number.isFinite(duration) || duration <= 0 || loopStart >= duration) {
+      issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'malformed', detail: 'loopTick must be a finite time in seconds earlier than the clip duration; the source loop point was not applied.' });
+    } else if (clip.anim_time_update) {
+      issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'unsupported', detail: 'the source clip declares both loopTick and anim_time_update; its explicit time-update expression was preserved because the two time functions cannot be safely composed.' });
+    } else {
+      const start = Math.round(loopStart * 1000) / 1000;
+      const length = Math.round(duration * 1000) / 1000;
+      const loopDuration = Math.round((length - start) * 1000) / 1000;
+      clip.loop = true;
+      clip.anim_time_update =
+        'query.anim_time < ' + length + ' ? query.anim_time + query.delta_time : ' +
+        start + ' + math.mod(query.anim_time - ' + length + ' + query.delta_time, ' + loopDuration + ')';
+    }
+  }
   if (typeof rawClip.override_previous_animation === 'boolean') clip.override_previous_animation = rawClip.override_previous_animation;
 
   const sounds = translateEffectTrack(rawClip.sound_effects, clipId, 'sound_effects', issues);

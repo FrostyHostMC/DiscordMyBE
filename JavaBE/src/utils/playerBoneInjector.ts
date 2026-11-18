@@ -1,4 +1,4 @@
-import { hasCustomBoneTokens, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { resolvePlayerBone } from '@/utils/playerBoneAliases';
 import { VANILLA_PLAYER_GEOMETRY_JSON } from '@/utils/vanillaPlayerGeometry';
 
 /** A geometry file the archive really shipped. */

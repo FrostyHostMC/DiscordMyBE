@@ -30,6 +30,8 @@ export interface AnimTimeline {
   overridePreviousAnimation?: boolean;
   animTimeUpdate?: string;
   frameCount: number;
+  /** Source-format nonzero loop return point, in seconds (PAL/Emotecraft Blockbench loopTick). */
+  loopStartSeconds?: number;
 }
 
 export interface Vector3Keyframe {
@@ -246,6 +248,7 @@ const KNOWN_CLIP_FIELDS = new Set([
   'start_delay',
   'fps',
   'name',
+  'loopTick',
 ]);
 
 const KNOWN_CHANNEL_FIELDS = new Set([
@@ -981,6 +984,10 @@ export function buildUniversalAnimationIR(
       const inferredFps = timeUnit === 'ticks' ? 20 : 30;
       const frameCount = Math.max(1, Math.round(finalDuration * inferredFps));
 
+      const rawLoopTick = Number((rawClip as Record<string, unknown>).loopTick);
+      const loopStartSeconds = Number.isFinite(rawLoopTick) && rawLoopTick >= 0 && rawLoopTick < finalDuration
+        ? rawLoopTick
+        : undefined;
       const timeline: AnimTimeline = {
         durationSeconds: finalDuration,
         timeUnit,
@@ -992,6 +999,7 @@ export function buildUniversalAnimationIR(
         overridePreviousAnimation: overridePrevious,
         animTimeUpdate,
         frameCount,
+        loopStartSeconds,
       };
 
       // Dependency resolution
