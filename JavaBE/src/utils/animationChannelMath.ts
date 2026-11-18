@@ -355,12 +355,13 @@ function geckoEase(name: string, progress: number, args: number[] = []): number 
     }
   };
   if (key === 'linear' || key === 'none') return t;
+  if (key === 'constant') return t >= 1 ? 1 : 0;
   if (key === 'step') {
     const steps = arg === undefined ? 2 : Math.floor(arg);
     if (steps < 2) return null;
     return t >= 1 ? 1 : Math.floor(t * steps) / steps;
   }
-  const match = /^ease(inout|in|out)(sine|quad|cubic|quart|quint|expo|circ|back|elastic|bounce)$/.exec(key);
+  const match = /^(?:ease)?(inout|in|out)(sine|quad|cubic|quart|quint|expo|circ|back|elastic|bounce)$/.exec(key);
   if (!match) return null;
   const mode = match[1];
   const kind = match[2];
@@ -436,6 +437,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
   shaped.sort((a, b) => a.time - b.time);
   const keyframeMap: Record<string, unknown> = {};
   const originalTimes = new Set(shaped.map((entry) => formatSeconds(entry.time)));
+  const constantTransitions = new Map<string, unknown>();
   const sampleStep = 1 / 20; // GeckoLib evaluates animation state on Minecraft's 20 TPS clock.
 
   for (let index = 1; index < shaped.length; index += 1) {
@@ -462,6 +464,12 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     }
     const duration = current.time - previous.time;
     if (!(duration > 0)) continue;
+    if (current.easing.toLowerCase() === 'constant') {
+      constantTransitions.set(formatSeconds(current.time), { pre: from, post: to, lerp_mode: 'linear' });
+      problems.push({ kind: 'normalised', detail: 'constant easing was represented as an exact Bedrock pre/post discontinuity' });
+      approximated = true;
+      continue;
+    }
     let recognized = true;
     for (let time = previous.time + sampleStep; time < current.time - 0.000001; time += sampleStep) {
       const easingProgress = Math.max(0, Math.min(1, Math.round(((time - previous.time) / duration) * 1e9) / 1e9));
@@ -490,6 +498,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
   }
 
   for (const entry of shaped) keyframeMap[formatSeconds(entry.time)] = entry.value;
+  for (const [time, value] of constantTransitions) keyframeMap[time] = value;
 
   return {
     channel,

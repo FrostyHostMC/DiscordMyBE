@@ -59,6 +59,8 @@ jobs:
         run: node scripts/run-animation-translator-regression.mjs
       - name: Verify GeckoLib easing curves and custom easing diagnostics
         run: node scripts/run-geckolib-easing-regression.mjs
+      - name: Verify legacy Emotecraft move animations
+        run: node scripts/run-emotecraft-import-regression.mjs
       - name: Convert the original Pierced fixture through the current animation engine
         run: node scripts/run-pierced-animation-regression.mjs
       - name: Upload current Pierced conversion diagnostics
