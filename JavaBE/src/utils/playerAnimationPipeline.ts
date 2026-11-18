@@ -39,6 +39,7 @@ export interface PlayerAnimationPortReport {
   mainhandClips: string[];
   injectedBones: string[];
   injectedGeometryIdentifier: string | null;
+  injectedSlimGeometryIdentifier: string | null;
   gatedClips: number;
   scriptActions: number;
   notes: string[];
@@ -49,6 +50,7 @@ export interface PlayerAnimationPortResult {
   files: Record<string, string>;
   scriptCode: string;
   geometryIdentifier: string | null;
+  slimGeometryIdentifier: string | null;
   report: PlayerAnimationPortReport;
 }
 
@@ -94,6 +96,7 @@ export function buildPlayerAnimationPort(options: {
     files: rigInjection.files,
     scriptCode: offhand.script,
     geometryIdentifier: rigInjection.geometryIdentifier,
+    slimGeometryIdentifier: rigInjection.slimGeometryIdentifier,
     report: {
       owners: options.decisions,
       clipsInspected: Object.keys(options.clips).length,
@@ -109,6 +112,7 @@ export function buildPlayerAnimationPort(options: {
       mainhandClips: offhand.mainhandClips,
       injectedBones: rigInjection.injectedBones,
       injectedGeometryIdentifier: rigInjection.geometryIdentifier,
+      injectedSlimGeometryIdentifier: rigInjection.slimGeometryIdentifier,
       gatedClips,
       scriptActions,
       notes,
