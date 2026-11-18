@@ -326,13 +326,6 @@ export function buildPlayerClientEntity(options: {
               : existingGeometry.default && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.default)
                 ? existingGeometry.default
                 : 'geometry.humanoid.custom',
-            slim: options.slimGeometryIdentifier &&
-              (VANILLA_PLAYER_GEOMETRY_IDS.has(options.slimGeometryIdentifier) ||
-                /^geometry\\.javabe\\.player\\.[a-z0-9_]+\\.slim$/i.test(options.slimGeometryIdentifier))
-              ? options.slimGeometryIdentifier
-              : existingGeometry.slim && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.slim)
-                ? existingGeometry.slim
-                : 'geometry.humanoid.customSlim',
             cape: existingGeometry.cape === 'geometry.cape' ? existingGeometry.cape : 'geometry.cape',
           },
           scripts: {
