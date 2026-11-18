@@ -115,10 +115,10 @@ try {
     },
   }, { fileHint: 'fixture' });
   const splitClip = splitEasing.animations[splitEasing.idMap.split_part_easing];
-  if (splitClip.bones.head.rotation['0.5'].easing !== 'easeInQuad' ||
-      splitClip.bones.body.rotation['0.5'].easing !== 'easeOutQuad' ||
+  if (Math.abs(splitClip.bones.head.rotation['0.25'][0] - 11.25) > 0.001 ||
+      Math.abs(splitClip.bones.body.rotation['0.25'][0] - 67.5) > 0.001 ||
       splitEasing.issues.some((issue) => issue.detail.includes('conflicting easing values across split part keyframes'))) {
-    throw new Error('Split Emotecraft part tracks did not retain their independent easing declarations.');
+    throw new Error('Split Emotecraft part tracks did not retain their independent easing curves.');
   }
 
   const playerTransforms = translateJavaAnimationSet({
