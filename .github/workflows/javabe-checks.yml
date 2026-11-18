@@ -61,6 +61,8 @@ jobs:
         run: node scripts/run-geckolib-easing-regression.mjs
       - name: Verify legacy Emotecraft move animations
         run: node scripts/run-emotecraft-import-regression.mjs
+      - name: Verify skin-preserving Emotecraft bend geometry for classic and slim players
+        run: node scripts/run-player-bend-rig-regression.mjs
       - name: Verify player hierarchy preservation for dynamic branches
         run: node scripts/run-player-hierarchy-preserve-regression.mjs
       - name: Verify event-only animation runtime validation
