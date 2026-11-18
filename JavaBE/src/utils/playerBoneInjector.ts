@@ -93,7 +93,7 @@ function canonicalBendBone(raw: string): string | null {
   return null;
 }
 
-function buildBendGeometry(bendBones: string[]): {
+function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
   identifier: string;
   slimIdentifier: string;
   path: string;
@@ -101,7 +101,7 @@ function buildBendGeometry(bendBones: string[]): {
   injected: string[];
 } | null {
   const requested = new Set(bendBones.map(canonicalBendBone).filter((name): name is string => Boolean(name)));
-  if (requested.size === 0) return null;
+  if (requested.size === 0 && !needsWaistParenting) return null;
   const doc = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON) as JsonObject;
   const geometries = doc['minecraft:geometry'] as JsonObject[] | undefined;
   if (!Array.isArray(geometries) || geometries.length < 2) {
@@ -116,6 +116,14 @@ function buildBendGeometry(bendBones: string[]): {
     const bones = geometry.bones as JsonObject[] | undefined;
     if (!description || !Array.isArray(bones)) throw new Error('Mojang player geometry is missing its description or bones.');
     const additions: JsonObject[] = [];
+    if (needsWaistParenting) {
+      // Emotecraft's body channel is the lower waist pivot and also drives the legs.
+      // Mojang's stock player model keeps legs under root, so restore that parent chain here.
+      for (const legName of ['leftLeg', 'rightLeg']) {
+        const leg = bones.find((bone) => bone.name === legName);
+        if (leg) leg.parent = 'waist';
+      }
+    }
     for (const baseName of ['body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
       if (!requested.has(baseName)) continue;
       const base = bones.find((bone) => bone.name === baseName);
@@ -190,12 +198,13 @@ export function injectPlayerRigBones(options: {
   clipBones: string[];
   modId: string;
   bendBones?: string[];
+  needsWaistParenting?: boolean;
 }): BoneInjectionResult {
   const unresolvedBones = [...new Set(options.clipBones.filter((name) => {
     const base = name.replace(/_bend$/i, '');
     return !resolvePlayerBone(base) || (!/_bend$/i.test(name) && hasCustomBoneTokens(name));
   }))];
-  const bendGeometry = buildBendGeometry(options.bendBones ?? []);
+  const bendGeometry = buildBendGeometry(options.bendBones ?? [], options.needsWaistParenting === true);
   const files = bendGeometry ? { [bendGeometry.path]: bendGeometry.json } : {};
   const candidateNote = options.candidates.length > 0
     ? `${options.candidates.length} source geometry candidate(s) audited; the vanilla skin mesh remains the base`
