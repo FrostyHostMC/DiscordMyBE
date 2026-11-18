@@ -145,7 +145,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const hasReturnTick = emote.returnTick !== undefined && emote.returnTick !== null;
   const hasValidReturnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick));
   const returnTick = hasValidReturnTick
-    ? Math.max(Number(emote.returnTick) - 1, 0)
+    ? Math.max(Number(emote.returnTick), 0)
     : 0;
   const validLoop = wantsLoop && hasValidReturnTick && returnTick >= 0 && returnTick < endTick;
   if (wantsLoop && !validLoop) {
@@ -157,7 +157,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       ? endTick + 3
       : rawStopTick;
   const loopDurationTick = validLoop ? endTick - returnTick : 0;
-  const timelineEndTick = validLoop ? endTick + loopDurationTick : animationEndTick;
+  // Legacy Emotecraft returnTick is an exact source tick. The runtime jumps from endTick
+  // back to that tick; it does not blend to the next later keyframe or extend the clip timeline.
+  const timelineEndTick = validLoop ? endTick : animationEndTick;
 
   type PartFrame = {
     position: Record<string, number>;
@@ -531,11 +533,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   };
   if (validLoop) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
-    const loopStart = intro;
+    const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
     const loopDuration = Math.round((loopDurationTick / 20) * 1000) / 1000;
     result.anim_time_update =
       'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
-      loopStart + ' + math.mod(query.anim_time - ' + loopStart + ' + query.delta_time, ' + loopDuration + ')';
+      loopStart + ' + math.mod(query.anim_time - ' + intro + ' + query.delta_time, ' + loopDuration + ')';
   }
   return result;
 }
