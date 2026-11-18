@@ -109,6 +109,7 @@ try {
 
   const splitEasing = translateJavaAnimationSet({
     name: 'split_part_easing',
+    version: 3,
     emote: {
       isLoop: false,
       beginTick: 0,
