@@ -177,7 +177,7 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
 
   splitRig(geometries.find((geometry) => (geometry.description as JsonObject)?.identifier === 'geometry.humanoid.custom')!, false);
   splitRig(geometries.find((geometry) => (geometry.description as JsonObject)?.identifier === 'geometry.humanoid.customSlim')!, true);
-  if (injected.size === 0) return null;
+  if (injected.size === 0 && !needsWaistParenting) return null;
   return {
     identifier,
     slimIdentifier,
