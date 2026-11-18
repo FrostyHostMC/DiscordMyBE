@@ -325,7 +325,8 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     for (let index = 1; index < entries.length; index += 1) {
       const current = entries[index];
       const previous = entries[index - 1];
-      if (tick <= current.tick) {
+      if (tick === current.tick) return current.value;
+      if (tick < current.tick) {
         const easing = easeBefore ? current.easing : previous.easing;
         const duration = current.tick - previous.tick;
         if (duration <= 0) return current.value;
@@ -358,6 +359,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
         : returnTick + (tick - endTick);
       return sampleSourceTrack(entries, Math.min(endTick, localTick), defaultValue, label);
     }
+    if (!validLoop && tick >= animationEndTick) return defaultValue;
     if (!validLoop && tick > endTick) {
       const startValue = sampleSourceTrack(entries, endTick, defaultValue, label);
       const lastEntry = entries[entries.length - 1];
@@ -368,6 +370,13 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       return startValue + (defaultValue - startValue) * evaluateEasing(easing, progress, label + ' stop reset');
     }
     return sampleSourceTrack(entries, tick, defaultValue, label);
+  };
+
+  const stepBoundary = (start: number, end: number, easing: string): [number, number] | null => {
+    const normalized = easing.toLowerCase();
+    if (normalized === 'constant') return [start, end];
+    if (normalized === 'step') return [start + (end - start) * 0.5, end];
+    return null;
   };
 
   const constantBoundary = (
@@ -382,16 +391,13 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       const seamDuration = Math.max(0, firstLoopFrame.tick - returnTick);
       const seamEnd = endTick + seamDuration;
       const seamEasing = easeBefore ? firstLoopFrame.easing : lastEntry.easing;
-      if (seamDuration > 0 && tick === seamEnd && seamEasing.toLowerCase() === 'constant') {
-        return [sampleSourceTrack(entries, endTick, defaultValue, 'loop seam'), firstLoopFrame.value];
+      if (seamDuration > 0 && tick === seamEnd) {
+        return stepBoundary(sampleSourceTrack(entries, endTick, defaultValue, 'loop seam'), firstLoopFrame.value, seamEasing);
       }
     }
     if (!validLoop && tick === animationEndTick) {
       const lastEntry = entries[entries.length - 1];
-      const resetEasing = lastEntry.easing;
-      if (resetEasing.toLowerCase() === 'constant') {
-        return [sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'), defaultValue];
-      }
+      return stepBoundary(sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'), defaultValue, lastEntry.easing);
     }
     const index = entries.findIndex((entry) => entry.tick === tick);
     if (index < 0) return null;
@@ -401,8 +407,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     const easing = easeBefore
       ? current.easing
       : previous?.easing ?? 'easeInOutSine';
-    if (easing.toLowerCase() !== 'constant') return null;
-    return [previous?.value ?? defaultValue, current.value];
+    return stepBoundary(previous?.value ?? defaultValue, current.value, easing);
   };
 
   const bones: Record<string, Record<string, unknown>> = {};
