@@ -55,6 +55,10 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   lower.size[1] = halfHeight;
   upper.size[1] = halfHeight;
   lower.origin[1] = Number(lower.origin[1]) + halfHeight;
+  // Emotecraft's reference implementation creates the second cube from the already-shifted
+  // lower cube. Both halves therefore share the shifted origin; the new joint pivot supplies
+  // the relative offset. Keeping the original origin on the upper cube causes a visible seam.
+  upper.origin[1] = lower.origin[1];
 
   const sides = ['north', 'south', 'east', 'west'];
   for (const side of sides) {
@@ -68,7 +72,11 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   }
   if (drawCrossSection && lower.uv.up) lower.uv.down = clone(lower.uv.up);
   else delete lower.uv.down;
-  if (!drawCrossSection) delete upper.uv.up;
+  // The upper cube is copied from the patched lower cube in Emotecraft's implementation.
+  if (!drawCrossSection) {
+    delete upper.uv.up;
+    delete upper.uv.down;
+  }
   return { lower, upper, halfHeight };
 }
 
