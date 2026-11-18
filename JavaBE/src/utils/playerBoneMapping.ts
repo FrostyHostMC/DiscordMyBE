@@ -50,13 +50,23 @@ export interface PlayerRigMappingResult {
  * unresolved and reported rather than approximated onto a skeleton bone.
  */
 export function mapJavaPlayerBone(rawName: string): PlayerBoneMapping | null {
-  const hit = resolvePlayerBone(rawName);
+  const isBendSegment = /_bend$/i.test(rawName);
+  const anatomicalName = isBendSegment ? rawName.replace(/_bend$/i, '') : rawName;
+  const hit = resolvePlayerBone(anatomicalName);
   if (!hit || !isBedrockPlayerBone(hit.bone, 'classic')) return null;
+  // Emotecraft bend is a real deformation channel. Its generated child track is kept as a
+  // distinct joint and paired with the skin-preserving split geometry emitted by the player port.
+  if (isBendSegment) {
+    return {
+      source: rawName,
+      bone: hit.bone + '_bend',
+      approximated: true,
+      via: 'generated-bend-segment',
+    };
+  }
   // The native player rig has no separate wrist/finger/twist joints. When a source bone
   // contains a recognized anatomical part plus a sub-joint token, retain its transform by
   // composing it onto the corresponding Bedrock limb instead of silently dropping the track.
-  // This is explicitly marked as an approximation; exact sub-joint motion requires a custom
-  // player geometry and cannot be represented by the vanilla skin skeleton.
   const customSubJoint = hit.via === 'compound' && /upper|lower|fore|wrist|finger|thumb|twist|roll|elbow|shoulder|knee|ankle|toe|joint|segment/i.test(rawName);
   return {
     source: rawName,
