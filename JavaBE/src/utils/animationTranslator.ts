@@ -193,7 +193,22 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   const bones: Record<string, Record<string, unknown>> = {};
   const orderedFrames = Array.from(frames.entries()).sort((a, b) => a[0] - b[0]);
   for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-    const boneName = partName === 'torso' ? 'body' : partName;
+    const boneName = ({
+      torso: 'body',
+      body: 'body',
+      rightArm: 'right_arm',
+      leftArm: 'left_arm',
+      rightLeg: 'right_leg',
+      leftLeg: 'left_leg',
+    } as Record<string, string>)[partName] ?? partName;
+    const partDefaults: Record<string, number[]> = {
+      rightArm: [-5, 2, 0],
+      leftArm: [5, 2, 0],
+      leftLeg: [1.9, 12, 0.1],
+      rightLeg: [-1.9, 12, 0.1],
+    };
+    const isBodyPart = partName === 'torso' || partName === 'body';
+    const defaults = partDefaults[partName] ?? [0, 0, 0];
     const positionTrack: Record<string, unknown> = {};
     const rotationTrack: Record<string, unknown> = {};
     const position = [0, 0, 0];
@@ -214,7 +229,16 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       if (positionChanged) {
         for (let axis = 0; axis < 3; axis += 1) {
           const value = part.position[positionAxes[axis]];
-          if (value !== undefined) position[axis] = value;
+          if (value !== undefined) {
+            const sourceDefault = defaults[axis];
+            let offset = value - sourceDefault;
+            // PlayerAnimator stores limb positions relative to their vanilla pivots, in
+            // model units; Bedrock animation positions are 1/16-block model units.
+            // Its player coordinate convention also negates limb Y and torso X.
+            if (axis === 1 && !isBodyPart) offset *= -1;
+            if (axis === 0 && isBodyPart) offset *= -1;
+            position[axis] = offset * 16;
+          }
         }
         const easing = easeBefore ? part.positionEasing : previousPositionEasing;
         positionTrack[timeKey] = { vector: [...position], ...(easing ? { easing } : {}) };
@@ -224,7 +248,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         for (let axis = 0; axis < 3; axis += 1) {
           const value = part.rotation[rotationAxes[axis]];
           if (value !== undefined) {
-            const angle = degrees ? value : value * (180 / Math.PI);
+            let angle = degrees ? value : value * (180 / Math.PI);
+            // Legacy Emotecraft/PlayerAnimator's body bone uses the opposite X/Y
+            // rotation convention; limbs and head keep their authored signs.
+            if (isBodyPart && axis < 2) angle *= -1;
             rotation[axis] = angle + (frame.turn ?? 0) * 360;
           }
         }
