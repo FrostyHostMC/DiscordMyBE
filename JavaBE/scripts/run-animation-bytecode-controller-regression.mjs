@@ -202,7 +202,29 @@ try {
     throw new Error('The javac enum-switch state bindings or guarded transitions were not reconstructed.');
   }
 
-    const lambdaHandle = {
+    // Some Java compilers emit a direct enum ordinal lookupswitch instead of a synthetic map.
+  const directSwitchController = structuredClone(switchController);
+  directSwitchController.path = 'fixture/DirectSwitchController.class';
+  directSwitchController.name = 'fixture.DirectSwitchController';
+  const directTick = directSwitchController.methods[1];
+  directTick.instructions.splice(2, 2);
+  directTick.instructions[2] = { offset: 10, opcode: 0xab, mnemonic: 'lookupswitch', size: 1, operands: [0,1], branchTargets: [60,20,40] };
+  directTick.blocks[0].instructionOffsets = [0,3,10];
+  const directResult = synthesizeAnimationControllersFromBytecode(['player', 'fixture:entity'], {
+    controllerClasses: ['fixture.DirectSwitchController'],
+    playerClassNames: ['fixture.DirectSwitchController'],
+    animationIds: ['animation.fixture.idle', 'animation.fixture.run'],
+    bytecodeClasses: [directSwitchController, stateEnum],
+    entityClasses: [{ className: 'Entity', qualifiedClassName: 'fixture.Entity', role: 'entity', methods: [], registryIds: ['fixture:entity'] }],
+  });
+  if (directResult.controllers.length !== 1 || directResult.controllers[0].ownerId !== 'player') {
+    throw new Error('Direct enum ordinal lookupswitch states were not reconstructed or assigned to the player owner: ' + JSON.stringify(directResult.analysis));
+  }
+  const directGraph = JSON.parse(directResult.controllers[0].json).animation_controllers[directResult.controllers[0].controllerId];
+  if (directGraph.states.IDLE.animations[0] !== 'animation.fixture.idle' || directGraph.states.RUN.animations[0] !== 'animation.fixture.run') {
+    throw new Error('Direct enum ordinal lookupswitch case values were not mapped to declared enum states.');
+  }
+  const lambdaHandle = {
     index: 6, tag: 15, kind: 'MethodHandle',
     reference: { index: 7, tag: 10, kind: 'Methodref', owner: 'fixture.LambdaController', name: 'lambda$controller$0', descriptor: '(Lfixture/AnimationState;)V' },
   };

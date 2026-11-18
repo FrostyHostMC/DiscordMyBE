@@ -173,6 +173,14 @@ function branchConditionForSuccessor(method: JvmMethodIR, blockStart: number, su
   const taken = branch.branchTargets.includes(successor);
   if (branch.opcode === 0x99 || branch.opcode === 0xc6) return taken ? '!' + predicate : predicate;
   if (branch.opcode === 0x9a || branch.opcode === 0xc7) return taken ? predicate : '!' + predicate;
+  if (branch.opcode === 0x9f || branch.opcode === 0xa0) {
+    const index = method.instructions.findIndex((instruction) => instruction.offset === branch.offset);
+    const previous = index > 0 ? method.instructions[index - 1] : undefined;
+    const comparesWithZero = previous?.opcode === 0x03 ||
+      ((previous?.opcode === 0x10 || previous?.opcode === 0x11) && previous.operands[0] === 0);
+    if (!comparesWithZero) return null;
+    return branch.opcode === 0xa0 ? (taken ? predicate : '!' + predicate) : (taken ? '!' + predicate : predicate);
+  }
   return null;
 }
 
@@ -285,6 +293,7 @@ function enumSwitchMapKeys(classes: JvmClassIR[], enumClass: JvmClassIR): Map<st
 
 function switchStateCases(method: JvmMethodIR, enumClass: JvmClassIR, classes: JvmClassIR[]): Array<{ state: string; target: number }> {
   const mappedSwitches = enumSwitchMapKeys(classes, enumClass);
+  const stateNames = enumStateNames(enumClass);
   const cases: Array<{ state: string; target: number }> = [];
   for (const instruction of method.instructions) {
     if (instruction.opcode !== 0xaa && instruction.opcode !== 0xab) continue;
@@ -302,7 +311,7 @@ function switchStateCases(method: JvmMethodIR, enumClass: JvmClassIR, classes: J
       ? instruction.branchTargets.slice(1).map((_, index) => (instruction.operands[0] ?? 0) + index)
       : instruction.operands;
     for (let index = 0; index < keys.length; index++) {
-      const state = mapped?.get(keys[index]);
+      const state = mapped?.get(keys[index]) ?? (!switchMapRef ? stateNames[keys[index]] : undefined);
       const target = instruction.branchTargets[index + 1];
       if (state && target !== undefined) cases.push({ state, target });
     }
