@@ -87,8 +87,13 @@ export interface AnimationFidelityReport {
   boneCoverage: number;
   /** Same figure, named for what it measures so it cannot be read as "the skeleton matches". */
   boneTrackCoverage: number;
-  /** Source bone names with tracks in the IR, and those retained in shipped definitions. */
+  /** All source bone tracks, including definitions proven unused by the source runtime. */
   sourceBoneTracks: number;
+  /** Tracks in clips with a source-proven runtime path. */
+  sourceBoneTracksActive: number;
+  /** Tracks in source-proven inactive definitions, excluded from active retention scoring. */
+  sourceBoneTracksInactive: number;
+  /** Active source tracks retained in shipped definitions. */
   sourceBoneTracksRetained: number;
   /** 0-100: tracked bones that address a bone the owning entity's rendered skeleton declares (registry audit). */
   skeletonCoverage: number;
@@ -445,6 +450,8 @@ export function validateAnimationFidelity(input: {
       : 0,
     boneTrackCoverage: 0,
     sourceBoneTracks: 0,
+    sourceBoneTracksActive: 0,
+    sourceBoneTracksInactive: 0,
     sourceBoneTracksRetained: 0,
     skeletonCoverage: registry.metrics.bones.checked > 0
       ? Math.round((registry.metrics.bones.resolved / registry.metrics.bones.checked) * 100)
@@ -502,6 +509,8 @@ export function validateAnimationFidelity(input: {
   let fidelityTotal = 0;
   let fidelityWeight = 0;
   let sourceBones = 0;
+  let activeSourceBones = 0;
+  let inactiveSourceBones = 0;
   let resolvedBones = 0;
 
   for (const clip of Object.values(ir.clips)) {
@@ -516,8 +525,11 @@ export function validateAnimationFidelity(input: {
       );
       report.clipsShipped += 1;
       report.clipsDeliberatelyInactive += 1;
-      sourceBones += Object.keys(clip.bones).length;
+      const inactiveBoneCount = Object.keys(clip.bones).length;
+      sourceBones += inactiveBoneCount;
+      inactiveSourceBones += inactiveBoneCount;
       report.sourceBoneTracks = sourceBones;
+      report.sourceBoneTracksInactive = inactiveSourceBones;
       report.clips.push({
         clipId: clip.id,
         shippedClipId,
@@ -595,7 +607,9 @@ export function validateAnimationFidelity(input: {
     report.channelsCompared += comparison.channelsCompared;
     report.playbackSimulated += comparison.channelsCompared > 0 ? 1 : 0;
     sourceBones += entry.bonesSource;
+    activeSourceBones += entry.bonesSource;
     report.sourceBoneTracks = sourceBones;
+    report.sourceBoneTracksActive = activeSourceBones;
 
     const hadMotion = sourceKeyframes > 0;
     if (!shippedClip) {
@@ -745,7 +759,7 @@ export function validateAnimationFidelity(input: {
   // are never collapsed into one "compatibility" number, because a ship-ready percentage made of
   // copies can hide a pose that a Bedrock client would never reproduce.
   report.averageFidelity = fidelityWeight > 0 ? Math.round(fidelityTotal / fidelityWeight) : null;
-  report.boneTrackCoverage = sourceBones > 0 ? Math.round((resolvedBones / sourceBones) * 100) : 0;
+  report.boneTrackCoverage = activeSourceBones > 0 ? Math.round((resolvedBones / activeSourceBones) * 100) : 0;
   report.skeletonCoverage =
     registry.metrics.bones.checked > 0
       ? Math.round((registry.metrics.bones.resolved / registry.metrics.bones.checked) * 100)
@@ -812,7 +826,7 @@ export function validateAnimationFidelity(input: {
     .join(', ');
   report.metricScopes = [
     `source curves: ${report.clipsShipped}/${report.clipsInterpreted} interpreted clip(s) shipped; ${curveFidelityLabel} average sampled curve preservation across ${fidelityWeight} clip(s) with comparable numeric channels and ${report.channelsCompared} channel(s).`,
-    `bone tracks: ${report.sourceBoneTracksRetained}/${report.sourceBoneTracks} source bone names carry a track in shipped definitions (${report.boneTrackCoverage}%; this does not measure whether the owning skeleton contains those bones).`,
+    `active bone tracks: ${report.sourceBoneTracksRetained}/${report.sourceBoneTracksActive} tracks from runtime-used source clips are retained (${report.boneTrackCoverage}%); ${report.sourceBoneTracksInactive} tracks in deliberately inactive definitions are excluded from active coverage; ${report.sourceBoneTracks} total source tracks were inspected.`,
     `skeleton: ${registry.metrics.bones.checked > 0 ? `${report.skeletonCoverage}% (${registry.metrics.bones.resolved}/${registry.metrics.bones.checked}) of measured final owner/clip/bone bindings resolve` : 'not measured'}; ${registry.metrics.bones.unresolved.length} checked bindings do not and ${registry.metrics.bones.skeletonsUnresolved.length} owner skeleton(s) were not measurable.`,
     `retarget pass: ${poseDriftLabel} mean sampled curve drift on comparable shipped clips, ${report.poseApproximations.length} clip(s) with tracks composed onto an ancestor, and ${reconstructedByClip.size} with rebuilt bones using unverified parent pivots.`,
     `registration: ${report.registeredClips} unique clip id(s) selectable by a client entity; activation: ${report.activatedClips}/${report.registeredClips} unique registered id(s) have a start path.`,
@@ -823,7 +837,7 @@ export function validateAnimationFidelity(input: {
   report.summary =
     `Animation audit: ${report.clipsInterpreted} interpreted → ${report.clipsShipped} shipped (${report.clipsMissing} missing, ${report.clipsDeliberatelyInactive} deliberately inactive); ` +
     `${report.channelsCompared} channel(s) sampled at ${SAMPLE_COUNT} points, curve preservation ${curveFidelityLabel} ` +
-    `(${report.clipsFaithful} faithful, ${report.clipsApproximated} approximated); source bone tracks ${report.sourceBoneTracksRetained}/${report.sourceBoneTracks} retained (${report.boneTrackCoverage}%), ` +
+    `(${report.clipsFaithful} faithful, ${report.clipsApproximated} approximated); active source bone tracks ${report.sourceBoneTracksRetained}/${report.sourceBoneTracksActive} retained (${report.boneTrackCoverage}%), ${report.sourceBoneTracksInactive} tracks belong to deliberately inactive definitions, ` +
     `final skeleton bindings ${registry.metrics.bones.checked > 0 ? `${report.skeletonCoverage}% (${registry.metrics.bones.resolved}/${registry.metrics.bones.checked})` : 'not measured'} with ${registry.metrics.bones.unresolved.length} unresolved; ` +
     `${report.poseApproximations.length} approximated clip(s); registered ${report.registeredClips}, activated ${report.activatedClips}, ` +
     `rendering-integrated ${report.renderIntegratedClips}, playback verified 0; ${errorsAfterPose} error(s), ${warningsAfterPose} warning(s).`;
