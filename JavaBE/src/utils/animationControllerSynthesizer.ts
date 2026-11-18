@@ -198,7 +198,7 @@ function bytecodeNumber(instruction: JvmInstruction): number | null {
 }
 
 /** Recover javac's synthetic enum-switch map (enum constant -> generated case key). */
-function enumSwitchMapKeys(classes: JvmClassIR[], enumClass: JvmClassIR[]): Map<string, Map<number, string>> {
+function enumSwitchMapKeys(classes: JvmClassIR[], enumClass: JvmClassIR): Map<string, Map<number, string>> {
   const output = new Map<string, Map<number, string>>();
   const stateNames = new Set(enumStateNames(enumClass));
   for (const owner of classes) for (const method of owner.methods) {
