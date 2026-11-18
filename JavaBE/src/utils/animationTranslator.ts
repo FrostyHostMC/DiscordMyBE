@@ -316,7 +316,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     const first = entries[0];
     if (tick < first.tick) {
       if (first.tick <= 0) return first.value;
-      const easing = easeBefore ? first.easing : 'easeInOutSine';
+      const easing = beginTick > 0 ? 'easeInOutSine' : easeBefore ? first.easing : 'easeInOutSine';
       const progress = tick / first.tick;
       return defaultValue + (first.value - defaultValue) * evaluateEasing(easing, progress, label);
     }
@@ -360,7 +360,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     if (!validLoop && tick > endTick) {
       const startValue = sampleSourceTrack(entries, endTick, defaultValue, label);
       const lastEntry = entries[entries.length - 1];
-      const easing = easeBefore ? 'easeInOutSine' : lastEntry.easing;
+      const easing = lastEntry.easing;
       const duration = animationEndTick - endTick;
       if (duration <= 0) return defaultValue;
       const progress = (tick - endTick) / duration;
@@ -387,7 +387,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     }
     if (!validLoop && tick === animationEndTick) {
       const lastEntry = entries[entries.length - 1];
-      const resetEasing = easeBefore ? 'easeInOutSine' : lastEntry.easing;
+      const resetEasing = lastEntry.easing;
       if (resetEasing.toLowerCase() === 'constant') {
         return [sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'), defaultValue];
       }
