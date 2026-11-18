@@ -317,7 +317,9 @@ export function buildPlayerClientEntity(options: {
           // bind to the engine's native player skeleton.
           geometry: {
             ...existingGeometry,
-            default: options.geometryIdentifier && VANILLA_PLAYER_GEOMETRY_IDS.has(options.geometryIdentifier)
+            default: options.geometryIdentifier &&
+              (VANILLA_PLAYER_GEOMETRY_IDS.has(options.geometryIdentifier) ||
+                /^geometry\\.javabe\\.player\\.[a-z0-9_]+$/i.test(options.geometryIdentifier))
               ? options.geometryIdentifier
               : existingGeometry.default && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.default)
                 ? existingGeometry.default
