@@ -105,6 +105,8 @@ export function buildPlayerClientEntity(options: {
    * is not safe to use as a skin rig and is deliberately omitted by the player port.
    */
   geometryIdentifier?: string;
+  /** Generated slim-arm counterpart to geometryIdentifier, when a bend rig is required. */
+  slimGeometryIdentifier?: string;
   /** Variable initialization statements from the Universal Variable Resolver */
   variableInitializations?: string[];
   /** Namespace used by the runtime playback self-test script event. */
@@ -319,11 +321,18 @@ export function buildPlayerClientEntity(options: {
             ...existingGeometry,
             default: options.geometryIdentifier &&
               (VANILLA_PLAYER_GEOMETRY_IDS.has(options.geometryIdentifier) ||
-                /^geometry\\.javabe\\.player\\.[a-z0-9_]+$/i.test(options.geometryIdentifier))
+                /^geometry\\.javabe\\.player\\.[a-z0-9_]+\\.classic$/i.test(options.geometryIdentifier))
               ? options.geometryIdentifier
               : existingGeometry.default && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.default)
                 ? existingGeometry.default
                 : 'geometry.humanoid.custom',
+            slim: options.slimGeometryIdentifier &&
+              (VANILLA_PLAYER_GEOMETRY_IDS.has(options.slimGeometryIdentifier) ||
+                /^geometry\\.javabe\\.player\\.[a-z0-9_]+\\.slim$/i.test(options.slimGeometryIdentifier))
+              ? options.slimGeometryIdentifier
+              : existingGeometry.slim && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.slim)
+                ? existingGeometry.slim
+                : 'geometry.humanoid.customSlim',
             cape: existingGeometry.cape === 'geometry.cape' ? existingGeometry.cape : 'geometry.cape',
           },
           scripts: {
