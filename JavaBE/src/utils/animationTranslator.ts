@@ -103,7 +103,7 @@ function emptyStats(): AnimationTranslationStats {
 }
 
 /** Converts the legacy Emotecraft tick/part format into timestamped bone tracks. */
-function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, unknown> {
+function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Record<string, unknown> {
   const issues: string[] = [];
   const moves = Array.isArray(emote.moves) ? emote.moves.filter(isPlainObject) : [];
   const beginTick = Number.isFinite(Number(emote.beginTick)) ? Number(emote.beginTick) : 0;
@@ -152,8 +152,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
     const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
     const turn = Number.isFinite(Number(move.turn)) ? Number(move.turn) : 0;
-    for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-      const transform = move[partName];
+    for (const sourcePartName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
+      const partName = version < 3 && sourcePartName === 'torso' ? 'body' : sourcePartName;
+      const transform = move[sourcePartName];
       if (!isPlainObject(transform)) continue;
       const part = parts.get(partName) ?? { position: {}, rotation: {}, scale: {}, easing, turn };
       part.easing = easing;
@@ -323,7 +324,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
     const boneName = ({
       torso: 'body',
-      body: 'body',
+      body: version >= 3 ? 'waist' : 'waist',
       rightArm: 'right_arm',
       leftArm: 'left_arm',
       rightLeg: 'right_leg',
@@ -362,7 +363,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     if (hasRotation) bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
     if (hasScale) bones[boneName] = { ...(bones[boneName] ?? {}), scale: scaleTrack };
     if (hasBend) {
-      const bendBoneName = boneName + '_bend';
+      const bendBoneName = partName === 'body' || partName === 'torso' ? 'body_bend' : boneName + '_bend';
       bones[bendBoneName] = {
         ...(bones[bendBoneName] ?? {}),
         rotation: bendRotationTrack,
@@ -402,7 +403,8 @@ function collectClipMap(document: unknown): Record<string, unknown> {
     const emote = document.emote;
     if (Array.isArray(emote.moves)) {
       const id = typeof document.name === 'string' && document.name.trim() ? document.name : 'emote';
-      return { [id]: convertEmotecraftEmote(emote) };
+      const version = Number.isFinite(Number(document.version)) ? Number(document.version) : 1;
+      return { [id]: convertEmotecraftEmote(emote, version) };
     }
     if (isPlainObject(emote.bones) || isPlainObject(emote.bone) || isPlainObject(emote.animators) || isPlainObject(emote.parts)) {
       const id = typeof document.name === 'string' && document.name.trim() ? document.name : 'emote';
