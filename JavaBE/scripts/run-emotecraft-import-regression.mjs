@@ -107,6 +107,43 @@ try {
     throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play, loop seam blend, and returnTick-to-end cycle.');
   }
 
+  const fadeIn = translateJavaAnimationSet({
+    name: 'begin_tick_fade',
+    emote: {
+      isLoop: false,
+      beginTick: 5,
+      endTick: 20,
+      stopTick: 30,
+      degrees: true,
+      easeBeforeKeyframe: true,
+      moves: [{ tick: 10, easing: 'easeInQuad', head: { pitch: 90 } }],
+    },
+  }, { fileHint: 'fixture' });
+  const fadeInClip = fadeIn.animations[fadeIn.idMap.begin_tick_fade];
+  if (Math.abs(fadeInClip.bones.head.rotation['0.25'][0] - 45) > 0.001) {
+    throw new Error('Emotecraft beginTick did not use the default ease-in-out-sine fade into the first keyframe.');
+  }
+
+  const fadeOut = translateJavaAnimationSet({
+    name: 'end_tick_fade',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 30,
+      degrees: true,
+      easeBeforeKeyframe: true,
+      moves: [
+        { tick: 0, head: { pitch: 0 } },
+        { tick: 10, easing: 'easeInQuad', head: { pitch: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const fadeOutClip = fadeOut.animations[fadeOut.idMap.end_tick_fade];
+  if (Math.abs(fadeOutClip.bones.head.rotation['1.25'][0] - 67.5) > 0.001) {
+    throw new Error('Emotecraft endTick reset did not retain the final keyframe easing.');
+  }
+
   const zeroReturnLoop = translateJavaAnimationSet({
     name: 'zero_return_loop',
     emote: {
