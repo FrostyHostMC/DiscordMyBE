@@ -333,8 +333,17 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean, c
   return fn;
 }
 
+function invokedynamicIndexBefore(method: JvmMethodIR, callIndex: number): number | null {
+  for (let index = callIndex - 1; index >= 0 && index >= callIndex - 16; index--) {
+    if (method.instructions[index].opcode === 0xba) return index;
+  }
+  return null;
+}
+
 function lambdaTargetAt(method: JvmMethodIR, callIndex: number): { owner: string; name: string; descriptor?: string } | null {
-  const bootstrap = method.instructions[callIndex]?.constant?.bootstrapMethod;
+  const dynamicIndex = invokedynamicIndexBefore(method, callIndex);
+  if (dynamicIndex === null) return null;
+  const bootstrap = method.instructions[dynamicIndex]?.constant?.bootstrapMethod;
   const targets = new Map<string, { owner: string; name: string; descriptor?: string }>();
   for (const argument of bootstrap?.arguments ?? []) {
     const reference = argument.reference;
@@ -346,14 +355,15 @@ function lambdaTargetAt(method: JvmMethodIR, callIndex: number): { owner: string
 }
 
 function captureValuesForLambda(method: JvmMethodIR, callIndex: number): number[] | null {
-  const descriptor = method.instructions[callIndex]?.constant?.descriptor ?? '';
+  const dynamicIndex = invokedynamicIndexBefore(method, callIndex);
+  if (dynamicIndex === null) return null;
+  const descriptor = method.instructions[dynamicIndex]?.constant?.descriptor ?? '';
   const parameters = descriptorParameters(descriptor, true);
   if (parameters.length === 0) return [];
   if (parameters.some((parameter) => !['D','F','I','J'].includes(parameter.kind))) return null;
   const values: number[] = [];
-  for (let index = callIndex - 1; index >= 0 && values.length < parameters.length; index--) {
-    const instruction = method.instructions[index];
-    const opcode = instruction.opcode;
+  for (let index = dynamicIndex - 1; index >= 0 && values.length < parameters.length; index--) {
+    const instruction = method.instructions[index]; const opcode = instruction.opcode;
     if (instruction.mnemonic.startsWith('ldc') || (opcode >= 0x02 && opcode <= 0x11)) {
       const value = constantNumber(instruction); if (value === null) return null; values.unshift(value); continue;
     }
