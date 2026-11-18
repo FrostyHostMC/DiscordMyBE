@@ -18,6 +18,18 @@ import { retargetClips } from '@/utils/boneRetarget';
  * and duration preserved, and every unsupported expression recorded instead of dropped.
  */
 
+function isBalancedMolangExpression(expression: string): boolean {
+  let depth = 0;
+  for (const character of expression) {
+    if (character === '(') depth += 1;
+    else if (character === ')') {
+      depth -= 1;
+      if (depth < 0) return false;
+    }
+  }
+  return depth === 0;
+}
+
 export interface AnimationTranslationIssue {
   clip: string;
   bone: string;
@@ -796,16 +808,25 @@ function translateClip(rawClip: unknown, clipId: string, customEasings?: Record<
     const duration = Number(clip.animation_length ?? result.maxTime);
     if (!Number.isFinite(loopStart) || loopStart < 0 || !Number.isFinite(duration) || duration <= 0 || loopStart >= duration) {
       issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'malformed', detail: 'loopTick must be a finite time in seconds earlier than the clip duration; the source loop point was not applied.' });
-    } else if (clip.anim_time_update) {
-      issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'unsupported', detail: 'the source clip declares both loopTick and anim_time_update; its explicit time-update expression was preserved because the two time functions cannot be safely composed.' });
     } else {
       const start = Math.round(loopStart * 1000) / 1000;
       const length = Math.round(duration * 1000) / 1000;
       const loopDuration = Math.round((length - start) * 1000) / 1000;
-      clip.loop = true;
-      clip.anim_time_update =
-        'query.anim_time < ' + length + ' ? query.anim_time + query.delta_time : ' +
-        start + ' + math.mod(query.anim_time - ' + length + ' + query.delta_time, ' + loopDuration + ')';
+      const sourceUpdate = clip.anim_time_update;
+      if (sourceUpdate && (sourceUpdate.includes(';') || !isBalancedMolangExpression(sourceUpdate))) {
+        issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'unsupported', detail: 'loopTick could not be composed with the source anim_time_update because it is a multi-statement or unbalanced Molang expression; the original expression was preserved.' });
+      } else {
+        clip.loop = true;
+        const timeExpression = sourceUpdate
+          ? 'temp.javae_loop_source_time_' + clipId.toLowerCase().replace(/[^a-z0-9_]/g, '_') + ' = (' + sourceUpdate + '); '
+          : '';
+        const timeValue = sourceUpdate
+          ? 'temp.javae_loop_source_time_' + clipId.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+          : 'query.anim_time + query.delta_time';
+        clip.anim_time_update = timeExpression +
+          timeValue + ' < ' + length + ' ? ' + timeValue + ' : ' +
+          start + ' + math.mod(' + timeValue + ' - ' + length + ', ' + loopDuration + ')';
+      }
     }
   }
   if (typeof rawClip.override_previous_animation === 'boolean') clip.override_previous_animation = rawClip.override_previous_animation;

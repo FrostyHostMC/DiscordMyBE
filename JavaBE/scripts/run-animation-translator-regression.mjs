@@ -81,6 +81,7 @@ try {
         animation_length: 1,
         loop: false,
         loopTick: 0.4,
+        anim_time_update: 'query.anim_time + query.delta_time',
         bones: { body: { rotation: { '0': [0, 0, 0], '1': [0, 90, 0] } } },
       },
     },
@@ -89,7 +90,9 @@ try {
   const loopTickClip = loopTickResult.animations[loopTickResult.idMap.returning_loop];
   if (!loopTickClip || loopTickClip.loop !== true ||
       !String(loopTickClip.anim_time_update ?? '').includes('0.4') ||
-      !String(loopTickClip.anim_time_update ?? '').includes('1')) {
+      !String(loopTickClip.anim_time_update ?? '').includes('1') ||
+      !String(loopTickClip.anim_time_update ?? '').includes('query.anim_time + query.delta_time') ||
+      !String(loopTickClip.anim_time_update ?? '').includes('temp.javae_loop_source_time')) {
     throw new Error('A nonzero PAL/Emotecraft loopTick was not converted into a Bedrock return-time expression.');
   }
   const loopIr = buildUniversalAnimationIR({
