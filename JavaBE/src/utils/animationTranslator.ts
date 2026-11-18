@@ -210,18 +210,38 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const reportedEasings = new Set<string>();
 
   const evaluateEasing = (name: string, progress: number, label: string): number => {
-    const normalizedName = name.toLowerCase().replace(/[-_\s]/g, '');
-    // PlayerAnimator's legacy move format supplies no easing arguments. Its Catmull-Rom
-    // and Bezier transformers therefore intentionally fall back to their linear defaults.
-    if (normalizedName === 'catmullrom' || normalizedName === 'bezier') return Math.max(0, Math.min(1, progress));
-    const value = geckoEase(name || 'linear', progress);
-    if (value !== null && Number.isFinite(value)) return value;
-    const key = label + ':' + name;
-    if (!reportedEasings.has(key)) {
-      reportedEasings.add(key);
-      issues.push('Emotecraft easing "' + name + '" on ' + label + ' is not in the PlayerAnimator easing registry; the source loader resolves unknown names to linear.');
+    const registryName = name.trim().toLowerCase();
+    const t = Math.max(0, Math.min(1, progress));
+    const supported = new Set([
+      'linear', 'constant', 'step',
+      'easeinsine', 'easeoutsine', 'easeinoutsine',
+      'easeinquad', 'easeoutquad', 'easeinoutquad',
+      'easeincubic', 'easeoutcubic', 'easeinoutcubic',
+      'easeinquart', 'easeoutquart', 'easeinoutquart',
+      'easeinquint', 'easeoutquint', 'easeinoutquint',
+      'easeinexpo', 'easeoutexpo', 'easeinoutexpo',
+      'easeincirc', 'easeoutcirc', 'easeinoutcirc',
+      'easeinback', 'easeoutback', 'easeinoutback',
+      'easeinelastic', 'easeoutelastic', 'easeinoutelastic',
+      'easeinbounce', 'easeoutbounce', 'easeinoutbounce',
+      'catmullrom', 'bezier',
+    ]);
+    // The legacy move loader supplies no easing arguments. PAL's Catmull-Rom and Bezier
+    // transformers therefore use their documented linear defaults.
+    if (registryName === 'catmullrom' || registryName === 'bezier') return t;
+    // Match PlayerAnimator's STEP implementation (default n=2), including its final
+    // plateau at (n-1)/n rather than forcing the final sample to 1.
+    if (registryName === 'step') return Math.min(Math.floor(t * 2), 1) / 2;
+    if (!supported.has(registryName)) {
+      const key = label + ':' + name;
+      if (!reportedEasings.has(key)) {
+        reportedEasings.add(key);
+        issues.push('Emotecraft easing "' + name + '" on ' + label + ' is not in the PlayerAnimator easing registry; the source loader resolves unknown names to linear.');
+      }
+      return t;
     }
-    return Math.max(0, Math.min(1, progress));
+    const value = geckoEase(registryName || 'linear', t);
+    return value !== null && Number.isFinite(value) ? value : t;
   };
 
   const getEntries = (
