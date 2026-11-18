@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const sourcePath = path.join(root, 'Test Addons & Mods', 'Pierced Animations - Serious Player Animations - 1.20.x.zip');
 const reportDir = path.resolve(root, '..', 'fixture-analysis');
 fs.mkdirSync(reportDir, { recursive: true });
+fs.copyFileSync(sourcePath, path.join(reportDir, 'Pierced-source-fixture.zip'));
 
 if (!fs.existsSync(sourcePath)) throw new Error(`Pierced source fixture is missing: ${sourcePath}`);
 
