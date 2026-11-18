@@ -329,9 +329,28 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     tick: number,
     defaultValue: number,
   ): [number, number] | null => {
+    if (entries.length === 0) return null;
+    if (validLoop && tick >= endTick) {
+      const firstLoopFrame = entries.find((entry) => entry.tick > returnTick) ?? entries[entries.length - 1];
+      const lastEntry = entries[entries.length - 1];
+      const seamDuration = Math.max(0, firstLoopFrame.tick - returnTick);
+      const seamEnd = endTick + seamDuration;
+      const seamEasing = easeBefore ? firstLoopFrame.easing : lastEntry.easing;
+      if (seamDuration > 0 && tick === seamEnd && seamEasing.toLowerCase() === 'constant') {
+        return [sampleSourceTrack(entries, endTick, defaultValue, 'loop seam'), firstLoopFrame.value];
+      }
+    }
+    if (!validLoop && tick === animationEndTick) {
+      const lastEntry = entries[entries.length - 1];
+      const resetEasing = easeBefore ? 'easeInOutSine' : lastEntry.easing;
+      if (resetEasing.toLowerCase() === 'constant') {
+        return [sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'), defaultValue];
+      }
+    }
     const index = entries.findIndex((entry) => entry.tick === tick);
     if (index < 0) return null;
     const current = entries[index];
+    if (current.tick === 0) return null;
     const previous = index > 0 ? entries[index - 1] : null;
     const easing = easeBefore
       ? current.easing
