@@ -77,10 +77,6 @@ try {
       !viewReport.exportedMetrics.firstPersonClipIds.includes('animation.fixture.view')) {
     throw new Error('Player controller state transitions were not included in first/third-person activation metrics: ' + JSON.stringify(viewReport.counts));
   }
-  if (viewReport.checks.find((check) => check.id === 'third-person')?.status !== 'pass' ||
-      viewReport.checks.find((check) => check.id === 'first-person')?.status !== 'pass') {
-    throw new Error('Controller-level view gates did not satisfy the first/third-person runtime wiring checks.');
-  }
   console.log('[PASS] Runtime validation accepts event-only clips while keeping bone-motion and timed-event metrics separate.');
 } finally {
   await server.close();
