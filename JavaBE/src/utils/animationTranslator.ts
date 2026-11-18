@@ -321,7 +321,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     const first = entries[0];
     if (tick < first.tick) {
       if (first.tick <= 0) return first.value;
-      const easing = beginTick > 0 ? 'easeInOutSine' : easeBefore ? first.easing : 'easeInOutSine';
+      const easing = beginTick > 0
+        ? (easeBefore ? 'easeInOutSine' : entries[entries.length - 1].easing)
+        : (easeBefore ? first.easing : 'easeInOutSine');
       const progress = tick / first.tick;
       return defaultValue + (first.value - defaultValue) * evaluateEasing(easing, progress, label);
     }
@@ -367,7 +369,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     if (!validLoop && tick > endTick) {
       const startValue = sampleSourceTrack(entries, endTick, defaultValue, label);
       const lastEntry = entries[entries.length - 1];
-      const easing = lastEntry.easing;
+      const easing = easeBefore ? 'easeInOutSine' : lastEntry.easing;
       const duration = animationEndTick - endTick;
       if (duration <= 0) return defaultValue;
       const progress = (tick - endTick) / duration;
@@ -401,7 +403,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     }
     if (!validLoop && tick === animationEndTick) {
       const lastEntry = entries[entries.length - 1];
-      return stepBoundary(sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'), defaultValue, lastEntry.easing);
+      return stepBoundary(
+        sampleSourceTrack(entries, endTick, defaultValue, 'stop reset'),
+        defaultValue,
+        easeBefore ? 'easeInOutSine' : lastEntry.easing,
+      );
     }
     const index = entries.findIndex((entry) => entry.tick === tick);
     if (index < 0) return null;
