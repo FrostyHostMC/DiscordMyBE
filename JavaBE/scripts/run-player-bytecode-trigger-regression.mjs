@@ -81,6 +81,37 @@ try {
     throw new Error('A bytecode-proven attack trigger did not generate a real Bedrock entityHitEntity playback adapter.');
   }
 
+  const ambiguousClipId = 'animation.fixture.attack_alt';
+  const ambiguousBytecodeClass = {
+    ...bytecodeClass,
+    methods: [
+      ...bytecodeClass.methods,
+      {
+        ...bytecodeClass.methods[0],
+        name: 'attackAlt',
+        instructions: [
+          { ...instructions[0], constant: string(ambiguousClipId) },
+          ...instructions.slice(1),
+        ],
+      },
+    ],
+  };
+  const ambiguousReport = translatePlayerTriggers({
+    clips: { ...clips, [ambiguousClipId]: clips['animation.fixture.attack'] },
+    sourceClipIdsByClipId: {
+      'animation.fixture.attack': 'animation.fixture.attack',
+      [ambiguousClipId]: ambiguousClipId,
+    },
+    bytecodeClasses: [ambiguousBytecodeClass],
+    archiveEntries: [],
+  });
+  const ambiguousTriggers = ambiguousReport.triggers.filter((trigger) =>
+    trigger.clipId === 'animation.fixture.attack' || trigger.clipId === ambiguousClipId);
+  if (ambiguousTriggers.length !== 2 ||
+      ambiguousTriggers.some((trigger) => trigger.status !== 'unresolved' || trigger.scriptDriven || trigger.runtimeEvent)) {
+    throw new Error('Two clips sharing one inferred runtime event must be withheld rather than both firing and overriding each other.');
+  }
+
   const priorityAttack = {
     ...attack,
     status: 'mapped',
@@ -110,7 +141,7 @@ try {
     throw new Error('Recovered Java source priority did not outrank the fallback concept priority: ' + orderedClips.join(', '));
   }
 
-  console.log('[PASS] Bytecode-correlated player clips generate Bedrock after-event playback and preserve explicit source layer priority.');
+  console.log('[PASS] Bytecode-correlated player clips generate Bedrock after-event playback, withhold ambiguous same-event clips, and preserve explicit source layer priority.');
 } finally {
   await server.close();
 }
