@@ -332,10 +332,6 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         ...(Object.keys(bendPositionTrack).length > 0 ? { position: bendPositionTrack } : {}),
       };
     }
-      bones[boneName + '_bend'] = {
-        ...(bones[boneName + '_bend'] ?? {}),
-        rotation: bendTrack,
-      };
     }
   }
 
