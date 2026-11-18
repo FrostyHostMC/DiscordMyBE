@@ -649,6 +649,7 @@ export function portMobAndPlayerAnimations(
       controllerDrivenClipIds,
       templateClipIds: playerAnimationsPorted,
       geometryIdentifier: playerPort.geometryIdentifier ?? undefined,
+      slimGeometryIdentifier: playerPort.slimGeometryIdentifier ?? undefined,
       modId,
       existingPlayerEntity: typeof resourcePackFiles['entity/player.entity.json'] === 'string'
         ? resourcePackFiles['entity/player.entity.json'] as string
