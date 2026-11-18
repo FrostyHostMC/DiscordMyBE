@@ -393,7 +393,7 @@ function stripBalancedOuterParentheses(value: string): string {
     let depth = 0, quote = ''; let enclosesAll = true;
     for (let index = 0; index < text.length; index++) {
       const char = text[index];
-      if (quote) { if (char === quote && text[index - 1] !== '\\\\') quote = ''; continue; }
+      if (quote) { if (char === quote && text.charCodeAt(index - 1) !== 92) quote = ''; continue; }
       if (char === '\"' || char === "'") { quote = char; continue; }
       if (char === '(') depth++; else if (char === ')') depth--;
       if (depth === 0 && index < text.length - 1) { enclosesAll = false; break; }
@@ -408,7 +408,7 @@ function splitTopLevelConjunction(value: string): string[] {
   const parts: string[] = []; let depth = 0, start = 0, quote = '';
   for (let index = 0; index < value.length - 1; index++) {
     const char = value[index];
-    if (quote) { if (char === quote && value[index - 1] !== '\\\\') quote = ''; continue; }
+    if (quote) { if (char === quote && value.charCodeAt(index - 1) !== 92) quote = ''; continue; }
     if (char === '\"' || char === "'") { quote = char; continue; }
     if (char === '(') depth++; else if (char === ')') depth--;
     if (depth === 0 && value.slice(index, index + 2) === '&&') { parts.push(value.slice(start, index).trim()); start = index + 2; index++; }
