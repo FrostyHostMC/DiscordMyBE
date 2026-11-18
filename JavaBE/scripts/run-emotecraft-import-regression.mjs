@@ -86,20 +86,25 @@ try {
     emote: {
       isLoop: true,
       beginTick: 0,
-      returnTick: 10,
+      returnTick: 5,
       endTick: 30,
       stopTick: 30,
-      moves: [{ tick: 0, head: { yaw: 0 } }, { tick: 30, head: { yaw: 90 } }],
+      moves: [
+        { tick: 0, head: { yaw: 0 } },
+        { tick: 10, head: { yaw: 45 } },
+        { tick: 30, head: { yaw: 90 } },
+      ],
     },
   }, { fileHint: 'fixture' });
   const loopClip = loopIntro.animations[loopIntro.idMap.loop_intro];
-  if (loopClip.loop !== true || loopClip.animation_length !== 1.5 ||
+  if (loopClip.loop !== true || loopClip.animation_length !== 2.8 ||
       typeof loopClip.anim_time_update !== 'string' ||
       !loopClip.anim_time_update.includes('math.mod') ||
       !loopClip.anim_time_update.includes('1.5') ||
-      !loopClip.anim_time_update.includes('0.45') ||
-      !loopClip.anim_time_update.includes('1.05')) {
-    throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play followed by a returnTick-to-end loop.');
+      !loopClip.anim_time_update.includes('1.3') ||
+      loopClip.bones.head.rotation['1.5'][1] !== 90 ||
+      loopClip.bones.head.rotation['1.8'][1] !== 45) {
+    throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play, loop seam blend, and returnTick-to-end cycle.');
   }
 
   const splitEasing = translateJavaAnimationSet({
