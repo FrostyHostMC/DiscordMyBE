@@ -81,6 +81,60 @@ try {
     throw new Error('A bytecode-proven attack trigger did not generate a real Bedrock entityHitEntity playback adapter.');
   }
 
+  const hurtClipId = 'animation.fixture.hurt';
+  const obfuscatedHurtClass = {
+    path: 'fixture/ObfuscatedPlayerHooks.class',
+    name: 'fixture.ObfuscatedPlayerHooks',
+    superName: 'java.lang.Object',
+    interfaces: [],
+    access: 0x0001,
+    majorVersion: 61,
+    minorVersion: 0,
+    fields: [],
+    methods: [{
+      ...methodIR('m_12345_', [
+        ins(0, 'ldc', 0x12, string(hurtClipId)),
+        ins(1, 'invokevirtual', 0xb6, method('fixture.Player', 'isHurt')),
+        ins(2, 'invokestatic', 0xb8, method('fixture.Controller', 'triggerAnim')),
+      ], [block(0, [0,1,2])], [
+        method('fixture.Player', 'isHurt'),
+        method('fixture.Controller', 'triggerAnim'),
+      ]),
+      descriptor: '(Lnet/minecraftforge/event/entity/living/LivingHurtEvent;)V',
+    }],
+    references: [],
+    bootstrapMethods: [],
+    decodeWarnings: [],
+  };
+  const obfuscatedHurtReport = translatePlayerTriggers({
+    clips: { ...clips, [hurtClipId]: clips['animation.fixture.attack'] },
+    sourceClipIdsByClipId: { [hurtClipId]: hurtClipId },
+    bytecodeClasses: [obfuscatedHurtClass],
+    archiveEntries: [],
+  });
+  const obfuscatedHurt = obfuscatedHurtReport.triggers.find((trigger) => trigger.clipId === hurtClipId);
+  if (!obfuscatedHurt || obfuscatedHurt.status !== 'script-driven' || obfuscatedHurt.runtimeEvent !== 'entityHurt') {
+    throw new Error('An obfuscated Java event-handler method was not mapped from its LivingHurtEvent descriptor.');
+  }
+  const hurtPort = buildPlayerAnimationPort({
+    modId: 'fixture',
+    clips: { ...clips, [hurtClipId]: clips['animation.fixture.attack'] },
+    triggers: [obfuscatedHurt],
+    decisions: [],
+    evidence: {
+      classesScanned: 0,
+      playerModelClasses: [],
+      playerApiTokens: [],
+      firstPersonEvidence: [],
+      offhandEvidence: [],
+      dualWieldDetected: false,
+      summary: 'fixture',
+    },
+  });
+  if (!hurtPort.scriptCode.includes('entityHurt') || !hurtPort.scriptCode.includes('event.hurtEntity')) {
+    throw new Error('The descriptor-derived hurt event did not produce a Bedrock entityHurt adapter.');
+  }
+
   const ambiguousClipId = 'animation.fixture.attack_alt';
   const ambiguousBytecodeClass = {
     ...bytecodeClass,
@@ -141,7 +195,7 @@ try {
     throw new Error('Recovered Java source priority did not outrank the fallback concept priority: ' + orderedClips.join(', '));
   }
 
-  console.log('[PASS] Bytecode-correlated player clips generate Bedrock after-event playback, withhold ambiguous same-event clips, and preserve explicit source layer priority.');
+  console.log('[PASS] Bytecode-correlated player clips generate Bedrock after-event playback, infer obfuscated event methods from descriptors, withhold ambiguous same-event clips, and preserve explicit source layer priority.');
 } finally {
   await server.close();
 }

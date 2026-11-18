@@ -140,8 +140,22 @@ function bytecodeNumber(instruction: JvmInstruction): number | null {
   return null;
 }
 
-function runtimeEventForSourceMethod(methodName: string): PlayerRuntimeEvent | undefined {
-  const name = methodName.toLowerCase();
+function runtimeEventForSourceMethod(method: JvmMethodIR): PlayerRuntimeEvent | undefined {
+  const signature = [
+    method.name,
+    method.descriptor,
+    ...method.localVariables.map((local) => local.name + ':' + local.descriptor),
+    ...method.calls.map((call) => (call.owner ?? '') + '.' + (call.name ?? '')),
+  ].join(' ').toLowerCase();
+  const typedEvents = new Set<PlayerRuntimeEvent>();
+  if (/livinghurtevent|livingdamageevent|livingattackevent|entitydamageevent|entityhurtevent/.test(signature)) typedEvents.add('entityHurt');
+  if (/attackentityevent|entityhitresult|entityattackevent|entityhitentityevent/.test(signature)) typedEvents.add('entityHitEntity');
+  if (/playerswingstart|playerswingevent|swingevent/.test(signature)) typedEvents.add('playerSwingStart');
+  if (/rightclickitem|itemuseevent|useitemcallback|playeritemuse/.test(signature)) typedEvents.add('itemUse');
+  if (/playeremote|emoteevent/.test(signature)) typedEvents.add('playerEmote');
+  if (typedEvents.size === 1) return [...typedEvents][0];
+  if (typedEvents.size > 1) return undefined;
+  const name = method.name.toLowerCase();
   if (/hurt|damage|injur/.test(name)) return 'entityHurt';
   if (/swing/.test(name)) return 'playerSwingStart';
   if (/attack|hit|strike/.test(name)) return 'entityHitEntity';
@@ -180,7 +194,7 @@ function bytecodeEvidenceForClip(
         if (sourcePriority !== undefined) break;
       }
       const runtimeTrigger = callNames.find((name) => runtimeCalls.test(name));
-      const runtimeEvent = runtimeTrigger ? runtimeEventForSourceMethod(method.name) : undefined;
+      const runtimeEvent = runtimeTrigger ? runtimeEventForSourceMethod(method) : undefined;
       matches.push({
         evidence: item.name + '.' + method.name + (runtimeTrigger ? ' -> ' + runtimeTrigger : ''),
         conceptEvidence,
