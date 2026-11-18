@@ -46,8 +46,11 @@ try {
     '1': { vector: [100, 0, 0], easing: 'easeInQuad' },
   });
   if (dynamic.value['0']?.[0] !== 'query.anim_time' ||
-      !dynamic.problems.some((p) => p.kind === 'unsupported' && p.detail.includes('dynamic Molang'))) {
-    throw new Error('Dynamic Molang easing endpoints were not preserved and reported.');
+      typeof dynamic.value['0.5']?.[0] !== 'string' ||
+      !dynamic.value['0.5'][0].includes('query.anim_time') ||
+      !dynamic.value['0.5'][0].includes('0.25') ||
+      !dynamic.problems.some((p) => p.kind === 'normalised' && p.detail.includes('easeInQuad'))) {
+    throw new Error('Dynamic Molang endpoints were not retained inside the sampled easing interpolation expressions.');
   }
 
   const dynamicArgs = analyzeChannel('rotation', {

@@ -481,7 +481,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       }
       if (hasBend) {
         const bendAngle = sampleTrack(bendEntries, tick, 0, partName + ' bend');
-        const angle = Math.abs(bendAngle * Math.PI / 180);
+        const angle = bendAngle * Math.PI / 180;
         const boundary = constantBoundary(bendEntries, tick, 0);
         const bendPre = boundary?.[0] ?? bendAngle;
         const preAngle = Math.abs(bendPre * Math.PI / 180);

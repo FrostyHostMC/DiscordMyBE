@@ -374,6 +374,34 @@ export function geckoEase(name: string, progress: number, args: number[] = []): 
   return 1 - easeIn(kind, (1 - t) * 2) / 2;
 }
 
+function expressionVector(value: KeyframeValue, channel: BedrockChannel): Array<number | string> | null {
+  let raw: unknown = value;
+  if (isPlainObject(raw)) raw = raw.post ?? raw.pre ?? raw.vector ?? raw.value;
+  if (typeof raw === 'number' || typeof raw === 'string') {
+    const component = asMolangComponent(raw);
+    return component === null ? null : [component, component, component];
+  }
+  if (!Array.isArray(raw)) return null;
+  const values = raw.flat(Infinity as never).slice(0, 3);
+  if (values.length === 0) return null;
+  const components = values.map(asMolangComponent);
+  if (components.some((part) => part === null)) return null;
+  const result = components as Array<number | string>;
+  if (result.length === 1) return [result[0], result[0], result[0]];
+  if (result.length === 2) return [result[0], result[1], IDENTITY[channel]];
+  return result;
+}
+
+function interpolateMolangComponent(from: number | string, to: number | string, progress: number): number | string {
+  if (typeof from === 'number' && typeof to === 'number') {
+    return from + (to - from) * progress;
+  }
+  const left = typeof from === 'number' ? String(from) : '(' + from + ')';
+  const right = typeof to === 'number' ? String(to) : '(' + to + ')';
+  const weight = String(Math.round(progress * 1000000) / 1000000);
+  return '(' + left + ') + ((' + right + ') - (' + left + ')) * ' + weight;
+}
+
 function numericVector(value: KeyframeValue, channel: BedrockChannel): number[] | null {
   let raw: unknown = value;
   if (isPlainObject(raw)) raw = raw.post ?? raw.pre ?? raw.vector ?? raw.value;
@@ -455,12 +483,12 @@ export function analyzeChannel(sourceChannel: string, raw: unknown, options: { c
       approximated = true;
       continue;
     }
-    const from = numericVector(previous.value, channel);
-    const to = numericVector(current.value, channel);
+    const from = expressionVector(previous.value, channel);
+    const to = expressionVector(current.value, channel);
     if (!from || !to) {
       problems.push({
         kind: 'unsupported',
-        detail: `GeckoLib easing "${current.easing}" could not be baked because one or both endpoint vectors contain dynamic Molang expressions; the original endpoints were retained`,
+        detail: `GeckoLib easing "${current.easing}" could not be baked because one or both endpoint vectors contain expressions outside the validated Molang subset; the original endpoints were retained`,
       });
       approximated = true;
       continue;
@@ -490,7 +518,7 @@ export function analyzeChannel(sourceChannel: string, raw: unknown, options: { c
       }
       const timeKey = formatSeconds(time);
       if (originalTimes.has(timeKey)) continue;
-      keyframeMap[timeKey] = from.map((value, axis) => value + (to[axis] - value) * eased);
+      keyframeMap[timeKey] = from.map((value, axis) => interpolateMolangComponent(value, to[axis] ?? value, eased));
     }
     if (!recognized) {
       problems.push({

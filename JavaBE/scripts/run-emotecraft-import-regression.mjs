@@ -368,6 +368,25 @@ try {
   const objectBend = bendObject.animations[bendObject.idMap.bend_value_object].bones.left_leg_bend.rotation['0.5'];
   if (objectBend[0] !== 45) throw new Error('PAL bend { value } keyframes were not imported.');
 
+  const negativeBend = translateJavaAnimationSet({
+    name: 'negative_bend_arc',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 20,
+      degrees: true,
+      moves: [
+        { tick: 0, rightArm: { bend: 0 } },
+        { tick: 20, rightArm: { bend: -45 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const negativeBendTrack = negativeBend.animations[negativeBend.idMap.negative_bend_arc].bones.right_arm_bend;
+  if (negativeBendTrack.rotation['1'][0] !== -45 || negativeBendTrack.position['1'][2] <= 0) {
+    throw new Error('Negative Emotecraft bend angles must reverse the child segment arc instead of being forced positive.');
+  }
+
   console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, player pivots/units, bend axes, stop reset, and nonzero returnTick looping are imported.');
 } finally {
   await server.close();
