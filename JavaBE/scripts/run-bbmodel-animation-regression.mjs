@@ -32,6 +32,8 @@ try {
           keyframes: [
             { channel: 'rotation', time: 0, interpolation: 'linear', data_points: [{ x: 0, y: 0, z: 0 }] },
             { channel: 'rotation', time: 1, interpolation: 'catmullrom', data_points: [{ x: 10, y: 20, z: 30 }] },
+            { channel: 'position', time: 0, interpolation: 'bezier', data_points: [{ x: 0, y: 0, z: 0 }], bezier_right_time: [0.25, 0.25, 0.25], bezier_right_value: [0, 1, 0] },
+            { channel: 'position', time: 1, interpolation: 'linear', data_points: [{ x: 4, y: 0, z: 0 }], bezier_left_time: [-0.25, -0.25, -0.25], bezier_left_value: [0, -1, 0] },
           ],
         },
         effects: {
@@ -49,6 +51,13 @@ try {
   if (!clip) throw new Error('Blockbench animation was not imported.');
   if (!clip.bones.body) throw new Error('Blockbench 5.0 animator UUID did not resolve to the declared group name.');
   if (clip.bones.body.rotation['1'].lerp_mode !== 'catmullrom') throw new Error('Catmull-Rom interpolation was not preserved.');
+  for (const time of ['0.25', '0.5', '0.75']) {
+    if (!clip.bones.body.position[time]) throw new Error('Bezier curve sample missing at ' + time + 's.');
+  }
+  const duplicateSource = JSON.parse(JSON.stringify(source));
+  duplicateSource.animations.push({ ...duplicateSource.animations[0], animators: { 'body-group-uuid': { name: 'body', keyframes: [{ channel: 'rotation', time: 0, data_points: [{ x: 0, y: 0, z: 0 }] }] } } });
+  const duplicateResult = extractBbModelAnimations(JSON.stringify(duplicateSource), 'fixture');
+  if (!duplicateResult.clips['animation.fixture.complex_motion_2']) throw new Error('Duplicate source animation names overwrote an earlier clip.');
   if (clip.start_delay !== '0.2' || clip.loop_delay !== '0.3' || clip.blend_weight !== 'query.modified_move_speed') {
     throw new Error('Blockbench animation timing/blending properties were lost.');
   }
@@ -62,7 +71,7 @@ try {
   if (!Array.isArray(clip.timeline['0.75']) || clip.timeline['0.75'].length !== 2) {
     throw new Error('Blockbench timeline instruction keyframes were lost.');
   }
-  console.log('[PASS] Blockbench 5.0 UUID bone tracks, effects animator, timeline scripts, interpolation, and animation timing are imported.');
+  console.log('[PASS] Blockbench UUID rigs, Bezier baking, Catmull-Rom, duplicate clip names, effects animator, timeline scripts, and timing are imported.');
 } finally {
   await server.close();
 }

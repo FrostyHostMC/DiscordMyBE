@@ -51,6 +51,10 @@ interface BbKeyframe {
   time?: number;
   interpolation?: string;
   data_points?: Array<Record<string, unknown>>;
+  bezier_left_time?: number[];
+  bezier_right_time?: number[];
+  bezier_left_value?: number[];
+  bezier_right_value?: number[];
 }
 
 interface BbAnimator {
@@ -387,6 +391,20 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
   };
   collectOutlinerNames(doc.outliner ?? []);
 
+  const cubic = (a: number, b: number, c: number, d: number, t: number): number => {
+    const u = 1 - t;
+    return u * u * u * a + 3 * u * u * t * b + 3 * u * t * t * c + t * t * t * d;
+  };
+  const solveBezierParameter = (x0: number, x1: number, x2: number, x3: number, target: number): number => {
+    let low = 0;
+    let high = 1;
+    for (let iteration = 0; iteration < 36; iteration += 1) {
+      const middle = (low + high) / 2;
+      if (cubic(x0, x1, x2, x3, middle) < target) low = middle;
+      else high = middle;
+    }
+    return (low + high) / 2;
+  };
   const component = (raw: unknown, fallback: number): number | string => {
     if (typeof raw === 'number') return Number.isFinite(raw) ? raw : fallback;
     if (typeof raw !== 'string' || !raw.trim()) return fallback;
@@ -416,6 +434,9 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
     else if (Array.isArray(current)) current.push(value);
     else target[time] = [current, value];
   };
+
+  const usedClipIds = new Set<string>();
+  const snapping = Math.max(1, Math.min(120, num(animations[0]?.snapping, 24)));
 
   for (let index = 0; index < animations.length; index += 1) {
     const animation = animations[index];
@@ -508,13 +529,67 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
             post: values.length > 1 && needsPre ? values[1] : values[0],
             lerp_mode: 'catmullrom',
           };
-        } else if (keyframe.interpolation === 'bezier') {
-          notes.push('animation "' + (animation.name ?? index) + '": Bezier keyframe at ' + timeKey + 's retained at its authored value; curve baking is pending for this Blockbench source path');
         }
         const target = (track[bedrockChannel] as Record<string, unknown>) ?? {};
         target[timeKey] = value;
         track[bedrockChannel] = target;
         maxTime = Math.max(maxTime, time);
+      }
+      // Blockbench stores Bezier handles as time/value offsets. Bedrock has no Bezier
+      // interpolation mode, so bake numeric curves onto the model's snapping grid, matching
+      // Blockbench's own Bedrock exporter rather than degrading them to linear/Catmull-Rom.
+      for (let segmentIndex = 0; segmentIndex < sorted.length - 1; segmentIndex += 1) {
+        const before = sorted[segmentIndex];
+        const after = sorted[segmentIndex + 1];
+        if (before.interpolation !== 'bezier' && after.interpolation !== 'bezier') continue;
+        const beforePoints = before.data_points ?? [];
+        const afterPoints = after.data_points ?? [];
+        const beforePoint = beforePoints[beforePoints.length > 1 ? 1 : 0];
+        const afterPoint = afterPoints[0];
+        if (!beforePoint || !afterPoint) continue;
+        const t0 = Number(before.time);
+        const t1 = Number(after.time);
+        const gap = t1 - t0;
+        if (!(gap > 0)) continue;
+        const axes = ['x', 'y', 'z'] as const;
+        const controls: Array<[number, number, number, number]> = [];
+        let numeric = true;
+        for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+          const axis = axes[axisIndex];
+          const y0 = Number(beforePoint[axis]);
+          const y3 = Number(afterPoint[axis]);
+          if (!Number.isFinite(y0) || !Number.isFinite(y3)) {
+            numeric = false;
+            break;
+          }
+          const rightTime = Math.max(0, Math.min(gap, Number(before.bezier_right_time?.[axisIndex]) || 0));
+          const leftTime = Math.max(-gap, Math.min(0, Number(after.bezier_left_time?.[axisIndex]) || 0));
+          const y1 = y0 + (Number(before.bezier_right_value?.[axisIndex]) || 0);
+          const y2 = y3 + (Number(after.bezier_left_value?.[axisIndex]) || 0);
+          controls.push([t0, t0 + rightTime, t1 + leftTime, t1]);
+          controls.push([y0, y1, y2, y3]);
+        }
+        if (!numeric) {
+          notes.push('animation "' + (animation.name ?? index) + '": Bezier segment ' + t0 + 's–' + t1 + 's contains a Molang expression; endpoint expressions were preserved but the custom curve could not be numerically baked');
+          continue;
+        }
+        const target = (track[bedrockChannel] as Record<string, unknown>) ?? {};
+        for (let sampleTime = t0 + 1 / snapping; sampleTime < t1 - 0.000001; sampleTime += 1 / snapping) {
+          const snappedTime = Math.round(sampleTime * snapping) / snapping;
+          if (snappedTime <= t0 || snappedTime >= t1) continue;
+          const timeKey = String(Math.round(snappedTime * 1000) / 1000);
+          if (Object.prototype.hasOwnProperty.call(target, timeKey)) continue;
+          const alpha = (snappedTime - t0) / gap;
+          const values: Record<string, number> = {};
+          for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+            const x = controls[axisIndex * 2];
+            const y = controls[axisIndex * 2 + 1];
+            const parameter = solveBezierParameter(x[0], x[1], x[2], x[3], snappedTime);
+            values[axes[axisIndex]] = cubic(y[0], y[1], y[2], y[3], parameter);
+          }
+          target[timeKey] = vector(values, bedrockChannel);
+        }
+        track[bedrockChannel] = target;
       }
       if (animator.rotation_global) track.relative_to = { rotation: 'entity' };
       if (Object.keys(track).length > 0) bones[boneName] = track;
@@ -524,7 +599,14 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
 
     const rawName = (animation.name ?? ('clip_' + (index + 1))).trim();
     const slug = rawName.toLowerCase().replace(/[^a-z0-9_.-]+/g, '_').replace(/^[_.-]+|[_.-]+$/g, '') || ('clip_' + (index + 1));
-    const clipId = 'animation.' + (ownerHint || 'model') + '.' + slug;
+    const baseClipId = 'animation.' + (ownerHint || 'model') + '.' + slug;
+    let clipId = baseClipId;
+    let duplicateIndex = 2;
+    while (usedClipIds.has(clipId)) {
+      clipId = baseClipId + '_' + duplicateIndex;
+      duplicateIndex += 1;
+    }
+    usedClipIds.add(clipId);
     const clip: BedrockAnimationClip = { bones };
     const declared = num(animation.length, 0);
     clip.animation_length = declared > 0 ? Math.round(declared * 1000) / 1000 : Math.round(maxTime * 1000) / 1000;
