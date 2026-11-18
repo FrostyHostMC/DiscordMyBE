@@ -71,6 +71,7 @@ export function buildPlayerAnimationPort(options: {
     candidates: [],
     clipBones,
     bendBones,
+    needsWaistParenting: clipBones.includes('waist'),
     modId: options.modId,
   });
   const gatedClips = options.triggers.filter((trigger) => Boolean(trigger.condition) || trigger.scriptDriven).length;
