@@ -154,8 +154,11 @@ export function validateAnimationRuntime(input: {
   // integration error keeps the whole run unresolved.
   const integrationFailure = input.integration !== undefined && input.integration.passed === false;
 
-  const definitions = new Map<string, { bones: string[]; path: string }>(
-    [...registry.clips.entries()].map(([clipId, clip]) => [clipId, { bones: clip.bones, path: clip.path }]),
+  const definitions = new Map<string, { bones: string[]; path: string; hasTimedEvents: boolean }>(
+    [...registry.clips.entries()].map(([clipId, clip]) => [
+      clipId,
+      { bones: clip.bones, path: clip.path, hasTimedEvents: clip.hasTimedEvents },
+    ]),
   );
   const motionDefinitions = [...definitions.values()].filter((entry) => entry.bones.length > 0);
   const timedEventDefinitions = [...definitions.values()].filter((entry) => entry.hasTimedEvents);
