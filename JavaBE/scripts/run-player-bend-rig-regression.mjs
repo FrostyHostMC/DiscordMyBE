@@ -43,8 +43,10 @@ try {
         arm.cubes[0].size[1] !== 6 || armBend.cubes[0].size[1] !== 6) {
       throw new Error('Bendable player cubes were not split into matching upper/lower segments.');
     }
+    const expectedArmParentY = geometry.description.identifier.endsWith('customSlim') ? 17.5 : 18;
+    const expectedArmChildY = geometry.description.identifier.endsWith('customSlim') ? 11.5 : 12;
     if (body.cubes[0].origin[1] !== 18 || bodyBend.cubes[0].origin[1] !== 12 ||
-        arm.cubes[0].origin[1] !== -6 || armBend.cubes[0].origin[1] !== -12) {
+        arm.cubes[0].origin[1] !== expectedArmParentY || armBend.cubes[0].origin[1] !== expectedArmChildY) {
       throw new Error('Generated bend segments do not use the reference parent/child cube origins.');
     }
     if (!bodyBend.cubes[0].uv.up || !bodyBend.cubes[0].uv.down ||
