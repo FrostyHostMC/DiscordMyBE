@@ -113,7 +113,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     rotation: Record<string, number>;
     positionEasing?: string;
     rotationEasing?: string;
-    bendRotation?: number[];
+    bendAngle?: number;
     bendEasing?: string;
     bend: boolean;
   };
@@ -174,37 +174,20 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         }
         part.rotationEasing = easing;
       }
-      if (transform.bend !== undefined || transform.axis !== undefined) {
+      if (transform.bend !== undefined) {
         part.bend = true;
         if (partName === 'head') {
           issues.push('Emotecraft head declares bend at tick ' + tick + '; the source format does not support head bending, so the invalid head bend was ignored.');
         } else {
-          const rawAxis = transform.axis;
-          const axis = Array.isArray(rawAxis)
-            ? rawAxis.map(Number)
-            : isPlainObject(rawAxis)
-              ? [Number(rawAxis.x ?? 0), Number(rawAxis.y ?? 0), Number(rawAxis.z ?? 0)]
-              : [1, 0, 0];
-          const bendValue = transform.bend;
-          let radians: number[] | null = null;
-          if (typeof bendValue === 'number' && Number.isFinite(bendValue)) {
-            const length = Math.hypot(axis[0] ?? 0, axis[1] ?? 0, axis[2] ?? 0);
-            const direction = length > 0 ? axis.map((value) => value / length) : [1, 0, 0];
-            radians = direction.map((value) => value * bendValue);
-          } else if (Array.isArray(bendValue) && bendValue.length > 0) {
-            const vector = bendValue.slice(0, 3).map(Number);
-            if (vector.every(Number.isFinite)) radians = [vector[0] ?? 0, vector[1] ?? 0, vector[2] ?? 0];
-          } else if (isPlainObject(bendValue)) {
-            const vector = Array.isArray(bendValue.vector)
-              ? bendValue.vector.slice(0, 3).map(Number)
-              : [Number(bendValue.x ?? 0), Number(bendValue.y ?? 0), Number(bendValue.z ?? 0)];
-            if (vector.every(Number.isFinite)) radians = [vector[0] ?? 0, vector[1] ?? 0, vector[2] ?? 0];
-          }
-          if (radians) {
-            part.bendRotation = radians.map((value) => value * (180 / Math.PI));
+          const rawBend = isPlainObject(transform.bend) ? transform.bend.value : transform.bend;
+          const bendValue = Number(rawBend);
+          if (Number.isFinite(bendValue)) {
+            // Emotecraft bend is a scalar angle (radians when degrees=false), not a
+            // three-axis Euler vector. PAL's JSON wrapper also permits { value: number }.
+            part.bendAngle = degrees ? bendValue : bendValue * (180 / Math.PI);
             if (easing) part.bendEasing = easing;
           } else {
-            issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' has an unreadable bend/axis value; the channel was not carried.');
+            issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' is not a numeric angle; the channel was not carried.');
           }
         }
       }
@@ -296,9 +279,25 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
         previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
       }
-      if (part.bendRotation) {
+      if (part.bendAngle !== undefined) {
+        const angleRadians = part.bendAngle * (Math.PI / 180);
+        const angle = Math.abs(angleRadians);
         const easing = easeBefore ? part.bendEasing : previousBendEasing;
-        bendTrack[timeKey] = { vector: [...part.bendRotation], ...(easing ? { easing } : {}) };
+        // Match Emotecraft's Bedrock bend rig: the generated child segment rotates
+        // around X and follows the two-pixel arc so the split mesh stays connected.
+        bendTrack[timeKey] = {
+          vector: [part.bendAngle, 0, 0],
+          ...(easing ? { easing } : {}),
+        };
+        const bendPositionTrack = (bones[boneName + '_bend']?.position ?? {}) as Record<string, unknown>;
+        bendPositionTrack[timeKey] = {
+          vector: [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)],
+          ...(easing ? { easing } : {}),
+        };
+        bones[boneName + '_bend'] = {
+          ...(bones[boneName + '_bend'] ?? {}),
+          position: bendPositionTrack,
+        };
         previousBendEasing = part.bendEasing ?? previousBendEasing;
       }
     }
