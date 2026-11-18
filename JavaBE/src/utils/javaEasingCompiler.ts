@@ -244,9 +244,28 @@ export function buildJavaCustomEasingRegistry(classes: JvmClassIR[]): JavaEasing
     for (const method of item.methods) {
       for (let callIndex = 0; callIndex < method.instructions.length; callIndex++) {
         const call = method.instructions[callIndex].constant;
-        if (!call?.name || !/addCustomSimpleEasingType|registerSimple/i.test(call.name)) continue;
+        if (!call?.name || !/addCustomSimpleEasingType|registerSimple|addCustomEasingType/i.test(call.name)) continue;
         const name = registrationName(method, callIndex);
         if (!name) continue;
+        if (/addCustomEasingType/i.test(call.name)) {
+          let className: string | null = null;
+          for (let index = callIndex - 1; index >= 0 && index >= callIndex - 16; index--) {
+            const instruction = method.instructions[index];
+            if (instruction.opcode === 0xbb && typeof instruction.constant?.value === 'string') {
+              className = String(instruction.constant.value);
+              break;
+            }
+          }
+          const easingClass = className ? byName.get(className) : undefined;
+          const candidates = easingClass?.methods.filter((candidate) =>
+            /^\(D\)D$|^\(F\)F$/.test(candidate.descriptor) &&
+            !['<init>', '<clinit>'].includes(candidate.name));
+          const targetMethod = candidates?.find((candidate) => /ease|apply|value/i.test(candidate.name)) ??
+            (candidates?.length === 1 ? candidates[0] : undefined);
+          register(name, className ?? item.name, targetMethod?.name ?? '<unresolved>',
+            targetMethod ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0) : null);
+          continue;
+        }
         const target = lambdaTarget(method);
         if (!target) {
           withheld.push({ name, sourceClass: item.name, reason: 'The registration call did not have one unambiguous invokedynamic method target.' });

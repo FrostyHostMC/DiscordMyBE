@@ -652,7 +652,7 @@ interface ClipTranslation {
   maxTime: number;
 }
 
-function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
+function translateClip(rawClip: unknown, clipId: string, customEasings?: Record<string, (progress: number) => number>): ClipTranslation {
   const issues: AnimationTranslationIssue[] = [];
   const result: ClipTranslation = {
     clip: null,
@@ -835,6 +835,8 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
 export interface AnimationTranslateOptions {
   /** File stem used as a fallback clip id prefix. */
   fileHint?: string;
+  /** Recovered scalar easing functions from this mod's JVM bytecode. */
+  customEasings?: Record<string, (progress: number) => number>;
 }
 
 /**
@@ -858,7 +860,7 @@ export function translateJavaAnimationSet(
   for (const [rawId, rawClip] of Object.entries(sourceClips)) {
     const clipId = normaliseClipId(rawId, hint, used);
     used.add(clipId);
-    const translated = translateClip(rawClip, clipId);
+    const translated = translateClip(rawClip, clipId, options.customEasings);
     issues.push(...translated.issues);
     stats.channels += translated.channels;
     stats.keyframes += translated.keyframes;

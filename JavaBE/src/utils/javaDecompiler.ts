@@ -1197,11 +1197,35 @@ export async function decompileAndInspectJarAsync(
           if (target && classByName.has(target)) referenced.add(target);
         }
       }
+      // invokedynamic lambda targets and NEW class constants are instruction-level references,
+      // not ordinary method/field calls. Retain them so easing lambdas and anonymous EasingType
+      // implementations survive the compact-analysis boundary.
+      for (const instruction of method.instructions) {
+        const reference = instruction.constant;
+        if (reference?.kind === 'Class' && typeof reference.value === 'string' && classByName.has(reference.value)) {
+          referenced.add(reference.value);
+        }
+        for (const argument of reference?.bootstrapMethod?.arguments ?? []) {
+          const target = argument.reference?.owner;
+          if (target && classByName.has(target)) referenced.add(target);
+        }
+      }
     }
   }
   for (const name of referenced) {
     const item = classByName.get(name);
-    if (item && (item.access & 0x4000) !== 0) selected.add(name); // enum state types
+    if (!item) continue;
+    const enumState = (item.access & 0x4000) !== 0;
+    const easingSubclass = /EasingType/i.test(item.superName ?? '');
+    const lambdaBody = item.methods.some((method) => method.name.startsWith('lambda
+  }
+  const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
+  result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
+  inspectionCache.set(entries, { key, result });
+  return result;
+}
+) && (/^\(D\)D$|^\(F\)F$/.test(method.descriptor)));
+    if (enumState || easingSubclass || lambdaBody) selected.add(name);
   }
   const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
   result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
