@@ -1,5 +1,4 @@
 import { hasCustomBoneTokens, resolvePlayerBone } from '@/utils/playerBoneAliases';
-import { safeFileId } from '@/utils/bedrockIds';
 import { VANILLA_PLAYER_GEOMETRY_JSON } from '@/utils/vanillaPlayerGeometry';
 
 /** A geometry file the archive really shipped. */
