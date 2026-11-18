@@ -536,8 +536,8 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
     const loopDuration = Math.round((loopDurationTick / 20) * 1000) / 1000;
     result.anim_time_update =
-      'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
-      loopStart + ' + math.mod(query.anim_time - ' + intro + ' + query.delta_time, ' + loopDuration + ')';
+      'query.life_time < ' + intro + ' ? query.life_time + query.delta_time : ' +
+      loopStart + ' + math.mod(query.life_time - ' + intro + ', ' + loopDuration + ')';
   }
   return result;
 }
