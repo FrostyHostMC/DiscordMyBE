@@ -436,10 +436,10 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
   };
 
   const usedClipIds = new Set<string>();
-  const snapping = Math.max(1, Math.min(120, num(animations[0]?.snapping, 24)));
 
   for (let index = 0; index < animations.length; index += 1) {
     const animation = animations[index];
+    const snapping = Math.max(1, Math.min(120, num(animation.snapping, 24)));
     if (!animation || typeof animation !== 'object') continue;
     const bones: Record<string, Record<string, unknown>> = {};
     const soundEffects: Record<string, unknown> = {};
@@ -497,99 +497,104 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
         continue;
       }
       const track: Record<string, unknown> = {};
-      const sorted = keyframes
+      const sortedAll = keyframes
         .filter((keyframe) => Number.isFinite(Number(keyframe.time)) && Number(keyframe.time) >= 0)
         .sort((a, b) => Number(a.time) - Number(b.time));
-      for (let keyIndex = 0; keyIndex < sorted.length; keyIndex += 1) {
-        const keyframe = sorted[keyIndex];
+      for (const keyframe of sortedAll) {
         const channel = (keyframe.channel ?? '').toLowerCase();
-        const bedrockChannel = channel === 'rotation' || channel === 'position' || channel === 'scale' ? channel : '';
-        if (!bedrockChannel) {
+        if (channel !== 'rotation' && channel !== 'position' && channel !== 'scale') {
           notes.push('animation "' + (animation.name ?? index) + '": channel "' + channel + '" has no Bedrock bone equivalent and was reported, not carried');
-          continue;
         }
-        const time = Number(keyframe.time);
-        const timeKey = String(Math.round(time * 1000) / 1000);
-        const points = Array.isArray(keyframe.data_points) ? keyframe.data_points : [];
-        if (points.length === 0) continue;
-        const values = points.slice(0, 2).map((point) => vector(point, bedrockChannel));
-        const previous = sorted[keyIndex - 1];
-        const previousIsStep = previous?.interpolation === 'step';
-        let value: unknown = values[0];
-        if (values.length > 1) {
-          value = { pre: values[0], post: values[1] };
-        } else if (previousIsStep) {
-          const previousPoint = previous?.data_points?.[previous.data_points.length > 1 ? 1 : 0];
-          value = { pre: vector(previousPoint, bedrockChannel), post: values[0] };
-        }
-        if (keyframe.interpolation === 'catmullrom') {
-          const needsPre = !previous && time > 0 || Boolean(previous && previous.interpolation !== 'catmullrom');
-          value = {
-            ...(needsPre ? { pre: values[0] } : {}),
-            post: values.length > 1 && needsPre ? values[1] : values[0],
-            lerp_mode: 'catmullrom',
-          };
-        }
-        const target = (track[bedrockChannel] as Record<string, unknown>) ?? {};
-        target[timeKey] = value;
-        track[bedrockChannel] = target;
-        maxTime = Math.max(maxTime, time);
       }
-      // Blockbench stores Bezier handles as time/value offsets. Bedrock has no Bezier
-      // interpolation mode, so bake numeric curves onto the model's snapping grid, matching
-      // Blockbench's own Bedrock exporter rather than degrading them to linear/Catmull-Rom.
-      for (let segmentIndex = 0; segmentIndex < sorted.length - 1; segmentIndex += 1) {
-        const before = sorted[segmentIndex];
-        const after = sorted[segmentIndex + 1];
-        if (before.interpolation !== 'bezier' && after.interpolation !== 'bezier') continue;
-        const beforePoints = before.data_points ?? [];
-        const afterPoints = after.data_points ?? [];
-        const beforePoint = beforePoints[beforePoints.length > 1 ? 1 : 0];
-        const afterPoint = afterPoints[0];
-        if (!beforePoint || !afterPoint) continue;
-        const t0 = Number(before.time);
-        const t1 = Number(after.time);
-        const gap = t1 - t0;
-        if (!(gap > 0)) continue;
-        const axes = ['x', 'y', 'z'] as const;
-        const controls: Array<[number, number, number, number]> = [];
-        let numeric = true;
-        for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
-          const axis = axes[axisIndex];
-          const y0 = Number(beforePoint[axis]);
-          const y3 = Number(afterPoint[axis]);
-          if (!Number.isFinite(y0) || !Number.isFinite(y3)) {
-            numeric = false;
-            break;
+
+      // Keyframe ordering and step/Bezier interpolation are channel-local. Interleaving
+      // rotation, position and scale timestamps must never make one channel become another's
+      // previous/next keyframe.
+      for (const bedrockChannel of ['rotation', 'position', 'scale'] as const) {
+        const sorted = sortedAll.filter((keyframe) => (keyframe.channel ?? '').toLowerCase() === bedrockChannel);
+        const target: Record<string, unknown> = {};
+        for (let keyIndex = 0; keyIndex < sorted.length; keyIndex += 1) {
+          const keyframe = sorted[keyIndex];
+          const time = Number(keyframe.time);
+          const timeKey = String(Math.round(time * 1000) / 1000);
+          const points = Array.isArray(keyframe.data_points) ? keyframe.data_points : [];
+          if (points.length === 0) continue;
+          const values = points.slice(0, 2).map((point) => vector(point, bedrockChannel));
+          const previous = sorted[keyIndex - 1];
+          const previousIsStep = previous?.interpolation === 'step';
+          let value: unknown = values[0];
+          if (values.length > 1) {
+            value = { pre: values[0], post: values[1] };
+          } else if (previousIsStep) {
+            const previousPoints = previous?.data_points ?? [];
+            const previousPoint = previousPoints[previousPoints.length > 1 ? 1 : 0];
+            value = { pre: vector(previousPoint, bedrockChannel), post: values[0] };
           }
-          const rightTime = Math.max(0, Math.min(gap, Number(before.bezier_right_time?.[axisIndex]) || 0));
-          const leftTime = Math.max(-gap, Math.min(0, Number(after.bezier_left_time?.[axisIndex]) || 0));
-          const y1 = y0 + (Number(before.bezier_right_value?.[axisIndex]) || 0);
-          const y2 = y3 + (Number(after.bezier_left_value?.[axisIndex]) || 0);
-          controls.push([t0, t0 + rightTime, t1 + leftTime, t1]);
-          controls.push([y0, y1, y2, y3]);
+          if (keyframe.interpolation === 'catmullrom') {
+            const needsPre = (!previous && time > 0) || Boolean(previous && previous.interpolation !== 'catmullrom');
+            value = {
+              ...(needsPre ? { pre: values[0] } : {}),
+              post: values.length > 1 && needsPre ? values[1] : values[0],
+              lerp_mode: 'catmullrom',
+            };
+          }
+          target[timeKey] = value;
+          maxTime = Math.max(maxTime, time);
         }
-        if (!numeric) {
-          notes.push('animation "' + (animation.name ?? index) + '": Bezier segment ' + t0 + 's–' + t1 + 's contains a Molang expression; endpoint expressions were preserved but the custom curve could not be numerically baked');
-          continue;
-        }
-        const target = (track[bedrockChannel] as Record<string, unknown>) ?? {};
-        for (let sampleTime = t0 + 1 / snapping; sampleTime < t1 - 0.000001; sampleTime += 1 / snapping) {
-          const snappedTime = Math.round(sampleTime * snapping) / snapping;
-          if (snappedTime <= t0 || snappedTime >= t1) continue;
-          const timeKey = String(Math.round(snappedTime * 1000) / 1000);
-          if (Object.prototype.hasOwnProperty.call(target, timeKey)) continue;
-          const alpha = (snappedTime - t0) / gap;
-          const values: Record<string, number> = {};
+
+        // Blockbench stores Bezier handles as time/value offsets. Bedrock has no Bezier
+        // interpolation mode, so bake numeric curves onto this animation's snapping grid.
+        for (let segmentIndex = 0; segmentIndex < sorted.length - 1; segmentIndex += 1) {
+          const before = sorted[segmentIndex];
+          const after = sorted[segmentIndex + 1];
+          if (before.interpolation !== 'bezier' && after.interpolation !== 'bezier') continue;
+          const beforePoints = before.data_points ?? [];
+          const afterPoints = after.data_points ?? [];
+          const beforePoint = beforePoints[beforePoints.length > 1 ? 1 : 0];
+          const afterPoint = afterPoints[0];
+          if (!beforePoint || !afterPoint) continue;
+          const t0 = Number(before.time);
+          const t1 = Number(after.time);
+          const gap = t1 - t0;
+          if (!(gap > 0)) continue;
+          const axes = ['x', 'y', 'z'] as const;
+          const controls: Array<[number, number, number, number]> = [];
+          let numeric = true;
           for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
-            const x = controls[axisIndex * 2];
-            const y = controls[axisIndex * 2 + 1];
-            const parameter = solveBezierParameter(x[0], x[1], x[2], x[3], snappedTime);
-            values[axes[axisIndex]] = cubic(y[0], y[1], y[2], y[3], parameter);
+            const axis = axes[axisIndex];
+            const y0 = Number(beforePoint[axis]);
+            const y3 = Number(afterPoint[axis]);
+            if (!Number.isFinite(y0) || !Number.isFinite(y3)) {
+              numeric = false;
+              break;
+            }
+            const rightTime = Math.max(0, Math.min(gap, Number(before.bezier_right_time?.[axisIndex]) || 0));
+            const leftTime = Math.max(-gap, Math.min(0, Number(after.bezier_left_time?.[axisIndex]) || 0));
+            const y1 = y0 + (Number(before.bezier_right_value?.[axisIndex]) || 0);
+            const y2 = y3 + (Number(after.bezier_left_value?.[axisIndex]) || 0);
+            controls.push([t0, t0 + rightTime, t1 + leftTime, t1]);
+            controls.push([y0, y1, y2, y3]);
           }
-          target[timeKey] = vector(values, bedrockChannel);
+          if (!numeric) {
+            notes.push('animation "' + (animation.name ?? index) + '": Bezier segment ' + t0 + 's–' + t1 + 's contains a Molang expression; endpoint expressions were preserved but the custom curve could not be numerically baked');
+            continue;
+          }
+          for (let sampleTime = t0 + 1 / snapping; sampleTime < t1 - 0.000001; sampleTime += 1 / snapping) {
+            const snappedTime = Math.round(sampleTime * snapping) / snapping;
+            if (snappedTime <= t0 || snappedTime >= t1) continue;
+            const timeKey = String(Math.round(snappedTime * 1000) / 1000);
+            if (Object.prototype.hasOwnProperty.call(target, timeKey)) continue;
+            const values: Record<string, number> = {};
+            for (let axisIndex = 0; axisIndex < 3; axisIndex += 1) {
+              const x = controls[axisIndex * 2];
+              const y = controls[axisIndex * 2 + 1];
+              const parameter = solveBezierParameter(x[0], x[1], x[2], x[3], snappedTime);
+              values[axes[axisIndex]] = cubic(y[0], y[1], y[2], y[3], parameter);
+            }
+            target[timeKey] = vector(values, bedrockChannel);
+          }
         }
-        track[bedrockChannel] = target;
+        if (Object.keys(target).length > 0) track[bedrockChannel] = target;
       }
       if (animator.rotation_global) track.relative_to = { rotation: 'entity' };
       if (Object.keys(track).length > 0) bones[boneName] = track;
