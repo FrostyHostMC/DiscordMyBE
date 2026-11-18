@@ -124,8 +124,8 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
 
   for (const move of moves) {
     const tick = Number(move.tick);
-    if (!Number.isFinite(tick) || tick < beginTick) {
-      issues.push('Emotecraft move with an invalid or pre-begin tick was not carried.');
+    if (!Number.isFinite(tick) || tick < 0) {
+      issues.push('Emotecraft move with an invalid or negative tick was not carried.');
       continue;
     }
     let frame = frames.get(tick);
@@ -196,15 +196,23 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
   }
 
+  // PlayerAnimator keeps keyframes on their absolute tick timeline. beginTick is
+  // transition metadata, not a time offset; endTick is clamped to beginTick + 1.
   const endTick = Number.isFinite(Number(emote.endTick))
-    ? Number(emote.endTick)
-    : Math.max(beginTick, ...Array.from(frames.keys()));
-  const stopTick = Number.isFinite(Number(emote.stopTick)) && Number(emote.stopTick) > beginTick
-    ? Number(emote.stopTick)
-    : endTick;
+    ? Math.max(beginTick + 1, Number(emote.endTick))
+    : beginTick + 1;
+  const rawStopTick = Number.isFinite(Number(emote.stopTick)) ? Number(emote.stopTick) : 0;
   const wantsLoop = emote.isLoop === true || String(emote.isLoop).toLowerCase() === 'true';
-  const returnTick = Number.isFinite(Number(emote.returnTick)) ? Number(emote.returnTick) : beginTick;
-  const validLoop = wantsLoop && returnTick >= beginTick && returnTick < endTick;
+  // The legacy loader treats returnTick as a one-based keyframe position.
+  const returnTick = Number.isFinite(Number(emote.returnTick))
+    ? Math.max(Number(emote.returnTick) - 1, 0)
+    : 0;
+  const validLoop = wantsLoop && returnTick >= 0 && returnTick < endTick;
+  const animationEndTick = validLoop
+    ? endTick
+    : rawStopTick <= endTick
+      ? endTick + 3
+      : rawStopTick;
   if (wantsLoop && !validLoop) {
     issues.push('Emotecraft loop has an invalid returnTick/endTick interval; the clip was kept as a one-shot rather than emitting a broken time loop.');
   }
@@ -240,7 +248,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     for (const [tick, frame] of orderedFrames) {
       const part = frame.parts.get(partName);
       if (!part) continue;
-      const time = Math.round(((tick - beginTick) / 20) * 1000) / 1000;
+      const time = Math.round((tick / 20) * 1000) / 1000;
       const timeKey = String(time);
       const positionAxes = ['x', 'y', 'z'] as const;
       const rotationAxes = ['pitch', 'yaw', 'roll'] as const;
@@ -304,16 +312,22 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
 
     if (Object.keys(positionTrack).length > 0) {
-      if (!validLoop && stopTick > endTick) {
-        const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
-        positionTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
+      if (!validLoop) {
+        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
+        positionTrack[resetTime] = {
+          vector: [0, 0, 0],
+          easing: easeBefore ? 'easeInOutSine' : previousPositionEasing ?? 'easeInOutSine',
+        };
       }
       bones[boneName] = { ...(bones[boneName] ?? {}), position: positionTrack };
     }
     if (Object.keys(rotationTrack).length > 0) {
-      if (!validLoop && stopTick > endTick) {
-        const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
-        rotationTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
+      if (!validLoop) {
+        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
+        rotationTrack[resetTime] = {
+          vector: [0, 0, 0],
+          easing: easeBefore ? 'easeInOutSine' : previousRotationEasing ?? 'easeInOutSine',
+        };
       }
       bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
     }
@@ -321,10 +335,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       const bendBoneName = boneName + '_bend';
       const bendBone = (bones[bendBoneName] ?? {}) as Record<string, unknown>;
       const bendPositionTrack = (bendBone.position ?? {}) as Record<string, unknown>;
-      if (!validLoop && stopTick > endTick) {
-        const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
-        bendTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
-        bendPositionTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
+      if (!validLoop) {
+        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
+        const resetEasing = easeBefore ? 'easeInOutSine' : previousBendEasing ?? 'easeInOutSine';
+        bendTrack[resetTime] = { vector: [0, 0, 0], easing: resetEasing };
+        bendPositionTrack[resetTime] = { vector: [0, 0, 0], easing: resetEasing };
       }
       bones[bendBoneName] = {
         ...bendBone,
@@ -334,22 +349,23 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
   }
 
-  const durationTick = (validLoop ? endTick : Math.max(endTick, stopTick)) - beginTick;
+  const durationTick = animationEndTick;
   const result: Record<string, unknown> = {
     bones,
     animation_length: Math.max(0, durationTick / 20),
     loop: validLoop,
     __emoteIssues: issues,
   };
-  if (validLoop && returnTick > beginTick) {
-    const intro = Math.round(((returnTick - beginTick) / 20) * 1000) / 1000;
+  if (validLoop && returnTick > 0) {
+    const intro = Math.round((endTick / 20) * 1000) / 1000;
+    const loopStart = Math.round((endTick / 20) * 1000) / 1000;
     const loopDuration = Math.round(((endTick - returnTick) / 20) * 1000) / 1000;
     // Bedrock evaluates anim_time_update every frame. Keeping the source timeline in its
     // original coordinates lets the intro play once, then wraps only the returnTick→endTick
     // interval instead of restarting the entire emote at tick zero.
     result.anim_time_update =
       'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
-      intro + ' + math.mod(query.anim_time - ' + intro + ' + query.delta_time, ' + loopDuration + ')';
+      loopStart + ' + math.mod(query.anim_time - ' + loopStart + ' + query.delta_time, ' + loopDuration + ')';
   }
   return result;
 }
