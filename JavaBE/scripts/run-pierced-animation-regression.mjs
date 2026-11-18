@@ -289,7 +289,7 @@ try {
       { id: 'full-converter-animation-integration-audit-passes', expected: true, actual: fullResult.animationIntegration?.passed ?? false, passed: fullResult.animationIntegration?.passed === true },
       { id: 'full-converter-fidelity-matches-all-nine-source-definitions', expected: { shipped: 9, missing: 0 }, actual: { shipped: fullResult.animationFidelity?.clipsShipped ?? -1, missing: fullResult.animationFidelity?.clipsMissing ?? -1 }, passed: fullResult.animationFidelity?.clipsShipped === 9 && fullResult.animationFidelity?.clipsMissing === 0 },
       { id: 'full-converter-runtime-structure-audit-passes', expected: true, actual: fullResult.animationRuntime?.passed ?? false, passed: fullResult.animationRuntime?.passed === true },
-      { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationRuntime?.sourceBoneTracksActive ?? -1, retained: fullResult.animationRuntime?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationRuntime?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationRuntime?.boneTrackCoverage ?? -1 }, passed: fullResult.animationRuntime?.sourceBoneTracksActive === 46 && fullResult.animationRuntime?.sourceBoneTracksRetained === 46 && fullResult.animationRuntime?.sourceBoneTracksInactive === 81 && fullResult.animationRuntime?.boneTrackCoverage === 100 },
+      { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 46 && fullResult.animationFidelity?.sourceBoneTracksRetained === 46 && fullResult.animationFidelity?.sourceBoneTracksInactive === 81 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
     ];
     report.fullConversion = {
@@ -311,6 +311,7 @@ try {
       playerDependencyResolution: fullResult.playerDependencyResolution ?? null,
       playerBaselineGuard: fullResult.playerBaselineGuard ?? null,
       animationIntegration: fullResult.animationIntegration ?? null,
+      animationFidelity: fullResult.animationFidelity ?? null,
       animationRuntime: fullResult.animationRuntime ?? null,
       assertions: fullAssertions,
       recentLogs: fullLogs.slice(-100),
