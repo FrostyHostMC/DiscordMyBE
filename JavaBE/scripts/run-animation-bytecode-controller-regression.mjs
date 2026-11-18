@@ -272,10 +272,13 @@ try {
     const lambdaDoc = JSON.parse(entry.json);
     const lambdaGraph = lambdaDoc.animation_controllers[entry.controllerId];
     const lambdaTransitions = lambdaGraph.states.default.transitions;
+    const actualConditions = lambdaTransitions.map((item) => Object.values(item)[0]);
+    const expectedConditions = entry.controllerId.includes('attack_controller')
+      ? ['(query.is_moving) && (query.is_sprinting)', '(query.is_moving) && (!query.is_sprinting)', '(!query.is_moving)']
+      : ['query.is_moving', '!query.is_moving'];
     if (lambdaGraph.initial_state !== 'default' ||
-        !lambdaTransitions.some((item) => Object.values(item)[0] === 'query.is_moving') ||
-        !lambdaTransitions.some((item) => Object.values(item)[0] === '!query.is_moving')) {
-      throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions.');
+        expectedConditions.some((condition) => !actualConditions.includes(condition))) {
+      throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions: ' + JSON.stringify(actualConditions));
     }
     const activeStates = Object.values(lambdaGraph.states).filter((state) => Array.isArray(state.animations) && state.animations.length > 0);
     const expectedCount = entry.controllerId.includes('attack_controller') ? 3 : 2;
