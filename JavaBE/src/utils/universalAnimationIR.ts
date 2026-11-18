@@ -301,7 +301,23 @@ function categorizeMolangCondition(
   return 'custom';
 }
 
-/** Parses raw Vector3 or Molang array/object representation */
+/** Numeric literals include scientific notation; a zero component must never be replaced by its fallback. */
+function parseNumericComponent(raw: unknown, fallback: number): number {
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : fallback;
+  if (typeof raw !== 'string') return fallback;
+  const value = raw.trim();
+  if (!/^[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value)) return fallback;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function isMolangComponent(raw: unknown): raw is string {
+  if (typeof raw !== 'string') return false;
+  const value = raw.trim();
+  return value.length > 0 && !/^[+-]?(?:\\d+\\.?\\d*|\\.\\d+)(?:[eE][+-]?\\d+)?$/.test(value);
+}
+
+/** Parses raw Vector3 or Molang array/object representation without losing zero-valued transforms. */
 function normalizeVector3Value(
   raw: unknown,
   fallback: [number, number, number] = [0, 0, 0],
@@ -310,73 +326,55 @@ function normalizeVector3Value(
   isMolang: boolean;
 } {
   if (Array.isArray(raw)) {
-    const v0 = raw[0];
-    const v1 = raw[1];
-    const v2 = raw[2];
-    const isMolang = [v0, v1, v2].some((item) => typeof item === 'string' && /[a-z_.]/i.test(item));
-
+    const values = [raw[0] ?? fallback[0], raw[1] ?? fallback[1], raw[2] ?? fallback[2]];
+    const isMolang = values.some(isMolangComponent);
     if (isMolang) {
       return {
-        value: [String(v0 ?? '0'), String(v1 ?? '0'), String(v2 ?? '0')],
+        value: values.map((item, index) => isMolangComponent(item) ? item.trim() : String(parseNumericComponent(item, fallback[index]))) as [string, string, string],
         isMolang: true,
       };
     }
-
     return {
-      value: [
-        Number(v0) || fallback[0],
-        Number(v1) || fallback[1],
-        Number(v2) || fallback[2],
-      ],
+      value: values.map((item, index) => parseNumericComponent(item, fallback[index])) as [number, number, number],
       isMolang: false,
     };
   }
 
   if (isPlainObject(raw)) {
     const obj = raw as Record<string, unknown>;
-    const x = obj.x ?? obj[0] ?? fallback[0];
-    const y = obj.y ?? obj[1] ?? fallback[1];
-    const z = obj.z ?? obj[2] ?? fallback[2];
-    const isMolang = [x, y, z].some((item) => typeof item === 'string' && /[a-z_.]/i.test(item));
-
+    const values = [
+      obj.x ?? obj[0] ?? fallback[0],
+      obj.y ?? obj[1] ?? fallback[1],
+      obj.z ?? obj[2] ?? fallback[2],
+    ];
+    const isMolang = values.some(isMolangComponent);
     if (isMolang) {
       return {
-        value: [String(x), String(y), String(z)],
+        value: values.map((item, index) => isMolangComponent(item) ? item.trim() : String(parseNumericComponent(item, fallback[index]))) as [string, string, string],
         isMolang: true,
       };
     }
-
     return {
-      value: [Number(x) || fallback[0], Number(y) || fallback[1], Number(z) || fallback[2]],
+      value: values.map((item, index) => parseNumericComponent(item, fallback[index])) as [number, number, number],
       isMolang: false,
     };
   }
 
   if (typeof raw === 'number') {
-    return {
-      value: [raw, raw, raw],
-      isMolang: false,
-    };
+    const value = Number.isFinite(raw) ? raw : 0;
+    return { value: [value, value, value], isMolang: false };
   }
 
   if (typeof raw === 'string') {
-    if (/[a-z_.]/i.test(raw)) {
-      return {
-        value: [raw, raw, raw],
-        isMolang: true,
-      };
+    if (isMolangComponent(raw)) {
+      const expression = raw.trim();
+      return { value: [expression, expression, expression], isMolang: true };
     }
-    const num = Number(raw) || 0;
-    return {
-      value: [num, num, num],
-      isMolang: false,
-    };
+    const value = parseNumericComponent(raw, 0);
+    return { value: [value, value, value], isMolang: false };
   }
 
-  return {
-    value: fallback,
-    isMolang: false,
-  };
+  return { value: fallback, isMolang: false };
 }
 
 /** Detects procedural mathematical formulas in Molang expressions */

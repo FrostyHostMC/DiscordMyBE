@@ -65,7 +65,14 @@ interface NormalisedKeyframe {
 
 const IDENTITY: Record<BedrockChannel, number> = { rotation: 0, position: 0, scale: 1 };
 const LERP_MODES = new Set<string>(['linear', 'catmullrom']);
-const JAVA_LEAK = /Math\.|MathHelper|this\.|->|\bnew\s+[A-Z]|\bget[A-Z]\w*\(|\b(?:float|double)\b/;
+const JAVA_LEAK = /Math\\.|MathHelper|this\\.|\\bnew\\s+[A-Z]|\\bget[A-Z]\\w*\\(|\\b(?:float|double)\\b/;
+
+function isJavaLeak(text: string): boolean {
+  if (JAVA_LEAK.test(text)) return true;
+  // Bedrock Molang uses -> to access another entity's query/variable/temp/context scope.
+  // A Java lambda is rejected unless the right side is a recognised Molang scope member.
+  return text.includes('->') && !/(?:^|[\\w.)\\]])\\s*->\\s*(?:query|q|variable|v|temp|t|context|c)\\./i.test(text);
+}
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -103,7 +110,7 @@ export function asMolangComponent(entry: unknown): number | string | null {
   if (typeof entry !== 'string') return null;
   const text = entry.trim().replace(/;+\s*$/, '');
   if (!text) return null;
-  if (JAVA_LEAK.test(text)) return null;
+  if (isJavaLeak(text)) return null;
   if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
   if (!balancedMolang(text)) return null;
   return text;
