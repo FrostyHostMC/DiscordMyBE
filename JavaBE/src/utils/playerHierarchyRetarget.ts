@@ -164,17 +164,18 @@ export function retargetJavaPlayerHierarchy(
       ),
     );
     const unsafeSubtree = new Set(unsupported.map(([name]) => name));
-    const targetBySourceName = new Map<string, string>();
-    for (const [targetName, sourceBone] of javaSourceForTarget) targetBySourceName.set(sourceBone.name, targetName);
+    // Compensation is solved against Bedrock's target hierarchy, not Java's root-sibling
+    // hierarchy. A dynamic body transform makes its Bedrock child bones unsafe even though the
+    // corresponding Java PlayerEntityModel parts are independent siblings.
     let expanded = true;
     while (expanded) {
       expanded = false;
-      for (const [targetName, sourceBone] of javaSourceForTarget) {
-        const parentTarget = sourceBone.parent ? targetBySourceName.get(sourceBone.parent) : undefined;
-        const layerParent = SOURCE_LAYER_PARENT[targetName];
-        if ((parentTarget && unsafeSubtree.has(parentTarget) || layerParent && unsafeSubtree.has(layerParent)) &&
-            !unsafeSubtree.has(targetName)) {
-          unsafeSubtree.add(targetName);
+      for (const bone of bedrockBones) {
+        const parent = bone.parent;
+        const layerParent = SOURCE_LAYER_PARENT[bone.name];
+        if ((parent && unsafeSubtree.has(parent) || layerParent && unsafeSubtree.has(layerParent)) &&
+            !unsafeSubtree.has(bone.name)) {
+          unsafeSubtree.add(bone.name);
           expanded = true;
         }
       }

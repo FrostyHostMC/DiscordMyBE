@@ -68,9 +68,11 @@ try {
     },
   };
   const parentHead = JSON.parse(JSON.stringify(dynamicParent['animation.fixture.dynamic_parent'].bones.head.rotation));
+  const parentArm = JSON.parse(JSON.stringify(dynamicParent['animation.fixture.dynamic_parent'].bones.rightArm.rotation));
   const parentResult = retargetJavaPlayerHierarchy(dynamicParent);
-  if (JSON.stringify(parentResult.clips['animation.fixture.dynamic_parent'].bones.head.rotation) !== JSON.stringify(parentHead)) {
-    throw new Error('A child of a dynamic parent was retargeted against an invented bind-pose parent.');
+  if (JSON.stringify(parentResult.clips['animation.fixture.dynamic_parent'].bones.head.rotation) !== JSON.stringify(parentHead) ||
+      JSON.stringify(parentResult.clips['animation.fixture.dynamic_parent'].bones.rightArm.rotation) !== JSON.stringify(parentArm)) {
+    throw new Error('A child of a dynamic Bedrock parent was retargeted against an invented bind-pose parent.');
   }
 
   console.log('[PASS] Player hierarchy retargeting preserves dynamic/pre-post branches while continuing safe sibling branches.');
