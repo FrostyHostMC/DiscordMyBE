@@ -69,7 +69,7 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   }
   if (drawCrossSection && lower.uv.up) lower.uv.down = clone(lower.uv.up);
   else delete lower.uv.down;
-  delete upper.uv.up;
+  if (!drawCrossSection) delete upper.uv.up;
   return { lower, upper, halfHeight };
 }
 
