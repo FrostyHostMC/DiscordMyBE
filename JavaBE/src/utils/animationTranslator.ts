@@ -39,9 +39,15 @@ export interface AnimationTranslationStats {
 export interface BedrockAnimationClip {
   loop?: boolean | 'hold_on_last_frame';
   animation_length?: number;
+  start_delay?: string | number;
+  loop_delay?: string | number;
+  blend_weight?: string | number;
+  anim_time_update?: string;
+  override_previous_animation?: boolean;
   bones: Record<string, Record<string, unknown>>;
   sound_effects?: Record<string, unknown>;
   particle_effects?: Record<string, unknown>;
+  timeline?: Record<string, string | string[]>;
 }
 
 export interface AnimationTranslationResult {

@@ -49,11 +49,13 @@ interface BbOutlinerNode {
 interface BbKeyframe {
   channel?: string;
   time?: number;
-  data_points?: Array<{ x?: number; y?: number; z?: number }>;
+  interpolation?: string;
+  data_points?: Array<Record<string, unknown>>;
 }
 
 interface BbAnimator {
   name?: string;
+  rotation_global?: boolean;
   keyframes?: BbKeyframe[];
 }
 
@@ -61,6 +63,12 @@ interface BbAnimation {
   name?: string;
   loop?: string | boolean;
   length?: number;
+  snapping?: number;
+  start_delay?: string | number;
+  loop_delay?: string | number;
+  blend_weight?: string | number;
+  anim_time_update?: string;
+  override?: boolean;
   animators?: Record<string, BbAnimator>;
 }
 
@@ -69,6 +77,7 @@ interface BbDocument {
   name?: string;
   resolution?: { width?: number; height?: number };
   elements?: BbElement[];
+  groups?: Array<{ uuid?: string; name?: string }>;
   outliner?: Array<string | BbOutlinerNode>;
   animations?: BbAnimation[];
   textures?: Array<{ name?: string; source?: string }>;
@@ -345,7 +354,7 @@ export function convertBbModel(input: {
   };
 }
 
-/** Blockbench keyframes → Bedrock animation clips, one clip per Blockbench animation. */
+/** Blockbench keyframes and effects → Bedrock clips, one clip per Blockbench animation. */
 export function extractBbModelAnimations(text: string, ownerHint: string): {
   owner: string;
   clips: Record<string, BedrockAnimationClip>;
@@ -360,47 +369,176 @@ export function extractBbModelAnimations(text: string, ownerHint: string): {
   const notes: string[] = [];
   const clips: Record<string, BedrockAnimationClip> = {};
   const animations = Array.isArray(doc.animations) ? doc.animations : [];
+  const groupNames = new Map<string, string>();
+
+  for (const group of doc.groups ?? []) {
+    if (typeof group.uuid === 'string' && typeof group.name === 'string' && group.name.trim()) {
+      groupNames.set(group.uuid, group.name.trim());
+    }
+  }
+  const collectOutlinerNames = (nodes: Array<string | BbOutlinerNode>): void => {
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object' || Array.isArray(node)) continue;
+      if (typeof node.uuid === 'string' && typeof node.name === 'string' && node.name.trim()) {
+        groupNames.set(node.uuid, node.name.trim());
+      }
+      if (Array.isArray(node.children)) collectOutlinerNames(node.children);
+    }
+  };
+  collectOutlinerNames(doc.outliner ?? []);
+
+  const component = (raw: unknown, fallback: number): number | string => {
+    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : fallback;
+    if (typeof raw !== 'string' || !raw.trim()) return fallback;
+    const value = raw.trim();
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : value.replace(/[\r\n]+/g, ' ');
+  };
+  const vector = (point: Record<string, unknown> | undefined, channel: string): [number | string, number | string, number | string] => {
+    const fallback = channel === 'scale' ? 1 : 0;
+    const values: [number | string, number | string, number | string] = [
+      component(point?.x, fallback),
+      component(point?.y, fallback),
+      component(point?.z, fallback),
+    ];
+    // Blockbench's Bedrock codec mirrors X for position and X/Y for rotation.
+    if (channel === 'position' || channel === 'rotation') {
+      values[0] = typeof values[0] === 'number' ? -values[0] : '-(' + values[0] + ')';
+    }
+    if (channel === 'rotation') {
+      values[1] = typeof values[1] === 'number' ? -values[1] : '-(' + values[1] + ')';
+    }
+    return values;
+  };
+  const appendTimed = (target: Record<string, unknown>, time: string, value: unknown): void => {
+    const current = target[time];
+    if (current === undefined) target[time] = value;
+    else if (Array.isArray(current)) current.push(value);
+    else target[time] = [current, value];
+  };
 
   for (let index = 0; index < animations.length; index += 1) {
     const animation = animations[index];
     if (!animation || typeof animation !== 'object') continue;
     const bones: Record<string, Record<string, unknown>> = {};
+    const soundEffects: Record<string, unknown> = {};
+    const particleEffects: Record<string, unknown> = {};
+    const timeline: Record<string, unknown> = {};
     let maxTime = 0;
-    for (const animator of Object.values(animation.animators ?? {})) {
-      const boneName = (animator?.name ?? '').trim();
-      if (!boneName) continue;
+
+    for (const [animatorId, animator] of Object.entries(animation.animators ?? {})) {
+      if (!animator || typeof animator !== 'object') continue;
+      const keyframes = Array.isArray(animator.keyframes) ? [...animator.keyframes] : [];
+      const isEffects = animatorId.toLowerCase() === 'effects' || (animator.name ?? '').toLowerCase() === 'effects';
+      if (isEffects) {
+        for (const keyframe of keyframes) {
+          const time = num(keyframe.time, NaN);
+          if (!Number.isFinite(time) || time < 0) continue;
+          maxTime = Math.max(maxTime, time);
+          const timeKey = String(Math.round(time * 1000) / 1000);
+          const points = Array.isArray(keyframe.data_points) ? keyframe.data_points : [];
+          const channel = (keyframe.channel ?? '').toLowerCase();
+          if (channel === 'sound') {
+            for (const point of points) {
+              const effect = typeof point.effect === 'string' ? point.effect.trim() : '';
+              if (!effect) continue;
+              const entry: Record<string, unknown> = { effect };
+              if (typeof point.locator === 'string' && point.locator.trim()) entry.locator = point.locator.trim();
+              if (typeof point.volume === 'number') entry.volume = point.volume;
+              if (typeof point.pitch === 'number') entry.pitch = point.pitch;
+              appendTimed(soundEffects, timeKey, entry);
+            }
+          } else if (channel === 'particle') {
+            for (const point of points) {
+              const effect = typeof point.effect === 'string' ? point.effect.trim() : '';
+              if (!effect) continue;
+              const entry: Record<string, unknown> = { effect };
+              if (typeof point.locator === 'string' && point.locator.trim()) entry.locator = point.locator.trim();
+              if (point.bind_to_actor === false) entry.bind_to_actor = false;
+              if (typeof point.script === 'string' && point.script.trim()) entry.pre_effect_script = point.script.trim();
+              appendTimed(particleEffects, timeKey, entry);
+            }
+          } else if (channel === 'timeline') {
+            const scripts = points
+              .map((point) => typeof point.script === 'string' ? point.script.trim() : '')
+              .filter(Boolean);
+            if (scripts.length > 0) appendTimed(timeline, timeKey, scripts.length === 1 ? scripts[0] : scripts);
+          } else {
+            notes.push('animation "' + (animation.name ?? index) + '": effects animator channel "' + channel + '" was not recognized and was reported, not discarded silently');
+          }
+        }
+        continue;
+      }
+
+      const boneName = (animator.name ?? '').trim() || groupNames.get(animatorId) || '';
+      if (!boneName) {
+        if (keyframes.length > 0) notes.push('animation "' + (animation.name ?? index) + '": animator UUID "' + animatorId + '" did not resolve to a Blockbench group name; its tracks were withheld rather than assigned to the wrong bone');
+        continue;
+      }
       const track: Record<string, unknown> = {};
-      for (const keyframe of animator.keyframes ?? []) {
+      const sorted = keyframes
+        .filter((keyframe) => Number.isFinite(Number(keyframe.time)) && Number(keyframe.time) >= 0)
+        .sort((a, b) => Number(a.time) - Number(b.time));
+      for (let keyIndex = 0; keyIndex < sorted.length; keyIndex += 1) {
+        const keyframe = sorted[keyIndex];
         const channel = (keyframe.channel ?? '').toLowerCase();
-        const bedrockChannel =
-          channel === 'rotation' ? 'rotation' : channel === 'position' ? 'position' : channel === 'scale' ? 'scale' : '';
+        const bedrockChannel = channel === 'rotation' || channel === 'position' || channel === 'scale' ? channel : '';
         if (!bedrockChannel) {
-          notes.push(`animation "${animation.name ?? index}": channel "${channel}" has no Bedrock equivalent and was reported, not carried`);
+          notes.push('animation "' + (animation.name ?? index) + '": channel "' + channel + '" has no Bedrock bone equivalent and was reported, not carried');
           continue;
         }
-        const time = num(keyframe.time, NaN);
-        if (!Number.isFinite(time)) continue;
-        const point = keyframe.data_points?.[0];
-        const value: [number, number, number] = [num(point?.x), num(point?.y), num(point?.z)];
-        const stamped = String(Math.max(0, Math.round(time * 1000) / 1000));
+        const time = Number(keyframe.time);
+        const timeKey = String(Math.round(time * 1000) / 1000);
+        const points = Array.isArray(keyframe.data_points) ? keyframe.data_points : [];
+        if (points.length === 0) continue;
+        const values = points.slice(0, 2).map((point) => vector(point, bedrockChannel));
+        const previous = sorted[keyIndex - 1];
+        const previousIsStep = previous?.interpolation === 'step';
+        let value: unknown = values[0];
+        if (values.length > 1) {
+          value = { pre: values[0], post: values[1] };
+        } else if (previousIsStep) {
+          const previousPoint = previous?.data_points?.[previous.data_points.length > 1 ? 1 : 0];
+          value = { pre: vector(previousPoint, bedrockChannel), post: values[0] };
+        }
+        if (keyframe.interpolation === 'catmullrom') {
+          const needsPre = !previous && time > 0 || Boolean(previous && previous.interpolation !== 'catmullrom');
+          value = {
+            ...(needsPre ? { pre: values[0] } : {}),
+            post: values.length > 1 && needsPre ? values[1] : values[0],
+            lerp_mode: 'catmullrom',
+          };
+        } else if (keyframe.interpolation === 'bezier') {
+          notes.push('animation "' + (animation.name ?? index) + '": Bezier keyframe at ' + timeKey + 's retained at its authored value; curve baking is pending for this Blockbench source path');
+        }
         const target = (track[bedrockChannel] as Record<string, unknown>) ?? {};
-        target[stamped] = value;
+        target[timeKey] = value;
         track[bedrockChannel] = target;
-        maxTime = Math.max(maxTime, Math.max(0, time));
+        maxTime = Math.max(maxTime, time);
       }
+      if (animator.rotation_global) track.relative_to = { rotation: 'entity' };
       if (Object.keys(track).length > 0) bones[boneName] = track;
     }
-    if (Object.keys(bones).length === 0) continue;
 
-    const rawName = (animation.name ?? `clip_${index + 1}`).trim();
-    const slug = rawName.toLowerCase().replace(/[^a-z0-9_.-]+/g, '_').replace(/^[_.-]+|[_.-]+$/g, '') || `clip_${index + 1}`;
-    const clipId = `animation.${ownerHint || 'model'}.${slug}`;
+    if (Object.keys(bones).length === 0 && Object.keys(soundEffects).length === 0 && Object.keys(particleEffects).length === 0 && Object.keys(timeline).length === 0) continue;
+
+    const rawName = (animation.name ?? ('clip_' + (index + 1))).trim();
+    const slug = rawName.toLowerCase().replace(/[^a-z0-9_.-]+/g, '_').replace(/^[_.-]+|[_.-]+$/g, '') || ('clip_' + (index + 1));
+    const clipId = 'animation.' + (ownerHint || 'model') + '.' + slug;
     const clip: BedrockAnimationClip = { bones };
     const declared = num(animation.length, 0);
     clip.animation_length = declared > 0 ? Math.round(declared * 1000) / 1000 : Math.round(maxTime * 1000) / 1000;
     if (animation.loop === true || animation.loop === 'loop') clip.loop = true;
     else if (animation.loop === 'hold' || animation.loop === 'hold_on_last_frame') clip.loop = 'hold_on_last_frame';
     else if (animation.loop === 'once' || animation.loop === false) clip.loop = false;
+    if (animation.start_delay !== undefined) clip.start_delay = animation.start_delay;
+    if (animation.loop_delay !== undefined) clip.loop_delay = animation.loop_delay;
+    if (animation.blend_weight !== undefined) clip.blend_weight = animation.blend_weight;
+    if (typeof animation.anim_time_update === 'string' && animation.anim_time_update.trim()) clip.anim_time_update = animation.anim_time_update.trim();
+    if (animation.override === true) clip.override_previous_animation = true;
+    if (Object.keys(soundEffects).length > 0) clip.sound_effects = soundEffects;
+    if (Object.keys(particleEffects).length > 0) clip.particle_effects = particleEffects;
+    if (Object.keys(timeline).length > 0) clip.timeline = timeline as Record<string, string | string[]>;
     clips[clipId] = clip;
   }
 
