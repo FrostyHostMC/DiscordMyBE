@@ -93,9 +93,13 @@ try {
     },
   }, { fileHint: 'fixture' });
   const loopClip = loopIntro.animations[loopIntro.idMap.loop_intro];
-  if (loopClip.loop !== true || typeof loopClip.anim_time_update !== 'string' ||
-      !loopClip.anim_time_update.includes('math.mod') || !loopClip.anim_time_update.includes('0.5')) {
-    throw new Error('A nonzero Emotecraft returnTick was not compiled into an intro-once / returnTick-to-end loop timeline.');
+  if (loopClip.loop !== true || loopClip.animation_length !== 1.5 ||
+      typeof loopClip.anim_time_update !== 'string' ||
+      !loopClip.anim_time_update.includes('math.mod') ||
+      !loopClip.anim_time_update.includes('1.5') ||
+      !loopClip.anim_time_update.includes('0.45') ||
+      !loopClip.anim_time_update.includes('1.05')) {
+    throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play followed by a returnTick-to-end loop.');
   }
 
   const splitEasing = translateJavaAnimationSet({
