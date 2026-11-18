@@ -18,6 +18,7 @@ try {
     modId: 'bend_rig_fixture',
     clipBones: ['body', 'rightArm', 'rightArm_bend', 'leftLeg_bend'],
     bendBones: ['body_bend', 'rightArm_bend', 'leftLeg_bend'],
+    needsWaistParenting: true,
   });
   const pathName = Object.keys(result.files)[0];
   if (!pathName || !pathName.endsWith('.geo.json') || !result.geometryIdentifier || !result.slimGeometryIdentifier) {
@@ -54,7 +55,8 @@ try {
       throw new Error('Bend segment exterior caps or overlay internal caps were not preserved correctly.');
     }
     if (find('head').parent !== 'body_bend' || find('jacket_bend').parent !== 'body_bend' ||
-        find('rightSleeve_bend').parent !== 'rightArm_bend') {
+        find('rightSleeve_bend').parent !== 'rightArm_bend' ||
+        find('leftLeg').parent !== 'waist' || find('rightLeg').parent !== 'waist') {
       throw new Error('Player descendants or overlay layers were not re-parented with the bend segment.');
     }
     if (!Array.isArray(arm.cubes[0].uv.east.uv_size) || !Array.isArray(armBend.cubes[0].uv.west.uv_size)) {
@@ -64,6 +66,23 @@ try {
 
   if (result.unresolvedBones.length !== 0 || result.injectedBones.length < 6) {
     throw new Error('The bend geometry report does not account for all generated joints.');
+  }
+
+  const waistOnly = injectPlayerRigBones({
+    candidates: [],
+    modId: 'waist_parent_fixture',
+    clipBones: ['waist', 'leftLeg', 'rightLeg'],
+    bendBones: [],
+    needsWaistParenting: true,
+  });
+  const waistPath = Object.keys(waistOnly.files)[0];
+  if (!waistPath) throw new Error('The player geometry writer skipped a required waist-to-legs parent reconstruction.');
+  const waistDoc = JSON.parse(waistOnly.files[waistPath]);
+  for (const geometry of waistDoc['minecraft:geometry']) {
+    const find = (name) => geometry.bones.find((bone) => bone.name === name);
+    if (find('leftLeg').parent !== 'waist' || find('rightLeg').parent !== 'waist') {
+      throw new Error('The no-bend Emotecraft waist geometry did not re-parent both legs.');
+    }
   }
   console.log('[PASS] Emotecraft bend tracks generate skin-preserving classic/slim player geometry with split limbs, torso, overlay layers, and retained UVs.');
 } finally {
