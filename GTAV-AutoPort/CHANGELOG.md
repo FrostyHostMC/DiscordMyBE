@@ -1,3 +1,10 @@
+## 2026-11-18 — Deep PS4 asset and runtime source audit
+- Inspected the current RaringM/ps5-gtav-menu source tree, including its CUSA00411 01.57 PS4 target manifest, plugin lifecycle, custom-pack parser/runtime, capability policy, fragment converter, texture writer and pack validators.
+- Documented the PS4 fragment BlendIndices declaration repair (Colour to UByte4), GCN Thin1DThin texture tiling, mip views, stock donor requirements and read-back checks.
+- Clarified the PS4 support boundary: vehicle packs and stock vehicle replacements are documented; broad PS5 converter families are not PS4-supported. Maps, typs, collision, ped/clothing, weapon components, custom wheels and mod kits remain refused in this PS4 lane.
+- Added AutoPort-specific PS4 adapter stages and separate CUSA00419 evidence gates. No upstream code was copied and no PS4 compatibility was claimed.
+- Research: [Deep PS4 asset and runtime research](docs/DEEP-PS4-ASSET-AND-RUNTIME-RESEARCH-2026-11-18.md).
+
 ## 2026-11-18 — International PS4 porting research update
 - Added a source-linked research record covering RaringM's PC-to-PS4 custom-pack pipeline, PS4-specific OFT/OTD/ODR/ODD resource forms, GoldHEN/OpenOrbis PRX development, InsulinGTAV's EU CUSA00411 1.57 build reference, and historical US CUSA00419 PRX precedent.
 - Distinguished broad upstream converter tooling from the narrower documented PS4 1.57 custom-pack support; unsupported PS4 asset families remain blocked.
