@@ -60,6 +60,20 @@ function enumStateNames(item: JvmClassIR): string[] {
     .filter((name) => name && !name.startsWith('$'));
 }
 
+function lambdaTarget(method: JvmMethodIR): { owner: string; name: string } | null {
+  const targets = new Map<string, { owner: string; name: string }>();
+  for (const instruction of method.instructions) {
+    const bootstrap = instruction.constant?.bootstrapMethod;
+    for (const argument of bootstrap?.arguments ?? []) {
+      const reference = argument.reference;
+      if (argument.kind !== 'MethodHandle' || !reference?.owner || !reference.name) continue;
+      const target = { owner: reference.owner, name: reference.name };
+      targets.set(target.owner + '#' + target.name, target);
+    }
+  }
+  return targets.size === 1 ? [...targets.values()][0] : null;
+}
+
 function isStringConstant(instruction: JvmInstruction): string | null {
   const value = instruction.constant?.value;
   return instruction.mnemonic.startsWith('ldc') && typeof value === 'string' ? value : null;
