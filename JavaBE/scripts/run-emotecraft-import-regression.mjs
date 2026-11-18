@@ -131,6 +131,7 @@ try {
   }
 
   const playerTransforms = translateJavaAnimationSet({
+    version: 3,
     name: 'playeranimator_coordinates',
     emote: {
       isLoop: false,
