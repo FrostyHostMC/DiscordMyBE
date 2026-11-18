@@ -211,6 +211,21 @@ function recoverTransitions(
     all.findIndex((candidate) => candidate.from === edge.from && candidate.to === edge.to && candidate.condition === edge.condition) === index);
 }
 
+function lambdaTarget(method: JvmMethodIR): { owner: string; name: string } | null {
+  const targets = new Map<string, { owner: string; name: string }>();
+  for (const instruction of method.instructions) {
+    const bootstrap = instruction.constant?.bootstrapMethod;
+    for (const argument of bootstrap?.arguments ?? []) {
+      const reference = argument.reference;
+      if (argument.kind === 'MethodHandle' && reference?.owner && reference.name) {
+        const target = { owner: reference.owner, name: reference.name };
+        targets.set(target.owner + '#' + target.name, target);
+      }
+    }
+  }
+  return targets.size === 1 ? [...targets.values()][0] : null;
+}
+
 function invertCondition(condition: string): string {
   return condition.startsWith('!') ? condition.slice(1) : '!' + condition;
 }
