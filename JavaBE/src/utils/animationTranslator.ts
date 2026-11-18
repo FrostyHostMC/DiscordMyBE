@@ -204,10 +204,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   const rawStopTick = Number.isFinite(Number(emote.stopTick)) ? Number(emote.stopTick) : 0;
   const wantsLoop = emote.isLoop === true || String(emote.isLoop).toLowerCase() === 'true';
   // The legacy loader treats returnTick as a one-based keyframe position.
-  const returnTick = Number.isFinite(Number(emote.returnTick))
+  const hasReturnTick = emote.returnTick !== undefined && emote.returnTick !== null;
+  const returnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick))
     ? Math.max(Number(emote.returnTick) - 1, 0)
     : 0;
-  const validLoop = wantsLoop && returnTick >= 0 && returnTick < endTick;
+  const validLoop = wantsLoop && hasReturnTick && returnTick >= 0 && returnTick < endTick;
   const animationEndTick = validLoop
     ? endTick
     : rawStopTick <= endTick
@@ -358,7 +359,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   };
   if (validLoop && returnTick > 0) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
-    const loopStart = Math.round((endTick / 20) * 1000) / 1000;
+    const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
     const loopDuration = Math.round(((endTick - returnTick) / 20) * 1000) / 1000;
     // Bedrock evaluates anim_time_update every frame. Keeping the source timeline in its
     // original coordinates lets the intro play once, then wraps only the returnTick→endTick
