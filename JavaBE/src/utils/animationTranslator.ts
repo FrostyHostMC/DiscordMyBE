@@ -103,6 +103,21 @@ function emptyStats(): AnimationTranslationStats {
 }
 
 /** Converts the legacy Emotecraft tick/part format into timestamped bone tracks. */
+const PLAYER_ANIM_EASING_NAMES = new Set([
+  'linear', 'constant', 'step',
+  'easeinsine', 'easeoutsine', 'easeinoutsine',
+  'easeinquad', 'easeoutquad', 'easeinoutquad',
+  'easeincubic', 'easeoutcubic', 'easeinoutcubic',
+  'easeinquart', 'easeoutquart', 'easeinoutquart',
+  'easeinquint', 'easeoutquint', 'easeinoutquint',
+  'easeinexpo', 'easeoutexpo', 'easeinoutexpo',
+  'easeincirc', 'easeoutcirc', 'easeinoutcirc',
+  'easeinback', 'easeoutback', 'easeinoutback',
+  'easeinelastic', 'easeoutelastic', 'easeinoutelastic',
+  'easeinbounce', 'easeoutbounce', 'easeinoutbounce',
+  'catmullrom', 'bezier',
+]);
+
 function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Record<string, unknown> {
   const issues: string[] = [];
   const moves = Array.isArray(emote.moves) ? emote.moves.filter(isPlainObject) : [];
@@ -212,27 +227,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const evaluateEasing = (name: string, progress: number, label: string): number => {
     const registryName = name.trim().toLowerCase();
     const t = Math.max(0, Math.min(1, progress));
-    const supported = new Set([
-      'linear', 'constant', 'step',
-      'easeinsine', 'easeoutsine', 'easeinoutsine',
-      'easeinquad', 'easeoutquad', 'easeinoutquad',
-      'easeincubic', 'easeoutcubic', 'easeinoutcubic',
-      'easeinquart', 'easeoutquart', 'easeinoutquart',
-      'easeinquint', 'easeoutquint', 'easeinoutquint',
-      'easeinexpo', 'easeoutexpo', 'easeinoutexpo',
-      'easeincirc', 'easeoutcirc', 'easeinoutcirc',
-      'easeinback', 'easeoutback', 'easeinoutback',
-      'easeinelastic', 'easeoutelastic', 'easeinoutelastic',
-      'easeinbounce', 'easeoutbounce', 'easeinoutbounce',
-      'catmullrom', 'bezier',
-    ]);
+
     // The legacy move loader supplies no easing arguments. PAL's Catmull-Rom and Bezier
     // transformers therefore use their documented linear defaults.
     if (registryName === 'catmullrom' || registryName === 'bezier') return t;
     // Match PlayerAnimator's STEP implementation (default n=2), including its final
     // plateau at (n-1)/n rather than forcing the final sample to 1.
     if (registryName === 'step') return Math.min(Math.floor(t * 2), 1) / 2;
-    if (!supported.has(registryName)) {
+    if (!PLAYER_ANIM_EASING_NAMES.has(registryName)) {
       const key = label + ':' + name;
       if (!reportedEasings.has(key)) {
         reportedEasings.add(key);
