@@ -242,13 +242,14 @@ try {
   ], [block(0, [0,1,2,5,6,7,10])], [method('software.bernie.geckolib.animation.AnimationController', '<init>')]);
   const lambdaHandler = methodIR('lambda$controller$0', [
     ins(0, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isMoving')),
-    ins(3, 'ifne', 0x9a, undefined, [20]),
+    ins(3, 'iconst_0', 0x03, undefined),
+    ins(4, 'if_icmpne', 0xa0, undefined, [20]),
     ins(10, 'ldc', 0x12, string('animation.fixture.idle')),
     ins(11, 'return', 0xb1, undefined),
     ins(20, 'ldc', 0x12, string('animation.fixture.run')),
     ins(21, 'return', 0xb1, undefined),
   ], [
-    block(0, [0,3], [20,10]),
+    block(0, [0,3,4], [20,10]),
     block(10, [10,11], []),
     block(20, [20,21], []),
   ], [method('fixture.AnimationState', 'isMoving')]);
