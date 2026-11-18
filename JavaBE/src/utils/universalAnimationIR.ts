@@ -990,7 +990,7 @@ export function buildUniversalAnimationIR(
       // The source loopTick is consumed into Bedrock's anim_time_update by the translator.
       // Recover our emitted return point here so the IR retains the source timing without
       // leaking a non-Bedrock metadata key into the exported animation JSON.
-      const emittedLoopReturn = /:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\+\\s*math\\.mod\\s*\\(/i.exec(timeUpdate);
+      const emittedLoopReturn = /:\s*([0-9]+(?:\.[0-9]+)?)\s*\+\s*math\.mod\s*\(/i.exec(timeUpdate);
       const parsedLoopStart = Number.isFinite(rawLoopTick) ? rawLoopTick :
         emittedLoopReturn ? Number(emittedLoopReturn[1]) : Number.NaN;
       const loopStartSeconds = Number.isFinite(parsedLoopStart) && parsedLoopStart >= 0 && parsedLoopStart < finalDuration
