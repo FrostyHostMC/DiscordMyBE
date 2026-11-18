@@ -2,6 +2,7 @@ import {
   analyzeChannel,
   channelDuration,
   isPlainObject,
+  geckoEase,
   type BedrockChannel,
 } from '@/utils/animationChannelMath';
 import { retargetClips } from '@/utils/boneRetarget';
@@ -108,327 +109,278 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   const beginTick = Number.isFinite(Number(emote.beginTick)) ? Number(emote.beginTick) : 0;
   const degrees = emote.degrees !== false;
   const easeBefore = emote.easeBeforeKeyframe === true;
-  type PartFrame = {
-    position: Record<string, number>;
-    rotation: Record<string, number>;
-    scale: Record<string, number>;
-    positionEasing?: string;
-    rotationEasing?: string;
-    scaleEasing?: string;
-    bendAngle?: number;
-    bendEasing?: string;
-    bend: boolean;
-  };
-  const frames = new Map<number, {
-    turn?: number;
-    parts: Map<string, PartFrame>;
-  }>();
-
-  for (const move of moves) {
-    const tick = Number(move.tick);
-    if (!Number.isFinite(tick) || tick < 0) {
-      issues.push('Emotecraft move with an invalid or negative tick was not carried.');
-      continue;
-    }
-    let frame = frames.get(tick);
-    if (!frame) {
-      frame = { parts: new Map() };
-      frames.set(tick, frame);
-    }
-    if (move.turn !== undefined) {
-      const turn = Number(move.turn);
-      if (Number.isFinite(turn)) frame.turn = turn;
-      else issues.push('Emotecraft turn at tick ' + tick + ' is not numeric and was ignored.');
-    }
-
-    for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-      const transform = move[partName];
-      if (!isPlainObject(transform)) continue;
-      const part = frame.parts.get(partName) ?? { position: {}, rotation: {}, scale: {}, bend: false };
-      let positionChanged = false;
-      let rotationChanged = false;
-      let scaleChanged = false;
-      for (const axis of ['x', 'y', 'z']) {
-        if (transform[axis] === undefined) continue;
-        const value = Number(transform[axis]);
-        if (Number.isFinite(value)) {
-          part.position[axis] = value;
-          positionChanged = true;
-        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
-      }
-      for (const axis of ['pitch', 'yaw', 'roll']) {
-        if (transform[axis] === undefined) continue;
-        const value = Number(transform[axis]);
-        if (Number.isFinite(value)) {
-          part.rotation[axis] = value;
-          rotationChanged = true;
-        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
-      }
-      for (const [index, axis] of ['scaleX', 'scaleY', 'scaleZ'].entries()) {
-        if (transform[axis] === undefined) continue;
-        const value = Number(transform[axis]);
-        if (Number.isFinite(value)) {
-          part.scale[String(index)] = value;
-          scaleChanged = true;
-        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
-      }
-      const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
-      if (positionChanged && easing) {
-        if (part.positionEasing && part.positionEasing.toLowerCase() !== easing.toLowerCase()) {
-          issues.push('Emotecraft ' + partName + ' position at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
-        }
-        part.positionEasing = easing;
-      }
-      if (rotationChanged && easing) {
-        if (part.rotationEasing && part.rotationEasing.toLowerCase() !== easing.toLowerCase()) {
-          issues.push('Emotecraft ' + partName + ' rotation at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
-        }
-        part.rotationEasing = easing;
-      }
-      if (scaleChanged && easing) {
-        if (part.scaleEasing && part.scaleEasing.toLowerCase() !== easing.toLowerCase()) {
-          issues.push('Emotecraft ' + partName + ' scale at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
-        }
-        part.scaleEasing = easing;
-      }
-      if (transform.bend !== undefined) {
-        part.bend = true;
-        if (partName === 'head') {
-          issues.push('Emotecraft head declares bend at tick ' + tick + '; the source format does not support head bending, so the invalid head bend was ignored.');
-        } else {
-          const rawBend = isPlainObject(transform.bend) ? transform.bend.value : transform.bend;
-          const bendValue = Number(rawBend);
-          if (Number.isFinite(bendValue)) {
-            // Player Animation Library's legacy loader treats bend as degrees regardless
-            // of the degrees flag (that flag applies to pitch/yaw/roll only).
-            // PAL's JSON wrapper also permits { value: number }.
-            part.bendAngle = bendValue;
-            if (easing) part.bendEasing = easing;
-          } else {
-            issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' is not a numeric angle; the channel was not carried.');
-          }
-        }
-      }
-      frame.parts.set(partName, part);
-    }
-  }
-
-  // PlayerAnimator keeps keyframes on their absolute tick timeline. beginTick is
-  // transition metadata, not a time offset; endTick is clamped to beginTick + 1.
   const endTick = Number.isFinite(Number(emote.endTick))
     ? Math.max(beginTick + 1, Number(emote.endTick))
     : beginTick + 1;
   const rawStopTick = Number.isFinite(Number(emote.stopTick)) ? Number(emote.stopTick) : 0;
   const wantsLoop = emote.isLoop === true || String(emote.isLoop).toLowerCase() === 'true';
-  // The legacy loader treats returnTick as a one-based keyframe position.
   const hasReturnTick = emote.returnTick !== undefined && emote.returnTick !== null;
   const returnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick))
     ? Math.max(Number(emote.returnTick) - 1, 0)
     : 0;
   const validLoop = wantsLoop && hasReturnTick && returnTick >= 0 && returnTick < endTick;
+  if (wantsLoop && !validLoop) {
+    issues.push('Emotecraft loop has an invalid or missing returnTick/endTick interval; the clip was kept as a one-shot.');
+  }
   const animationEndTick = validLoop
     ? endTick
     : rawStopTick <= endTick
       ? endTick + 3
       : rawStopTick;
-  if (wantsLoop && !validLoop) {
-    issues.push('Emotecraft loop has an invalid returnTick/endTick interval; the clip was kept as a one-shot rather than emitting a broken time loop.');
+  const loopDurationTick = validLoop ? endTick - returnTick : 0;
+  const timelineEndTick = validLoop ? endTick + loopDurationTick : animationEndTick;
+
+  type PartFrame = {
+    position: Record<string, number>;
+    rotation: Record<string, number>;
+    scale: Record<string, number>;
+    bendAngle?: number;
+    easing: string;
+    turn: number;
+  };
+  const frames = new Map<number, Map<string, PartFrame>>();
+  for (const move of moves) {
+    const tick = Number(move.tick);
+    if (!Number.isFinite(tick) || tick < 0 || tick > endTick) {
+      issues.push('Emotecraft move with an invalid or out-of-range tick was not carried.');
+      continue;
+    }
+    let parts = frames.get(tick);
+    if (!parts) {
+      parts = new Map();
+      frames.set(tick, parts);
+    }
+    const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
+    const turn = Number.isFinite(Number(move.turn)) ? Number(move.turn) : 0;
+    for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
+      const transform = move[partName];
+      if (!isPlainObject(transform)) continue;
+      const part = parts.get(partName) ?? { position: {}, rotation: {}, scale: {}, easing, turn };
+      part.easing = easing;
+      part.turn = turn;
+      for (const axis of ['x', 'y', 'z']) {
+        if (transform[axis] === undefined) continue;
+        const value = Number(transform[axis]);
+        if (Number.isFinite(value)) part.position[axis] = value;
+        else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric.');
+      }
+      for (const axis of ['pitch', 'yaw', 'roll']) {
+        if (transform[axis] === undefined) continue;
+        const value = Number(transform[axis]);
+        if (Number.isFinite(value)) part.rotation[axis] = value;
+        else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric.');
+      }
+      for (const [sourceAxis, targetAxis] of [['scaleX', 'x'], ['scaleY', 'y'], ['scaleZ', 'z']] as const) {
+        if (transform[sourceAxis] === undefined) continue;
+        const value = Number(transform[sourceAxis]);
+        if (Number.isFinite(value)) part.scale[targetAxis] = value;
+        else issues.push('Emotecraft ' + partName + '.' + sourceAxis + ' at tick ' + tick + ' is not numeric.');
+      }
+      if (transform.bend !== undefined) {
+        if (partName === 'head') {
+          issues.push('Emotecraft head declares bend at tick ' + tick + '; the source format does not support head bending.');
+        } else {
+          const rawBend = isPlainObject(transform.bend) ? transform.bend.value : transform.bend;
+          const bendValue = Number(rawBend);
+          if (Number.isFinite(bendValue)) part.bendAngle = bendValue;
+          else issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' is not a numeric angle.');
+        }
+      }
+      parts.set(partName, part);
+    }
   }
 
-  const bones: Record<string, Record<string, unknown>> = {};
   const orderedFrames = Array.from(frames.entries()).sort((a, b) => a[0] - b[0]);
+  const defaults: Record<string, number[]> = {
+    rightArm: [-5, 2, 0],
+    leftArm: [5, 2, 0],
+    leftLeg: [1.9, 12, 0.1],
+    rightLeg: [-1.9, 12, 0.1],
+  };
+  const sampleTicks = new Set<number>();
+  for (let tick = 0; tick <= Math.floor(timelineEndTick); tick += 1) sampleTicks.add(tick);
+  sampleTicks.add(timelineEndTick);
+  for (const [tick] of orderedFrames) sampleTicks.add(tick);
+  if (validLoop) {
+    const loopEnd = endTick + loopDurationTick;
+    sampleTicks.add(loopEnd);
+  }
+  const sortedSampleTicks = [...sampleTicks].filter((tick) => tick >= 0 && tick <= timelineEndTick).sort((a, b) => a - b);
+  const reportedEasings = new Set<string>();
+
+  const evaluateEasing = (name: string, progress: number, label: string): number => {
+    const value = geckoEase(name || 'linear', progress);
+    if (value !== null && Number.isFinite(value)) return value;
+    const key = label + ':' + name;
+    if (!reportedEasings.has(key)) {
+      reportedEasings.add(key);
+      issues.push('Emotecraft easing "' + name + '" on ' + label + ' is not in the PlayerAnimator easing registry; the source loader resolves unknown names to linear.');
+    }
+    return Math.max(0, Math.min(1, progress));
+  };
+
+  const getEntries = (
+    partName: string,
+    channel: 'position' | 'rotation' | 'scale' | 'bend',
+    axis: string,
+  ): Array<{ tick: number; value: number; easing: string }> => {
+    const entries: Array<{ tick: number; value: number; easing: string }> = [];
+    const isBodyPart = partName === 'body' || partName === 'torso';
+    const base = defaults[partName] ?? [0, 0, 0];
+    for (const [tick, parts] of orderedFrames) {
+      const part = parts.get(partName);
+      if (!part) continue;
+      if (channel === 'bend') {
+        if (part.bendAngle !== undefined) entries.push({ tick, value: part.bendAngle, easing: part.easing });
+        continue;
+      }
+      const raw = channel === 'position'
+        ? part.position[axis]
+        : channel === 'rotation'
+          ? part.rotation[axis]
+          : part.scale[axis];
+      if (raw === undefined) continue;
+      let value = raw;
+      if (channel === 'position') {
+        if (!isBodyPart) value -= base[['x', 'y', 'z'].indexOf(axis)] ?? 0;
+        if (axis === 'y' && !isBodyPart) value *= -1;
+        if (axis === 'x' && isBodyPart) value *= -1;
+        value *= 16;
+      } else if (channel === 'rotation') {
+        value = degrees ? value : value * (180 / Math.PI);
+        if (isBodyPart && (axis === 'pitch' || axis === 'yaw')) value *= -1;
+        value += part.turn * 360;
+      }
+      entries.push({ tick, value, easing: part.easing });
+    }
+    return entries;
+  };
+
+  const sampleSourceTrack = (
+    entries: Array<{ tick: number; value: number; easing: string }>,
+    tick: number,
+    defaultValue: number,
+    label: string,
+  ): number => {
+    if (entries.length === 0) return defaultValue;
+    const first = entries[0];
+    if (tick < first.tick) {
+      if (first.tick <= 0) return first.value;
+      const easing = easeBefore ? first.easing : 'easeInOutSine';
+      const progress = tick / first.tick;
+      return defaultValue + (first.value - defaultValue) * evaluateEasing(easing, progress, label);
+    }
+    if (tick === first.tick || first.tick === 0 && tick === 0) return first.value;
+    for (let index = 1; index < entries.length; index += 1) {
+      const current = entries[index];
+      const previous = entries[index - 1];
+      if (tick <= current.tick) {
+        const easing = easeBefore ? current.easing : previous.easing;
+        const duration = current.tick - previous.tick;
+        if (duration <= 0) return current.value;
+        const progress = (tick - previous.tick) / duration;
+        return previous.value + (current.value - previous.value) * evaluateEasing(easing, progress, label);
+      }
+    }
+    return entries[entries.length - 1].value;
+  };
+
+  const sampleTrack = (
+    entries: Array<{ tick: number; value: number; easing: string }>,
+    tick: number,
+    defaultValue: number,
+    label: string,
+  ): number => {
+    if (entries.length === 0) return defaultValue;
+    if (validLoop && tick >= endTick) {
+      const firstLoopFrame = entries.find((entry) => entry.tick > returnTick) ?? entries[entries.length - 1];
+      const lastValue = sampleSourceTrack(entries, endTick, defaultValue, label);
+      const seamDuration = Math.max(0, firstLoopFrame.tick - returnTick);
+      if (seamDuration > 0 && tick < endTick + seamDuration) {
+        const lastEntry = entries[entries.length - 1];
+        const easing = easeBefore ? firstLoopFrame.easing : lastEntry.easing;
+        const progress = (tick - endTick) / seamDuration;
+        return lastValue + (firstLoopFrame.value - lastValue) * evaluateEasing(easing, progress, label + ' loop seam');
+      }
+      const localTick = seamDuration > 0
+        ? firstLoopFrame.tick + (tick - (endTick + seamDuration))
+        : returnTick + (tick - endTick);
+      return sampleSourceTrack(entries, Math.min(endTick, localTick), defaultValue, label);
+    }
+    if (!validLoop && tick > endTick) {
+      const startValue = sampleSourceTrack(entries, endTick, defaultValue, label);
+      const lastEntry = entries[entries.length - 1];
+      const easing = easeBefore ? 'easeInOutSine' : lastEntry.easing;
+      const duration = animationEndTick - endTick;
+      if (duration <= 0) return defaultValue;
+      const progress = (tick - endTick) / duration;
+      return startValue + (defaultValue - startValue) * evaluateEasing(easing, progress, label + ' stop reset');
+    }
+    return sampleSourceTrack(entries, tick, defaultValue, label);
+  };
+
+  const bones: Record<string, Record<string, unknown>> = {};
   for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
     const boneName = ({
       torso: 'body',
-      body: 'waist',
+      body: 'body',
       rightArm: 'right_arm',
       leftArm: 'left_arm',
       rightLeg: 'right_leg',
       leftLeg: 'left_leg',
     } as Record<string, string>)[partName] ?? partName;
-    const partDefaults: Record<string, number[]> = {
-      rightArm: [-5, 2, 0],
-      leftArm: [5, 2, 0],
-      leftLeg: [1.9, 12, 0.1],
-      rightLeg: [-1.9, 12, 0.1],
-    };
-    const isBodyPart = partName === 'body';
-    const defaults = partDefaults[partName] ?? [0, 0, 0];
-    const positionTrack: Record<string, unknown> = {};
-    const rotationTrack: Record<string, unknown> = {};
-    const scaleTrack: Record<string, unknown> = {};
-    const bendTrack: Record<string, unknown> = {};
-    const position = [0, 0, 0];
-    const rotation = [0, 0, 0];
-    const scale = [1, 1, 1];
-    let previousPositionTimeKey: string | undefined;
-    let previousRotationTimeKey: string | undefined;
-    let previousScaleTimeKey: string | undefined;
-    let previousBendTimeKey: string | undefined;
-    let previousPositionEasing: string | undefined;
-    let previousRotationEasing: string | undefined;
-    let previousScaleEasing: string | undefined;
-    let previousBendEasing: string | undefined;
+    const positionAxes = ['x', 'y', 'z'];
+    const rotationAxes = ['pitch', 'yaw', 'roll'];
+    const positionEntries = positionAxes.map((axis) => getEntries(partName, 'position', axis));
+    const rotationEntries = rotationAxes.map((axis) => getEntries(partName, 'rotation', axis));
+    const scaleEntries = positionAxes.map((axis) => getEntries(partName, 'scale', axis));
+    const bendEntries = getEntries(partName, 'bend', 'value');
+    const hasPosition = positionEntries.some((entries) => entries.length > 0);
+    const hasRotation = rotationEntries.some((entries) => entries.length > 0);
+    const hasScale = scaleEntries.some((entries) => entries.length > 0);
+    const hasBend = bendEntries.length > 0;
+    const positionTrack: Record<string, number[]> = {};
+    const rotationTrack: Record<string, number[]> = {};
+    const scaleTrack: Record<string, number[]> = {};
+    const bendRotationTrack: Record<string, number[]> = {};
+    const bendPositionTrack: Record<string, number[]> = {};
 
-    for (const [tick, frame] of orderedFrames) {
-      const part = frame.parts.get(partName);
-      if (!part) continue;
-      const time = Math.round((tick / 20) * 1000) / 1000;
-      const timeKey = String(time);
-      const positionAxes = ['x', 'y', 'z'] as const;
-      const rotationAxes = ['pitch', 'yaw', 'roll'] as const;
-      const positionChanged = positionAxes.some((axis) => part.position[axis] !== undefined);
-      const rotationChanged = rotationAxes.some((axis) => part.rotation[axis] !== undefined);
-      const scaleChanged = ['0', '1', '2'].some((axis) => part.scale[axis] !== undefined);
-
-      if (positionChanged) {
-        for (let axis = 0; axis < 3; axis += 1) {
-          const value = part.position[positionAxes[axis]];
-          if (value !== undefined) {
-            const sourceDefault = defaults[axis];
-            let offset = value - sourceDefault;
-            // PlayerAnimator stores limb positions relative to their vanilla pivots, in
-            // model units; Bedrock animation positions are 1/16-block model units.
-            // Its player coordinate convention also negates limb Y and torso X.
-            if (axis === 1 && !isBodyPart) offset *= -1;
-            if (axis === 0 && isBodyPart) offset *= -1;
-            position[axis] = offset * 16;
-          }
-        }
-        if (easeBefore && previousPositionTimeKey && part.positionEasing) {
-          const previous = positionTrack[previousPositionTimeKey] as Record<string, unknown>;
-          previous.easing = part.positionEasing;
-        }
-        const easing = easeBefore ? undefined : part.positionEasing;
-        positionTrack[timeKey] = { vector: [...position], ...(easing ? { easing } : {}) };
-        previousPositionTimeKey = timeKey;
-        previousPositionEasing = part.positionEasing ?? previousPositionEasing;
-      }
-      if (rotationChanged) {
-        for (let axis = 0; axis < 3; axis += 1) {
-          const value = part.rotation[rotationAxes[axis]];
-          if (value !== undefined) {
-            let angle = degrees ? value : value * (180 / Math.PI);
-            // Legacy Emotecraft/PlayerAnimator's body bone uses the opposite X/Y
-            // rotation convention; limbs and head keep their authored signs.
-            if (isBodyPart && axis < 2) angle *= -1;
-            rotation[axis] = angle + (frame.turn ?? 0) * 360;
-          }
-        }
-        if (easeBefore && previousRotationTimeKey && part.rotationEasing) {
-          const previous = rotationTrack[previousRotationTimeKey] as Record<string, unknown>;
-          previous.easing = part.rotationEasing;
-        }
-        const easing = easeBefore ? undefined : part.rotationEasing;
-        rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
-        previousRotationTimeKey = timeKey;
-        previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
-      }
-      if (scaleChanged) {
-        for (let axis = 0; axis < 3; axis += 1) {
-          const value = part.scale[String(axis)];
-          if (value !== undefined) scale[axis] = value;
-        }
-        if (easeBefore && previousScaleTimeKey && part.scaleEasing) {
-          const previous = scaleTrack[previousScaleTimeKey] as Record<string, unknown>;
-          previous.easing = part.scaleEasing;
-        }
-        const easing = easeBefore ? undefined : part.scaleEasing;
-        scaleTrack[timeKey] = { vector: [...scale], ...(easing ? { easing } : {}) };
-        previousScaleTimeKey = timeKey;
-        previousScaleEasing = part.scaleEasing ?? previousScaleEasing;
-      }
-      if (part.bendAngle !== undefined) {
-        const angleRadians = part.bendAngle * (Math.PI / 180);
-        const angle = Math.abs(angleRadians);
-        if (easeBefore && previousBendTimeKey && part.bendEasing) {
-          const previous = bendTrack[previousBendTimeKey] as Record<string, unknown>;
-          previous.easing = part.bendEasing;
-        }
-        const easing = easeBefore ? undefined : part.bendEasing;
-        // Match Emotecraft's Bedrock bend rig: the generated child segment rotates
-        // around X and follows the two-pixel arc so the split mesh stays connected.
-        bendTrack[timeKey] = {
-          vector: [part.bendAngle, 0, 0],
-          ...(easing ? { easing } : {}),
-        };
-        const bendTargetName = partName === 'body' || partName === 'torso' ? 'body_bend' : boneName + '_bend';
-        const bendPositionTrack = (bones[bendTargetName]?.position ?? {}) as Record<string, unknown>;
-        bendPositionTrack[timeKey] = {
-          vector: [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)],
-          ...(easing ? { easing } : {}),
-        };
-        bones[bendTargetName] = {
-          ...(bones[bendTargetName] ?? {}),
-          position: bendPositionTrack,
-        };
-        previousBendTimeKey = timeKey;
-        previousBendEasing = part.bendEasing ?? previousBendEasing;
+    for (const tick of sortedSampleTicks) {
+      const time = String(Math.round((tick / 20) * 1000) / 1000);
+      if (hasPosition) positionTrack[time] = positionEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' position'));
+      if (hasRotation) rotationTrack[time] = rotationEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' rotation'));
+      if (hasScale) scaleTrack[time] = scaleEntries.map((entries) => sampleTrack(entries, tick, 1, partName + ' scale'));
+      if (hasBend) {
+        const bendAngle = sampleTrack(bendEntries, tick, 0, partName + ' bend');
+        const angle = Math.abs(bendAngle * Math.PI / 180);
+        bendRotationTrack[time] = [bendAngle, 0, 0];
+        bendPositionTrack[time] = [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)];
       }
     }
 
-    if (Object.keys(positionTrack).length > 0) {
-      if (!validLoop) {
-        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
-        positionTrack[resetTime] = {
-          vector: [0, 0, 0],
-          easing: easeBefore ? 'easeInOutSine' : previousPositionEasing ?? 'easeInOutSine',
-        };
-      }
-      bones[boneName] = { ...(bones[boneName] ?? {}), position: positionTrack };
-    }
-    if (Object.keys(rotationTrack).length > 0) {
-      if (!validLoop) {
-        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
-        rotationTrack[resetTime] = {
-          vector: [0, 0, 0],
-          easing: easeBefore ? 'easeInOutSine' : previousRotationEasing ?? 'easeInOutSine',
-        };
-      }
-      bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
-    }
-    if (Object.keys(scaleTrack).length > 0) {
-      if (!validLoop) {
-        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
-        scaleTrack[resetTime] = {
-          vector: [1, 1, 1],
-          easing: easeBefore ? 'easeInOutSine' : previousScaleEasing ?? 'easeInOutSine',
-        };
-      }
-      bones[boneName] = { ...(bones[boneName] ?? {}), scale: scaleTrack };
-    }
-    if (Object.keys(bendTrack).length > 0) {
+    if (hasPosition) bones[boneName] = { ...(bones[boneName] ?? {}), position: positionTrack };
+    if (hasRotation) bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
+    if (hasScale) bones[boneName] = { ...(bones[boneName] ?? {}), scale: scaleTrack };
+    if (hasBend) {
       const bendBoneName = boneName + '_bend';
-      const bendBone = (bones[bendBoneName] ?? {}) as Record<string, unknown>;
-      const bendPositionTrack = (bendBone.position ?? {}) as Record<string, unknown>;
-      if (!validLoop) {
-        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
-        const resetEasing = easeBefore ? 'easeInOutSine' : previousBendEasing ?? 'easeInOutSine';
-        bendTrack[resetTime] = { vector: [0, 0, 0], easing: resetEasing };
-        bendPositionTrack[resetTime] = { vector: [0, 0, 0], easing: resetEasing };
-      }
       bones[bendBoneName] = {
-        ...bendBone,
-        rotation: bendTrack,
-        ...(Object.keys(bendPositionTrack).length > 0 ? { position: bendPositionTrack } : {}),
+        ...(bones[bendBoneName] ?? {}),
+        rotation: bendRotationTrack,
+        position: bendPositionTrack,
       };
     }
   }
 
-  const durationTick = animationEndTick;
   const result: Record<string, unknown> = {
     bones,
-    animation_length: Math.max(0, durationTick / 20),
+    animation_length: Math.max(0, timelineEndTick / 20),
     loop: validLoop,
     __emoteIssues: issues,
   };
   if (validLoop && returnTick > 0) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
-    const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
-    const loopDuration = Math.round(((endTick - returnTick) / 20) * 1000) / 1000;
-    // Bedrock evaluates anim_time_update every frame. Keeping the source timeline in its
-    // original coordinates lets the intro play once, then wraps only the returnTick→endTick
-    // interval instead of restarting the entire emote at tick zero.
+    const loopStart = intro;
+    const loopDuration = Math.round((loopDurationTick / 20) * 1000) / 1000;
     result.anim_time_update =
       'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
       loopStart + ' + math.mod(query.anim_time - ' + loopStart + ' + query.delta_time, ' + loopDuration + ')';
