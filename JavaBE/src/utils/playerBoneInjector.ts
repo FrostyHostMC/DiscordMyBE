@@ -86,7 +86,7 @@ function canonicalBendBone(raw: string): string | null {
   return null;
 }
 
-function buildBendGeometry(modId: string, bendBones: string[]): {
+function buildBendGeometry(bendBones: string[]): {
   identifier: string;
   slimIdentifier: string;
   path: string;
@@ -100,7 +100,6 @@ function buildBendGeometry(modId: string, bendBones: string[]): {
   if (!Array.isArray(geometries) || geometries.length < 2) {
     throw new Error('Mojang classic/slim player geometry source is malformed.');
   }
-  const namespace = safeFileId(modId) || 'mod';
   const identifier = 'geometry.humanoid.custom';
   const slimIdentifier = 'geometry.humanoid.customSlim';
   const injected = new Set<string>();
@@ -189,7 +188,7 @@ export function injectPlayerRigBones(options: {
     const base = name.replace(/_bend$/i, '');
     return !resolvePlayerBone(base) || (!/_bend$/i.test(name) && hasCustomBoneTokens(name));
   }))];
-  const bendGeometry = buildBendGeometry(options.modId, options.bendBones ?? []);
+  const bendGeometry = buildBendGeometry(options.bendBones ?? []);
   const files = bendGeometry ? { [bendGeometry.path]: bendGeometry.json } : {};
   const candidateNote = options.candidates.length > 0
     ? `${options.candidates.length} source geometry candidate(s) audited; the vanilla skin mesh remains the base`
