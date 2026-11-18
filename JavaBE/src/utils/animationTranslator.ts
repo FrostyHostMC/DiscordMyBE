@@ -332,7 +332,6 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         ...(Object.keys(bendPositionTrack).length > 0 ? { position: bendPositionTrack } : {}),
       };
     }
-    }
   }
 
   const durationTick = (validLoop ? endTick : Math.max(endTick, stopTick)) - beginTick;
