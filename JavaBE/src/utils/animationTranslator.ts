@@ -154,7 +154,7 @@ function normaliseLoop(raw: unknown): boolean | 'hold_on_last_frame' | undefined
   return undefined;
 }
 
-/** GeckoLib sound/particle keyframes → Bedrock `{ "effect": "id" }` effect keyframes. */
+/** Source sound/particle keyframes → Bedrock effect tracks, including simultaneous cues. */
 function translateEffectTrack(
   raw: unknown,
   clipId: string,
@@ -162,34 +162,46 @@ function translateEffectTrack(
   issues: AnimationTranslationIssue[],
 ): Record<string, unknown> | null {
   if (!isPlainObject(raw)) {
-    if (raw !== undefined && raw !== null) issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `${channel} must be a timestamp-keyed object; source event data was not carried` });
+    if (raw !== undefined && raw !== null) issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: channel + ' must be a timestamp-keyed object; source event data was not carried' });
     return null;
   }
   const track: Record<string, unknown> = {};
-  for (const [time, entry] of Object.entries(raw)) {
+  for (const [time, rawEntries] of Object.entries(raw)) {
     if (!/^\s*-?\d+(?:\.\d+)?\s*$/.test(time)) {
-      issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `event key "${time}" is not a numeric timestamp; event was not carried` });
+      issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: 'event key "' + time + '" is not a numeric timestamp; event was not carried' });
       continue;
     }
-    if (typeof entry === 'string') { track[time] = { effect: entry }; continue; }
-    if (!isPlainObject(entry)) {
-      issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: `event at ${time}s is not a string or object; event was not carried` });
-      continue;
+    const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+    const translated: Record<string, unknown>[] = [];
+    for (const entry of entries) {
+      if (typeof entry === 'string') {
+        translated.push({ effect: entry });
+        continue;
+      }
+      if (!isPlainObject(entry)) {
+        issues.push({ clip: clipId, bone: '', channel, kind: 'malformed', detail: 'event at ' + time + 's is not a string or object; event was not carried' });
+        continue;
+      }
+      const effect = entry.effect ?? entry.sound ?? entry.particle ?? entry.name ?? entry.id;
+      if (typeof effect !== 'string' || !effect.trim()) {
+        issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: 'event at ' + time + 's has no effect/sound/particle identifier; source event was not carried' });
+        continue;
+      }
+      const event: Record<string, unknown> = { effect: effect.trim() };
+      const supported = channel === 'sound_effects'
+        ? ['locator', 'volume', 'pitch']
+        : ['locator', 'pre_effect_script', 'bind_to_actor'];
+      for (const key of supported) {
+        if (entry[key] !== undefined) event[key] = entry[key];
+      }
+      const known = new Set(['effect', 'sound', 'particle', 'name', 'id', ...supported]);
+      for (const key of Object.keys(entry)) {
+        if (!known.has(key)) issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: 'event at ' + time + 's contains unsupported field "' + key + '"; supported event metadata was retained' });
+      }
+      translated.push(event);
     }
-    const effect = entry.effect ?? entry.sound ?? entry.particle ?? entry.name ?? entry.id;
-    if (typeof effect !== 'string' || !effect.trim()) {
-      issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: `event at ${time}s has no effect/sound/particle identifier; source event was not carried` });
-      continue;
-    }
-    const event: Record<string, unknown> = { effect: effect.trim() };
-    for (const key of ['locator', 'pre_effect_script', 'bind_to_actor']) {
-      if (entry[key] !== undefined) event[key] = entry[key];
-    }
-    const known = new Set(['effect', 'sound', 'particle', 'name', 'id', 'locator', 'pre_effect_script', 'bind_to_actor']);
-    for (const key of Object.keys(entry)) {
-      if (!known.has(key)) issues.push({ clip: clipId, bone: '', channel, kind: 'unsupported', detail: `event at ${time}s contains unsupported field "${key}"; identifier and supported locator/script fields were retained` });
-    }
-    track[time] = event;
+    if (translated.length === 1) track[time] = translated[0];
+    else if (translated.length > 1) track[time] = translated;
   }
   return Object.keys(track).length > 0 ? track : null;
 }
@@ -232,14 +244,15 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
         ? rawClip.animators
         : isPlainObject(rawClip.parts)
           ? rawClip.parts
-          : null;
-  if (!rawBones) {
+          : {};
+  const hasEffectTracks = isPlainObject(rawClip.sound_effects) || isPlainObject(rawClip.particle_effects) || isPlainObject(rawClip.timeline);
+  if (Object.keys(rawBones).length === 0 && !hasEffectTracks) {
     issues.push({
       clip: clipId,
       bone: '',
       channel: 'bones',
       kind: 'malformed',
-      detail: 'the clip declares no bone tracks, so it animates nothing',
+      detail: 'the clip declares no bone or timed event tracks, so it animates nothing',
     });
     return result;
   }
@@ -300,7 +313,7 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
     result.bones += 1;
   }
 
-  if (Object.keys(bones).length === 0) {
+  if (Object.keys(bones).length === 0 && !hasEffectTracks) {
     issues.push({
       clip: clipId,
       bone: '',
@@ -323,10 +336,29 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
     result.durationDerived = true;
   }
 
+  if (typeof rawClip.start_delay === 'number' || typeof rawClip.start_delay === 'string') clip.start_delay = rawClip.start_delay;
+  if (typeof rawClip.loop_delay === 'number' || typeof rawClip.loop_delay === 'string') clip.loop_delay = rawClip.loop_delay;
+  if (typeof rawClip.blend_weight === 'number' || typeof rawClip.blend_weight === 'string') clip.blend_weight = rawClip.blend_weight;
+  if (typeof rawClip.anim_time_update === 'string' && rawClip.anim_time_update.trim()) clip.anim_time_update = rawClip.anim_time_update.trim();
+  if (typeof rawClip.override_previous_animation === 'boolean') clip.override_previous_animation = rawClip.override_previous_animation;
+
   const sounds = translateEffectTrack(rawClip.sound_effects, clipId, 'sound_effects', issues);
   if (sounds) clip.sound_effects = sounds;
   const particles = translateEffectTrack(rawClip.particle_effects, clipId, 'particle_effects', issues);
   if (particles) clip.particle_effects = particles;
+  if (isPlainObject(rawClip.timeline)) {
+    const timeline: Record<string, string | string[]> = {};
+    for (const [time, rawEvent] of Object.entries(rawClip.timeline)) {
+      if (!/^\s*-?\d+(?:\.\d+)?\s*$/.test(time)) {
+        issues.push({ clip: clipId, bone: '', channel: 'timeline', kind: 'malformed', detail: 'timeline key "' + time + '" is not a numeric timestamp; event was not carried' });
+        continue;
+      }
+      const events = (Array.isArray(rawEvent) ? rawEvent : [rawEvent]).filter((event): event is string => typeof event === 'string' && event.trim().length > 0);
+      if (events.length === 1) timeline[time] = events[0];
+      else if (events.length > 1) timeline[time] = events;
+    }
+    if (Object.keys(timeline).length > 0) clip.timeline = timeline;
+  }
 
   result.clip = clip;
   return result;

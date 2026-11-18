@@ -148,9 +148,12 @@ export function emitAnimationClip(clip: IRAnimationClip): EmittedAnimationClip |
     bones[bone.boneName] = track;
   }
 
-  if (Object.keys(bones).length === 0) return null;
+  const hasTimedEvents = (clip.audioReferences ?? []).length > 0 ||
+    (clip.particleReferences ?? []).length > 0 || (clip.customEvents ?? []).length > 0;
+  if (Object.keys(bones).length === 0 && !hasTimedEvents) return null;
 
-  const document: Record<string, unknown> = { bones };
+  const document: Record<string, unknown> = {};
+  if (Object.keys(bones).length > 0) document.bones = bones;
   const timeline = clip.timeline;
   if (timeline) {
     if (timeline.loopMode === 'hold_on_last_frame') document.loop = 'hold_on_last_frame';
