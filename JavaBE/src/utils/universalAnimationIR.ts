@@ -984,9 +984,17 @@ export function buildUniversalAnimationIR(
       const inferredFps = timeUnit === 'ticks' ? 20 : 30;
       const frameCount = Math.max(1, Math.round(finalDuration * inferredFps));
 
-      const rawLoopTick = Number((rawClip as Record<string, unknown>).loopTick);
-      const loopStartSeconds = Number.isFinite(rawLoopTick) && rawLoopTick >= 0 && rawLoopTick < finalDuration
-        ? rawLoopTick
+      const rawClipRecord = rawClip as Record<string, unknown>;
+      const rawLoopTick = Number(rawClipRecord.loopTick);
+      const timeUpdate = typeof rawClipRecord.anim_time_update === 'string' ? rawClipRecord.anim_time_update : '';
+      // The source loopTick is consumed into Bedrock's anim_time_update by the translator.
+      // Recover our emitted return point here so the IR retains the source timing without
+      // leaking a non-Bedrock metadata key into the exported animation JSON.
+      const emittedLoopReturn = /:\\s*([0-9]+(?:\\.[0-9]+)?)\\s*\\+\\s*math\\.mod\\s*\\(/i.exec(timeUpdate);
+      const parsedLoopStart = Number.isFinite(rawLoopTick) ? rawLoopTick :
+        emittedLoopReturn ? Number(emittedLoopReturn[1]) : Number.NaN;
+      const loopStartSeconds = Number.isFinite(parsedLoopStart) && parsedLoopStart >= 0 && parsedLoopStart < finalDuration
+        ? parsedLoopStart
         : undefined;
       const timeline: AnimTimeline = {
         durationSeconds: finalDuration,
