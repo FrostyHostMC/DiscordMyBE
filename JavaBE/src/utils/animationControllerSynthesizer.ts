@@ -616,7 +616,7 @@ export function synthesizeAnimationControllersFromBytecode(
     const initialState = recoverInitialState(candidate, enumClass, states);
     const bindings = recoverStateBindings(candidate, enumClass, states, knownClips, classes);
     const transitions = recoverTransitions(candidate, enumClass, states, classes);
-    const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? []);
+    const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? [], signals.playerClassNames ?? []);
     if (!initialState || bindings.size !== stateNames.length || transitions.length === 0 || !ownerId) {
       const missing = [
         !initialState ? 'initial state is not unambiguous in constructor bytecode' : '',

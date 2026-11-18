@@ -179,8 +179,9 @@ try {
     ],
     references: [], bootstrapMethods: [], decodeWarnings: [],
   };
-  const switchResult = synthesizeAnimationControllersFromBytecode(['fixture:entity'], {
+  const switchResult = synthesizeAnimationControllersFromBytecode(['player', 'fixture:entity'], {
     controllerClasses: ['fixture.SwitchController'],
+    playerClassNames: ['fixture.SwitchController'],
     animationIds: ['animation.fixture.idle', 'animation.fixture.run'],
     bytecodeClasses: [switchController, switchMapClass, stateEnum],
     entityClasses: [{
@@ -188,7 +189,7 @@ try {
       role: 'entity', methods: [], registryIds: ['fixture:entity'],
     }],
   });
-  if (switchResult.controllers.length !== 1) {
+  if (switchResult.controllers.length !== 1 || switchResult.controllers[0].ownerId !== 'player') {
     throw new Error('The bytecode reconstructor did not recover a javac enum-switch controller: ' +
       JSON.stringify(switchResult.analysis));
   }
