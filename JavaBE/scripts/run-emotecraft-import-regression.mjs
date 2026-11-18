@@ -107,6 +107,27 @@ try {
     throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play, loop seam blend, and returnTick-to-end cycle.');
   }
 
+  const zeroReturnLoop = translateJavaAnimationSet({
+    name: 'zero_return_loop',
+    emote: {
+      isLoop: true,
+      returnTick: 1,
+      endTick: 30,
+      moves: [
+        { tick: 0, head: { yaw: 0 } },
+        { tick: 10, head: { yaw: 45 } },
+        { tick: 30, head: { yaw: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const zeroReturnClip = zeroReturnLoop.animations[zeroReturnLoop.idMap.zero_return_loop];
+  if (zeroReturnClip.loop !== true || zeroReturnClip.animation_length !== 3 ||
+      typeof zeroReturnClip.anim_time_update !== 'string' ||
+      zeroReturnClip.bones.head.rotation['1.5'][1] !== 90 ||
+      zeroReturnClip.bones.head.rotation['2'][1] !== 45) {
+    throw new Error('Emotecraft returnTick=1 did not preserve the source loop seam from tick zero.');
+  }
+
   const splitEasing = translateJavaAnimationSet({
     name: 'split_part_easing',
     version: 3,
