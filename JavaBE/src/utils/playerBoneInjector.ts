@@ -93,7 +93,7 @@ function canonicalBendBone(raw: string): string | null {
   return null;
 }
 
-function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
+function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean, sourceBones: JsonObject[] = []): {
   identifier: string;
   slimIdentifier: string;
   path: string;
@@ -101,7 +101,7 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
   injected: string[];
 } | null {
   const requested = new Set(bendBones.map(canonicalBendBone).filter((name): name is string => Boolean(name)));
-  if (requested.size === 0 && !needsWaistParenting) return null;
+  if (requested.size === 0 && !needsWaistParenting && sourceBones.length === 0) return null;
   const doc = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON) as JsonObject;
   const geometries = doc['minecraft:geometry'] as JsonObject[] | undefined;
   if (!Array.isArray(geometries) || geometries.length < 2) {
@@ -116,6 +116,7 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
     const bones = geometry.bones as JsonObject[] | undefined;
     if (!description || !Array.isArray(bones)) throw new Error('Mojang player geometry is missing its description or bones.');
     const additions: JsonObject[] = [];
+    for (const injectedName of appendCustomPlayerBones(geometry, sourceBones)) injected.add(injectedName);
     if (needsWaistParenting) {
       // Emotecraft's body channel is the lower waist pivot and also drives the legs.
       // Mojang's stock player model keeps legs under root, so restore that parent chain here.
@@ -187,6 +188,81 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
   };
 }
 
+
+/**
+ * Select a source rig only when its real joint names strongly match custom player
+ * animation tracks. Unrelated mob models in the same archive are not eligible.
+ */
+function selectPlayerSourceBones(candidates: GeometryCandidate[], clipBones: string[]): JsonObject[] {
+  const wanted = [...new Set(clipBones.map((name) => name.toLowerCase()))];
+  const customWanted = wanted.filter((name) => !resolvePlayerBone(name.replace(/_bend$/i, '')));
+  let best: { bones: JsonObject[]; score: number } | null = null;
+  let tied = false;
+  for (const candidate of candidates) {
+    try {
+      const doc = JSON.parse(candidate.json) as JsonObject;
+      const geometry = (doc['minecraft:geometry'] as JsonObject[] | undefined)?.[0];
+      const bones = geometry?.bones;
+      if (!Array.isArray(bones) || bones.length === 0) continue;
+      const names = new Set<string>(bones.map((bone: JsonObject) => String(bone.name ?? '').toLowerCase()));
+      const matched = customWanted.filter((name) => names.has(name));
+      const keySuggestsPlayer = /player|avatar|humanoid/i.test(candidate.key);
+      if (matched.length === 0) continue;
+      const ratio = matched.length / Math.max(1, customWanted.length);
+      if (ratio < 0.75 || (matched.length === 1 && customWanted.length > 1 && !keySuggestsPlayer)) continue;
+      const description = geometry.description ?? {};
+      if (Number(description.texture_width ?? 64) !== 64 || Number(description.texture_height ?? 64) !== 64) continue;
+      const score = matched.length * 100 + ratio * 10 + (keySuggestsPlayer ? 1 : 0);
+      if (!best || score > best.score) { best = { bones, score }; tied = false; }
+      else if (score === best.score) tied = true;
+    } catch {
+      // Invalid source geometry is ignored; it must never replace the player's skin rig.
+    }
+  }
+  if (!best || tied) return [];
+  const byName = new Map(best.bones.map((bone) => [String(bone.name ?? '').toLowerCase(), bone]));
+  const required = new Set<string>();
+  const addAncestors = (name: string, depth = 0): void => {
+    if (depth > 64 || required.has(name)) return;
+    const bone = byName.get(name);
+    if (!bone) return;
+    required.add(name);
+    if (typeof bone.parent === 'string') addAncestors(bone.parent.toLowerCase(), depth + 1);
+  };
+  for (const name of customWanted) addAncestors(name);
+  return [...required].map((name) => byName.get(name)!).filter(Boolean);
+}
+
+function appendCustomPlayerBones(geometry: JsonObject, sourceBones: JsonObject[]): string[] {
+  const bones = geometry.bones as JsonObject[];
+  const used = new Set(bones.map((bone) => String(bone.name ?? '').toLowerCase()));
+  const sourceNames = new Set(sourceBones.map((bone) => String(bone.name ?? '').toLowerCase()));
+  const rename = new Map<string, string>();
+  for (const source of sourceBones) {
+    const raw = String(source.name ?? '').trim();
+    if (!raw || resolvePlayerBone(raw)) continue;
+    let name = raw, suffix = 2;
+    while (used.has(name.toLowerCase())) name = raw + '_' + suffix++;
+    used.add(name.toLowerCase());
+    rename.set(raw.toLowerCase(), name);
+  }
+  const injected: string[] = [];
+  for (const source of sourceBones) {
+    const raw = String(source.name ?? '').toLowerCase();
+    const name = rename.get(raw);
+    if (!name) continue;
+    const copy = clone(source);
+    copy.name = name;
+    const parent = typeof source.parent === 'string' ? source.parent.toLowerCase() : '';
+    if (rename.has(parent)) copy.parent = rename.get(parent);
+    else if (parent && sourceNames.has(parent) && resolvePlayerBone(parent)) copy.parent = resolvePlayerBone(parent)?.bone;
+    else copy.parent = /head|skull|face|eye|jaw|hat/i.test(name) ? 'head' : 'body';
+    bones.push(copy);
+    injected.push(name);
+  }
+  return injected;
+}
+
 /**
  * Generates a skin-preserving copy of Mojang's published player model when source clips contain
  * real bend tracks. Each requested vanilla limb/body cube is split into lower and upper segments;
@@ -200,11 +276,13 @@ export function injectPlayerRigBones(options: {
   bendBones?: string[];
   needsWaistParenting?: boolean;
 }): BoneInjectionResult {
+  const sourceBones = selectPlayerSourceBones(options.candidates, options.clipBones);
+  const bendGeometry = buildBendGeometry(options.bendBones ?? [], options.needsWaistParenting === true, sourceBones);
+  const injectedNames = new Set((bendGeometry?.injected ?? []).map((name) => name.toLowerCase()));
   const unresolvedBones = [...new Set(options.clipBones.filter((name) => {
     const base = name.replace(/_bend$/i, '');
-    return !resolvePlayerBone(base) || (!/_bend$/i.test(name) && hasCustomBoneTokens(name));
+    return !resolvePlayerBone(base) && !injectedNames.has(name.toLowerCase()) && !injectedNames.has(base.toLowerCase());
   }))];
-  const bendGeometry = buildBendGeometry(options.bendBones ?? [], options.needsWaistParenting === true);
   const files = bendGeometry ? { [bendGeometry.path]: bendGeometry.json } : {};
   const candidateNote = options.candidates.length > 0
     ? `${options.candidates.length} source geometry candidate(s) audited; the vanilla skin mesh remains the base`
@@ -218,10 +296,10 @@ export function injectPlayerRigBones(options: {
     geometryPath: bendGeometry?.path ?? null,
     files,
     injectedBones: bendGeometry?.injected ?? [],
-    approximatedBones: bendGeometry?.injected ?? [],
+    approximatedBones: (bendGeometry?.injected ?? []).filter((name) => /_bend$/i.test(name)),
     unresolvedBones,
     note: bendGeometry
-      ? `${candidateNote}; generated ${bendGeometry.injected.length} bend segment/overlay joint(s) for ${options.modId}; ${unresolvedNote}.`
+      ? `${candidateNote}; generated ${bendGeometry.injected.length} custom/bend joint(s) for ${options.modId}; ${unresolvedNote}.`
       : `${candidateNote}; no bend segment geometry was needed; ${unresolvedNote}.`,
   };
 }
