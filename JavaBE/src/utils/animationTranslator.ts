@@ -113,6 +113,8 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     rotation: Record<string, number>;
     positionEasing?: string;
     rotationEasing?: string;
+    bendRotation?: number[];
+    bendEasing?: string;
     bend: boolean;
   };
   const frames = new Map<number, {
@@ -172,7 +174,40 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         }
         part.rotationEasing = easing;
       }
-      if (transform.bend !== undefined || transform.axis !== undefined) part.bend = true;
+      if (transform.bend !== undefined || transform.axis !== undefined) {
+        part.bend = true;
+        if (partName === 'head') {
+          issues.push('Emotecraft head declares bend at tick ' + tick + '; the source format does not support head bending, so the invalid head bend was ignored.');
+        } else {
+          const rawAxis = transform.axis;
+          const axis = Array.isArray(rawAxis)
+            ? rawAxis.map(Number)
+            : isPlainObject(rawAxis)
+              ? [Number(rawAxis.x ?? 0), Number(rawAxis.y ?? 0), Number(rawAxis.z ?? 0)]
+              : [1, 0, 0];
+          const bendValue = transform.bend;
+          let radians: number[] | null = null;
+          if (typeof bendValue === 'number' && Number.isFinite(bendValue)) {
+            const length = Math.hypot(axis[0] ?? 0, axis[1] ?? 0, axis[2] ?? 0);
+            const direction = length > 0 ? axis.map((value) => value / length) : [1, 0, 0];
+            radians = direction.map((value) => value * bendValue);
+          } else if (Array.isArray(bendValue) && bendValue.length > 0) {
+            const vector = bendValue.slice(0, 3).map(Number);
+            if (vector.every(Number.isFinite)) radians = [vector[0] ?? 0, vector[1] ?? 0, vector[2] ?? 0];
+          } else if (isPlainObject(bendValue)) {
+            const vector = Array.isArray(bendValue.vector)
+              ? bendValue.vector.slice(0, 3).map(Number)
+              : [Number(bendValue.x ?? 0), Number(bendValue.y ?? 0), Number(bendValue.z ?? 0)];
+            if (vector.every(Number.isFinite)) radians = [vector[0] ?? 0, vector[1] ?? 0, vector[2] ?? 0];
+          }
+          if (radians) {
+            part.bendRotation = radians.map((value) => value * (180 / Math.PI));
+            if (easing) part.bendEasing = easing;
+          } else {
+            issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' has an unreadable bend/axis value; the channel was not carried.');
+          }
+        }
+      }
       frame.parts.set(partName, part);
     }
   }
@@ -211,10 +246,12 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     const defaults = partDefaults[partName] ?? [0, 0, 0];
     const positionTrack: Record<string, unknown> = {};
     const rotationTrack: Record<string, unknown> = {};
+    const bendTrack: Record<string, unknown> = {};
     const position = [0, 0, 0];
     const rotation = [0, 0, 0];
     let previousPositionEasing: string | undefined;
     let previousRotationEasing: string | undefined;
+    let previousBendEasing: string | undefined;
 
     for (const [tick, frame] of orderedFrames) {
       const part = frame.parts.get(partName);
@@ -259,8 +296,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
         previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
       }
-      if (part.bend) {
-        issues.push('Emotecraft ' + partName + ' uses bend/axis at tick ' + tick + '; its source bend values were detected and retained for the dedicated bend-rig reconstruction stage.');
+      if (part.bendRotation) {
+        const easing = easeBefore ? part.bendEasing : previousBendEasing;
+        bendTrack[timeKey] = { vector: [...part.bendRotation], ...(easing ? { easing } : {}) };
+        previousBendEasing = part.bendEasing ?? previousBendEasing;
       }
     }
 
@@ -277,6 +316,16 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         rotationTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
       }
       bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
+    }
+    if (Object.keys(bendTrack).length > 0) {
+      if (!validLoop && stopTick > endTick) {
+        const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
+        bendTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
+      }
+      bones[boneName + '_bend'] = {
+        ...(bones[boneName + '_bend'] ?? {}),
+        rotation: bendTrack,
+      };
     }
   }
 
