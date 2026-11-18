@@ -139,18 +139,20 @@ try {
       stopTick: 20,
       degrees: false,
       moves: [
-        { tick: 0, rightArm: { x: -5, y: 2 }, torso: { x: 0, pitch: 0 } },
-        { tick: 10, rightArm: { x: -4, y: 4, pitch: 1 }, torso: { x: 2, pitch: 1 } },
+        { tick: 0, rightArm: { x: -5, y: 2 }, torso: { x: 0, pitch: 0 }, body: { x: 0, pitch: 0 } },
+        { tick: 10, rightArm: { x: -4, y: 4, pitch: 1 }, torso: { x: 2, pitch: 1 }, body: { x: 3, pitch: 2 } },
       ],
     },
   }, { fileHint: 'fixture' });
   const playerClip = playerTransforms.animations[playerTransforms.idMap.playeranimator_coordinates];
   if (playerClip.bones.right_arm.position['0.5'].vector[0] !== 16 ||
       playerClip.bones.right_arm.position['0.5'].vector[1] !== -32 ||
-      playerClip.bones.body.position['0.5'].vector[0] !== -32 ||
-      Math.abs(playerClip.bones.body.rotation['0.5'].vector[0] + 57.2957795) > 0.001 ||
+      playerClip.bones.body.position['0.5'].vector[0] !== 32 ||
+      playerClip.bones.waist.position['0.5'].vector[0] !== -48 ||
+      Math.abs(playerClip.bones.body.rotation['0.5'].vector[0] - 57.2957795) > 0.001 ||
+      Math.abs(playerClip.bones.waist.rotation['0.5'].vector[0] + 114.591559) > 0.001 ||
       Math.abs(playerClip.bones.right_arm.rotation['0.5'].vector[0] - 57.2957795) > 0.001) {
-    throw new Error('Emotecraft limb pivot offsets, Bedrock position units, or torso rotation signs were not reconstructed.');
+    throw new Error('Emotecraft waist/torso hierarchy, limb pivot offsets, Bedrock position units, or rotation signs were not reconstructed.');
   }
 
   const scale = translateJavaAnimationSet({
