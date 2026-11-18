@@ -161,7 +161,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           rotationChanged = true;
         } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
       }
-      const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : undefined;
+      const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
       if (positionChanged && easing) {
         if (part.positionEasing && part.positionEasing.toLowerCase() !== easing.toLowerCase()) {
           issues.push('Emotecraft ' + partName + ' position at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
@@ -242,9 +242,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     const bendTrack: Record<string, unknown> = {};
     const position = [0, 0, 0];
     const rotation = [0, 0, 0];
-    let previousPositionEasing: string | undefined;
-    let previousRotationEasing: string | undefined;
-    let previousBendEasing: string | undefined;
+    let previousPositionTimeKey: string | undefined;
+    let previousRotationTimeKey: string | undefined;
+    let previousBendTimeKey: string | undefined;
 
     for (const [tick, frame] of orderedFrames) {
       const part = frame.parts.get(partName);
@@ -270,9 +270,13 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
             position[axis] = offset * 16;
           }
         }
-        const easing = easeBefore ? part.positionEasing : previousPositionEasing;
+        if (easeBefore && previousPositionTimeKey && part.positionEasing) {
+          const previous = positionTrack[previousPositionTimeKey] as Record<string, unknown>;
+          previous.easing = part.positionEasing;
+        }
+        const easing = easeBefore ? undefined : part.positionEasing;
         positionTrack[timeKey] = { vector: [...position], ...(easing ? { easing } : {}) };
-        previousPositionEasing = part.positionEasing ?? previousPositionEasing;
+        previousPositionTimeKey = timeKey;
       }
       if (rotationChanged) {
         for (let axis = 0; axis < 3; axis += 1) {
@@ -285,14 +289,22 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
             rotation[axis] = angle + (frame.turn ?? 0) * 360;
           }
         }
-        const easing = easeBefore ? part.rotationEasing : previousRotationEasing;
+        if (easeBefore && previousRotationTimeKey && part.rotationEasing) {
+          const previous = rotationTrack[previousRotationTimeKey] as Record<string, unknown>;
+          previous.easing = part.rotationEasing;
+        }
+        const easing = easeBefore ? undefined : part.rotationEasing;
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
-        previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
+        previousRotationTimeKey = timeKey;
       }
       if (part.bendAngle !== undefined) {
         const angleRadians = part.bendAngle * (Math.PI / 180);
         const angle = Math.abs(angleRadians);
-        const easing = easeBefore ? part.bendEasing : previousBendEasing;
+        if (easeBefore && previousBendTimeKey && part.bendEasing) {
+          const previous = bendTrack[previousBendTimeKey] as Record<string, unknown>;
+          previous.easing = part.bendEasing;
+        }
+        const easing = easeBefore ? undefined : part.bendEasing;
         // Match Emotecraft's Bedrock bend rig: the generated child segment rotates
         // around X and follows the two-pixel arc so the split mesh stays connected.
         bendTrack[timeKey] = {
@@ -308,7 +320,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           ...(bones[boneName + '_bend'] ?? {}),
           position: bendPositionTrack,
         };
-        previousBendEasing = part.bendEasing ?? previousBendEasing;
+        previousBendTimeKey = timeKey;
       }
     }
 
