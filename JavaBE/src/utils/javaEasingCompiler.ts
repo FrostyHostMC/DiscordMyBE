@@ -79,12 +79,20 @@ function descriptorParameters(descriptor: string, isStatic: boolean): Array<{ sl
 }
 
 function loadIndex(instruction: JvmInstruction): number | null {
-  const short = /^[ilfd]load_(\d+)$/.exec(instruction.mnemonic);
+  const short = /^[ailfd]load_(\\d+)$/.exec(instruction.mnemonic);
   if (short) return Number(short[1]);
-  if (/^[ilfd]load$/.test(instruction.mnemonic)) return instruction.operands[0] ?? null;
+  if (/^[ailfd]load$/.test(instruction.mnemonic)) return instruction.operands[0] ?? null;
+  if (instruction.opcode === 0xc4 && [0x15,0x16,0x17,0x18,0x19].includes(instruction.operands[0])) return instruction.operands[1] ?? null;
   return null;
 }
 
+function storeIndex(instruction: JvmInstruction): number | null {
+  const short = /^[ilfda]store_(\\d+)$/.exec(instruction.mnemonic);
+  if (short) return Number(short[1]);
+  if (/^[ilfda]store$/.test(instruction.mnemonic)) return instruction.operands[0] ?? null;
+  if (instruction.opcode === 0xc4 && [0x36,0x37,0x38,0x39,0x3a].includes(instruction.operands[0])) return instruction.operands[1] ?? null;
+  return null;
+}
 function constantNumber(instruction: JvmInstruction): number | null {
   const value = instruction.constant?.value;
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -107,10 +115,11 @@ function mathCall(instruction: JvmInstruction): { name: string; arity: number } 
   const owner = instruction.constant?.owner ?? '';
   const name = instruction.constant?.name ?? '';
   if (!/(?:java\.lang\.(?:Strict)?Math|Mth|MathHelper)$/.test(owner)) return null;
-  const unary = new Set(['sin','cos','tan','asin','acos','atan','sqrt','cbrt','abs','floor','ceil','round','exp','log','log10','signum']);
-  const binary = new Set(['pow','min','max','atan2','hypot','copySign']);
+  const unary = new Set(['sin','cos','tan','asin','acos','atan','sqrt','cbrt','abs','floor','ceil','round','exp','log','log10','signum','square','wrapDegrees']);
+  const binary = new Set(['pow','min','max','atan2','hypot','copySign','positiveModulo']);
   if (unary.has(name)) return { name, arity: 1 };
   if (binary.has(name)) return { name, arity: 2 };
+  if (name === 'clamp' || name === 'lerp') return { name, arity: 3 };
   return null;
 }
 
@@ -119,23 +128,27 @@ function mathCall(instruction: JvmInstruction): { name: string; arity: number } 
  * Branching, mutable fields, captured object state, and unknown calls are rejected rather than
  * approximated as a different curve. The caller adaptively samples the recovered function.
  */
-export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): CustomEasingFunction | null {
+export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean, capturedValues: number[] = [], instanceFields: Record<string, number> = {}): CustomEasingFunction | null {
   const params = descriptorParameters(method.descriptor, isStatic);
   const numeric = params.filter((param) => ['D','F','I','J'].includes(param.kind));
   if (numeric.length === 0) return null;
   const namedProgress = method.localVariables.find((local) =>
     /^(t|x|value|progress|partialtick|partial_tick)$/i.test(local.name));
   const progressSlot = namedProgress?.index ?? numeric[numeric.length - 1].slot;
+  const captureParameters = numeric.filter((param) => param.slot !== progressSlot);
+  if (captureParameters.length !== capturedValues.length) return null;
   const offsetToIndex = new Map(method.instructions.map((instruction, index) => [instruction.offset, index]));
 
   const execute = (progress: number): number => {
     const locals: number[] = [];
     locals[progressSlot] = Math.max(0, Math.min(1, progress));
-    const stack: number[] = [];
+    captureParameters.forEach((parameter, index) => { locals[parameter.slot] = capturedValues[index]; });
+    const thisReference = Symbol('easing-this');
+    const stack: Array<number | symbol> = [];
     let pc = 0;
     let steps = 0;
     const maxSteps = Math.max(128, method.instructions.length * 16);
-    const pop = (): number | null => stack.length > 0 ? stack.pop()! : null;
+    const pop = (): number | null => { const value = stack.pop(); return typeof value === 'number' ? value : null; };
     const jump = (instruction: JvmInstruction): boolean => {
       const target = instruction.branchTargets[0];
       const index = offsetToIndex.get(target);
@@ -149,8 +162,17 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
       const op = instruction.opcode;
       const loaded = loadIndex(instruction);
       if (loaded !== null) {
-        if (loaded !== progressSlot) return Number.NaN;
-        stack.push(locals[loaded]);
+        if (!isStatic && loaded === 0 && instruction.mnemonic.startsWith('aload')) stack.push(thisReference);
+        else if (typeof locals[loaded] === 'number') stack.push(locals[loaded]);
+        else return Number.NaN;
+        pc += 1;
+        continue;
+      }
+      const stored = storeIndex(instruction);
+      if (stored !== null) {
+        const value = pop();
+        if (value === null) return Number.NaN;
+        locals[stored] = value;
         pc += 1;
         continue;
       }
@@ -167,6 +189,14 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
         if (owner === 'java.lang.Math' && name === 'PI') stack.push(Math.PI);
         else if (owner === 'java.lang.Math' && name === 'E') stack.push(Math.E);
         else return Number.NaN;
+        pc += 1;
+        continue;
+      }
+      if (op === 0xb4) {
+        const receiver = stack.pop();
+        const name = instruction.constant?.name ?? '';
+        if (receiver !== thisReference || typeof instanceFields[name] !== 'number') return Number.NaN;
+        stack.push(instanceFields[name]);
         pc += 1;
         continue;
       }
@@ -188,7 +218,14 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
         pc += 1;
         continue;
       }
-      if (op >= 0x85 && op <= 0x93) { pc += 1; continue; }
+      if (op >= 0x85 && op <= 0x93) {
+        const value = pop(); if (value === null) return Number.NaN;
+        const converted = [0x88,0x8b,0x8e,0x8c,0x8f].includes(op) ? Math.trunc(value) :
+          op === 0x91 ? ((Math.trunc(value) << 24) >> 24) :
+          op === 0x92 ? (Math.trunc(value) & 0xffff) :
+          op === 0x93 ? ((Math.trunc(value) << 16) >> 16) : value;
+        stack.push(converted); pc += 1; continue;
+      }
       if (op === 0x59 || op === 0x5c) {
         if (stack.length === 0) return Number.NaN;
         stack.push(stack[stack.length - 1]);
@@ -247,6 +284,11 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
           case 'max': value = Math.max(args[0], args[1]); break;
           case 'hypot': value = Math.hypot(args[0], args[1]); break;
           case 'copySign': value = Math.sign(args[1]) * Math.abs(args[0]); break;
+          case 'square': value = args[0] * args[0]; break;
+          case 'wrapDegrees': value = ((args[0] + 180) % 360 + 360) % 360 - 180; break;
+          case 'positiveModulo': value = ((args[0] % args[1]) + args[1]) % args[1]; break;
+          case 'clamp': value = Math.min(args[2], Math.max(args[1], args[0])); break;
+          case 'lerp': value = args[1] + args[0] * (args[2] - args[1]); break;
           default: return Number.NaN;
         }
         stack.push(value);
@@ -291,21 +333,52 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
   return fn;
 }
 
-function lambdaTarget(method: JvmMethodIR): { owner: string; name: string } | null {
-  const targets = new Map<string, { owner: string; name: string }>();
-  for (const instruction of method.instructions) {
-    const bootstrap = instruction.constant?.bootstrapMethod;
-    for (const argument of bootstrap?.arguments ?? []) {
-      const reference = argument.reference;
-      if (argument.kind === 'MethodHandle' && reference?.owner && reference.name) {
-        const target = { owner: reference.owner, name: reference.name };
-        targets.set(target.owner + '#' + target.name, target);
-      }
-    }
+function lambdaTargetAt(method: JvmMethodIR, callIndex: number): { owner: string; name: string; descriptor?: string } | null {
+  const bootstrap = method.instructions[callIndex]?.constant?.bootstrapMethod;
+  const targets = new Map<string, { owner: string; name: string; descriptor?: string }>();
+  for (const argument of bootstrap?.arguments ?? []) {
+    const reference = argument.reference;
+    if (argument.kind !== 'MethodHandle' || !reference?.owner || !reference.name) continue;
+    const target = { owner: reference.owner, name: reference.name, descriptor: reference.descriptor };
+    targets.set(target.owner + '#' + target.name + '#' + (target.descriptor ?? ''), target);
   }
   return targets.size === 1 ? [...targets.values()][0] : null;
 }
 
+function captureValuesForLambda(method: JvmMethodIR, callIndex: number): number[] | null {
+  const descriptor = method.instructions[callIndex]?.constant?.descriptor ?? '';
+  const parameters = descriptorParameters(descriptor, true);
+  if (parameters.length === 0) return [];
+  if (parameters.some((parameter) => !['D','F','I','J'].includes(parameter.kind))) return null;
+  const values: number[] = [];
+  for (let index = callIndex - 1; index >= 0 && values.length < parameters.length; index--) {
+    const instruction = method.instructions[index];
+    const opcode = instruction.opcode;
+    if (instruction.mnemonic.startsWith('ldc') || (opcode >= 0x02 && opcode <= 0x11)) {
+      const value = constantNumber(instruction); if (value === null) return null; values.unshift(value); continue;
+    }
+    if (opcode === 0xb2 && instruction.constant?.owner === 'java.lang.Math' && instruction.constant.name === 'PI') { values.unshift(Math.PI); continue; }
+    if (opcode === 0xb2 && instruction.constant?.owner === 'java.lang.Math' && instruction.constant.name === 'E') { values.unshift(Math.E); continue; }
+    if (opcode === 0x00) continue;
+    return null;
+  }
+  return values.length === parameters.length ? values : null;
+}
+
+function instanceNumericFields(easingClass: JvmClassIR): Record<string, number> {
+  const values: Record<string, number> = {};
+  for (const method of easingClass.methods.filter((candidate) => candidate.name === '<init>')) {
+    for (let index = 0; index < method.instructions.length; index++) {
+      const instruction = method.instructions[index];
+      if (instruction.opcode !== 0xb5 || !instruction.constant?.name) continue;
+      for (let previous = index - 1; previous >= 0 && previous >= index - 3; previous--) {
+        const value = constantNumber(method.instructions[previous]);
+        if (value !== null) { values[instruction.constant.name] = value; break; }
+      }
+    }
+  }
+  return values;
+}
 function registrationName(method: JvmMethodIR, callIndex: number): string | null {
   for (let index = callIndex - 1; index >= 0 && index >= callIndex - 12; index--) {
     const instruction = method.instructions[index];
@@ -356,17 +429,18 @@ export function buildJavaCustomEasingRegistry(classes: JvmClassIR[]): JavaEasing
           const targetMethod = candidates?.find((candidate) => /ease|apply|value/i.test(candidate.name)) ??
             (candidates?.length === 1 ? candidates[0] : undefined);
           register(name, className ?? item.name, targetMethod?.name ?? '<unresolved>',
-            targetMethod ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0) : null);
+            targetMethod ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0, [], instanceNumericFields(easingClass!)) : null);
           continue;
         }
-        const target = lambdaTarget(method);
+        const target = lambdaTargetAt(method, callIndex);
         if (!target) {
           withheld.push({ name, sourceClass: item.name, reason: 'The registration call did not have one unambiguous invokedynamic method target.' });
           continue;
         }
         const targetClass = byName.get(target.owner);
-        const targetMethod = targetClass?.methods.find((candidate) => candidate.name === target.name);
-        register(name, target.owner, target.name, targetMethod ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0) : null);
+        const targetMethod = targetClass?.methods.find((candidate) => candidate.name === target.name && (!target.descriptor || candidate.descriptor === target.descriptor));
+        const captures = captureValuesForLambda(method, callIndex);
+        register(name, target.owner, target.name, targetMethod && captures ? compileJvmScalarEasing(targetMethod, (targetMethod.access & 0x0008) !== 0, captures) : null);
       }
     }
   }

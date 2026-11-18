@@ -96,6 +96,57 @@ try {
     throw new Error('A branch-based custom Java easing was not interpreted correctly: ' + JSON.stringify(piecewiseRegistry));
   }
 
+  // Captured numeric lambda arguments are part of the easing function, not a reason to reject it.
+  const capturedHandle = { index: 30, tag: 15, kind: 'MethodHandle', reference: { index: 31, tag: 10, kind: 'Methodref', owner: 'fixture.EasingMod', name: 'lambda$register$2', descriptor: '(DD)D' } };
+  const capturedRegistration = {
+    ...registration, name: 'registerCaptured',
+    instructions: [
+      { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: { index: 32, tag: 8, kind: 'String', value: 'fixture_captured_curve' }, branchTargets: [] },
+      { offset: 1, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { index: 33, tag: 6, kind: 'Double', value: 3 }, branchTargets: [] },
+      { offset: 2, opcode: 0xba, mnemonic: 'invokedynamic', size: 1, operands: [], constant: { index: 34, tag: 18, kind: 'InvokeDynamic', descriptor: '(D)Ljava/util/function/DoubleUnaryOperator;', bootstrapMethod: { methodReference: undefined, arguments: [capturedHandle] } }, branchTargets: [] },
+      { offset: 3, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: methodRef, branchTargets: [] },
+    ],
+  };
+  const capturedLambda = {
+    ...lambda, name: 'lambda$register$2', descriptor: '(DD)D', maxLocals: 4,
+    instructions: [
+      { offset: 0, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 1, opcode: 0x28, mnemonic: 'dload_2', size: 1, operands: [], branchTargets: [] },
+      { offset: 2, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+      { offset: 3, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+    ],
+    blocks: [{ start: 0, end: 4, instructionOffsets: [0,1,2,3], successors: [], exceptionalSuccessors: [] }],
+    localVariables: [{ name: 'progress', descriptor: 'D', index: 2, start: 0, length: 4 }],
+  };
+  const storedRegistration = {
+    ...registration, name: 'registerStored',
+    instructions: [
+      { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: { index: 35, tag: 8, kind: 'String', value: 'fixture_stored_curve' }, branchTargets: [] },
+      { offset: 1, opcode: 0xba, mnemonic: 'invokedynamic', size: 1, operands: [], constant: { index: 36, tag: 18, kind: 'InvokeDynamic', descriptor: '()Ljava/util/function/DoubleUnaryOperator;', bootstrapMethod: { methodReference: undefined, arguments: [{ index: 37, tag: 15, kind: 'MethodHandle', reference: { index: 38, tag: 10, kind: 'Methodref', owner: 'fixture.EasingMod', name: 'lambda$register$3', descriptor: '(D)D' } }] } }, branchTargets: [] },
+      { offset: 2, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: methodRef, branchTargets: [] },
+    ],
+  };
+  const storedLambda = {
+    ...lambda, name: 'lambda$register$3',
+    instructions: [
+      { offset: 0, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 1, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 2, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+      { offset: 3, opcode: 0x49, mnemonic: 'dstore_2', size: 1, operands: [], branchTargets: [] },
+      { offset: 4, opcode: 0x28, mnemonic: 'dload_2', size: 1, operands: [], branchTargets: [] },
+      { offset: 5, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+    ],
+    blocks: [{ start: 0, end: 6, instructionOffsets: [0,1,2,3,4,5], successors: [], exceptionalSuccessors: [] }],
+  };
+  owner.methods.push(capturedRegistration, capturedLambda, storedRegistration, storedLambda);
+  const advancedRegistry = buildJavaCustomEasingRegistry([owner]);
+  if (!advancedRegistry.functions.fixture_captured_curve || Math.abs(advancedRegistry.functions.fixture_captured_curve(0.5) - 1.5) > 0.000001) {
+    throw new Error('A captured numeric lambda parameter was not restored from its invokedynamic call site.');
+  }
+  if (!advancedRegistry.functions.fixture_stored_curve || Math.abs(advancedRegistry.functions.fixture_stored_curve(0.5) - 0.25) > 0.000001) {
+    throw new Error('A custom easing that stores intermediate values in JVM locals was not interpreted correctly.');
+  }
+
   const classRegistration = {
     ...registration,
     name: 'registerClassEasing',
@@ -111,25 +162,37 @@ try {
   const customEaseClass = {
     path: 'fixture/CustomEase.class', name: 'fixture.CustomEase',
     superName: 'software.bernie.geckolib.animation.EasingType',
-    interfaces: [], access: 0x0001, majorVersion: 61, minorVersion: 0, fields: [],
+    interfaces: [], access: 0x0001, majorVersion: 61, minorVersion: 0,
+    fields: [{ name: 'factor', descriptor: 'D', access: 0x0012 }],
     methods: [{
-      name: 'ease', descriptor: '(D)D', access: 0x0001, maxStack: 4, maxLocals: 3,
+      name: '<init>', descriptor: '()V', access: 0x0001, maxStack: 3, maxLocals: 1,
       instructions: [
-        { offset: 0, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
-        { offset: 1, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
-        { offset: 2, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
-        { offset: 3, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+        { offset: 0, opcode: 0x2a, mnemonic: 'aload_0', size: 1, operands: [], branchTargets: [] },
+        { offset: 1, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 4 }, branchTargets: [] },
+        { offset: 2, opcode: 0xb5, mnemonic: 'putfield', size: 1, operands: [], constant: { index: 40, tag: 9, kind: 'Fieldref', owner: 'fixture.CustomEase', name: 'factor', descriptor: 'D' }, branchTargets: [] },
+        { offset: 3, opcode: 0xb1, mnemonic: 'return', size: 1, operands: [], branchTargets: [] },
       ],
       blocks: [{ start: 0, end: 4, instructionOffsets: [0,1,2,3], successors: [], exceptionalSuccessors: [] }],
-      calls: [], fieldAccesses: [], localVariables: [{ name: 'progress', descriptor: 'D', index: 1, start: 0, length: 4 }],
-      exceptionHandlers: [], codeLength: 4, decodeWarnings: [],
+      calls: [], fieldAccesses: [], localVariables: [], exceptionHandlers: [], codeLength: 4, decodeWarnings: [],
+    }, {
+      name: 'ease', descriptor: '(D)D', access: 0x0001, maxStack: 3, maxLocals: 3,
+      instructions: [
+        { offset: 0, opcode: 0x2a, mnemonic: 'aload_0', size: 1, operands: [], branchTargets: [] },
+        { offset: 1, opcode: 0xb4, mnemonic: 'getfield', size: 1, operands: [], constant: { index: 41, tag: 9, kind: 'Fieldref', owner: 'fixture.CustomEase', name: 'factor', descriptor: 'D' }, branchTargets: [] },
+        { offset: 2, opcode: 0x27, mnemonic: 'dload_1', size: 1, operands: [], branchTargets: [] },
+        { offset: 3, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+        { offset: 4, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+      ],
+      blocks: [{ start: 0, end: 5, instructionOffsets: [0,1,2,3,4], successors: [], exceptionalSuccessors: [] }],
+      calls: [], fieldAccesses: [], localVariables: [{ name: 'progress', descriptor: 'D', index: 1, start: 0, length: 5 }],
+      exceptionHandlers: [], codeLength: 5, decodeWarnings: [],
     }],
     references: [], bootstrapMethods: [], decodeWarnings: [],
   };
   const classRegistry = buildJavaCustomEasingRegistry([owner, customEaseClass]);
   if (!classRegistry.functions.fixture_custom_class ||
-      Math.abs(classRegistry.functions.fixture_custom_class(0.5) - 0.25) > 0.000001) {
-    throw new Error('A registered GeckoLib EasingType subclass was not compiled from its instance method.');
+      Math.abs(classRegistry.functions.fixture_custom_class(0.5) - 2) > 0.000001) {
+    throw new Error('A registered GeckoLib EasingType subclass with constructor-backed numeric state was not compiled from its instance method.');
   }
 
   const result = analyzeChannel('rotation', {
