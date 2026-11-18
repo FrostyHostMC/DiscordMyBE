@@ -144,6 +144,29 @@ try {
     throw new Error('Emotecraft endTick reset did not retain the final keyframe easing.');
   }
 
+  const stepClipResult = translateJavaAnimationSet({
+    name: 'step_easing',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 20,
+      degrees: true,
+      easeBeforeKeyframe: true,
+      moves: [
+        { tick: 0, head: { pitch: 0 } },
+        { tick: 10, easing: 'step', head: { pitch: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const stepClip = stepClipResult.animations[stepClipResult.idMap.step_easing];
+  const stepKey = stepClip.bones.head.rotation['0.5'];
+  if (Math.abs(stepClip.bones.head.rotation['0.25'][0] - 45) > 0.001 ||
+      Math.abs(stepKey.pre[0] - 45) > 0.001 ||
+      Math.abs(stepKey.post[0] - 90) > 0.001) {
+    throw new Error('Emotecraft STEP easing did not preserve its plateau and exact endpoint jump.');
+  }
+
   const zeroReturnLoop = translateJavaAnimationSet({
     name: 'zero_return_loop',
     emote: {
