@@ -38,7 +38,7 @@ try {
   if (Math.abs(clip.bones.head.rotation['0.5'][0] - 22.5) > 0.0001) {
     throw new Error('Emotecraft easing-after-frame or radians-to-degrees conversion was not applied.');
   }
-  if (clip.bones.head.rotation['2.5'].vector[0] !== 0) {
+  if (clip.bones.head.rotation['2.5'][0] !== 0) {
     throw new Error('Emotecraft stopTick pose reset keyframe was not emitted.');
   }
 

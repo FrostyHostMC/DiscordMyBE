@@ -243,7 +243,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
   }
 
-  const durationTick = Math.max(endTick, stopTick) - beginTick;
+  const durationTick = (loop ? endTick : Math.max(endTick, stopTick)) - beginTick;
   return {
     bones,
     animation_length: Math.max(0, durationTick / 20),
