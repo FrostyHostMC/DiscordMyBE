@@ -160,7 +160,7 @@ try {
     },
   }, { fileHint: 'fixture' });
   const bendClip = bend.animations[bend.idMap.bend_axis];
-  const bendVector = bendClip.bones.right_arm_bend.rotation['0.5'].vector;
+  const bendVector = bendClip.bones.right_arm_bend.rotation['0.5'];
   if (Math.abs(bendVector[0]) > 0.001 ||
       Math.abs(bendVector[1] - (0.5 * 180 / Math.PI)) > 0.001 ||
       Math.abs(bendVector[2]) > 0.001) {
