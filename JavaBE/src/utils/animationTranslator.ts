@@ -111,8 +111,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   type PartFrame = {
     position: Record<string, number>;
     rotation: Record<string, number>;
+    scale: Record<string, number>;
     positionEasing?: string;
     rotationEasing?: string;
+    scaleEasing?: string;
     bendAngle?: number;
     bendEasing?: string;
     bend: boolean;
@@ -142,9 +144,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
       const transform = move[partName];
       if (!isPlainObject(transform)) continue;
-      const part = frame.parts.get(partName) ?? { position: {}, rotation: {}, bend: false };
+      const part = frame.parts.get(partName) ?? { position: {}, rotation: {}, scale: {}, bend: false };
       let positionChanged = false;
       let rotationChanged = false;
+      let scaleChanged = false;
       for (const axis of ['x', 'y', 'z']) {
         if (transform[axis] === undefined) continue;
         const value = Number(transform[axis]);
@@ -161,6 +164,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           rotationChanged = true;
         } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
       }
+      for (const [index, axis] of ['scaleX', 'scaleY', 'scaleZ'].entries()) {
+        if (transform[axis] === undefined) continue;
+        const value = Number(transform[axis]);
+        if (Number.isFinite(value)) {
+          part.scale[String(index)] = value;
+          scaleChanged = true;
+        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
+      }
       const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
       if (positionChanged && easing) {
         if (part.positionEasing && part.positionEasing.toLowerCase() !== easing.toLowerCase()) {
@@ -173,6 +184,12 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           issues.push('Emotecraft ' + partName + ' rotation at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
         }
         part.rotationEasing = easing;
+      }
+      if (scaleChanged && easing) {
+        if (part.scaleEasing && part.scaleEasing.toLowerCase() !== easing.toLowerCase()) {
+          issues.push('Emotecraft ' + partName + ' scale at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
+        }
+        part.scaleEasing = easing;
       }
       if (transform.bend !== undefined) {
         part.bend = true;
@@ -239,14 +256,18 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     const defaults = partDefaults[partName] ?? [0, 0, 0];
     const positionTrack: Record<string, unknown> = {};
     const rotationTrack: Record<string, unknown> = {};
+    const scaleTrack: Record<string, unknown> = {};
     const bendTrack: Record<string, unknown> = {};
     const position = [0, 0, 0];
     const rotation = [0, 0, 0];
+    const scale = [1, 1, 1];
     let previousPositionTimeKey: string | undefined;
     let previousRotationTimeKey: string | undefined;
+    let previousScaleTimeKey: string | undefined;
     let previousBendTimeKey: string | undefined;
     let previousPositionEasing: string | undefined;
     let previousRotationEasing: string | undefined;
+    let previousScaleEasing: string | undefined;
     let previousBendEasing: string | undefined;
 
     for (const [tick, frame] of orderedFrames) {
@@ -258,6 +279,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       const rotationAxes = ['pitch', 'yaw', 'roll'] as const;
       const positionChanged = positionAxes.some((axis) => part.position[axis] !== undefined);
       const rotationChanged = rotationAxes.some((axis) => part.rotation[axis] !== undefined);
+      const scaleChanged = ['0', '1', '2'].some((axis) => part.scale[axis] !== undefined);
 
       if (positionChanged) {
         for (let axis = 0; axis < 3; axis += 1) {
@@ -301,6 +323,20 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
         previousRotationTimeKey = timeKey;
         previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
+      }
+      if (scaleChanged) {
+        for (let axis = 0; axis < 3; axis += 1) {
+          const value = part.scale[String(axis)];
+          if (value !== undefined) scale[axis] = value;
+        }
+        if (easeBefore && previousScaleTimeKey && part.scaleEasing) {
+          const previous = scaleTrack[previousScaleTimeKey] as Record<string, unknown>;
+          previous.easing = part.scaleEasing;
+        }
+        const easing = easeBefore ? undefined : part.scaleEasing;
+        scaleTrack[timeKey] = { vector: [...scale], ...(easing ? { easing } : {}) };
+        previousScaleTimeKey = timeKey;
+        previousScaleEasing = part.scaleEasing ?? previousScaleEasing;
       }
       if (part.bendAngle !== undefined) {
         const angleRadians = part.bendAngle * (Math.PI / 180);
@@ -349,6 +385,16 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         };
       }
       bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
+    }
+    if (Object.keys(scaleTrack).length > 0) {
+      if (!validLoop) {
+        const resetTime = String(Math.round((animationEndTick / 20) * 1000) / 1000);
+        scaleTrack[resetTime] = {
+          vector: [1, 1, 1],
+          easing: easeBefore ? 'easeInOutSine' : previousScaleEasing ?? 'easeInOutSine',
+        };
+      }
+      bones[boneName] = { ...(bones[boneName] ?? {}), scale: scaleTrack };
     }
     if (Object.keys(bendTrack).length > 0) {
       const bendBoneName = boneName + '_bend';
