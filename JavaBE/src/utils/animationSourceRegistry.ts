@@ -68,6 +68,7 @@ export function importAdditionalAnimationSources(
   modId: string,
   skipPaths: Set<string>,
   onLog?: (line: string) => void,
+  customEasings?: Record<string, (progress: number) => number>,
 ): ExtraAnimationImport {
   const log: string[] = [];
   const logLine = (line: string) => {
@@ -118,6 +119,7 @@ export function importAdditionalAnimationSources(
     entries,
     modId,
     onLog: logLine,
+    customEasings,
   });
 
   // Pull all universally discovered clips into the registry
@@ -210,7 +212,7 @@ export function importAdditionalAnimationSources(
       continue;
     }
 
-    const translation = translateJavaAnimationSet(parsed, { fileHint: fileOwnerOf(path) || 'clip' });
+    const translation = translateJavaAnimationSet(parsed, { fileHint: fileOwnerOf(path) || 'clip', customEasings });
     const sourceIdByTranslatedId = new Map(
       Object.entries(translation.idMap).map(([sourceId, translatedId]) => [translatedId, sourceId]),
     );

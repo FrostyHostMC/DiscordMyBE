@@ -730,7 +730,7 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
         if (isPlainObject(rawValue)) track.relative_to = rawValue;
         continue;
       }
-      const analysis = analyzeChannel(sourceChannel, rawValue);
+      const analysis = analyzeChannel(sourceChannel, rawValue, { customEasings });
       if (!analysis.channel) {
         const detail = analysis.problems[0]?.detail ?? `channel "${sourceChannel}" has no Bedrock equivalent`;
         issues.push({ clip: clipId, bone: boneName, channel: sourceChannel, kind: 'unsupported', detail });

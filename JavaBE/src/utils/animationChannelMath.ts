@@ -391,7 +391,7 @@ function numericVector(value: KeyframeValue, channel: BedrockChannel): number[] 
  * The returned `value` is always safe to write into a shipped animation document, so a
  * caller can either report it or repair the file with it.
  */
-export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnalysis {
+export function analyzeChannel(sourceChannel: string, raw: unknown, options: { customEasings?: Record<string, (progress: number) => number> } = {}): ChannelAnalysis {
   const channel = CHANNEL_ALIASES[sourceChannel.trim().toLowerCase()] ?? null;
   if (!channel) {
     return {
@@ -476,7 +476,14 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     let recognized = true;
     for (let time = previous.time + sampleStep; time < current.time - 0.000001; time += sampleStep) {
       const easingProgress = Math.max(0, Math.min(1, Math.round(((time - previous.time) / duration) * 1e9) / 1e9));
-      const eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
+      let eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
+      if (eased === null) {
+        const normalizedName = current.easing.toLowerCase().replace(/[-_\\s]/g, '');
+        const custom = options.customEasings?.[current.easing] ?? options.customEasings?.[normalizedName];
+        if (custom) {
+          try { eased = custom(easingProgress); } catch { eased = null; }
+        }
+      }
       if (eased === null || !Number.isFinite(eased)) {
         recognized = false;
         break;

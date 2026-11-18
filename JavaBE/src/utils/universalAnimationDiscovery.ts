@@ -139,6 +139,7 @@ export interface UniversalAnimationDiscoveryInput {
   controllerClasses?: string[];
   stateMachineClasses?: string[];
   entityClasses?: string[];
+  customEasings?: Record<string, (progress: number) => number>;
 }
 
 /** Humanoid bones indicative of player model animation */
@@ -684,7 +685,7 @@ function detectRotationUnit(clip: BedrockAnimationClip): 'degrees' | 'radians' {
 export function runUniversalAnimationDiscovery(
   input: UniversalAnimationDiscoveryInput,
 ): UniversalAnimationDiscoveryReport {
-  const { entries, modId, onLog, controllerClasses, stateMachineClasses } = input;
+  const { entries, modId, onLog, controllerClasses, stateMachineClasses, customEasings } = input;
   const log: string[] = [];
   const logLine = (msg: string) => {
     log.push(msg);
