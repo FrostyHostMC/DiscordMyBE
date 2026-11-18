@@ -78,6 +78,7 @@ export interface AnimationRuntimeReport {
   counts: {
     definitions: number;
     definitionsWithMotion: number;
+    definitionsWithTimedEvents: number;
     clipsRegistered: number;
     clipsActivated: number;
     clipsDeliberatelyInactive: number;
@@ -157,20 +158,24 @@ export function validateAnimationRuntime(input: {
     [...registry.clips.entries()].map(([clipId, clip]) => [clipId, { bones: clip.bones, path: clip.path }]),
   );
   const motionDefinitions = [...definitions.values()].filter((entry) => entry.bones.length > 0);
+  const timedEventDefinitions = [...definitions.values()].filter((entry) => entry.hasTimedEvents);
+  const playableDefinitions = [...definitions.values()].filter((entry) => entry.bones.length > 0 || entry.hasTimedEvents);
 
   checks.push({
     id: 'definitions',
     label: 'Animation definitions',
-    rule: 'Every shipped animation defines at least one bone channel; a definition that moves nothing can never be played.',
-    status: definitions.size === 0 ? 'not-measured' : motionDefinitions.length === definitions.size ? 'pass' : 'unresolved',
+    rule: 'Every shipped animation must contain bone tracks or timed sound, particle, or timeline events; event-only clips are valid definitions.',
+    status: definitions.size === 0 ? 'not-measured' : playableDefinitions.length === definitions.size ? 'pass' : 'unresolved',
     detail:
       definitions.size === 0
         ? 'The pack ships no animation definition, so there is nothing to play (not measured, never passed).'
-        : `${motionDefinitions.length}/${definitions.size} definition(s) carry bone channels; ${definitions.size - motionDefinitions.length} move nothing.`,
+        : `${motionDefinitions.length}/${definitions.size} definition(s) carry bone channels; ${timedEventDefinitions.length} carry timed effect/timeline events; ${definitions.size - playableDefinitions.length} are empty.`,
   });
-  if (definitions.size > 0 && motionDefinitions.length < definitions.size) {
+  if (definitions.size > 0 && playableDefinitions.length < definitions.size) {
     for (const [clipId, entry] of definitions) {
-      if (entry.bones.length === 0) errors.push(`${clipId} (${entry.path}) declares no bone channel and can never move the model`);
+      if (entry.bones.length === 0 && !entry.hasTimedEvents) {
+        errors.push(`${clipId} (${entry.path}) declares no bone channel or timed effect/timeline event`);
+      }
     }
   }
 
@@ -504,7 +509,7 @@ export function validateAnimationRuntime(input: {
           : missingExpectedDefinitions.length > 0
             ? 'unresolved'
             : 'pass',
-      detail: `${definitions.size} unique animation id(s) are declared in final shipped documents; ${expectedClipSet.size - missingExpectedDefinitions.length}/${expectedClipSet.size} expected source id(s) resolve in that same export; ${definitions.size - motionDefinitions.length} definitions carry no bone tracks.`,
+      detail: `${definitions.size} unique animation id(s) are declared in final shipped documents; ${expectedClipSet.size - missingExpectedDefinitions.length}/${expectedClipSet.size} expected source id(s) resolve in that same export; ${definitions.size - playableDefinitions.length} definitions carry neither bone tracks nor timed effect/timeline events.`,
     },
     {
       index: 4,
@@ -752,6 +757,7 @@ export function validateAnimationRuntime(input: {
     counts: {
       definitions: registry.metrics.clipsDefined,
       definitionsWithMotion: registry.metrics.clipsWithMotion,
+      definitionsWithTimedEvents: registry.metrics.clipsWithTimedEvents,
       clipsRegistered,
       clipsActivated,
       clipsDeliberatelyInactive: deliberatelyInactive.size,

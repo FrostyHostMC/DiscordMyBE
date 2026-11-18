@@ -39,6 +39,7 @@ export interface RegistryClip {
   id: string;
   path: string;
   bones: string[];
+  hasTimedEvents: boolean;
   body: Record<string, any>;
 }
 
@@ -97,6 +98,7 @@ export interface AnimationRegistryMetrics {
   clipRegistrationEdges: number;
   duplicateAnimationIds: Array<{ id: string; definitions: number }>;
   clipsWithMotion: number;
+  clipsWithTimedEvents: number;
   clipsRegistered: number;
   /** Clip ids a client entity can select (direct registration or an activated controller state). */
   registeredClipIds: string[];
@@ -195,7 +197,11 @@ function collectClips(json: Map<string, Record<string, any>>): {
       const bones = record.bones && typeof record.bones === 'object' && !Array.isArray(record.bones)
         ? Object.keys(record.bones as Record<string, unknown>)
         : [];
-      clips.set(clipId, { id: clipId, path, bones, body: record });
+      const hasTimedEvents = ['sound_effects', 'particle_effects', 'timeline'].some((key) => {
+        const events = record[key];
+        return Boolean(events && typeof events === 'object' && !Array.isArray(events) && Object.keys(events).length > 0);
+      });
+      clips.set(clipId, { id: clipId, path, bones, hasTimedEvents, body: record });
     }
   }
   return {
@@ -657,6 +663,7 @@ export function buildAnimationResourceRegistry(input: {
     clipRegistrationEdges: registrationEdges.size,
     duplicateAnimationIds: clipScan.duplicateIds,
     clipsWithMotion: [...clips.values()].filter((clip) => clip.bones.length > 0).length,
+  clipsWithTimedEvents: [...clips.values()].filter((clip) => clip.hasTimedEvents).length,
     clipsRegistered: registered.size,
     registeredClipIds: [...registered],
     clipsActivatedByAnimate: animateActivated.size,
@@ -714,7 +721,7 @@ export function buildAnimationResourceRegistry(input: {
 
 export function describeRegistryScopes(metrics: AnimationRegistryMetrics): string[] {
   return [
-    `definitions: ${metrics.clipsDefined} unique animation id(s) in ${metrics.animationDefinitionFiles} final animation document(s); ${metrics.clipsWithMotion} have bone tracks${metrics.duplicateAnimationIds.length > 0 ? `; ${metrics.duplicateAnimationIds.length} id(s) are defined in multiple documents` : ''}.`,
+    `definitions: ${metrics.clipsDefined} unique animation id(s) in ${metrics.animationDefinitionFiles} final animation document(s); ${metrics.clipsWithMotion} have bone tracks and ${metrics.clipsWithTimedEvents} have timed effect/timeline events${metrics.duplicateAnimationIds.length > 0 ? `; ${metrics.duplicateAnimationIds.length} id(s) are defined in multiple documents` : ''}.`,
     `entity bindings: ${metrics.animationAliasesDeclared} final animation-map alias(es) across ${metrics.clientEntities} client entities; these include vanilla names and controller aliases. ${metrics.clipRegistrationEdges} unique entity/clip selection edge(s) resolve to ${metrics.clipsRegistered} unique custom clip id(s).`,
     `registration: ${metrics.clipsRegistered}/${metrics.clipsDefined} unique defined ids can be selected by at least one client entity through a direct alias or a reachable controller state.`,
     `activation: ${metrics.clipsActivated}/${metrics.clipsRegistered} unique registered ids have at least one final activation path; path-type counts can overlap — ${metrics.clipsActivatedByAnimate} animate, ${metrics.clipsActivatedByController} controller, ${metrics.clipsActivatedByScript} verified script calls; ${metrics.unactivatedClips.length} have no path, ${metrics.deliberatelyInactiveClips.length} are intentionally withheld.`,
