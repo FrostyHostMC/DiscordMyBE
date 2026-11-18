@@ -14,6 +14,7 @@ const server = await createServer({
 try {
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
   const { synthesizePlayerAnimationController } = await server.ssrLoadModule('/src/utils/playerAnimationController.ts');
+  const { buildPlayerAnimationPort } = await server.ssrLoadModule('/src/utils/playerAnimationPipeline.ts');
   const methodRef = (name) => ({
     index: 1, tag: 10, kind: 'Methodref', owner: 'fixture.PlayerActions', name, descriptor: '()V',
   });
@@ -53,15 +54,47 @@ try {
     archiveEntries: [],
   });
   const attack = report.triggers.find((trigger) => trigger.clipId === 'animation.fixture.attack');
-  if (!attack || attack.status !== 'mapped' || attack.sourcePriority !== 12 || attack.runtimeTrigger !== 'triggerAnim') {
+  if (!attack || attack.status !== 'script-driven' || !attack.scriptDriven || attack.runtimeEvent !== 'entityHitEntity' || attack.sourcePriority !== 12 || attack.runtimeTrigger !== 'triggerAnim') {
     throw new Error("Player trigger bytecode did not recover the exact clip's attack condition, priority, and runtime trigger: " + JSON.stringify(report));
   }
+
+  const playerPort = buildPlayerAnimationPort({
+    modId: 'fixture',
+    clips,
+    triggers: [attack],
+    decisions: [],
+    evidence: {
+      classesScanned: 0,
+      playerModelClasses: [],
+      playerApiTokens: [],
+      firstPersonEvidence: [],
+      offhandEvidence: [],
+      dualWieldDetected: false,
+      summary: 'fixture',
+    },
+  });
+  if (!playerPort.scriptCode.includes('entityHitEntity') ||
+      !playerPort.scriptCode.includes('world.afterEvents[eventName]') ||
+      !playerPort.scriptCode.includes('event.damagingEntity') ||
+      !playerPort.scriptCode.includes('player.playAnimation(action.clipId') ||
+      playerPort.report.runtimeTriggerActions !== 1) {
+    throw new Error('A bytecode-proven attack trigger did not generate a real Bedrock entityHitEntity playback adapter.');
+  }
+
+  const priorityAttack = {
+    ...attack,
+    status: 'mapped',
+    scriptDriven: false,
+    runtimeEvent: undefined,
+    runtimeTrigger: undefined,
+    condition: 'query.is_attacking',
+  };
 
   const controller = synthesizePlayerAnimationController({
     modId: 'fixture',
     clips,
     triggers: [
-      attack,
+      priorityAttack,
       {
         clipId: 'animation.fixture.hurt', shortName: 'ported_hurt', concept: 'hurt',
         condition: 'query.hurt_time > 0', javaEvidence: 'fixture.PlayerActions.hurt',
@@ -73,11 +106,11 @@ try {
   const controllerJson = JSON.parse(Object.values(controller.files)[0]);
   const machine = Object.values(controllerJson.animation_controllers)[0];
   const orderedClips = Object.values(machine.states).flatMap((state) => Array.isArray(state.animations) ? state.animations : []);
-  if (orderedClips[0] !== attack.clipId) {
+  if (orderedClips[0] !== priorityAttack.clipId) {
     throw new Error('Recovered Java source priority did not outrank the fallback concept priority: ' + orderedClips.join(', '));
   }
 
-  console.log('[PASS] Bytecode-correlated player clips recover runtime trigger calls and explicit layer priorities; the controller honors source priority over inferred concept priority.');
+  console.log('[PASS] Bytecode-correlated player clips generate Bedrock after-event playback and preserve explicit source layer priority.');
 } finally {
   await server.close();
 }

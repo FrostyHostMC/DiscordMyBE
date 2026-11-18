@@ -542,6 +542,23 @@ export function translatePlayerTriggers(options: {
     });
   }
 
+  const runtimeGroups = new Map<PlayerRuntimeEvent, PlayerClipTrigger[]>();
+  for (const trigger of triggers) {
+    if (!trigger.scriptDriven || !trigger.runtimeEvent) continue;
+    const group = runtimeGroups.get(trigger.runtimeEvent) ?? [];
+    group.push(trigger);
+    runtimeGroups.set(trigger.runtimeEvent, group);
+  }
+  for (const [eventName, group] of runtimeGroups) {
+    if (group.length <= 1) continue;
+    for (const trigger of group) {
+      trigger.status = 'unresolved';
+      trigger.scriptDriven = false;
+      trigger.runtimeEvent = undefined;
+      trigger.note = `Multiple source clips resolve to the same ${eventName} event; without a unique bytecode branch-to-clip condition, no one-shot animation is guessed or played.`;
+    }
+  }
+
   // No trigger is inferred from a clip name, duration, loop flag, or bone layout.
   // If source code/data does not establish the activation condition, keep it unresolved.
 
