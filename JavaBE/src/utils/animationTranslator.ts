@@ -210,6 +210,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const reportedEasings = new Set<string>();
 
   const evaluateEasing = (name: string, progress: number, label: string): number => {
+    const normalizedName = name.toLowerCase().replace(/[-_\\s]/g, '');
+    // PlayerAnimator's legacy move format supplies no easing arguments. Its Catmull-Rom
+    // and Bezier transformers therefore intentionally fall back to their linear defaults.
+    if (normalizedName === 'catmullrom' || normalizedName === 'bezier') return Math.max(0, Math.min(1, progress));
     const value = geckoEase(name || 'linear', progress);
     if (value !== null && Number.isFinite(value)) return value;
     const key = label + ':' + name;
