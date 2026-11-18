@@ -240,7 +240,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
     const boneName = ({
       torso: 'body',
-      body: 'body',
+      body: 'waist',
       rightArm: 'right_arm',
       leftArm: 'left_arm',
       rightLeg: 'right_leg',
@@ -252,7 +252,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       leftLeg: [1.9, 12, 0.1],
       rightLeg: [-1.9, 12, 0.1],
     };
-    const isBodyPart = partName === 'torso' || partName === 'body';
+    const isBodyPart = partName === 'body';
     const defaults = partDefaults[partName] ?? [0, 0, 0];
     const positionTrack: Record<string, unknown> = {};
     const rotationTrack: Record<string, unknown> = {};
@@ -352,13 +352,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           vector: [part.bendAngle, 0, 0],
           ...(easing ? { easing } : {}),
         };
-        const bendPositionTrack = (bones[boneName + '_bend']?.position ?? {}) as Record<string, unknown>;
+        const bendTargetName = partName === 'body' || partName === 'torso' ? 'body_bend' : boneName + '_bend';
+        const bendPositionTrack = (bones[bendTargetName]?.position ?? {}) as Record<string, unknown>;
         bendPositionTrack[timeKey] = {
           vector: [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)],
           ...(easing ? { easing } : {}),
         };
-        bones[boneName + '_bend'] = {
-          ...(bones[boneName + '_bend'] ?? {}),
+        bones[bendTargetName] = {
+          ...(bones[bendTargetName] ?? {}),
           position: bendPositionTrack,
         };
         previousBendTimeKey = timeKey;
