@@ -125,6 +125,24 @@ function queryForCall(name: string): string | null {
     isbaby: 'query.is_baby',
     isriding: 'query.is_riding',
     isangry: 'query.is_angry',
+    isshiftkeydown: 'query.is_sneaking',
+    iscrouching: 'query.is_sneaking',
+    issneaking: 'query.is_sneaking',
+    isusingitem: 'query.is_using_item',
+    isblocking: 'query.is_using_item',
+    ishurt: 'query.hurt_time > 0',
+    isfalling: '!query.is_on_ground',
+    isjumping: '!query.is_on_ground',
+    ispassenger: 'query.is_riding',
+    isgliding: 'query.is_gliding',
+    isfallflying: 'query.is_gliding',
+    isdeadordying: '!query.is_alive',
+    isbaby: 'query.is_baby',
+    iswet: 'query.is_in_water',
+    isunderwater: 'query.is_underwater',
+    isonfire: 'query.is_on_fire',
+    isburning: 'query.is_on_fire',
+    isattacking: 'variable.attack_time > 0.05',
   };
   return exact[key] ?? null;
 }
@@ -172,6 +190,7 @@ function recoverStateBindings(
   enumClass: JvmClassIR,
   states: Set<string>,
   knownClips: Set<string>,
+  allClasses: JvmClassIR[],
 ): Map<string, string> {
   const bindings = new Map<string, string>();
   for (const method of controller.methods) {
@@ -184,6 +203,14 @@ function recoverStateBindings(
       const clips = clipIdsInBlock(method, block.start, knownClips);
       if (referencedStates.length === 1 && clips.length === 1) bindings.set(referencedStates[0], clips[0]);
     }
+    // javac enum switch bodies often contain clip constants in the case block but no enum
+    // Fieldref: the enum was lowered to a synthetic int switch map before the tableswitch.
+    for (const entry of switchStateCases(method, enumClass, allClasses)) {
+      if (bindings.has(entry.state)) continue;
+      const direct = clipIdsInBlock(method, entry.target, knownClips);
+      const clips = direct.length === 1 ? direct : reachableClipIds(method, entry.target, knownClips, 2);
+      if (clips.length === 1) bindings.set(entry.state, clips[0]);
+    }
   }
   return bindings;
 }
@@ -192,8 +219,12 @@ function recoverTransitions(
   controller: JvmClassIR,
   enumClass: JvmClassIR,
   states: Set<string>,
+  allClasses: JvmClassIR[],
 ): Array<{ from: string; to: string; condition: string }> {
   const edges: Array<{ from: string; to: string; condition: string }> = [];
+  const addEdge = (from: string, to: string, condition: string | null) => {
+    if (condition && from !== to) edges.push({ from, to, condition });
+  };
   for (const method of controller.methods) {
     for (const block of method.blocks) {
       const branch = method.instructions.find((instruction) =>
@@ -218,14 +249,47 @@ function recoverTransitions(
           enumClass.name,
           states,
         );
-        if (targets.length !== 1 || targets[0] === currentStates[0]) continue;
-        const taken = branch.branchTargets.includes(successor);
-        const condition = branch.opcode === 0x99 || branch.opcode === 0xc6
-          ? (taken ? '!' + predicate : predicate)
-          : branch.opcode === 0x9a || branch.opcode === 0xc7
-            ? (taken ? predicate : '!' + predicate)
-            : null;
-        if (condition) edges.push({ from: currentStates[0], to: targets[0], condition });
+        if (targets.length !== 1) continue;
+        addEdge(currentStates[0], targets[0], branchCondition(branch, predicate, branch.branchTargets.includes(successor)));
+      }
+    }
+
+    // Recover state context from tableswitch/lookupswitch case labels. Each branch's source
+    // state comes from its case label; the destination remains an explicit enum constant in
+    // the branch successor, so no transition is guessed from method or field names.
+    for (const entry of switchStateCases(method, enumClass, allClasses)) {
+      const queue: Array<{ offset: number; depth: number }> = [{ offset: entry.target, depth: 0 }];
+      const visited = new Set<number>();
+      while (queue.length) {
+        const current = queue.shift()!;
+        if (visited.has(current.offset) || current.depth > 4) continue;
+        visited.add(current.offset);
+        const block = blockAt(method, current.offset);
+        if (!block) continue;
+        const branch = method.instructions.find((instruction) =>
+          block.instructionOffsets.includes(instruction.offset) &&
+          CONDITIONAL_BRANCHES.has(instruction.opcode) && instruction.branchTargets.length > 0,
+        );
+        if (branch) {
+          const predicate = predicateForBlock(method, block.start);
+          if (predicate) {
+            for (const successor of block.successors) {
+              const targetBlock = blockAt(method, successor);
+              if (!targetBlock) continue;
+              const targets = stateReferences(
+                method.instructions.filter((instruction) => targetBlock.instructionOffsets.includes(instruction.offset)),
+                enumClass.name,
+                states,
+              );
+              if (targets.length === 1) {
+                addEdge(entry.state, targets[0], branchCondition(branch, predicate, branch.branchTargets.includes(successor)));
+              }
+            }
+          }
+        }
+        for (const successor of block.successors) {
+          if (!visited.has(successor)) queue.push({ offset: successor, depth: current.depth + 1 });
+        }
       }
     }
   }
@@ -414,8 +478,8 @@ export function synthesizeAnimationControllersFromBytecode(
     const stateNames = enumCandidates[0].names;
     const states = new Set(stateNames);
     const initialState = recoverInitialState(candidate, enumClass, states);
-    const bindings = recoverStateBindings(candidate, enumClass, states, knownClips);
-    const transitions = recoverTransitions(candidate, enumClass, states);
+    const bindings = recoverStateBindings(candidate, enumClass, states, knownClips, classes);
+    const transitions = recoverTransitions(candidate, enumClass, states, classes);
     const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? []);
     if (!initialState || bindings.size !== stateNames.length || transitions.length === 0 || !ownerId) {
       const missing = [
