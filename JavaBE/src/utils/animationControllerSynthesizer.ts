@@ -14,6 +14,8 @@ export interface ControllerSignals {
   entityClasses?: DecompileClassSummary[];
   /** Full bytecode for animation-related classes and their directly referenced enum state types. */
   bytecodeClasses?: JvmClassIR[];
+  /** Exact player rig classes recovered from archive evidence. */
+  playerClassNames?: string[];
 }
 
 export interface SynthesizedController {
@@ -283,7 +285,9 @@ function recoverLambdaStates(
   return { initialState: 'default', states, stateNames };
 }
 
-function ownerForController(controller: JvmClassIR, mobIds: string[], summaries: DecompileClassSummary[]): string | null {
+function ownerForController(controller: JvmClassIR, mobIds: string[], summaries: DecompileClassSummary[], playerClassNames: string[] = []): string | null {
+  const playerClasses = new Set(playerClassNames.map((value) => value.split(' (')[0]));
+  if (mobIds.includes('player') && playerClasses.has(controller.name)) return 'player';
   const ownRegistryIds = summaries
     .filter((summary) => summary.qualifiedClassName === controller.name)
     .flatMap((summary) => summary.registryIds ?? []);
@@ -298,6 +302,7 @@ function ownerForController(controller: JvmClassIR, mobIds: string[], summaries:
   const matched = summaries
     .filter((summary) => summary.qualifiedClassName && referencedOwners.has(summary.qualifiedClassName))
     .flatMap((summary) => summary.registryIds ?? []);
+  if (mobIds.includes('player') && [...referencedOwners].some((owner) => playerClasses.has(owner))) return 'player';
   const exact = [...new Set(matched)].filter((id) => mobIds.includes(id));
   if (exact.length === 1) return exact[0];
   return mobIds.length === 1 ? mobIds[0] : null;
@@ -335,7 +340,7 @@ export function synthesizeAnimationControllersFromBytecode(
     );
     if (enumCandidates.length === 0) {
       const lambdaGraph = recoverLambdaStates(candidate, byName, knownClips);
-      const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? []);
+      const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? [], signals.playerClassNames ?? []);
       if (lambdaGraph && ownerId) {
         const modId = ownerId.split(':')[0] || 'java_mod';
         const controllerId = 'controller.animation.' + cleanIdentifier(modId + '.' + candidate.name.split('.').pop());

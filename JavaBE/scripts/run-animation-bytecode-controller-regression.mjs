@@ -139,16 +139,17 @@ try {
     majorVersion: 61, minorVersion: 0, fields: [],
     methods: [lambdaRegistration, lambdaHandler], references: [], bootstrapMethods: [], decodeWarnings: [],
   };
-  const lambdaResult = synthesizeAnimationControllersFromBytecode(['fixture:entity'], {
+  const lambdaResult = synthesizeAnimationControllersFromBytecode(['player'], {
     controllerClasses: ['fixture.LambdaController'],
     animationIds: ['animation.fixture.idle', 'animation.fixture.run'],
     bytecodeClasses: [lambdaController],
+    playerClassNames: ['fixture.LambdaController'],
     entityClasses: [{
       className: 'LambdaController', qualifiedClassName: 'fixture.LambdaController',
       role: 'entity', methods: [], registryIds: ['fixture:entity'],
     }],
   });
-  if (lambdaResult.controllers.length !== 1) {
+  if (lambdaResult.controllers.length !== 1 || lambdaResult.controllers[0].ownerId !== 'player') {
     throw new Error('A lambda-driven GeckoLib controller was not reconstructed: ' + JSON.stringify(lambdaResult.analysis));
   }
   const lambdaDoc = JSON.parse(lambdaResult.controllers[0].json);

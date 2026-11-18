@@ -809,12 +809,15 @@ export function portMobAndPlayerAnimations(
 
   // 2b. Bytecode-driven controller synthesis: every detected Java controller or
   // state-machine class becomes a real Bedrock animation controller document.
-  const controllerSynthesis = synthesizeAnimationControllersFromBytecode([...mobCandidates], {
+  const controllerOwners = [...mobCandidates];
+  if ((hasPlayerOwnership || playerEvidence.playerModelClasses.length > 0) && !controllerOwners.includes('player')) controllerOwners.push('player');
+  const controllerSynthesis = synthesizeAnimationControllersFromBytecode(controllerOwners, {
     controllerClasses: controllerSignals?.controllerClasses,
     stateMachineClasses: controllerSignals?.stateMachineClasses,
     animationIds: collectedAnimationIds,
     bytecodeClasses: controllerSignals?.bytecodeClasses,
     entityClasses: controllerSignals?.entityClasses,
+    playerClassNames: playerEvidence.playerModelClasses,
   });
   if (controllerSynthesis.analysis.controllerCandidates > 0) {
     log(
