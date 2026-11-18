@@ -319,7 +319,7 @@ function collectKeyframeEntries(
 
 /** GeckoLib 5 built-in easing functions, sampled into linear Bedrock keyframes. */
 function geckoEase(name: string, progress: number, args: number[] = []): number | null {
-  const key = name.toLowerCase().replace(/[-_\\s]/g, '');
+  const key = name.toLowerCase().replace(/[-_\s]/g, '');
   const t = Math.max(0, Math.min(1, progress));
   const arg = args[0];
   const easeIn = (kind: string, value: number): number => {
@@ -433,7 +433,6 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
   const keyframeMap: Record<string, unknown> = {};
   const originalTimes = new Set(shaped.map((entry) => formatSeconds(entry.time)));
   const sampleStep = 1 / 20; // GeckoLib evaluates animation state on Minecraft's 20 TPS clock.
-  let easingSamples = 0;
 
   for (let index = 1; index < shaped.length; index += 1) {
     const current = shaped[index];
@@ -462,7 +461,6 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
       const timeKey = formatSeconds(time);
       if (originalTimes.has(timeKey)) continue;
       keyframeMap[timeKey] = from.map((value, axis) => value + (to[axis] - value) * eased);
-      easingSamples += 1;
     }
     if (!recognized) {
       problems.push({
