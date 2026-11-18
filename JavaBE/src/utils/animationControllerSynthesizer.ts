@@ -201,45 +201,59 @@ function bytecodeNumber(instruction: JvmInstruction): number | null {
 function enumSwitchMapKeys(classes: JvmClassIR[], enumClass: JvmClassIR): Map<string, Map<number, string>> {
   const output = new Map<string, Map<number, string>>();
   const stateNames = new Set(enumStateNames(enumClass));
-  for (const owner of classes) for (const method of owner.methods) {
-    const instructions = method.instructions;
-    for (let index = 0; index < instructions.length; index++) {
-      const stateRef = instructions[index].constant;
-      if (stateRef?.kind !== 'Fieldref' || stateRef.owner !== enumClass.name || !stateRef.name || !stateNames.has(stateRef.name)) continue;
-      const ordinalIndex = instructions.findIndex((instruction, at) => at > index && at <= index + 4 && instruction.constant?.name === 'ordinal');
-      if (ordinalIndex < 0) continue;
-      const storeIndex = instructions.findIndex((instruction, at) => at > ordinalIndex && at <= ordinalIndex + 4 && instruction.opcode === 0x4f);
-      if (storeIndex < 0) continue;
-      const mapRef = instructions.slice(Math.max(0, index - 3), index).map((instruction) => instruction.constant).find((constant) =>
-        constant?.kind === 'Fieldref' && (String(constant.name ?? '').includes("$SwitchMap$") || String(constant.owner ?? '').includes("$SwitchMap$")));
-      if (!mapRef?.owner || !mapRef.name) continue;
-      let caseKey: number | null = null;
-      for (let at = ordinalIndex + 1; at < storeIndex; at++) { const value = bytecodeNumber(instructions[at]); if (value !== null) caseKey = value; }
-      if (caseKey === null) continue;
-      const key = mapRef.owner + '#' + mapRef.name;
-      const values = output.get(key) ?? new Map<number, string>();
-      values.set(caseKey, stateRef.name);
-      output.set(key, values);
+  for (const owner of classes) {
+    for (const method of owner.methods) {
+      const instructions = method.instructions;
+      for (let index = 0; index < instructions.length; index++) {
+        const stateRef = instructions[index].constant;
+        if (stateRef?.kind !== 'Fieldref' || stateRef.owner !== enumClass.name ||
+            !stateRef.name || !stateNames.has(stateRef.name)) continue;
+        const ordinalIndex = instructions.findIndex((instruction, at) =>
+          at > index && at <= index + 6 && instruction.constant?.name === 'ordinal');
+        if (ordinalIndex < 0) continue;
+        const storeIndex = instructions.findIndex((instruction, at) =>
+          at > ordinalIndex && at <= ordinalIndex + 6 && instruction.opcode === 0x4f);
+        if (storeIndex < 0) continue;
+        const mapRef = instructions.slice(0, index).reverse()
+          .map((instruction) => instruction.constant)
+          .find((constant) => constant?.kind === 'Fieldref' &&
+            (String(constant.name ?? '').includes('$SwitchMap$') || String(constant.owner ?? '').includes('$SwitchMap$')));
+        if (!mapRef?.name) continue;
+        const keys = instructions.slice(ordinalIndex + 1, storeIndex)
+          .map(bytecodeNumber)
+          .filter((value): value is number => value !== null);
+        const caseKey = keys[keys.length - 1];
+        if (caseKey === undefined) continue;
+        const mapping = output.get(mapRef.owner + '#' + mapRef.name) ?? output.get(mapRef.name) ?? new Map<number, string>();
+        mapping.set(caseKey, stateRef.name);
+        if (mapRef.owner) output.set(mapRef.owner + '#' + mapRef.name, mapping);
+        output.set(mapRef.name, mapping);
+      }
     }
   }
   return output;
 }
 
 function switchStateCases(method: JvmMethodIR, enumClass: JvmClassIR, classes: JvmClassIR[]): Array<{ state: string; target: number }> {
-  const names = enumStateNames(enumClass);
   const mappedSwitches = enumSwitchMapKeys(classes, enumClass);
   const cases: Array<{ state: string; target: number }> = [];
   for (const instruction of method.instructions) {
     if (instruction.opcode !== 0xaa && instruction.opcode !== 0xab) continue;
-    const switchMapRef = method.instructions.filter((candidate) => candidate.offset < instruction.offset && candidate.offset >= instruction.offset - 24)
-      .slice(-12).map((candidate) => candidate.constant).find((constant) =>
-        constant?.kind === 'Fieldref' && (String(constant.name ?? '').includes("$SwitchMap$") || String(constant.owner ?? '').includes("$SwitchMap$")));
-    const mapped = switchMapRef?.owner && switchMapRef.name ? mappedSwitches.get(switchMapRef.owner + '#' + switchMapRef.name) : undefined;
+    const switchMapRef = method.instructions
+      .filter((candidate) => candidate.offset < instruction.offset)
+      .reverse()
+      .map((candidate) => candidate.constant)
+      .find((constant) => constant?.kind === 'Fieldref' &&
+        (String(constant.name ?? '').includes('$SwitchMap$') || String(constant.owner ?? '').includes('$SwitchMap$')));
+    const mapped = switchMapRef?.name
+      ? (switchMapRef.owner ? mappedSwitches.get(switchMapRef.owner + '#' + switchMapRef.name) : undefined) ??
+        mappedSwitches.get(switchMapRef.name)
+      : undefined;
     const keys = instruction.opcode === 0xaa
       ? instruction.branchTargets.slice(1).map((_, index) => (instruction.operands[0] ?? 0) + index)
       : instruction.operands;
     for (let index = 0; index < keys.length; index++) {
-      const state = mapped?.get(keys[index]) ?? (!switchMapRef ? names[keys[index]] : undefined);
+      const state = mapped?.get(keys[index]);
       const target = instruction.branchTargets[index + 1];
       if (state && target !== undefined) cases.push({ state, target });
     }
