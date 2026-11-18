@@ -73,8 +73,9 @@ function splitCube(cubeInput: JsonObject, drawCrossSection: boolean): {
   else delete lower.uv.down;
   // Emotecraft keeps both exterior caps for the main mesh; overlay layers omit the internal caps.
   if (!drawCrossSection) {
+    // The reference rig removes only the inner up face from the upper overlay half;
+    // the down face remains the exterior cap of that split cube.
     delete upper.uv.up;
-    delete upper.uv.down;
   }
   return { lower, upper, halfHeight };
 }
