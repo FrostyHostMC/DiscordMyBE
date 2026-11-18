@@ -50,7 +50,7 @@ try {
       throw new Error('Generated bend segments do not use the reference parent/child cube origins.');
     }
     if (!bodyBend.cubes[0].uv.up || !bodyBend.cubes[0].uv.down ||
-        find('jacket_bend').cubes[0].uv.up || find('jacket_bend').cubes[0].uv.down) {
+        find('jacket_bend').cubes[0].uv.up || !find('jacket_bend').cubes[0].uv.down) {
       throw new Error('Bend segment exterior caps or overlay internal caps were not preserved correctly.');
     }
     if (find('head').parent !== 'body_bend' || find('jacket_bend').parent !== 'body_bend' ||
