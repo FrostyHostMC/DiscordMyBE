@@ -182,9 +182,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           const rawBend = isPlainObject(transform.bend) ? transform.bend.value : transform.bend;
           const bendValue = Number(rawBend);
           if (Number.isFinite(bendValue)) {
-            // Emotecraft bend is a scalar angle (radians when degrees=false), not a
-            // three-axis Euler vector. PAL's JSON wrapper also permits { value: number }.
-            part.bendAngle = degrees ? bendValue : bendValue * (180 / Math.PI);
+            // Player Animation Library's legacy loader treats bend as degrees regardless
+            // of the degrees flag (that flag applies to pitch/yaw/roll only).
+            // PAL's JSON wrapper also permits { value: number }.
+            part.bendAngle = bendValue;
             if (easing) part.bendEasing = easing;
           } else {
             issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' is not a numeric angle; the channel was not carried.');
@@ -317,10 +318,20 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
     }
     if (Object.keys(bendTrack).length > 0) {
+      const bendBoneName = boneName + '_bend';
+      const bendBone = (bones[bendBoneName] ?? {}) as Record<string, unknown>;
+      const bendPositionTrack = (bendBone.position ?? {}) as Record<string, unknown>;
       if (!validLoop && stopTick > endTick) {
         const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
         bendTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
+        bendPositionTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
       }
+      bones[bendBoneName] = {
+        ...bendBone,
+        rotation: bendTrack,
+        ...(Object.keys(bendPositionTrack).length > 0 ? { position: bendPositionTrack } : {}),
+      };
+    }
       bones[boneName + '_bend'] = {
         ...(bones[boneName + '_bend'] ?? {}),
         rotation: bendTrack,
