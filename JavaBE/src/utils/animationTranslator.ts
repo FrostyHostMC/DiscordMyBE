@@ -320,6 +320,22 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     return sampleSourceTrack(entries, tick, defaultValue, label);
   };
 
+  const constantBoundary = (
+    entries: Array<{ tick: number; value: number; easing: string }>,
+    tick: number,
+    defaultValue: number,
+  ): [number, number] | null => {
+    const index = entries.findIndex((entry) => entry.tick === tick);
+    if (index < 0) return null;
+    const current = entries[index];
+    const previous = index > 0 ? entries[index - 1] : null;
+    const easing = easeBefore
+      ? current.easing
+      : previous?.easing ?? 'easeInOutSine';
+    if (easing.toLowerCase() !== 'constant') return null;
+    return [previous?.value ?? defaultValue, current.value];
+  };
+
   const bones: Record<string, Record<string, unknown>> = {};
   for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
     const boneName = ({
@@ -340,22 +356,60 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     const hasRotation = rotationEntries.some((entries) => entries.length > 0);
     const hasScale = scaleEntries.some((entries) => entries.length > 0);
     const hasBend = bendEntries.length > 0;
-    const positionTrack: Record<string, number[]> = {};
-    const rotationTrack: Record<string, number[]> = {};
-    const scaleTrack: Record<string, number[]> = {};
-    const bendRotationTrack: Record<string, number[]> = {};
-    const bendPositionTrack: Record<string, number[]> = {};
+    const positionTrack: Record<string, unknown> = {};
+    const rotationTrack: Record<string, unknown> = {};
+    const scaleTrack: Record<string, unknown> = {};
+    const bendRotationTrack: Record<string, unknown> = {};
+    const bendPositionTrack: Record<string, unknown> = {};
 
     for (const tick of sortedSampleTicks) {
       const time = String(Math.round((tick / 20) * 1000) / 1000);
-      if (hasPosition) positionTrack[time] = positionEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' position'));
-      if (hasRotation) rotationTrack[time] = rotationEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' rotation'));
-      if (hasScale) scaleTrack[time] = scaleEntries.map((entries) => sampleTrack(entries, tick, 1, partName + ' scale'));
+      if (hasPosition) {
+        const post = positionEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' position'));
+        const pre = [...post];
+        let stepped = false;
+        positionEntries.forEach((entries, axis) => {
+          const boundary = constantBoundary(entries, tick, 0);
+          if (boundary) { pre[axis] = boundary[0]; stepped = true; }
+        });
+        positionTrack[time] = stepped ? { pre, post, lerp_mode: 'linear' } : post;
+      }
+      if (hasRotation) {
+        const post = rotationEntries.map((entries) => sampleTrack(entries, tick, 0, partName + ' rotation'));
+        const pre = [...post];
+        let stepped = false;
+        rotationEntries.forEach((entries, axis) => {
+          const boundary = constantBoundary(entries, tick, 0);
+          if (boundary) { pre[axis] = boundary[0]; stepped = true; }
+        });
+        rotationTrack[time] = stepped ? { pre, post, lerp_mode: 'linear' } : post;
+      }
+      if (hasScale) {
+        const post = scaleEntries.map((entries) => sampleTrack(entries, tick, 1, partName + ' scale'));
+        const pre = [...post];
+        let stepped = false;
+        scaleEntries.forEach((entries, axis) => {
+          const boundary = constantBoundary(entries, tick, 1);
+          if (boundary) { pre[axis] = boundary[0]; stepped = true; }
+        });
+        scaleTrack[time] = stepped ? { pre, post, lerp_mode: 'linear' } : post;
+      }
       if (hasBend) {
         const bendAngle = sampleTrack(bendEntries, tick, 0, partName + ' bend');
         const angle = Math.abs(bendAngle * Math.PI / 180);
-        bendRotationTrack[time] = [bendAngle, 0, 0];
-        bendPositionTrack[time] = [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)];
+        const boundary = constantBoundary(bendEntries, tick, 0);
+        const bendPre = boundary?.[0] ?? bendAngle;
+        const preAngle = Math.abs(bendPre * Math.PI / 180);
+        bendRotationTrack[time] = boundary
+          ? { pre: [bendPre, 0, 0], post: [bendAngle, 0, 0], lerp_mode: 'linear' }
+          : [bendAngle, 0, 0];
+        bendPositionTrack[time] = boundary
+          ? {
+              pre: [0, 2 * (1 - Math.cos(preAngle)), -2 * Math.sin(preAngle)],
+              post: [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)],
+              lerp_mode: 'linear',
+            }
+          : [0, 2 * (1 - Math.cos(angle)), -2 * Math.sin(angle)];
       }
     }
 
