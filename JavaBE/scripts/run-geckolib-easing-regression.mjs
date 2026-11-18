@@ -67,7 +67,18 @@ try {
     throw new Error('Unknown/custom Java easing was silently misrepresented.');
   }
 
-  console.log('[PASS] GeckoLib built-in easing curves are baked; dynamic endpoints and custom easing are preserved/reported instead of falsely mapped.');
+  const { asMolangComponent } = await server.ssrLoadModule('/src/utils/animationChannelMath.ts');
+  if (asMolangComponent('q.target->q.is_alive') !== 'q.target->q.is_alive') {
+    throw new Error('A valid Molang cross-entity query scope was rejected as Java syntax.');
+  }
+  if (asMolangComponent('x -> x + 1') !== null) {
+    throw new Error('A Java lambda expression was incorrectly accepted as Molang.');
+  }
+  if (asMolangComponent('q.target->q.is_alive; x -> x + 1') !== null) {
+    throw new Error('A valid Molang arrow masked an unrelated Java lambda in the same expression.');
+  }
+
+  console.log('[PASS] GeckoLib easing diagnostics, dynamic Molang, and cross-entity scope arrows are validated without false Java-lambda acceptance.');
 } finally {
   await server.close();
 }
