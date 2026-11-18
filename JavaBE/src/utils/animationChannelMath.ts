@@ -71,7 +71,7 @@ function isJavaLeak(text: string): boolean {
   if (JAVA_LEAK.test(text)) return true;
   // Bedrock Molang uses -> to access another entity's query/variable/temp/context scope.
   // A Java lambda is rejected unless the right side is a recognised Molang scope member.
-  return text.includes('->') && !/(?:^|[\\w.)\\]])\\s*->\\s*(?:query|q|variable|v|temp|t|context|c)\\./i.test(text);
+  return text.includes('->') && !/(?:^|[\w.)\]])\s*->\s*(?:query|q|variable|v|temp|t|context|c)\./i.test(text);
 }
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -111,7 +111,7 @@ export function asMolangComponent(entry: unknown): number | string | null {
   const text = entry.trim().replace(/;+\s*$/, '');
   if (!text) return null;
   if (isJavaLeak(text)) return null;
-  if (/^-?\d+(?:\.\d+)?$/.test(text)) return Number(text);
+  if (/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)) return Number(text);
   if (!balancedMolang(text)) return null;
   return text;
 }
