@@ -139,14 +139,15 @@ try {
       degrees: true,
       easeBeforeKeyframe: true,
       moves: [
-        { tick: 0, head: { pitch: 0 }, torso: { pitch: 0 } },
+        { tick: 0, head: { pitch: 0, yaw: 0 }, torso: { pitch: 0 } },
         { tick: 10, easing: 'easeInQuad', head: { pitch: 45 } },
-        { tick: 10, easing: 'easeOutQuad', torso: { pitch: 90 } },
+        { tick: 10, easing: 'easeOutQuad', head: { yaw: 90 }, torso: { pitch: 90 } },
       ],
     },
   }, { fileHint: 'fixture' });
   const splitClip = splitEasing.animations[splitEasing.idMap.split_part_easing];
   if (Math.abs(splitClip.bones.head.rotation['0.25'][0] - 11.25) > 0.001 ||
+      Math.abs(splitClip.bones.head.rotation['0.25'][1] - 67.5) > 0.001 ||
       Math.abs(splitClip.bones.body.rotation['0.25'][0] - 67.5) > 0.001 ||
       splitEasing.issues.some((issue) => issue.detail.includes('conflicting easing values across split part keyframes'))) {
     throw new Error('Split Emotecraft part tracks did not retain their independent easing curves.');
