@@ -185,6 +185,7 @@ export function synthesizePlayerAnimationController(options: {
     .map((trigger, index) => ({ trigger, index }))
     .sort(
       (left, right) =>
+        ((right.trigger.sourcePriority ?? Number.NEGATIVE_INFINITY) - (left.trigger.sourcePriority ?? Number.NEGATIVE_INFINITY)) ||
         (CONCEPT_PRIORITY[left.trigger.concept] ?? 10) - (CONCEPT_PRIORITY[right.trigger.concept] ?? 10) ||
         left.index - right.index,
     )

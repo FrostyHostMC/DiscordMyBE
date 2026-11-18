@@ -616,6 +616,7 @@ export function portMobAndPlayerAnimations(
       sourceClipIdsByClipId: playerRigBridge.sourceClipIdByPlayerClipId,
       archiveEntries,
       mainhandItemIds,
+      bytecodeClasses: controllerSignals?.bytecodeClasses,
       onLog: log,
     });
     playerTriggers = triggerReport;

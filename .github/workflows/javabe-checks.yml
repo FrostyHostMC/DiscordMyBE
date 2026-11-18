@@ -53,6 +53,8 @@ jobs:
         run: node scripts/run-animation-scale-regression.mjs
       - name: Verify JVM bytecode animation controller reconstruction
         run: node scripts/run-animation-bytecode-controller-regression.mjs
+      - name: Verify player bytecode triggers and source priorities
+        run: node scripts/run-player-bytecode-trigger-regression.mjs
       - name: Verify custom Java easing bytecode recovery
         run: node scripts/run-java-custom-easing-regression.mjs
       - name: Verify animation timeline and effect event fidelity
