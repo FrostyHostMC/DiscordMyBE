@@ -11,6 +11,7 @@ export interface GeometryCandidate {
 
 export interface BoneInjectionResult {
   geometryIdentifier: string | null;
+  slimGeometryIdentifier: string | null;
   geometryPath: string | null;
   files: Record<string, string>;
   injectedBones: string[];
@@ -87,6 +88,7 @@ function canonicalBendBone(raw: string): string | null {
 
 function buildBendGeometry(modId: string, bendBones: string[]): {
   identifier: string;
+  slimIdentifier: string;
   path: string;
   json: string;
   injected: string[];
@@ -94,70 +96,81 @@ function buildBendGeometry(modId: string, bendBones: string[]): {
   const requested = new Set(bendBones.map(canonicalBendBone).filter((name): name is string => Boolean(name)));
   if (requested.size === 0) return null;
   const doc = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON) as JsonObject;
-  const geometry = doc['minecraft:geometry']?.[0] as JsonObject | undefined;
-  const description = geometry?.description as JsonObject | undefined;
-  const bones = geometry?.bones as JsonObject[] | undefined;
-  if (!description || !Array.isArray(bones)) throw new Error('Mojang vanilla player geometry source is malformed.');
-
-  const additions: JsonObject[] = [];
-  const injected: string[] = [];
-  for (const baseName of ['body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-    if (!requested.has(baseName)) continue;
-    const base = bones.find((bone) => bone.name === baseName);
-    const baseCube = base?.cubes?.[0] as JsonObject | undefined;
-    if (!base || !baseCube) continue;
-    const baseSplit = splitCube(baseCube, true);
-    if (!baseSplit) continue;
-    const originalHeight = Number(baseCube.size[1]);
-    base.cubes[0] = baseSplit.lower;
-
-    const bendName = baseName + '_bend';
-    const basePivot = Array.isArray(base.pivot) ? base.pivot : [0, 0, 0];
-    const bendBone: JsonObject = {
-      name: bendName,
-      parent: baseName,
-      pivot: [basePivot[0], Number(basePivot[1]) - baseSplit.halfHeight, basePivot[2]],
-      cubes: [baseSplit.upper],
-    };
-    additions.push(bendBone);
-    injected.push(bendName);
-
-    for (const child of bones) {
-      if (child.parent !== baseName || child.name === bendName) continue;
-      const childCube = child.cubes?.[0] as JsonObject | undefined;
-      const isMatchingOverlay = Boolean(
-        childCube && childCube.inflate !== undefined &&
-        Array.isArray(childCube.size) &&
-        Math.abs(Number(childCube.size[1]) - originalHeight) < 0.001,
-      );
-      if (isMatchingOverlay) {
-        const overlaySplit = splitCube(childCube!, false);
-        if (overlaySplit) {
-          child.cubes[0] = overlaySplit.lower;
-          const overlayName = child.name + '_bend';
-          const overlayPivot = Array.isArray(child.pivot) ? child.pivot : basePivot;
-          additions.push({
-            name: overlayName,
-            parent: bendName,
-            pivot: [overlayPivot[0], Number(overlayPivot[1]) - overlaySplit.halfHeight, overlayPivot[2]],
-            cubes: [overlaySplit.upper],
-          });
-          injected.push(overlayName);
-          continue;
-        }
-      }
-      // Head, cape, held-item locators and other descendants follow the upper segment.
-      child.parent = bendName;
-    }
+  const geometries = doc['minecraft:geometry'] as JsonObject[] | undefined;
+  if (!Array.isArray(geometries) || geometries.length < 2) {
+    throw new Error('Mojang classic/slim player geometry source is malformed.');
   }
-
-  if (injected.length === 0) return null;
-  geometry.bones.push(...additions);
   const namespace = safeFileId(modId) || 'mod';
-  const identifier = 'geometry.javabe.player.' + namespace;
-  description.identifier = identifier;
-  const path = 'models/entity/javabe_player_' + namespace + '.geo.json';
-  return { identifier, path, json: JSON.stringify(doc, null, 2), injected };
+  const identifier = 'geometry.javabe.player.' + namespace + '.classic';
+  const slimIdentifier = 'geometry.javabe.player.' + namespace + '.slim';
+  const injected = new Set<string>();
+
+  const splitRig = (geometry: JsonObject, isSlim: boolean): void => {
+    const description = geometry.description as JsonObject | undefined;
+    const bones = geometry.bones as JsonObject[] | undefined;
+    if (!description || !Array.isArray(bones)) throw new Error('Mojang player geometry is missing its description or bones.');
+    const additions: JsonObject[] = [];
+    for (const baseName of ['body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
+      if (!requested.has(baseName)) continue;
+      const base = bones.find((bone) => bone.name === baseName);
+      const baseCube = base?.cubes?.[0] as JsonObject | undefined;
+      if (!base || !baseCube) continue;
+      const baseSplit = splitCube(baseCube, true);
+      if (!baseSplit) continue;
+      const originalHeight = Number(baseCube.size[1]);
+      base.cubes[0] = baseSplit.lower;
+
+      const bendName = baseName + '_bend';
+      const basePivot = Array.isArray(base.pivot) ? base.pivot : [0, 0, 0];
+      additions.push({
+        name: bendName,
+        parent: baseName,
+        pivot: [basePivot[0], Number(basePivot[1]) - baseSplit.halfHeight, basePivot[2]],
+        cubes: [baseSplit.upper],
+      });
+      injected.add(bendName);
+
+      for (const child of bones) {
+        if (child.parent !== baseName || child.name === bendName) continue;
+        const childCube = child.cubes?.[0] as JsonObject | undefined;
+        const isMatchingOverlay = Boolean(
+          childCube && childCube.inflate !== undefined &&
+          Array.isArray(childCube.size) &&
+          Math.abs(Number(childCube.size[1]) - originalHeight) < 0.001,
+        );
+        if (isMatchingOverlay) {
+          const overlaySplit = splitCube(childCube!, false);
+          if (overlaySplit) {
+            child.cubes[0] = overlaySplit.lower;
+            const overlayName = child.name + '_bend';
+            const overlayPivot = Array.isArray(child.pivot) ? child.pivot : basePivot;
+            additions.push({
+              name: overlayName,
+              parent: bendName,
+              pivot: [overlayPivot[0], Number(overlayPivot[1]) - overlaySplit.halfHeight, overlayPivot[2]],
+              cubes: [overlaySplit.upper],
+            });
+            injected.add(overlayName);
+            continue;
+          }
+        }
+        child.parent = bendName;
+      }
+    }
+    description.identifier = isSlim ? slimIdentifier : identifier;
+    bones.push(...additions);
+  };
+
+  splitRig(geometries.find((geometry) => (geometry.description as JsonObject)?.identifier === 'geometry.humanoid.custom')!, false);
+  splitRig(geometries.find((geometry) => (geometry.description as JsonObject)?.identifier === 'geometry.humanoid.customSlim')!, true);
+  if (injected.size === 0) return null;
+  return {
+    identifier,
+    slimIdentifier,
+    path: 'models/entity/javabe_player_' + namespace + '.geo.json',
+    json: JSON.stringify(doc, null, 2),
+    injected: [...injected],
+  };
 }
 
 /**
@@ -186,6 +199,7 @@ export function injectPlayerRigBones(options: {
     : 'all mapped player tracks resolve';
   return {
     geometryIdentifier: bendGeometry?.identifier ?? null,
+    slimGeometryIdentifier: bendGeometry?.slimIdentifier ?? null,
     geometryPath: bendGeometry?.path ?? null,
     files,
     injectedBones: bendGeometry?.injected ?? [],
