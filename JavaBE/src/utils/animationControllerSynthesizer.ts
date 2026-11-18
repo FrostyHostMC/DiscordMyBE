@@ -197,7 +197,84 @@ function recoverTransitions(
     all.findIndex((candidate) => candidate.from === edge.from && candidate.to === edge.to && candidate.condition === edge.condition) === index);
 }
 
+function invertCondition(condition: string): string {
+  return condition.startsWith('!') ? condition.slice(1) : '!' + condition;
+}
+
+/**
+ * GeckoLib-style controllers are often Java lambdas rather than enum state machines.
+ * Recover a state graph only when a lambda's branch blocks lead directly to exact
+ * animation-id constants and the branch predicate maps to a known Bedrock query.
+ */
+function recoverLambdaStates(
+  controller: JvmClassIR,
+  byName: Map<string, JvmClassIR>,
+  knownClips: Set<string>,
+): { initialState: string; states: Record<string, unknown>; stateNames: string[] } | null {
+  const recovered = new Map<string, { clip: string; condition: string; order: number }>();
+  let order = 0;
+  for (const registrationMethod of controller.methods) {
+    const target = lambdaTarget(registrationMethod);
+    if (!target) continue;
+    const lambdaClass = byName.get(target.owner);
+    const lambdaMethod = lambdaClass?.methods.find((method) => method.name === target.name);
+    if (!lambdaMethod) continue;
+    const clipsByBlock = new Map<number, string[]>();
+    for (const block of lambdaMethod.blocks) {
+      const clips = clipIdsInBlock(lambdaMethod, block.start, knownClips);
+      if (clips.length === 1) clipsByBlock.set(block.start, clips);
+    }
+    for (const block of lambdaMethod.blocks) {
+      const branch = lambdaMethod.instructions.find((instruction) =>
+        block.instructionOffsets.includes(instruction.offset) &&
+        CONDITIONAL_BRANCHES.has(instruction.opcode) &&
+        instruction.branchTargets.length > 0,
+      );
+      if (!branch) continue;
+      const predicate = predicateForBlock(lambdaMethod, block.start);
+      if (!predicate) continue;
+      for (const successor of block.successors) {
+        const targetClips = clipsByBlock.get(successor);
+        if (!targetClips || targetClips.length !== 1) continue;
+        const taken = branch.branchTargets.includes(successor);
+        let condition: string | null = null;
+        if (branch.opcode === 0x99 || branch.opcode === 0xc6) condition = taken ? '!' + predicate : predicate;
+        else if (branch.opcode === 0x9a || branch.opcode === 0xc7) condition = taken ? predicate : '!' + predicate;
+        if (!condition) continue;
+        const clip = targetClips[0];
+        const existing = recovered.get(clip);
+        if (!existing) recovered.set(clip, { clip, condition, order: order++ });
+      }
+    }
+  }
+  if (recovered.size === 0) return null;
+  const entries = [...recovered.values()].sort((a, b) => a.order - b.order);
+  const states: Record<string, unknown> = { default: { animations: [], transitions: [] } };
+  const stateNames: string[] = ['default'];
+  const used = new Set<string>(['default']);
+  const transitions: Array<Record<string, string>> = [];
+  for (const entry of entries) {
+    const suffix = cleanIdentifier(entry.clip.split('.').pop() ?? entry.clip);
+    let state = 'state_' + suffix, index = 2;
+    while (used.has(state)) state = 'state_' + suffix + '_' + index++;
+    used.add(state);
+    stateNames.push(state);
+    states[state] = {
+      animations: [entry.clip],
+      transitions: [{ default: invertCondition(entry.condition) }],
+    };
+    transitions.push({ [state]: entry.condition });
+  }
+  (states.default as { transitions: Array<Record<string, string>> }).transitions = transitions;
+  return { initialState: 'default', states, stateNames };
+}
+
 function ownerForController(controller: JvmClassIR, mobIds: string[], summaries: DecompileClassSummary[]): string | null {
+  const ownRegistryIds = summaries
+    .filter((summary) => summary.qualifiedClassName === controller.name)
+    .flatMap((summary) => summary.registryIds ?? []);
+  const ownMatches = [...new Set(ownRegistryIds)].filter((id) => mobIds.includes(id));
+  if (ownMatches.length === 1) return ownMatches[0];
   const referencedOwners = new Set<string>();
   for (const method of controller.methods) {
     for (const reference of [...method.calls, ...method.fieldAccesses]) {
@@ -242,10 +319,34 @@ export function synthesizeAnimationControllersFromBytecode(
       candidate.fields.some((field) => field.descriptor.includes(item.name.replace(/\./g, '/'))) ||
       candidate.methods.some((method) => [...method.calls, ...method.fieldAccesses].some((reference) => reference.owner === item.name)),
     );
+    if (enumCandidates.length === 0) {
+      const lambdaGraph = recoverLambdaStates(candidate, byName, knownClips);
+      const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? []);
+      if (lambdaGraph && ownerId) {
+        const modId = ownerId.split(':')[0] || 'java_mod';
+        const controllerId = 'controller.animation.' + cleanIdentifier(modId + '.' + candidate.name.split('.').pop());
+        const filePath = 'animation_controllers/' + cleanIdentifier(candidate.name.split('.').pop()) + '.controller.json';
+        const json = JSON.stringify({ format_version: '1.10.0', animation_controllers: {
+          [controllerId]: { initial_state: lambdaGraph.initialState, states: lambdaGraph.states },
+        } }, null, 2);
+        files[filePath] = json;
+        controllers.push({
+          filePath, controllerId, ownerId, sourceClass: candidate.name,
+          kind: 'animation-controller', states: lambdaGraph.stateNames, json,
+        });
+        controllerIdsByOwner[ownerId] = [...(controllerIdsByOwner[ownerId] ?? []), controllerId];
+        completeGraphsRecovered += 1;
+      } else {
+        candidatesWithheld.push({ sourceClass: candidate.name, reason: enumCandidates.length > 1
+          ? 'More than one enum state type is referenced; ownership of transitions is ambiguous.'
+          : lambdaGraph
+            ? 'The lambda graph was recovered but its owning entity could not be resolved uniquely.'
+            : 'No enum graph or branch-to-clip lambda graph with recognized query guards was recovered.' });
+      }
+      continue;
+    }
     if (enumCandidates.length !== 1) {
-      candidatesWithheld.push({ sourceClass: candidate.name, reason: enumCandidates.length === 0
-        ? 'No directly referenced enum state type was recovered from fields or method references.'
-        : 'More than one enum state type is referenced; ownership of transitions is ambiguous.' });
+      candidatesWithheld.push({ sourceClass: candidate.name, reason: 'More than one enum state type is referenced; ownership of transitions is ambiguous.' });
       continue;
     }
     const enumClass = enumCandidates[0].item;

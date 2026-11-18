@@ -113,6 +113,53 @@ try {
     throw new Error('The reconstructed controller was not indexed under its resolved entity owner.');
   }
 
+  const lambdaHandle = {
+    index: 6, tag: 15, kind: 'MethodHandle',
+    reference: { index: 7, tag: 10, kind: 'Methodref', owner: 'fixture.LambdaController', name: 'lambda$controller$0', descriptor: '(Lfixture/AnimationState;)V' },
+  };
+  const lambdaRegistration = methodIR('registerControllers', [
+    ins(0, 'invokedynamic', 0xba, { index: 8, tag: 18, kind: 'InvokeDynamic', bootstrapMethod: { methodReference: undefined, arguments: [lambdaHandle] } }),
+    ins(5, 'invokespecial', 0xb7, method('software.bernie.geckolib.animation.AnimationController', '<init>')),
+  ], [block(0, [0,5])], [method('software.bernie.geckolib.animation.AnimationController', '<init>')]);
+  const lambdaHandler = methodIR('lambda$controller$0', [
+    ins(0, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isMoving')),
+    ins(3, 'ifne', 0x9a, undefined, [20]),
+    ins(10, 'ldc', 0x12, string('animation.fixture.idle')),
+    ins(11, 'return', 0xb1, undefined),
+    ins(20, 'ldc', 0x12, string('animation.fixture.run')),
+    ins(21, 'return', 0xb1, undefined),
+  ], [
+    block(0, [0,3], [20,10]),
+    block(10, [10,11], []),
+    block(20, [20,21], []),
+  ], [method('fixture.AnimationState', 'isMoving')]);
+  const lambdaController = {
+    path: 'fixture/LambdaController.class', name: 'fixture.LambdaController',
+    superName: 'java.lang.Object', interfaces: [], access: 0x0001,
+    majorVersion: 61, minorVersion: 0, fields: [],
+    methods: [lambdaRegistration, lambdaHandler], references: [], bootstrapMethods: [], decodeWarnings: [],
+  };
+  const lambdaResult = synthesizeAnimationControllersFromBytecode(['fixture:entity'], {
+    controllerClasses: ['fixture.LambdaController'],
+    animationIds: ['animation.fixture.idle', 'animation.fixture.run'],
+    bytecodeClasses: [lambdaController],
+    entityClasses: [{
+      className: 'LambdaController', qualifiedClassName: 'fixture.LambdaController',
+      role: 'entity', methods: [], registryIds: ['fixture:entity'],
+    }],
+  });
+  if (lambdaResult.controllers.length !== 1) {
+    throw new Error('A lambda-driven GeckoLib controller was not reconstructed: ' + JSON.stringify(lambdaResult.analysis));
+  }
+  const lambdaDoc = JSON.parse(lambdaResult.controllers[0].json);
+  const lambdaGraph = lambdaDoc.animation_controllers[lambdaResult.controllers[0].controllerId];
+  const lambdaTransitions = lambdaGraph.states.default.transitions;
+  if (lambdaGraph.initial_state !== 'default' ||
+      !lambdaTransitions.some((entry) => Object.values(entry)[0] === 'query.is_moving') ||
+      !lambdaTransitions.some((entry) => Object.values(entry)[0] === '!query.is_moving')) {
+    throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions.');
+  }
+
   console.log('[PASS] JVM enum states, constructor initial state, branch polarity, Molang guards, exact clip bindings, and entity ownership reconstruct into a Bedrock controller.');
 } finally {
   await server.close();
