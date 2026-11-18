@@ -148,6 +148,30 @@ try {
     throw new Error('Emotecraft limb pivot offsets, Bedrock position units, or torso rotation signs were not reconstructed.');
   }
 
+  const scale = translateJavaAnimationSet({
+    name: 'scale_channels',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 30,
+      degrees: true,
+      easeBeforeKeyframe: false,
+      moves: [
+        { tick: 0, easing: 'easeInQuad', rightArm: { scaleX: 1, scaleY: 1, scaleZ: 1 } },
+        { tick: 10, easing: 'linear', rightArm: { scaleX: 2, scaleY: 0.5, scaleZ: 1.5 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const scaleClip = scale.animations[scale.idMap.scale_channels];
+  const scaleAtQuarter = scaleClip.bones.right_arm.scale['0.25'];
+  if (Math.abs(scaleAtQuarter.vector[0] - 1.25) > 0.001 ||
+      Math.abs(scaleAtQuarter.vector[1] - 0.875) > 0.001 ||
+      Math.abs(scaleAtQuarter.vector[2] - 1.125) > 0.001 ||
+      scaleClip.bones.right_arm.scale['1.5'].vector.some((value) => value !== 1)) {
+    throw new Error('Emotecraft per-axis scale channels or scale reset were not imported.');
+  }
+
   const bend = translateJavaAnimationSet({
     name: 'bend_axis',
     emote: {
