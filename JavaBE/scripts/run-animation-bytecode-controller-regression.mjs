@@ -235,20 +235,26 @@ try {
     majorVersion: 61, minorVersion: 0, fields: [],
     methods: [lambdaRegistration, lambdaHandler, methodIR('lambda$controller$1', [
       ins(30, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isMoving')),
-      ins(33, 'ifne', 0x9a, undefined, [50]),
-      ins(40, 'ldc', 0x12, string('animation.fixture.attack_idle')),
-      ins(41, 'return', 0xb1, undefined),
-      ins(50, 'ldc', 0x12, string('animation.fixture.attack')),
+      ins(33, 'ifeq', 0x99, undefined, [70]),
+      ins(40, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isSprinting')),
+      ins(43, 'ifne', 0x9a, undefined, [60]),
+      ins(50, 'ldc', 0x12, string('animation.fixture.walk')),
       ins(51, 'return', 0xb1, undefined),
+      ins(60, 'ldc', 0x12, string('animation.fixture.attack')),
+      ins(61, 'return', 0xb1, undefined),
+      ins(70, 'ldc', 0x12, string('animation.fixture.attack_idle')),
+      ins(71, 'return', 0xb1, undefined),
     ], [
-      block(30, [30,33], [50,40]),
-      block(40, [40,41], []),
+      block(30, [30,33], [70,40]),
+      block(40, [40,43], [60,50]),
       block(50, [50,51], []),
-    ], [method('fixture.AnimationState', 'isMoving')])], references: [], bootstrapMethods: [], decodeWarnings: [],
+      block(60, [60,61], []),
+      block(70, [70,71], []),
+    ], [method('fixture.AnimationState', 'isMoving'), method('fixture.AnimationState', 'isSprinting')])], references: [], bootstrapMethods: [], decodeWarnings: [],
   };
   const lambdaResult = synthesizeAnimationControllersFromBytecode(['player'], {
     controllerClasses: ['fixture.LambdaController'],
-    animationIds: ['animation.fixture.idle', 'animation.fixture.run', 'animation.fixture.attack_idle', 'animation.fixture.attack'],
+    animationIds: ['animation.fixture.idle', 'animation.fixture.run', 'animation.fixture.attack_idle', 'animation.fixture.attack', 'animation.fixture.walk'],
     bytecodeClasses: [lambdaController],
     playerClassNames: ['fixture.LambdaController'],
     entityClasses: [{
@@ -272,8 +278,21 @@ try {
       throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions.');
     }
     const activeStates = Object.values(lambdaGraph.states).filter((state) => Array.isArray(state.animations) && state.animations.length > 0);
-    if (activeStates.length !== 2 || !activeStates.every((state) => [0.25, 0.15].includes(state.blend_transition))) {
+    const expectedCount = entry.controllerId.includes('attack_controller') ? 3 : 2;
+    if (activeStates.length !== expectedCount || !activeStates.every((state) => [0.25, 0.15].includes(state.blend_transition))) {
       throw new Error('GeckoLib constructor transition ticks were not preserved as Bedrock blend_transition seconds.');
+    }
+    if (entry.controllerId.includes('attack_controller')) {
+      const defaultTransitions = lambdaGraph.states.default.transitions;
+      const conditionFor = (clipId) => {
+        const stateName = Object.keys(lambdaGraph.states).find((name) => lambdaGraph.states[name].animations?.[0] === clipId);
+        return defaultTransitions.find((transition) => Object.prototype.hasOwnProperty.call(transition, stateName))?.[stateName];
+      };
+      if (conditionFor('animation.fixture.attack') !== '(query.is_moving) && (query.is_sprinting)' ||
+          conditionFor('animation.fixture.walk') !== '(query.is_moving) && (!query.is_sprinting)' ||
+          conditionFor('animation.fixture.attack_idle') !== '(!query.is_moving)') {
+        throw new Error('Compound Java state predicates were not reconstructed across basic-block paths.');
+      }
     }
   }
 

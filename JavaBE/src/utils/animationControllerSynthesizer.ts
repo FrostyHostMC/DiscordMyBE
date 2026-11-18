@@ -159,6 +159,55 @@ function predicateForBlock(method: JvmMethodIR, blockStart: number): string | nu
   return unique.length === 1 ? unique[0] : null;
 }
 
+function branchConditionForSuccessor(method: JvmMethodIR, blockStart: number, successor: number): string | null {
+  const block = blockAt(method, blockStart);
+  if (!block) return null;
+  const branch = method.instructions.find((instruction) =>
+    block.instructionOffsets.includes(instruction.offset) &&
+    CONDITIONAL_BRANCHES.has(instruction.opcode) &&
+    instruction.branchTargets.length > 0,
+  );
+  if (!branch) return block.successors.length <= 1 ? '' : null;
+  const predicate = predicateForBlock(method, blockStart);
+  if (!predicate) return null;
+  const taken = branch.branchTargets.includes(successor);
+  if (branch.opcode === 0x99 || branch.opcode === 0xc6) return taken ? '!' + predicate : predicate;
+  if (branch.opcode === 0x9a || branch.opcode === 0xc7) return taken ? predicate : '!' + predicate;
+  return null;
+}
+
+function pathConditionsToBlock(method: JvmMethodIR, targetStart: number): string[] {
+  const entry = method.blocks.find((block) => block.start === 0) ?? method.blocks[0];
+  if (!entry) return [];
+  const paths: string[] = [];
+  const visit = (offset: number, conditions: string[], visited: Set<number>, depth: number): void => {
+    if (depth > 48 || paths.length >= 128) return;
+    if (offset === targetStart) {
+      if (conditions.length > 0) paths.push(conditions.map((condition) => '(' + condition + ')').join(' && '));
+      return;
+    }
+    const block = blockAt(method, offset);
+    if (!block) return;
+    for (const successor of block.successors) {
+      if (visited.has(successor)) continue;
+      const condition = branchConditionForSuccessor(method, offset, successor);
+      if (condition === null) continue;
+      const next = condition ? [...conditions, condition] : conditions;
+      const nextVisited = new Set(visited);
+      nextVisited.add(successor);
+      visit(successor, next, nextVisited, depth + 1);
+    }
+  };
+  visit(entry.start, [], new Set([entry.start]), 0);
+  return [...new Set(paths)];
+}
+
+function combinePathConditions(paths: string[]): string | null {
+  if (paths.length === 0) return null;
+  if (paths.length === 1) return paths[0];
+  return paths.map((path) => '(' + path + ')').join(' || ');
+}
+
 function blockAt(method: JvmMethodIR, offset: number) {
   return method.blocks.find((block) => block.start === offset);
 }
@@ -425,30 +474,13 @@ function recoverLambdaStates(
       if (!lambdaMethod) continue;
       const recovered = new Map<string, { clip: string; condition: string; order: number }>();
       let order = 0;
-      const clipsByBlock = new Map<number, string[]>();
       for (const block of lambdaMethod.blocks) {
         const clips = clipIdsInBlock(lambdaMethod, block.start, knownClips);
-        if (clips.length === 1) clipsByBlock.set(block.start, clips);
-      }
-      for (const block of lambdaMethod.blocks) {
-        const branch = lambdaMethod.instructions.find((instruction) =>
-          block.instructionOffsets.includes(instruction.offset) &&
-          CONDITIONAL_BRANCHES.has(instruction.opcode) && instruction.branchTargets.length > 0,
-        );
-        if (!branch) continue;
-        const predicate = predicateForBlock(lambdaMethod, block.start);
-        if (!predicate) continue;
-        for (const successor of block.successors) {
-          const targetClips = clipsByBlock.get(successor);
-          if (!targetClips || targetClips.length !== 1) continue;
-          const taken = branch.branchTargets.includes(successor);
-          let condition: string | null = null;
-          if (branch.opcode === 0x99 || branch.opcode === 0xc6) condition = taken ? '!' + predicate : predicate;
-          else if (branch.opcode === 0x9a || branch.opcode === 0xc7) condition = taken ? predicate : '!' + predicate;
-          if (!condition) continue;
-          const clip = targetClips[0];
-          if (!recovered.has(clip)) recovered.set(clip, { clip, condition, order: order++ });
-        }
+        if (clips.length !== 1) continue;
+        const condition = combinePathConditions(pathConditionsToBlock(lambdaMethod, block.start));
+        if (!condition) continue;
+        const clip = clips[0];
+        if (!recovered.has(clip)) recovered.set(clip, { clip, condition, order: order++ });
       }
       if (recovered.size === 0) continue;
       const entries = [...recovered.values()].sort((a, b) => a.order - b.order);
