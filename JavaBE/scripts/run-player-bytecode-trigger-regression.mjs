@@ -74,7 +74,7 @@ try {
     },
   });
   if (!playerPort.scriptCode.includes('entityHitEntity') ||
-      !playerPort.scriptCode.includes('world.afterEvents[eventName]') ||
+      !playerPort.scriptCode.includes('javabeRuntimeWorld.afterEvents[eventName]') ||
       !playerPort.scriptCode.includes('event.damagingEntity') ||
       !playerPort.scriptCode.includes('player.playAnimation(action.clipId') ||
       playerPort.report.runtimeTriggerActions !== 1) {

@@ -77,6 +77,8 @@ function buildRuntimeTriggerScript(
   );
   const script = `
 // Bytecode-proven Java player animation runtime triggers.
+// Use a unique import binding so this can safely merge with other generated script modules.
+import { world as javabeRuntimeWorld } from '@minecraft/server';
 // Event-to-entity bindings follow the current @minecraft/server after-event contracts.
 const PORTED_JAVA_RUNTIME_ACTIONS = ${JSON.stringify(actions, null, 2)};
 const PORTED_JAVA_RUNTIME_ENTITY = {
@@ -91,7 +93,7 @@ const PORTED_JAVA_RUNTIME_GROUPS = PORTED_JAVA_RUNTIME_ACTIONS.reduce((groups, a
   return groups;
 }, {});
 for (const [eventName, eventActions] of Object.entries(PORTED_JAVA_RUNTIME_GROUPS)) {
-  const signal = world.afterEvents[eventName];
+  const signal = javabeRuntimeWorld.afterEvents[eventName];
   if (!signal || typeof signal.subscribe !== 'function') {
     console.warn('[AIPPY-ANIM] Runtime trigger event unavailable: ' + eventName);
     continue;
