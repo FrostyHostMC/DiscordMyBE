@@ -63,9 +63,9 @@ function enumStateNames(item: JvmClassIR): string[] {
 }
 
 function lambdaTargets(method: JvmMethodIR): Array<{
-  owner: string; name: string; controllerName: string; transitionTicks?: number;
+  owner: string; name: string; descriptor?: string; controllerName: string; transitionTicks?: number;
 }> {
-  const targets = new Map<string, { owner: string; name: string; controllerName: string; transitionTicks?: number }>();
+  const targets = new Map<string, { owner: string; name: string; descriptor?: string; controllerName: string; transitionTicks?: number }>();
   for (let index = 0; index < method.instructions.length; index++) {
     const instruction = method.instructions[index];
     const bootstrap = instruction.constant?.bootstrapMethod;
@@ -89,8 +89,8 @@ function lambdaTargets(method: JvmMethodIR): Array<{
         }
         if (controllerName && transitionTicks !== undefined) break;
       }
-      const target = { owner: reference.owner, name: reference.name, controllerName: controllerName || reference.name, transitionTicks };
-      targets.set(target.owner + '#' + target.name + '#' + target.controllerName, target);
+      const target = { owner: reference.owner, name: reference.name, descriptor: reference.descriptor, controllerName: controllerName || reference.name, transitionTicks };
+      targets.set(target.owner + '#' + target.name + '#' + (target.descriptor ?? '') + '#' + target.controllerName, target);
     }
   }
   return [...targets.values()];
@@ -466,11 +466,11 @@ function recoverLambdaStates(
   const seenMethods = new Set<string>();
   for (const registrationMethod of controller.methods) {
     for (const target of lambdaTargets(registrationMethod)) {
-      const targetKey = target.owner + '#' + target.name;
+      const targetKey = target.owner + '#' + target.name + '#' + (target.descriptor ?? '') + '#' + target.controllerName;
       if (seenMethods.has(targetKey)) continue;
       seenMethods.add(targetKey);
       const lambdaClass = byName.get(target.owner);
-      const lambdaMethod = lambdaClass?.methods.find((method) => method.name === target.name);
+      const lambdaMethod = lambdaClass?.methods.find((method) => method.name === target.name && (!target.descriptor || method.descriptor === target.descriptor));
       if (!lambdaMethod) continue;
       const recovered = new Map<string, { clip: string; condition: string; order: number }>();
       let order = 0;
@@ -483,7 +483,15 @@ function recoverLambdaStates(
         if (!recovered.has(clip)) recovered.set(clip, { clip, condition, order: order++ });
       }
       if (recovered.size === 0) continue;
-      const entries = [...recovered.values()].sort((a, b) => a.order - b.order);
+      const entries = [...recovered.values()].sort((a, b) => {
+        const score = (condition: string) => ({
+          and: condition.split('&&').length - 1,
+          or: condition.split('||').length - 1,
+          not: condition.split('!').length - 1,
+        });
+        const left = score(a.condition), right = score(b.condition);
+        return right.and - left.and || left.or - right.or || left.not - right.not || a.order - b.order;
+      });
       const states: Record<string, unknown> = { default: { animations: [], transitions: [] } };
       const stateNames = ['default'];
       const used = new Set(['default']);
