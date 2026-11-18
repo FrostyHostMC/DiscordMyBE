@@ -152,7 +152,7 @@ try {
         ins(3, 'invokevirtual', 0xb6, { ...method('fixture.State', 'ordinal'), descriptor: '()I' }),
         ins(6, 'getstatic', 0xb2, switchMapField),
         ins(9, 'iaload', 0x2e),
-        ins(10, 'tableswitch', 0xaa, undefined, [60,20,40]),
+        { ...ins(10, 'tableswitch', 0xaa, undefined, [60,20,40]), operands: [1,2] },
         ins(20, 'ldc', 0x12, string('animation.fixture.idle')),
         ins(21, 'invokevirtual', 0xb6, method('fixture.Entity', 'isMoving')),
         ins(24, 'ifne', 0x9a, undefined, [30]),
