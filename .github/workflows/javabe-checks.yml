@@ -49,6 +49,8 @@ jobs:
         run: echo "SERIOUS_PLAYER_ANIMATIONS_SOURCE=$GITHUB_WORKSPACE/source-serious-player-animations/fabric/src/main/java/net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.java" >> "$GITHUB_ENV"
       - name: Run player Molang baseline regression
         run: node scripts/run-player-baseline-regression.mjs
+      - name: Verify universal animation export has no arbitrary clip ceiling
+        run: node scripts/run-animation-scale-regression.mjs
       - name: Convert the original Pierced fixture through the current animation engine
         run: node scripts/run-pierced-animation-regression.mjs
       - name: Upload current Pierced conversion diagnostics

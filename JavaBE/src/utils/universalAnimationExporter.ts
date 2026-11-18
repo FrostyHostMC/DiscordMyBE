@@ -59,7 +59,6 @@ export interface UniversalAnimationExportReport {
   summary: string;
 }
 
-const MAX_EMITTED_CLIPS = 400;
 
 interface ClientEntitySlot {
   path: string;
@@ -429,11 +428,9 @@ export function exportUniversalAnimationIR(input: {
     if (shipped.has(clip.id)) {
       report.alreadyShipped += 1;
     } else {
-      if (report.emittedClips.length >= MAX_EMITTED_CLIPS) {
-        report.budgetExhausted = true;
-        report.skipped.push({ clipId: clip.id, reason: `emission budget of ${MAX_EMITTED_CLIPS} clips reached` });
-        continue;
-      }
+      // There is deliberately no per-clip emission ceiling. The archive extraction and
+      // generated-byte budgets are the resource-safety boundary; an arbitrary clip count
+      // silently discarded valid source animation sets (including large player libraries).
       const emitted = emitAnimationClip(clip);
       if (!emitted) {
         report.skipped.push({ clipId: clip.id, reason: 'the clip declares no Bedrock-readable bone channel' });
