@@ -72,18 +72,43 @@ function buildChannelTrack(
   approximated: string[],
 ): unknown {
   if (channel.keyframes.length === 0) return null;
-  if (channel.isStatic && channel.staticValue) return vectorOut(channel.staticValue);
-  if (channel.keyframes.length === 1 && !channel.keyframes[0].isMolang) {
-    return vectorOut(channel.keyframes[0].value);
+  const first = channel.keyframes[0];
+  const firstHasDiscontinuity = Boolean(first.preValue || first.postValue);
+  if (channel.isStatic && channel.staticValue && !firstHasDiscontinuity) return vectorOut(channel.staticValue);
+  if (channel.keyframes.length === 1 && !first.isMolang && !firstHasDiscontinuity) {
+    return vectorOut(first.value);
   }
   const track: Record<string, unknown> = {};
-  for (const keyframe of channel.keyframes) {
+  for (let index = 0; index < channel.keyframes.length; index += 1) {
+    const keyframe = channel.keyframes[index];
     if (!Number.isFinite(keyframe.time) || keyframe.time < 0) continue;
     const time = String(round(keyframe.time));
-    const mode = keyframe.isMolang ? null : lerpMode(keyframe.interpolation, approximated);
-    track[time] = mode
-      ? { post: vectorOut(keyframe.value), lerp_mode: mode }
-      : vectorOut(keyframe.value);
+    const previous = channel.keyframes[index - 1];
+
+    // Bedrock's pre/post representation carries discontinuities and step segments exactly.
+    // The source IR already records explicit pre/post values; a preceding step keyframe means
+    // the current timestamp jumps from that held value to this keyframe's value.
+    let preValue = keyframe.preValue;
+    let postValue = keyframe.postValue;
+    if (!preValue && !postValue && previous?.interpolation === 'step') {
+      preValue = previous.postValue ?? previous.value;
+      postValue = keyframe.value;
+    }
+    const mode = keyframe.isMolang || keyframe.interpolation === 'step'
+      ? null
+      : lerpMode(keyframe.interpolation, approximated);
+
+    if (preValue || postValue) {
+      track[time] = {
+        pre: vectorOut(preValue ?? keyframe.value),
+        post: vectorOut(postValue ?? keyframe.value),
+        ...(mode ? { lerp_mode: mode } : {}),
+      };
+    } else {
+      track[time] = mode
+        ? { post: vectorOut(keyframe.value), lerp_mode: mode }
+        : vectorOut(keyframe.value);
+    }
   }
   if (Object.keys(track).length === 0) return null;
   return track;

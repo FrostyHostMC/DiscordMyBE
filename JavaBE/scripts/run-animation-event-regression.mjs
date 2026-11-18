@@ -17,7 +17,19 @@ try {
   const rawClip = {
     animation_length: 1,
     loop: true,
-    bones: { root: { rotation: { '0': [0, 0, 0], '1': [0, 0, 0] } } },
+    bones: {
+      root: {
+        rotation: {
+          '0': { pre: [0, 0, 0], post: [1, 2, 3], lerp_mode: 'catmullrom' },
+          '1': { pre: [1, 2, 3], post: [4, 5, 6] },
+        },
+        position: {
+          '0': [0, 0, 0],
+          '1': { post: [1, 0, 0], lerp_mode: 'step' },
+          '2': [2, 0, 0],
+        },
+      },
+    },
     sound_effects: {
       '0.25': [
         { effect: 'fixture:step', locator: 'foot_left', volume: 0.7, pitch: 1.1 },
@@ -49,6 +61,18 @@ try {
   const emitted = emitAnimationClip(clip);
   if (!emitted) throw new Error('The universal emitter did not produce the animation.');
   const doc = emitted.document;
+  const rotationStart = doc.bones.root.rotation['0'];
+  if (rotationStart.pre[0] !== 0 || rotationStart.post[0] !== 1 || rotationStart.lerp_mode !== 'catmullrom') {
+    throw new Error('Explicit pre/post values or Catmull-Rom interpolation were lost.');
+  }
+  const rotationEnd = doc.bones.root.rotation['1'];
+  if (rotationEnd.pre[0] !== 1 || rotationEnd.post[0] !== 4) {
+    throw new Error('The second pre/post discontinuity was not preserved.');
+  }
+  const stepJump = doc.bones.root.position['2'];
+  if (stepJump.pre[0] !== 1 || stepJump.post[0] !== 2) {
+    throw new Error('A source step segment was not represented as a Bedrock pre/post jump.');
+  }
   if (!Array.isArray(doc.sound_effects['0.25']) || doc.sound_effects['0.25'].length !== 2) {
     throw new Error('Simultaneous sound cues were not preserved.');
   }
@@ -62,7 +86,7 @@ try {
   if (!Array.isArray(doc.timeline['0.75']) || doc.timeline['0.75'].length !== 2) {
     throw new Error('Multiple timeline scripts at one timestamp were not preserved.');
   }
-  console.log('[PASS] Universal animation IR and emitter preserve simultaneous sound/particle cues, locators, bind_to_actor, pre_effect_script, and timeline scripts.');
+  console.log('[PASS] Universal animation IR/emitter preserve pre/post transforms, Catmull-Rom, step jumps, simultaneous effects, locators, particle scripts, and timeline events.');
 } finally {
   await server.close();
 }
