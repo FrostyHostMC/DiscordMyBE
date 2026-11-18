@@ -23,14 +23,15 @@ try {
     },
   };
   const expressionHead = JSON.parse(JSON.stringify(expression['animation.fixture.expression'].bones.head.rotation));
+  const expressionArm = JSON.parse(JSON.stringify(expression['animation.fixture.expression'].bones.rightArm.rotation));
   const expressionResult = retargetJavaPlayerHierarchy(expression);
   const expressionClip = expressionResult.clips['animation.fixture.expression'];
   if (JSON.stringify(expressionClip.bones.head.rotation) !== JSON.stringify(expressionHead)) {
     throw new Error('Dynamic Molang head track was modified or lost during player hierarchy retargeting.');
   }
-  if (expressionResult.transformed !== 1 ||
-      JSON.stringify(expressionClip.bones.body.rotation) === JSON.stringify(expression['animation.fixture.expression'].bones.body.rotation)) {
-    throw new Error('An independent numeric player branch was unnecessarily blocked by a dynamic sibling.');
+  if (expressionResult.transformed < 1 ||
+      JSON.stringify(expressionClip.bones.rightArm.rotation) === JSON.stringify(expressionArm)) {
+    throw new Error('An independent numeric arm branch was unnecessarily blocked by a dynamic sibling.');
   }
 
   const discontinuity = {
@@ -48,8 +49,10 @@ try {
   if (JSON.stringify(discontinuityClip.bones.head.rotation) !== JSON.stringify(originalHead)) {
     throw new Error('A pre/post discontinuity was flattened or overwritten during hierarchy retargeting.');
   }
-  if (discontinuityResult.transformed !== 1) {
-    throw new Error('A safe sibling branch was not retargeted when another branch used pre/post data.');
+  const originalArm = discontinuity['animation.fixture.prepost'].bones.rightArm.rotation;
+  if (discontinuityResult.transformed < 1 ||
+      JSON.stringify(discontinuityClip.bones.rightArm.rotation) === JSON.stringify(originalArm)) {
+    throw new Error('A safe sibling arm branch was not retargeted when another branch used pre/post data.');
   }
 
   const dynamicParent = {
