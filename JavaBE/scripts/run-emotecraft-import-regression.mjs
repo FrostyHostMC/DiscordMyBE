@@ -256,10 +256,11 @@ try {
     },
   }, { fileHint: 'fixture' });
   const stepClip = step.animations[step.idMap.playeranimator_step_easing];
+  const finalStep = stepClip.bones.head.rotation['1'];
   if (stepClip.bones.head.rotation['0.25'][0] !== 0 ||
       stepClip.bones.head.rotation['0.5'][0] !== 45 ||
-      stepClip.bones.head.rotation['1'][0] !== 90) {
-    throw new Error('PlayerAnimator STEP easing did not retain its source two-step curve.');
+      finalStep.pre[0] !== 45 || finalStep.post[0] !== 90) {
+    throw new Error('PlayerAnimator STEP easing did not retain its source two-step curve and exact endpoint.');
   }
 
   const scale = translateJavaAnimationSet({
