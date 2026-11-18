@@ -1218,22 +1218,8 @@ export async function decompileAndInspectJarAsync(
     const enumState = (item.access & 0x4000) !== 0;
     const easingSubclass = /EasingType/i.test(item.superName ?? '');
     const lambdaBody = item.methods.some((method) =>
-      method.name.startsWith('lambda
-  }
-  const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
-  result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
-  inspectionCache.set(entries, { key, result });
-  return result;
-}
-) && /^\(D\)D$|^\(F\)F$/.test(method.descriptor));
-    const enumSwitchMap = item.fields.some((field) => field.name.includes('$SwitchMap
-  }
-  const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
-  result.stats.jvmAnalysis = { ...jvm, classes: animationBytecodeClasses };
-  inspectionCache.set(entries, { key, result });
-  return result;
-}
-) && field.descriptor === '[I');
+      method.name.startsWith('lambda$') && /^\(D\)D$|^\(F\)F$/.test(method.descriptor));
+    const enumSwitchMap = item.fields.some((field) => field.name.includes('$SwitchMap$'));
     if (enumState || easingSubclass || lambdaBody || enumSwitchMap) selected.add(name);
   }
   const animationBytecodeClasses = jvm.classes.filter((item) => selected.has(item.name));
