@@ -151,21 +151,41 @@ try {
       beginTick: 0,
       endTick: 20,
       stopTick: 20,
-      degrees: true,
+      degrees: false,
       easeBeforeKeyframe: true,
       moves: [
-        { tick: 0, rightArm: { bend: 0, axis: [0, 1, 0] } },
-        { tick: 10, easing: 'linear', rightArm: { bend: 0.5, axis: [0, 1, 0] } },
+        { tick: 0, rightArm: { bend: 0 } },
+        { tick: 10, easing: 'linear', rightArm: { bend: 0.5 } },
       ],
     },
   }, { fileHint: 'fixture' });
   const bendClip = bend.animations[bend.idMap.bend_axis];
   const bendVector = bendClip.bones.right_arm_bend.rotation['0.5'];
-  if (Math.abs(bendVector[0]) > 0.001 ||
-      Math.abs(bendVector[1] - (0.5 * 180 / Math.PI)) > 0.001 ||
-      Math.abs(bendVector[2]) > 0.001) {
-    throw new Error('Emotecraft bend axis was not translated into a generated bend-joint rotation track.');
+  const bendPosition = bendClip.bones.right_arm_bend.position['0.5'];
+  const bendRadians = 0.5;
+  if (Math.abs(bendVector[0] - (bendRadians * 180 / Math.PI)) > 0.001 ||
+      Math.abs(bendVector[1]) > 0.001 || Math.abs(bendVector[2]) > 0.001 ||
+      Math.abs(bendPosition.vector[1] - 2 * (1 - Math.cos(bendRadians))) > 0.001 ||
+      Math.abs(bendPosition.vector[2] + 2 * Math.sin(bendRadians)) > 0.001) {
+    throw new Error('Emotecraft scalar bend angle or the generated bend-segment arc was not reconstructed.');
   }
+
+  const bendObject = translateJavaAnimationSet({
+    name: 'bend_value_object',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 10,
+      stopTick: 10,
+      degrees: true,
+      moves: [
+        { tick: 0, leftLeg: { bend: { value: -30 } } },
+        { tick: 10, leftLeg: { bend: { value: 45 } } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const objectBend = bendObject.animations[bendObject.idMap.bend_value_object].bones.left_leg_bend.rotation['0.5'];
+  if (objectBend[0] !== 45) throw new Error('PAL bend { value } keyframes were not imported.');
 
   console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, player pivots/units, bend axes, stop reset, and nonzero returnTick looping are imported.');
 } finally {
