@@ -150,7 +150,13 @@ export function emitAnimationClip(clip: IRAnimationClip): EmittedAnimationClip |
       const entry: Record<string, unknown> = { effect };
       if (typeof cue.volume === 'number') entry.volume = cue.volume;
       if (typeof cue.pitch === 'number') entry.pitch = cue.pitch;
-      sounds[String(round(cue.time))] = entry;
+      const locator = cue.rawExtras?.locator;
+      if (typeof locator === 'string' && locator.trim()) entry.locator = locator.trim();
+      const time = String(round(cue.time));
+      const existing = sounds[time];
+      if (existing === undefined) sounds[time] = entry;
+      else if (Array.isArray(existing)) existing.push(entry);
+      else sounds[time] = [existing, entry];
     }
     if (Object.keys(sounds).length > 0) document.sound_effects = sounds;
   }
@@ -162,9 +168,31 @@ export function emitAnimationClip(clip: IRAnimationClip): EmittedAnimationClip |
       if (!effect) continue;
       const entry: Record<string, unknown> = { effect };
       if (typeof cue.locator === 'string' && cue.locator.trim()) entry.locator = cue.locator.trim();
-      particles[String(round(cue.time))] = entry;
+      if (cue.rawExtras?.bind_to_actor === false) entry.bind_to_actor = false;
+      if (typeof cue.preEffectScript === 'string' && cue.preEffectScript.trim()) {
+        entry.pre_effect_script = cue.preEffectScript.trim();
+      }
+      const time = String(round(cue.time));
+      const existing = particles[time];
+      if (existing === undefined) particles[time] = entry;
+      else if (Array.isArray(existing)) existing.push(entry);
+      else particles[time] = [existing, entry];
     }
     if (Object.keys(particles).length > 0) document.particle_effects = particles;
+  }
+
+  if ((clip.customEvents ?? []).length > 0) {
+    const timeline: Record<string, string | string[]> = {};
+    for (const cue of [...clip.customEvents].sort((a, b) => a.time - b.time)) {
+      const event = typeof cue.event === 'string' ? cue.event.trim() : '';
+      if (!event) continue;
+      const time = String(round(cue.time));
+      const existing = timeline[time];
+      if (existing === undefined) timeline[time] = event;
+      else if (Array.isArray(existing)) existing.push(event);
+      else timeline[time] = [existing, event];
+    }
+    if (Object.keys(timeline).length > 0) document.timeline = timeline;
   }
 
   return {

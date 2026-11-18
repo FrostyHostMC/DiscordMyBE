@@ -51,6 +51,8 @@ jobs:
         run: node scripts/run-player-baseline-regression.mjs
       - name: Verify universal animation export has no arbitrary clip ceiling
         run: node scripts/run-animation-scale-regression.mjs
+      - name: Verify animation timeline and effect event fidelity
+        run: node scripts/run-animation-event-regression.mjs
       - name: Convert the original Pierced fixture through the current animation engine
         run: node scripts/run-pierced-animation-regression.mjs
       - name: Upload current Pierced conversion diagnostics

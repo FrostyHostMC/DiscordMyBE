@@ -237,6 +237,8 @@ const KNOWN_CLIP_FIELDS = new Set([
   'bone',
   'sound_effects',
   'particle_effects',
+  'timeline',
+  'loop_delay',
   'events',
   'blend_weight',
   'override_previous_animation',
@@ -885,19 +887,21 @@ export function buildUniversalAnimationIR(
         }
       }
 
-      // Audio cues
+      // Audio cues. Bedrock accepts multiple simultaneous cues at one timestamp.
       const audioReferences: IRAudioReference[] = [];
       if (rawClip.sound_effects && isPlainObject(rawClip.sound_effects)) {
-        for (const [timeKey, entry] of Object.entries(rawClip.sound_effects)) {
+        for (const [timeKey, rawEntries] of Object.entries(rawClip.sound_effects)) {
           const ts = parseFloat(timeKey) * timeMultiplier;
           const time = !isNaN(ts) ? ts : 0;
-          if (isPlainObject(entry)) {
-            const eObj = entry as Record<string, unknown>;
-            const effect = String(eObj.effect ?? eObj.sound ?? eObj.name ?? '');
-            if (effect) {
+          const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+          for (const entry of entries) {
+            if (isPlainObject(entry)) {
+              const eObj = entry as Record<string, unknown>;
+              const effect = String(eObj.effect ?? eObj.sound ?? eObj.name ?? '');
+              if (!effect) continue;
               const extras: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(eObj)) {
-                if (k !== 'effect' && k !== 'sound' && k !== 'name') extras[k] = v;
+                if (!['effect', 'sound', 'name', 'volume', 'pitch'].includes(k)) extras[k] = v;
               }
               audioReferences.push({
                 time,
@@ -907,29 +911,29 @@ export function buildUniversalAnimationIR(
                 rawExtras: extras,
               });
               audioReferencesCount += 1;
+            } else if (typeof entry === 'string' && entry.trim()) {
+              audioReferences.push({ time, sound: entry.trim(), rawExtras: {} });
+              audioReferencesCount += 1;
             }
-          } else if (typeof entry === 'string' && entry.trim()) {
-            audioReferences.push({ time, sound: entry.trim(), rawExtras: {} });
-            audioReferencesCount += 1;
           }
         }
       }
 
-      // Particle cues
+      // Particle cues. Keep the Bedrock attachment and initialization semantics in the IR.
       const particleReferences: IRParticleReference[] = [];
       if (rawClip.particle_effects && isPlainObject(rawClip.particle_effects)) {
-        for (const [timeKey, entry] of Object.entries(rawClip.particle_effects)) {
+        for (const [timeKey, rawEntries] of Object.entries(rawClip.particle_effects)) {
           const ts = parseFloat(timeKey) * timeMultiplier;
           const time = !isNaN(ts) ? ts : 0;
-          if (isPlainObject(entry)) {
-            const eObj = entry as Record<string, unknown>;
-            const effect = String(eObj.effect ?? eObj.particle ?? '');
-            if (effect) {
+          const entries = Array.isArray(rawEntries) ? rawEntries : [rawEntries];
+          for (const entry of entries) {
+            if (isPlainObject(entry)) {
+              const eObj = entry as Record<string, unknown>;
+              const effect = String(eObj.effect ?? eObj.particle ?? '');
+              if (!effect) continue;
               const extras: Record<string, unknown> = {};
               for (const [k, v] of Object.entries(eObj)) {
-                if (k !== 'effect' && k !== 'particle' && k !== 'locator' && k !== 'pre_effect_script') {
-                  extras[k] = v;
-                }
+                if (!['effect', 'particle', 'locator', 'pre_effect_script'].includes(k)) extras[k] = v;
               }
               particleReferences.push({
                 time,
@@ -939,10 +943,35 @@ export function buildUniversalAnimationIR(
                 rawExtras: extras,
               });
               particleReferencesCount += 1;
+            } else if (typeof entry === 'string' && entry.trim()) {
+              particleReferences.push({ time, effect: entry.trim(), rawExtras: {} });
+              particleReferencesCount += 1;
             }
-          } else if (typeof entry === 'string' && entry.trim()) {
-            particleReferences.push({ time, effect: entry.trim(), rawExtras: {} });
-            particleReferencesCount += 1;
+          }
+        }
+      }
+
+      // Bedrock timeline events are executable Molang script lines, not decorative markers.
+      // Preserve each line and its timestamp so the emitter can write the timeline back.
+      const customEvents: IRCustomEvent[] = [];
+      if (rawClip.timeline && isPlainObject(rawClip.timeline)) {
+        for (const [timeKey, rawEvent] of Object.entries(rawClip.timeline)) {
+          const ts = parseFloat(timeKey) * timeMultiplier;
+          const time = !isNaN(ts) ? ts : 0;
+          const entries = Array.isArray(rawEvent) ? rawEvent : [rawEvent];
+          for (const entry of entries) {
+            const event = typeof entry === 'string'
+              ? entry
+              : isPlainObject(entry) && typeof entry.script === 'string'
+                ? entry.script
+                : '';
+            if (!event.trim()) continue;
+            customEvents.push({
+              time,
+              event,
+              payload: entry,
+              rawExtras: { source: 'bedrock-animation-timeline' },
+            });
           }
         }
       }
@@ -1012,7 +1041,7 @@ export function buildUniversalAnimationIR(
         proceduralBehaviors: clipProcedural,
         audioReferences,
         particleReferences,
-        customEvents: [],
+        customEvents,
         dependencies: clipDependencies,
         unfamiliarProperties: clipUnfamiliar,
       };
