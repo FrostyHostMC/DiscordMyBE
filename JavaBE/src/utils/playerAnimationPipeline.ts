@@ -42,6 +42,7 @@ export interface PlayerAnimationPortReport {
   injectedSlimGeometryIdentifier: string | null;
   gatedClips: number;
   scriptActions: number;
+  runtimeTriggerActions: number;
   notes: string[];
   summary: string;
 }
@@ -52,6 +53,68 @@ export interface PlayerAnimationPortResult {
   geometryIdentifier: string | null;
   slimGeometryIdentifier: string | null;
   report: PlayerAnimationPortReport;
+}
+
+function buildRuntimeTriggerScript(
+  triggers: PlayerClipTrigger[],
+  clips: Record<string, BedrockAnimationClip>,
+): { script: string; actions: number; notes: string[] } {
+  const actions = triggers
+    .filter((trigger) => trigger.scriptDriven && trigger.runtimeEvent && trigger.runtimeTrigger)
+    .map((trigger) => {
+      const length = Number(clips[trigger.clipId]?.animation_length ?? 0);
+      return {
+        eventName: trigger.runtimeEvent as string,
+        clipId: trigger.clipId,
+        blendOutTime: Number.isFinite(length) && length > 0
+          ? Math.round(Math.min(0.25, Math.max(0.05, length * 0.1)) * 1000) / 1000
+          : 0.15,
+      };
+    });
+  if (actions.length === 0) return { script: '', actions: 0, notes: [] };
+  const notes = actions.map((action) =>
+    `${action.clipId} replays from world.afterEvents.${action.eventName} after bytecode-confirmed Java trigger evidence`,
+  );
+  const script = `
+// Bytecode-proven Java player animation runtime triggers.
+// Event-to-entity bindings follow the current @minecraft/server after-event contracts.
+const PORTED_JAVA_RUNTIME_ACTIONS = ${JSON.stringify(actions, null, 2)};
+const PORTED_JAVA_RUNTIME_ENTITY = {
+  entityHurt: (event) => event.hurtEntity,
+  entityHitEntity: (event) => event.damagingEntity,
+  playerSwingStart: (event) => event.player,
+  itemUse: (event) => event.source,
+  playerEmote: (event) => event.player,
+};
+const PORTED_JAVA_RUNTIME_GROUPS = PORTED_JAVA_RUNTIME_ACTIONS.reduce((groups, action) => {
+  (groups[action.eventName] ??= []).push(action);
+  return groups;
+}, {});
+for (const [eventName, eventActions] of Object.entries(PORTED_JAVA_RUNTIME_GROUPS)) {
+  const signal = world.afterEvents[eventName];
+  if (!signal || typeof signal.subscribe !== 'function') {
+    console.warn('[AIPPY-ANIM] Runtime trigger event unavailable: ' + eventName);
+    continue;
+  }
+  signal.subscribe((event) => {
+    const player = PORTED_JAVA_RUNTIME_ENTITY[eventName]?.(event);
+    if (!player || player.typeId !== 'minecraft:player' || typeof player.playAnimation !== 'function') return;
+    if (eventName === 'playerSwingStart' && event.swingSource && event.swingSource !== 'Attack') return;
+    for (const action of eventActions) {
+      try {
+        player.playAnimation(action.clipId, {
+          blendOutTime: action.blendOutTime,
+          stopExpression: 'query.any_animation_finished',
+        });
+        console.info('[AIPPY-ANIM] Java runtime trigger ' + eventName + ' -> ' + action.clipId);
+      } catch (error) {
+        console.warn('[AIPPY-ANIM] Java runtime trigger FAILED for ' + action.clipId + ': ' + (error instanceof Error ? error.message : String(error)));
+      }
+    }
+  });
+}
+`;
+  return { script, actions: actions.length, notes };
 }
 
 export function buildPlayerAnimationPort(options: {
@@ -76,6 +139,7 @@ export function buildPlayerAnimationPort(options: {
     modId: options.modId,
   });
   const gatedClips = options.triggers.filter((trigger) => Boolean(trigger.condition) || trigger.scriptDriven).length;
+  const runtimeTriggers = buildRuntimeTriggerScript(options.triggers, options.clips);
 
   for (const note of viewModels.notes) log(`[PLAYER-VIEW] ${note}`);
   if (viewModels.perspectiveConflicts.length > 0) {
@@ -83,8 +147,8 @@ export function buildPlayerAnimationPort(options: {
   }
   for (const note of offhand.notes) log(`[PLAYER-OFFHAND] ${note}`);
 
-  const scriptActions = offhand.script ? 2 : 0;
-  const notes = [...viewModels.notes, ...offhand.notes, rigInjection.note];
+  const scriptActions = (offhand.script ? 2 : 0) + runtimeTriggers.actions;
+  const notes = [...viewModels.notes, ...offhand.notes, rigInjection.note, ...runtimeTriggers.notes];
   const summary = [
     `${Object.keys(options.clips).length} player clip(s) inspected; ${viewModels.armClips.length} first-person arm track(s), ${viewModels.bodyClips.length} third-person body track(s)`,
     `${gatedClips} clip(s) carry a translated trigger`,
@@ -92,11 +156,14 @@ export function buildPlayerAnimationPort(options: {
     offhand.offhandClips.length > 0
       ? `${offhand.offhandClips.length} off-hand clip(s) wired to the behaviour pack`
       : 'no off-hand clip found',
+    runtimeTriggers.actions > 0
+      ? `${runtimeTriggers.actions} bytecode-backed runtime trigger(s) wired to Bedrock after-events`
+      : 'no unambiguous bytecode-backed one-shot runtime triggers found',
   ].join('; ');
 
   return {
     files: rigInjection.files,
-    scriptCode: offhand.script,
+    scriptCode: [offhand.script, runtimeTriggers.script].filter(Boolean).join('\\n\\n'),
     geometryIdentifier: rigInjection.geometryIdentifier,
     slimGeometryIdentifier: rigInjection.slimGeometryIdentifier,
     report: {
@@ -117,6 +184,7 @@ export function buildPlayerAnimationPort(options: {
       injectedSlimGeometryIdentifier: rigInjection.slimGeometryIdentifier,
       gatedClips,
       scriptActions,
+      runtimeTriggerActions: runtimeTriggers.actions,
       notes,
       summary,
     },

@@ -23,6 +23,7 @@ import { safeFileId } from '@/utils/bedrockIds';
  */
 
 export type PlayerTriggerStatus = 'mapped' | 'approximated' | 'script-driven' | 'unresolved';
+export type PlayerRuntimeEvent = 'entityHurt' | 'entityHitEntity' | 'playerSwingStart' | 'itemUse' | 'playerEmote';
 
 export interface PlayerClipTrigger {
   clipId: string;
@@ -45,6 +46,8 @@ export interface PlayerClipTrigger {
   sourcePriority?: number;
   /** Java runtime API used to fire or stop this clip, when recovered. */
   runtimeTrigger?: string;
+  /** Exact Bedrock after-event inferred from the Java call-site method, when unambiguous. */
+  runtimeEvent?: PlayerRuntimeEvent;
 }
 
 export interface PlayerTriggerReport {
@@ -137,15 +140,25 @@ function bytecodeNumber(instruction: JvmInstruction): number | null {
   return null;
 }
 
+function runtimeEventForSourceMethod(methodName: string): PlayerRuntimeEvent | undefined {
+  const name = methodName.toLowerCase();
+  if (/hurt|damage|injur/.test(name)) return 'entityHurt';
+  if (/swing/.test(name)) return 'playerSwingStart';
+  if (/attack|hit|strike/.test(name)) return 'entityHitEntity';
+  if (/useitem|itemuse|consume|startusing/.test(name)) return 'itemUse';
+  if (/emote/.test(name)) return 'playerEmote';
+  return undefined;
+}
+
 function bytecodeEvidenceForClip(
   classes: JvmClassIR[],
   sourceClipId: string,
   clipId: string,
-): { evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string } | null {
+): { evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string; runtimeEvent?: PlayerRuntimeEvent } | null {
   const keys = new Set([sourceClipId, clipId].map((value) => value.trim().toLowerCase()).filter(Boolean));
   const runtimeCalls = /^(triggerAnim|triggerAnimation|playAnimation|setAnimation|startAnimation|stopAnimation|stopTriggeredAnim)$/i;
   const priorityCalls = /^(setPriority|setLayerPriority|setAnimationPriority)$/i;
-  const matches: Array<{ evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string }> = [];
+  const matches: Array<{ evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string; runtimeEvent?: PlayerRuntimeEvent }> = [];
   for (const item of classes) {
     for (const method of item.methods) {
       const stringValues = method.instructions
@@ -167,11 +180,13 @@ function bytecodeEvidenceForClip(
         if (sourcePriority !== undefined) break;
       }
       const runtimeTrigger = callNames.find((name) => runtimeCalls.test(name));
+      const runtimeEvent = runtimeTrigger ? runtimeEventForSourceMethod(method.name) : undefined;
       matches.push({
         evidence: item.name + '.' + method.name + (runtimeTrigger ? ' -> ' + runtimeTrigger : ''),
         conceptEvidence,
         sourcePriority,
         runtimeTrigger,
+        runtimeEvent,
       });
     }
   }
@@ -182,6 +197,11 @@ function bytecodeEvidenceForClip(
     conceptEvidence: matches.map((match) => match.conceptEvidence).join(' '),
     sourcePriority: priorities.length === 1 ? priorities[0] : undefined,
     runtimeTrigger: [...new Set(matches.map((match) => match.runtimeTrigger).filter((value): value is string => Boolean(value)))][0],
+    runtimeEvent: (() => {
+      const runtimeMatches = matches.filter((match) => Boolean(match.runtimeTrigger));
+      const events = [...new Set(runtimeMatches.map((match) => match.runtimeEvent).filter((value): value is PlayerRuntimeEvent => Boolean(value)))];
+      return runtimeMatches.length > 0 && events.length === 1 && runtimeMatches.every((match) => match.runtimeEvent === events[0]) ? events[0] : undefined;
+    })(),
   };
 }
 
@@ -438,6 +458,34 @@ export function translatePlayerTriggers(options: {
     const bytecodeEvidence = bytecodeEvidenceForClip(options.bytecodeClasses ?? [], sourceClipId, clipId);
     const bytecodeConfirmsConcept = Boolean(bytecodeEvidence && concept.java.test(bytecodeEvidence.conceptEvidence));
     const evidencePath = clipEvidence?.path ?? (bytecodeConfirmsConcept ? bytecodeEvidence?.evidence : undefined);
+    if (bytecodeEvidence?.runtimeTrigger && bytecodeEvidence.runtimeEvent && evidencePath) {
+      triggers.push({
+        clipId, sourceClipId, shortName, concept: concept.concept,
+        javaEvidence: evidencePath,
+        runtimeTrigger: bytecodeEvidence.runtimeTrigger,
+        runtimeEvent: bytecodeEvidence.runtimeEvent,
+        sourcePriority: bytecodeEvidence.sourcePriority,
+        status: 'script-driven',
+        scriptDriven: true,
+        perspective,
+        note: `Bytecode confirms ${bytecodeEvidence.runtimeTrigger} in a source call path mapped to ${bytecodeEvidence.runtimeEvent}; the behaviour pack replays this clip from the matching Bedrock after-event.`,
+      });
+      continue;
+    }
+    if (bytecodeEvidence?.runtimeTrigger && !bytecodeEvidence.runtimeEvent) {
+      triggers.push({
+        clipId, sourceClipId, shortName, concept: concept.concept,
+        javaEvidence: evidencePath ?? bytecodeEvidence.evidence,
+        runtimeTrigger: bytecodeEvidence.runtimeTrigger,
+        sourcePriority: bytecodeEvidence.sourcePriority,
+        status: 'unresolved',
+        scriptDriven: false,
+        perspective,
+        note: 'A Java runtime animation call was found, but its call-site method does not map unambiguously to a Bedrock event; the clip is not auto-played.',
+      });
+      continue;
+    }
+
     if (concept.script) {
       if (!evidencePath) {
         triggers.push({
