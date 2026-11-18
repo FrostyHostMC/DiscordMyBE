@@ -245,6 +245,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const evaluateEasing = (name: string, progress: number, label: string): number => {
     const registryName = name.trim().toLowerCase();
     const t = Math.max(0, Math.min(1, progress));
+    if (t >= 1) return 1;
 
     // The legacy move loader supplies no easing arguments. PAL's Catmull-Rom and Bezier
     // transformers therefore use their documented linear defaults.
