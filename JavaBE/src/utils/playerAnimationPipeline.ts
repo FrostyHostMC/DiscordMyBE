@@ -4,6 +4,7 @@ import type { PlayerModEvidence } from '@/utils/playerModEvidence';
 import type { PlayerOwnerDecision } from '@/utils/playerRigClassifier';
 import { planOffhandPlayback } from '@/utils/playerOffhandResolver';
 import { planViewModels } from '@/utils/playerViewModelMapper';
+import { injectPlayerRigBones } from '@/utils/playerBoneInjector';
 
 /**
  * Automated player animation port.
@@ -62,6 +63,14 @@ export function buildPlayerAnimationPort(options: {
   const log = (line: string) => options.onLog?.(line);
   const viewModels = planViewModels(options.clips, options.evidence);
   const offhand = planOffhandPlayback({ clips: options.clips, evidence: options.evidence });
+  const clipBones = [...new Set(Object.values(options.clips).flatMap((clip) => Object.keys(clip.bones ?? {})))];
+  const bendBones = clipBones.filter((bone) => /_bend$/i.test(bone));
+  const rigInjection = injectPlayerRigBones({
+    candidates: [],
+    clipBones,
+    bendBones,
+    modId: options.modId,
+  });
   const gatedClips = options.triggers.filter((trigger) => Boolean(trigger.condition) || trigger.scriptDriven).length;
 
   for (const note of viewModels.notes) log(`[PLAYER-VIEW] ${note}`);
@@ -71,7 +80,7 @@ export function buildPlayerAnimationPort(options: {
   for (const note of offhand.notes) log(`[PLAYER-OFFHAND] ${note}`);
 
   const scriptActions = offhand.script ? 2 : 0;
-  const notes = [...viewModels.notes, ...offhand.notes];
+  const notes = [...viewModels.notes, ...offhand.notes, rigInjection.note];
   const summary = [
     `${Object.keys(options.clips).length} player clip(s) inspected; ${viewModels.armClips.length} first-person arm track(s), ${viewModels.bodyClips.length} third-person body track(s)`,
     `${gatedClips} clip(s) carry a translated trigger`,
@@ -82,9 +91,9 @@ export function buildPlayerAnimationPort(options: {
   ].join('; ');
 
   return {
-    files: {},
+    files: rigInjection.files,
     scriptCode: offhand.script,
-    geometryIdentifier: null,
+    geometryIdentifier: rigInjection.geometryIdentifier,
     report: {
       owners: options.decisions,
       clipsInspected: Object.keys(options.clips).length,
@@ -98,8 +107,8 @@ export function buildPlayerAnimationPort(options: {
       offhandEvidence: offhand.evidence,
       offhandClips: offhand.offhandClips,
       mainhandClips: offhand.mainhandClips,
-      injectedBones: [],
-      injectedGeometryIdentifier: null,
+      injectedBones: rigInjection.injectedBones,
+      injectedGeometryIdentifier: rigInjection.geometryIdentifier,
       gatedClips,
       scriptActions,
       notes,
