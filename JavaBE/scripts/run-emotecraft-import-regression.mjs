@@ -298,7 +298,7 @@ try {
       easeBeforeKeyframe: true,
       moves: [
         { tick: 0, rightArm: { bend: 0 } },
-        { tick: 10, easing: 'linear', rightArm: { bend: 0.5 } },
+        { tick: 10, easing: 'linear', rightArm: { bend: 0.5, axis: [0, 1, 0] } },
       ],
     },
   }, { fileHint: 'fixture' });
@@ -309,7 +309,8 @@ try {
   if (Math.abs(bendVector[0] - 0.5) > 0.001 ||
       Math.abs(bendVector[1]) > 0.001 || Math.abs(bendVector[2]) > 0.001 ||
       Math.abs(bendPosition[1] - 2 * (1 - Math.cos(bendRadians))) > 0.001 ||
-      Math.abs(bendPosition[2] + 2 * Math.sin(bendRadians)) > 0.001) {
+      Math.abs(bendPosition[2] + 2 * Math.sin(bendRadians)) > 0.001 ||
+      !bend.issues.some((issue) => issue.detail.includes('rightArm.axis at tick 10'))) {
     throw new Error('Emotecraft scalar bend angle or the generated bend-segment arc was not reconstructed.');
   }
 
