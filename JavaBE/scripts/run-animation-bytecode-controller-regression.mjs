@@ -275,7 +275,7 @@ try {
     const actualConditions = lambdaTransitions.map((item) => Object.values(item)[0]);
     const expectedConditions = entry.controllerId.includes('attack_controller')
       ? ['(query.is_moving) && (query.is_sprinting)', '(query.is_moving) && (!query.is_sprinting)', '(!query.is_moving)']
-      : ['query.is_moving', '!query.is_moving'];
+      : ['(query.is_moving)', '(!query.is_moving)'];
     if (lambdaGraph.initial_state !== 'default' ||
         expectedConditions.some((condition) => !actualConditions.includes(condition))) {
       throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions: ' + JSON.stringify(actualConditions));
