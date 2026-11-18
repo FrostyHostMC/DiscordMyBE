@@ -108,10 +108,16 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   const beginTick = Number.isFinite(Number(emote.beginTick)) ? Number(emote.beginTick) : 0;
   const degrees = emote.degrees !== false;
   const easeBefore = emote.easeBeforeKeyframe === true;
+  type PartFrame = {
+    position: Record<string, number>;
+    rotation: Record<string, number>;
+    positionEasing?: string;
+    rotationEasing?: string;
+    bend: boolean;
+  };
   const frames = new Map<number, {
-    easing?: string;
     turn?: number;
-    parts: Map<string, { position: Record<string, number>; rotation: Record<string, number>; bend: boolean }>;
+    parts: Map<string, PartFrame>;
   }>();
 
   for (const move of moves) {
@@ -125,41 +131,46 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
       frame = { parts: new Map() };
       frames.set(tick, frame);
     }
-    if (typeof move.easing === 'string' && move.easing.trim()) {
-      if (frame.easing && frame.easing.toLowerCase() !== move.easing.trim().toLowerCase()) {
-        issues.push('Emotecraft tick ' + tick + ' declares conflicting easing values across split part keyframes; the first easing was retained.');
-      } else {
-        frame.easing = move.easing.trim();
-      }
-    }
     if (move.turn !== undefined) {
       const turn = Number(move.turn);
-      if (Number.isFinite(turn)) {
-        if (frame.turn !== undefined && frame.turn !== turn) {
-          issues.push('Emotecraft tick ' + tick + ' declares conflicting turn values; the first turn was retained.');
-        } else {
-          frame.turn = turn;
-        }
-      }
+      if (Number.isFinite(turn)) frame.turn = turn;
+      else issues.push('Emotecraft turn at tick ' + tick + ' is not numeric and was ignored.');
     }
 
     for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
       const transform = move[partName];
       if (!isPlainObject(transform)) continue;
       const part = frame.parts.get(partName) ?? { position: {}, rotation: {}, bend: false };
+      let positionChanged = false;
+      let rotationChanged = false;
       for (const axis of ['x', 'y', 'z']) {
-        if (transform[axis] !== undefined) {
-          const value = Number(transform[axis]);
-          if (Number.isFinite(value)) part.position[axis] = value;
-          else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
-        }
+        if (transform[axis] === undefined) continue;
+        const value = Number(transform[axis]);
+        if (Number.isFinite(value)) {
+          part.position[axis] = value;
+          positionChanged = true;
+        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
       }
       for (const axis of ['pitch', 'yaw', 'roll']) {
-        if (transform[axis] !== undefined) {
-          const value = Number(transform[axis]);
-          if (Number.isFinite(value)) part.rotation[axis] = value;
-          else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
+        if (transform[axis] === undefined) continue;
+        const value = Number(transform[axis]);
+        if (Number.isFinite(value)) {
+          part.rotation[axis] = value;
+          rotationChanged = true;
+        } else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric and was not carried.');
+      }
+      const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : undefined;
+      if (positionChanged && easing) {
+        if (part.positionEasing && part.positionEasing.toLowerCase() !== easing.toLowerCase()) {
+          issues.push('Emotecraft ' + partName + ' position at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
         }
+        part.positionEasing = easing;
+      }
+      if (rotationChanged && easing) {
+        if (part.rotationEasing && part.rotationEasing.toLowerCase() !== easing.toLowerCase()) {
+          issues.push('Emotecraft ' + partName + ' rotation at tick ' + tick + ' has multiple easing declarations; the last declaration was used for that part/channel only.');
+        }
+        part.rotationEasing = easing;
       }
       if (transform.bend !== undefined || transform.axis !== undefined) part.bend = true;
       frame.parts.set(partName, part);
@@ -172,12 +183,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
   const stopTick = Number.isFinite(Number(emote.stopTick)) && Number(emote.stopTick) > beginTick
     ? Number(emote.stopTick)
     : endTick;
-  const rawLoop = emote.isLoop;
-  const wantsLoop = rawLoop === true || String(rawLoop).toLowerCase() === 'true';
+  const wantsLoop = emote.isLoop === true || String(emote.isLoop).toLowerCase() === 'true';
   const returnTick = Number.isFinite(Number(emote.returnTick)) ? Number(emote.returnTick) : beginTick;
-  const loop = wantsLoop && returnTick <= beginTick;
-  if (wantsLoop && returnTick > beginTick) {
-    issues.push('Emotecraft loop returnTick ' + returnTick + ' is after beginTick ' + beginTick + '; intro/loop splitting needs a controller state graph, so this clip was kept as a one-shot instead of replaying the intro incorrectly.');
+  const validLoop = wantsLoop && returnTick >= beginTick && returnTick < endTick;
+  if (wantsLoop && !validLoop) {
+    issues.push('Emotecraft loop has an invalid returnTick/endTick interval; the clip was kept as a one-shot rather than emitting a broken time loop.');
   }
 
   const bones: Record<string, Record<string, unknown>> = {};
@@ -206,9 +216,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           const value = part.position[positionAxes[axis]];
           if (value !== undefined) position[axis] = value;
         }
-        const easing = easeBefore ? frame.easing : previousPositionEasing;
+        const easing = easeBefore ? part.positionEasing : previousPositionEasing;
         positionTrack[timeKey] = { vector: [...position], ...(easing ? { easing } : {}) };
-        previousPositionEasing = frame.easing;
+        previousPositionEasing = part.positionEasing ?? previousPositionEasing;
       }
       if (rotationChanged) {
         for (let axis = 0; axis < 3; axis += 1) {
@@ -218,24 +228,24 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
             rotation[axis] = angle + (frame.turn ?? 0) * 360;
           }
         }
-        const easing = easeBefore ? frame.easing : previousRotationEasing;
+        const easing = easeBefore ? part.rotationEasing : previousRotationEasing;
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
-        previousRotationEasing = frame.easing;
+        previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
       }
       if (part.bend) {
-        issues.push('Emotecraft ' + partName + ' uses bend/axis at tick ' + tick + '; Bedrock has no equivalent single-bone bend channel, so the limb-bending effect needs a generated segmented rig.');
+        issues.push('Emotecraft ' + partName + ' uses bend/axis at tick ' + tick + '; its source bend values were detected and retained for the dedicated bend-rig reconstruction stage.');
       }
     }
 
     if (Object.keys(positionTrack).length > 0) {
-      if (!loop && stopTick > endTick) {
+      if (!validLoop && stopTick > endTick) {
         const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
         positionTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
       }
       bones[boneName] = { ...(bones[boneName] ?? {}), position: positionTrack };
     }
     if (Object.keys(rotationTrack).length > 0) {
-      if (!loop && stopTick > endTick) {
+      if (!validLoop && stopTick > endTick) {
         const resetTime = String(Math.round(((stopTick - beginTick) / 20) * 1000) / 1000);
         rotationTrack[resetTime] = { vector: [0, 0, 0], easing: 'easeOutSine' };
       }
@@ -243,13 +253,24 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     }
   }
 
-  const durationTick = (loop ? endTick : Math.max(endTick, stopTick)) - beginTick;
-  return {
+  const durationTick = (validLoop ? endTick : Math.max(endTick, stopTick)) - beginTick;
+  const result: Record<string, unknown> = {
     bones,
     animation_length: Math.max(0, durationTick / 20),
-    loop,
+    loop: validLoop,
     __emoteIssues: issues,
   };
+  if (validLoop && returnTick > beginTick) {
+    const intro = Math.round(((returnTick - beginTick) / 20) * 1000) / 1000;
+    const loopDuration = Math.round(((endTick - returnTick) / 20) * 1000) / 1000;
+    // Bedrock evaluates anim_time_update every frame. Keeping the source timeline in its
+    // original coordinates lets the intro play once, then wraps only the returnTick→endTick
+    // interval instead of restarting the entire emote at tick zero.
+    result.anim_time_update =
+      'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
+      intro + ' + math.mod(query.anim_time - ' + intro + ' + query.delta_time, ' + loopDuration + ')';
+  }
+  return result;
 }
 
 /** Locates the clip map inside any Java/GeckoLib animation document shape. */
