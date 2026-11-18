@@ -140,8 +140,45 @@ try {
     },
   }, { fileHint: 'fixture' });
   const fadeOutClip = fadeOut.animations[fadeOut.idMap.end_tick_fade];
-  if (Math.abs(fadeOutClip.bones.head.rotation['1.25'][0] - 67.5) > 0.001) {
-    throw new Error('Emotecraft endTick reset did not retain the final keyframe easing.');
+  if (Math.abs(fadeOutClip.bones.head.rotation['1.25'][0] - 45) > 0.001) {
+    throw new Error('Emotecraft endTick reset did not use the source default sine easing when easeBeforeKeyframe is enabled.');
+  }
+
+  const fadeInLegacy = translateJavaAnimationSet({
+    name: 'begin_tick_fade_legacy_easing',
+    emote: {
+      isLoop: false,
+      beginTick: 5,
+      endTick: 20,
+      stopTick: 30,
+      degrees: true,
+      easeBeforeKeyframe: false,
+      moves: [{ tick: 10, easing: 'easeInQuad', head: { pitch: 90 } }],
+    },
+  }, { fileHint: 'fixture' });
+  const fadeInLegacyClip = fadeInLegacy.animations[fadeInLegacy.idMap.begin_tick_fade_legacy_easing];
+  if (Math.abs(fadeInLegacyClip.bones.head.rotation['0.25'][0] - 22.5) > 0.001) {
+    throw new Error('Emotecraft beginTick did not use the last-keyframe easing when easeBeforeKeyframe is disabled.');
+  }
+
+  const fadeOutLegacy = translateJavaAnimationSet({
+    name: 'end_tick_fade_legacy_easing',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 30,
+      degrees: true,
+      easeBeforeKeyframe: false,
+      moves: [
+        { tick: 0, easing: 'linear', head: { pitch: 0 } },
+        { tick: 10, easing: 'easeInQuad', head: { pitch: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const fadeOutLegacyClip = fadeOutLegacy.animations[fadeOutLegacy.idMap.end_tick_fade_legacy_easing];
+  if (Math.abs(fadeOutLegacyClip.bones.head.rotation['1.25'][0] - 67.5) > 0.001) {
+    throw new Error('Emotecraft endTick reset did not use the last-keyframe easing when easeBeforeKeyframe is disabled.');
   }
 
   const stepClipResult = translateJavaAnimationSet({
