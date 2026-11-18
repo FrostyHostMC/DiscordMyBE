@@ -1,3 +1,10 @@
+## 2026-11-18 — International PS4 porting research update
+- Added a source-linked research record covering RaringM's PC-to-PS4 custom-pack pipeline, PS4-specific OFT/OTD/ODR/ODD resource forms, GoldHEN/OpenOrbis PRX development, InsulinGTAV's EU CUSA00411 1.57 build reference, and historical US CUSA00419 PRX precedent.
+- Distinguished broad upstream converter tooling from the narrower documented PS4 1.57 custom-pack support; unsupported PS4 asset families remain blocked.
+- Clarified that RageKit YSC structural read/write is not a script decompiler/compiler or a validated PS4 script loader, and that ScriptHookV/SHVDN/RAGE Plugin Hook require behavior reimplementation rather than binary copying.
+- Kept the user's US CUSA00419 / GTA V 1.57 / firmware 14.00 target separate from EU CUSA00411 references. No code, runtime hooks, PS4 writers, or installable packages were changed or claimed.
+- Research document: [International PS4 porting research](docs/INTERNATIONAL-PS4-PORTING-RESEARCH-2026-11-18.md).
+
 ## 2026-11-14 — Per-resource diagnostics in the workbench
 - The port-plan panel now shows each imported resource's expected output files, required source inputs, and exact PS4 conversion gate.
 - This makes the diagnostics useful for deciding what the app must generate for vehicles, peds, weapons, textures, maps and runtime plugins.
