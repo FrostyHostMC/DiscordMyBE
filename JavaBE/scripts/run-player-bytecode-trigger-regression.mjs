@@ -38,11 +38,7 @@ try {
     { offset: 4, opcode: 0xb6, mnemonic: 'invokevirtual', size: 1, operands: [], constant: methodRef('setPriority'), branchTargets: [] },
     { offset: 5, opcode: 0xb6, mnemonic: 'invokevirtual', size: 1, operands: [], constant: methodRef('triggerAnim'), branchTargets: [] },
   ];
-  const methodIR = (name, instructions, blocks, calls = []) => ({
-    name, descriptor: '()V', access: 0x0001, maxStack: 4, maxLocals: 2,
-    instructions, blocks, calls, fieldAccesses: [], localVariables: [],
-    exceptionHandlers: [], codeLength: 64, decodeWarnings: [],
-  });
+
 
   const bytecodeClass = {
     path: 'fixture/PlayerActions.class', name: 'fixture.PlayerActions', superName: 'java.lang.Object',
