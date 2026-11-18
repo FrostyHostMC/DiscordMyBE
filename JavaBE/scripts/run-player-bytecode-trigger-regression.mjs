@@ -19,6 +19,18 @@ try {
     index: 1, tag: 10, kind: 'Methodref', owner: 'fixture.PlayerActions', name, descriptor: '()V',
   });
   const string = (value) => ({ index: 2, tag: 8, kind: 'String', value });
+  const ins = (offset, mnemonic, opcode, constant, branchTargets = []) => ({
+    offset, opcode, mnemonic, size: 1, operands: [], ...(constant ? { constant } : {}), branchTargets,
+  });
+  const block = (start, instructionOffsets, successors = []) => ({
+    start, end: start + 10, instructionOffsets, successors, exceptionalSuccessors: [],
+  });
+  const method = (owner, name) => ({ index: 3, tag: 10, kind: 'Methodref', owner, name, descriptor: '()V' });
+  const methodIR = (name, instructions, blocks, calls = []) => ({
+    name, descriptor: '()V', access: 0x0001, maxStack: 4, maxLocals: 2,
+    instructions, blocks, calls, fieldAccesses: [], localVariables: [],
+    exceptionHandlers: [], codeLength: 64, decodeWarnings: [],
+  });
   const instructions = [
     { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: string('animation.fixture.attack'), branchTargets: [] },
     { offset: 1, opcode: 0xb6, mnemonic: 'invokevirtual', size: 1, operands: [], constant: methodRef('isAttacking'), branchTargets: [] },
