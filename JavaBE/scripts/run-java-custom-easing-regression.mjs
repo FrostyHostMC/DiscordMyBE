@@ -52,6 +52,50 @@ try {
     throw new Error('A registered Java lambda easing was not compiled from JVM arithmetic bytecode: ' + JSON.stringify(registry));
   }
 
+  const piecewiseHandle = {
+    index: 9, tag: 15, kind: 'MethodHandle',
+    reference: { index: 10, tag: 10, kind: 'Methodref', owner: 'fixture.EasingMod', name: 'lambda$register$1', descriptor: '(D)D' },
+  };
+  const piecewiseRegistration = {
+    ...registration,
+    name: 'registerPiecewise',
+    instructions: [
+      { offset: 0, opcode: 0x12, mnemonic: 'ldc', size: 1, operands: [], constant: { index: 11, tag: 8, kind: 'String', value: 'fixture_piecewise' }, branchTargets: [] },
+      { offset: 1, opcode: 0xba, mnemonic: 'invokedynamic', size: 1, operands: [], constant: { index: 12, tag: 18, kind: 'InvokeDynamic', bootstrapMethod: { methodReference: undefined, arguments: [piecewiseHandle] } }, branchTargets: [] },
+      { offset: 2, opcode: 0xb8, mnemonic: 'invokestatic', size: 1, operands: [], constant: methodRef, branchTargets: [] },
+    ],
+  };
+  const piecewiseLambda = {
+    ...lambda,
+    name: 'lambda$register$1',
+    instructions: [
+      { offset: 0, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 1, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 0.5 }, branchTargets: [] },
+      { offset: 2, opcode: 0x97, mnemonic: 'dcmpl', size: 1, operands: [], branchTargets: [] },
+      { offset: 3, opcode: 0x9c, mnemonic: 'ifge', size: 1, operands: [], branchTargets: [12] },
+      { offset: 6, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 7, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 0.5 }, branchTargets: [] },
+      { offset: 8, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+      { offset: 9, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+      { offset: 12, opcode: 0x26, mnemonic: 'dload_0', size: 1, operands: [], branchTargets: [] },
+      { offset: 13, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 0.5 }, branchTargets: [] },
+      { offset: 14, opcode: 0x67, mnemonic: 'dsub', size: 1, operands: [], branchTargets: [] },
+      { offset: 15, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 1.5 }, branchTargets: [] },
+      { offset: 16, opcode: 0x6b, mnemonic: 'dmul', size: 1, operands: [], branchTargets: [] },
+      { offset: 17, opcode: 0x14, mnemonic: 'ldc2_w', size: 1, operands: [], constant: { value: 0.25 }, branchTargets: [] },
+      { offset: 18, opcode: 0x63, mnemonic: 'dadd', size: 1, operands: [], branchTargets: [] },
+      { offset: 19, opcode: 0xaf, mnemonic: 'dreturn', size: 1, operands: [], branchTargets: [] },
+    ],
+    blocks: [{ start: 0, end: 20, instructionOffsets: [0,1,2,3,6,7,8,9,12,13,14,15,16,17,18,19], successors: [12,6], exceptionalSuccessors: [] }],
+  };
+  owner.methods.push(piecewiseRegistration, piecewiseLambda);
+  const piecewiseRegistry = buildJavaCustomEasingRegistry([owner]);
+  const piecewise = piecewiseRegistry.functions.fixture_piecewise;
+  if (!piecewise || Math.abs(piecewise(0.25) - 0.125) > 0.000001 ||
+      Math.abs(piecewise(0.75) - 0.625) > 0.000001) {
+    throw new Error('A branch-based custom Java easing was not interpreted correctly: ' + JSON.stringify(piecewiseRegistry));
+  }
+
   const result = analyzeChannel('rotation', {
     '0': { vector: [0, 0, 0] },
     '1': { vector: [100, 0, 0], easing: 'fixture_custom_quad' },

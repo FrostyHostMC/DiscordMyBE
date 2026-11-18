@@ -107,8 +107,8 @@ function mathCall(instruction: JvmInstruction): { name: string; arity: number } 
   const owner = instruction.constant?.owner ?? '';
   const name = instruction.constant?.name ?? '';
   if (!/(?:java\.lang\.(?:Strict)?Math|Mth|MathHelper)$/.test(owner)) return null;
-  const unary = new Set(['sin','cos','tan','asin','acos','atan','sqrt','abs','floor','ceil','round','exp','log','log10']);
-  const binary = new Set(['pow','min','max']);
+  const unary = new Set(['sin','cos','tan','asin','acos','atan','sqrt','cbrt','abs','floor','ceil','round','exp','log','log10','signum']);
+  const binary = new Set(['pow','min','max','atan2','hypot','copySign']);
   if (unary.has(name)) return { name, arity: 1 };
   if (binary.has(name)) return { name, arity: 2 };
   return null;
@@ -126,72 +126,165 @@ export function compileJvmScalarEasing(method: JvmMethodIR, isStatic: boolean): 
   const namedProgress = method.localVariables.find((local) =>
     /^(t|x|value|progress|partialtick|partial_tick)$/i.test(local.name));
   const progressSlot = namedProgress?.index ?? numeric[numeric.length - 1].slot;
-  const stack: Expr[] = [];
-  let returned: Expr | null = null;
+  const offsetToIndex = new Map(method.instructions.map((instruction, index) => [instruction.offset, index]));
 
-  for (const instruction of method.instructions) {
-    const op = instruction.opcode;
-    const loaded = loadIndex(instruction);
-    if (loaded !== null) {
-      if (loaded !== progressSlot) return null;
-      stack.push({ kind: 'progress' });
-      continue;
+  const execute = (progress: number): number => {
+    const locals: number[] = [];
+    locals[progressSlot] = Math.max(0, Math.min(1, progress));
+    const stack: number[] = [];
+    let pc = 0;
+    let steps = 0;
+    const maxSteps = Math.max(128, method.instructions.length * 16);
+    const pop = (): number | null => stack.length > 0 ? stack.pop()! : null;
+    const jump = (instruction: JvmInstruction): boolean => {
+      const target = instruction.branchTargets[0];
+      const index = offsetToIndex.get(target);
+      if (index === undefined) return false;
+      pc = index;
+      return true;
+    };
+
+    while (pc < method.instructions.length && steps++ < maxSteps) {
+      const instruction = method.instructions[pc];
+      const op = instruction.opcode;
+      const loaded = loadIndex(instruction);
+      if (loaded !== null) {
+        if (loaded !== progressSlot) return Number.NaN;
+        stack.push(locals[loaded]);
+        pc += 1;
+        continue;
+      }
+      if (instruction.mnemonic.startsWith('ldc') || (op >= 0x02 && op <= 0x11)) {
+        const number = constantNumber(instruction);
+        if (number === null) return Number.NaN;
+        stack.push(number);
+        pc += 1;
+        continue;
+      }
+      if (op === 0xb2) {
+        const owner = instruction.constant?.owner ?? '';
+        const name = instruction.constant?.name ?? '';
+        if (owner === 'java.lang.Math' && name === 'PI') stack.push(Math.PI);
+        else if (owner === 'java.lang.Math' && name === 'E') stack.push(Math.E);
+        else return Number.NaN;
+        pc += 1;
+        continue;
+      }
+      if ([0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0x73].includes(op)) {
+        const right = pop(), left = pop();
+        if (left === null || right === null) return Number.NaN;
+        if (op >= 0x70) stack.push(left % right);
+        else if (op >= 0x6c) stack.push(left / right);
+        else if (op >= 0x68) stack.push(left * right);
+        else if (op >= 0x64) stack.push(left - right);
+        else stack.push(left + right);
+        pc += 1;
+        continue;
+      }
+      if (op >= 0x74 && op <= 0x77) {
+        const value = pop();
+        if (value === null) return Number.NaN;
+        stack.push(-value);
+        pc += 1;
+        continue;
+      }
+      if (op >= 0x85 && op <= 0x93) { pc += 1; continue; }
+      if (op === 0x59 || op === 0x5c) {
+        if (stack.length === 0) return Number.NaN;
+        stack.push(stack[stack.length - 1]);
+        pc += 1;
+        continue;
+      }
+      if (op === 0x5f) {
+        if (stack.length < 2) return Number.NaN;
+        const top = stack.pop()!, below = stack.pop()!;
+        stack.push(top, below);
+        pc += 1;
+        continue;
+      }
+      if (op === 0x57) { if (pop() === null) return Number.NaN; pc += 1; continue; }
+      if (op === 0x58) { if (pop() === null || pop() === null) return Number.NaN; pc += 1; continue; }
+      if (op === 0x84) {
+        const index = instruction.operands[0], amount = instruction.operands[1];
+        if (index === undefined || amount === undefined || locals[index] === undefined) return Number.NaN;
+        locals[index] += amount;
+        pc += 1;
+        continue;
+      }
+      if ([0x95,0x96,0x97,0x98].includes(op)) {
+        const right = pop(), left = pop();
+        if (left === null || right === null) return Number.NaN;
+        stack.push(Number.isNaN(left) || Number.isNaN(right) ? (op === 0x96 || op === 0x98 ? 1 : -1) : left > right ? 1 : left < right ? -1 : 0);
+        pc += 1;
+        continue;
+      }
+      if (op === 0xb8) {
+        const call = mathCall(instruction);
+        if (!call || stack.length < call.arity) return Number.NaN;
+        const args = stack.splice(stack.length - call.arity, call.arity);
+        const name = call.name;
+        let value: number;
+        switch (name) {
+          case 'sin': value = Math.sin(args[0]); break;
+          case 'cos': value = Math.cos(args[0]); break;
+          case 'tan': value = Math.tan(args[0]); break;
+          case 'asin': value = Math.asin(args[0]); break;
+          case 'acos': value = Math.acos(args[0]); break;
+          case 'atan': value = Math.atan(args[0]); break;
+          case 'atan2': value = Math.atan2(args[0], args[1]); break;
+          case 'sqrt': value = Math.sqrt(args[0]); break;
+          case 'cbrt': value = Math.cbrt(args[0]); break;
+          case 'abs': value = Math.abs(args[0]); break;
+          case 'signum': value = Math.sign(args[0]); break;
+          case 'floor': value = Math.floor(args[0]); break;
+          case 'ceil': value = Math.ceil(args[0]); break;
+          case 'round': value = Math.round(args[0]); break;
+          case 'exp': value = Math.exp(args[0]); break;
+          case 'log': value = Math.log(args[0]); break;
+          case 'log10': value = Math.log10(args[0]); break;
+          case 'pow': value = Math.pow(args[0], args[1]); break;
+          case 'min': value = Math.min(args[0], args[1]); break;
+          case 'max': value = Math.max(args[0], args[1]); break;
+          case 'hypot': value = Math.hypot(args[0], args[1]); break;
+          case 'copySign': value = Math.sign(args[1]) * Math.abs(args[0]); break;
+          default: return Number.NaN;
+        }
+        stack.push(value);
+        pc += 1;
+        continue;
+      }
+      if (op === 0xa7 || op === 0xc8) {
+        if (!jump(instruction)) return Number.NaN;
+        continue;
+      }
+      if (op >= 0x99 && op <= 0x9e) {
+        const value = pop();
+        if (value === null) return Number.NaN;
+        const take = op === 0x99 ? value === 0 : op === 0x9a ? value !== 0 :
+          op === 0x9b ? value < 0 : op === 0x9c ? value >= 0 :
+          op === 0x9d ? value > 0 : value <= 0;
+        if (take) { if (!jump(instruction)) return Number.NaN; }
+        else pc += 1;
+        continue;
+      }
+      if (op >= 0x9f && op <= 0xa4) {
+        const right = pop(), left = pop();
+        if (left === null || right === null) return Number.NaN;
+        const take = op === 0x9f ? left === right : op === 0xa0 ? left !== right :
+          op === 0xa1 ? left < right : op === 0xa2 ? left >= right :
+          op === 0xa3 ? left > right : left <= right;
+        if (take) { if (!jump(instruction)) return Number.NaN; }
+        else pc += 1;
+        continue;
+      }
+      if ([0xac,0xad,0xae,0xaf].includes(op)) return pop() ?? Number.NaN;
+      if (op === 0x00) { pc += 1; continue; }
+      return Number.NaN;
     }
-    if (instruction.mnemonic.startsWith('ldc') || (op >= 0x02 && op <= 0x11)) {
-      const number = constantNumber(instruction);
-      if (number === null) return null;
-      stack.push({ kind: 'constant', value: number });
-      continue;
-    }
-    if (op === 0xb2) {
-      const owner = instruction.constant?.owner ?? '';
-      const name = instruction.constant?.name ?? '';
-      if (owner === 'java.lang.Math' && name === 'PI') stack.push({ kind: 'constant', value: Math.PI });
-      else if (owner === 'java.lang.Math' && name === 'E') stack.push({ kind: 'constant', value: Math.E });
-      else return null;
-      continue;
-    }
-    if ([0x60,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0x73].includes(op)) {
-      const right = stack.pop(), left = stack.pop();
-      if (!left || !right) return null;
-      const family = op >= 0x70 ? 'rem' : op >= 0x6c ? 'div' : op >= 0x68 ? 'mul' : op >= 0x64 ? 'sub' : 'add';
-      stack.push({ kind: 'binary', op: family, left, right });
-      continue;
-    }
-    if (op >= 0x74 && op <= 0x77) {
-      const value = stack.pop();
-      if (!value) return null;
-      stack.push({ kind: 'unary', op: 'neg', value });
-      continue;
-    }
-    if (op >= 0x85 && op <= 0x93) continue; // numeric primitive conversions
-    if (op === 0x59 || op === 0x5c) {
-      const value = stack[stack.length - 1];
-      if (!value) return null;
-      stack.push(value);
-      continue;
-    }
-    if (op === 0x57) { if (!stack.pop()) return null; continue; }
-    if (op === 0x58) { if (!stack.pop() || !stack.pop()) return null; continue; }
-    if (op === 0xb8) {
-      const call = mathCall(instruction);
-      if (!call || stack.length < call.arity) return null;
-      const args = stack.splice(stack.length - call.arity, call.arity);
-      stack.push({ kind: 'call', name: call.name, args });
-      continue;
-    }
-    if ([0xac,0xad,0xae,0xaf].includes(op)) {
-      returned = stack.pop() ?? null;
-      if (!returned) return null;
-      break;
-    }
-    if (op === 0xb1 || op === 0xa7 || op === 0xc8 || op === 0x99 || op === 0x9a ||
-        (op >= 0x9b && op <= 0xa6) || op === 0xc6 || op === 0xc7) return null;
-    if (op === 0x00) continue;
-    return null;
-  }
-  if (!returned) return null;
-  const fn = (progress: number) => evaluate(returned!, Math.max(0, Math.min(1, progress)));
+    return Number.NaN;
+  };
+
+  const fn = (progress: number) => execute(progress);
   for (const sample of [0, 0.125, 0.25, 0.5, 0.75, 0.875, 1]) {
     if (!Number.isFinite(fn(sample))) return null;
   }
