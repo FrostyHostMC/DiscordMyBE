@@ -14,6 +14,7 @@ const server = await createServer({
 try {
   const { buildUniversalAnimationIR } = await server.ssrLoadModule('/src/utils/universalAnimationIR.ts');
   const { emitAnimationClip } = await server.ssrLoadModule('/src/utils/animationIREmitter.ts');
+  const { exportUniversalAnimationIR } = await server.ssrLoadModule('/src/utils/universalAnimationExporter.ts');
   const rawClip = {
     animation_length: 1,
     loop: true,
@@ -85,6 +86,44 @@ try {
   }
   if (!Array.isArray(doc.timeline['0.75']) || doc.timeline['0.75'].length !== 2) {
     throw new Error('Multiple timeline scripts at one timestamp were not preserved.');
+  }
+  const secondClip = { ...clip, id: 'animation.fixture.events_second', originalId: 'animation.fixture.events_second', timeline: { ...clip.timeline, durationSeconds: 2 } };
+  const resourcePackFiles = {
+    'entity/fixture.entity.json': JSON.stringify({
+      format_version: '1.10.0',
+      'minecraft:client_entity': {
+        description: {
+          identifier: 'fixture:fixture',
+          materials: { default: 'entity_alphatest' },
+          textures: { default: 'textures/entity/fixture' },
+          geometry: { default: 'geometry.fixture' },
+          animations: {},
+          scripts: { animate: [] },
+          render_controllers: ['controller.render.default'],
+        },
+      },
+    }),
+  };
+  const behaviorPackFiles = { 'scripts/main.js': '' };
+  const exportReport = exportUniversalAnimationIR({
+    ir: { clips: { [clip.id]: clip, [secondClip.id]: secondClip }, clipCount: 2, controllerCount: 0 },
+    modId: 'fixture',
+    resourcePackFiles,
+    behaviorPackFiles,
+  });
+  const selfTest = exportReport.selfTestScript;
+  if (typeof selfTest !== 'string' || !selfTest.includes('system.runTimeout(runNext')) {
+    throw new Error('Runtime diagnostic does not sequence animation requests.');
+  }
+  if (!selfTest.includes(clip.id) || !selfTest.includes(secondClip.id)) {
+    throw new Error('Runtime diagnostic omitted a registered animation clip.');
+  }
+  if (!selfTest.includes('API acceptance is NOT proof of visible playback') ||
+      !selfTest.includes('does not prove visible rendering')) {
+    throw new Error('Runtime diagnostic overstates what the Script API can verify.');
+  }
+  if (selfTest.includes('for (const clipId of PORTED_CLIPS)')) {
+    throw new Error('Runtime diagnostic still requests all clips in one immediate loop.');
   }
   console.log('[PASS] Universal animation IR/emitter preserve pre/post transforms, Catmull-Rom, step jumps, simultaneous effects, locators, particle scripts, and timeline events.');
 } finally {
