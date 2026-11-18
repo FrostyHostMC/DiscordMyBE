@@ -62,18 +62,38 @@ function enumStateNames(item: JvmClassIR): string[] {
     .filter((name) => name && !name.startsWith('$'));
 }
 
-function lambdaTarget(method: JvmMethodIR): { owner: string; name: string } | null {
-  const targets = new Map<string, { owner: string; name: string }>();
-  for (const instruction of method.instructions) {
+function lambdaTargets(method: JvmMethodIR): Array<{
+  owner: string; name: string; controllerName: string; transitionTicks?: number;
+}> {
+  const targets = new Map<string, { owner: string; name: string; controllerName: string; transitionTicks?: number }>();
+  for (let index = 0; index < method.instructions.length; index++) {
+    const instruction = method.instructions[index];
     const bootstrap = instruction.constant?.bootstrapMethod;
-    for (const argument of bootstrap?.arguments ?? []) {
+    if (!bootstrap) continue;
+    for (const argument of bootstrap.arguments ?? []) {
       const reference = argument.reference;
       if (argument.kind !== 'MethodHandle' || !reference?.owner || !reference.name) continue;
-      const target = { owner: reference.owner, name: reference.name };
-      targets.set(target.owner + '#' + target.name, target);
+      let controllerName = '';
+      let transitionTicks: number | undefined;
+      for (let previous = index - 1; previous >= 0 && previous >= index - 12; previous--) {
+        const candidate = method.instructions[previous];
+        const value = candidate.constant?.value;
+        if (!controllerName && candidate.mnemonic.startsWith('ldc') && typeof value === 'string') controllerName = value;
+        if (transitionTicks === undefined) {
+          if (typeof value === 'number' && Number.isFinite(value)) transitionTicks = value;
+          else if (candidate.opcode >= 0x02 && candidate.opcode <= 0x08) transitionTicks = candidate.opcode - 0x03;
+          else if (candidate.opcode === 0x10 || candidate.opcode === 0x11) transitionTicks = candidate.operands[0];
+          else if (candidate.opcode === 0x0b || candidate.opcode === 0x0e) transitionTicks = 0;
+          else if (candidate.opcode === 0x0c || candidate.opcode === 0x0f) transitionTicks = 1;
+          else if (candidate.opcode === 0x0d) transitionTicks = 2;
+        }
+        if (controllerName && transitionTicks !== undefined) break;
+      }
+      const target = { owner: reference.owner, name: reference.name, controllerName: controllerName || reference.name, transitionTicks };
+      targets.set(target.owner + '#' + target.name + '#' + target.controllerName, target);
     }
   }
-  return targets.size === 1 ? [...targets.values()][0] : null;
+  return [...targets.values()];
 }
 
 function isStringConstant(instruction: JvmInstruction): string | null {
@@ -226,63 +246,73 @@ function recoverLambdaStates(
   controller: JvmClassIR,
   byName: Map<string, JvmClassIR>,
   knownClips: Set<string>,
-): { initialState: string; states: Record<string, unknown>; stateNames: string[] } | null {
-  const recovered = new Map<string, { clip: string; condition: string; order: number }>();
-  let order = 0;
+): Array<{
+  initialState: string; states: Record<string, unknown>; stateNames: string[];
+  sourceMethod: string; controllerName: string; transitionTicks?: number;
+}> {
+  const graphs: Array<{
+    initialState: string; states: Record<string, unknown>; stateNames: string[];
+    sourceMethod: string; controllerName: string; transitionTicks?: number;
+  }> = [];
+  const seenMethods = new Set<string>();
   for (const registrationMethod of controller.methods) {
-    const target = lambdaTarget(registrationMethod);
-    if (!target) continue;
-    const lambdaClass = byName.get(target.owner);
-    const lambdaMethod = lambdaClass?.methods.find((method) => method.name === target.name);
-    if (!lambdaMethod) continue;
-    const clipsByBlock = new Map<number, string[]>();
-    for (const block of lambdaMethod.blocks) {
-      const clips = clipIdsInBlock(lambdaMethod, block.start, knownClips);
-      if (clips.length === 1) clipsByBlock.set(block.start, clips);
-    }
-    for (const block of lambdaMethod.blocks) {
-      const branch = lambdaMethod.instructions.find((instruction) =>
-        block.instructionOffsets.includes(instruction.offset) &&
-        CONDITIONAL_BRANCHES.has(instruction.opcode) &&
-        instruction.branchTargets.length > 0,
-      );
-      if (!branch) continue;
-      const predicate = predicateForBlock(lambdaMethod, block.start);
-      if (!predicate) continue;
-      for (const successor of block.successors) {
-        const targetClips = clipsByBlock.get(successor);
-        if (!targetClips || targetClips.length !== 1) continue;
-        const taken = branch.branchTargets.includes(successor);
-        let condition: string | null = null;
-        if (branch.opcode === 0x99 || branch.opcode === 0xc6) condition = taken ? '!' + predicate : predicate;
-        else if (branch.opcode === 0x9a || branch.opcode === 0xc7) condition = taken ? predicate : '!' + predicate;
-        if (!condition) continue;
-        const clip = targetClips[0];
-        const existing = recovered.get(clip);
-        if (!existing) recovered.set(clip, { clip, condition, order: order++ });
+    for (const target of lambdaTargets(registrationMethod)) {
+      const targetKey = target.owner + '#' + target.name;
+      if (seenMethods.has(targetKey)) continue;
+      seenMethods.add(targetKey);
+      const lambdaClass = byName.get(target.owner);
+      const lambdaMethod = lambdaClass?.methods.find((method) => method.name === target.name);
+      if (!lambdaMethod) continue;
+      const recovered = new Map<string, { clip: string; condition: string; order: number }>();
+      let order = 0;
+      const clipsByBlock = new Map<number, string[]>();
+      for (const block of lambdaMethod.blocks) {
+        const clips = clipIdsInBlock(lambdaMethod, block.start, knownClips);
+        if (clips.length === 1) clipsByBlock.set(block.start, clips);
       }
+      for (const block of lambdaMethod.blocks) {
+        const branch = lambdaMethod.instructions.find((instruction) =>
+          block.instructionOffsets.includes(instruction.offset) &&
+          CONDITIONAL_BRANCHES.has(instruction.opcode) && instruction.branchTargets.length > 0,
+        );
+        if (!branch) continue;
+        const predicate = predicateForBlock(lambdaMethod, block.start);
+        if (!predicate) continue;
+        for (const successor of block.successors) {
+          const targetClips = clipsByBlock.get(successor);
+          if (!targetClips || targetClips.length !== 1) continue;
+          const taken = branch.branchTargets.includes(successor);
+          let condition: string | null = null;
+          if (branch.opcode === 0x99 || branch.opcode === 0xc6) condition = taken ? '!' + predicate : predicate;
+          else if (branch.opcode === 0x9a || branch.opcode === 0xc7) condition = taken ? predicate : '!' + predicate;
+          if (!condition) continue;
+          const clip = targetClips[0];
+          if (!recovered.has(clip)) recovered.set(clip, { clip, condition, order: order++ });
+        }
+      }
+      if (recovered.size === 0) continue;
+      const entries = [...recovered.values()].sort((a, b) => a.order - b.order);
+      const states: Record<string, unknown> = { default: { animations: [], transitions: [] } };
+      const stateNames = ['default'];
+      const used = new Set(['default']);
+      const transitions: Array<Record<string, string>> = [];
+      for (const entry of entries) {
+        const suffix = cleanIdentifier(entry.clip.split('.').pop() ?? entry.clip);
+        let state = 'state_' + suffix, index = 2;
+        while (used.has(state)) state = 'state_' + suffix + '_' + index++;
+        used.add(state);
+        stateNames.push(state);
+        states[state] = { animations: [entry.clip], transitions: [{ default: invertCondition(entry.condition) }] };
+        transitions.push({ [state]: entry.condition });
+      }
+      (states.default as { transitions: Array<Record<string, string>> }).transitions = transitions;
+      graphs.push({
+        initialState: 'default', states, stateNames, sourceMethod: target.name,
+        controllerName: target.controllerName, transitionTicks: target.transitionTicks,
+      });
     }
   }
-  if (recovered.size === 0) return null;
-  const entries = [...recovered.values()].sort((a, b) => a.order - b.order);
-  const states: Record<string, unknown> = { default: { animations: [], transitions: [] } };
-  const stateNames: string[] = ['default'];
-  const used = new Set<string>(['default']);
-  const transitions: Array<Record<string, string>> = [];
-  for (const entry of entries) {
-    const suffix = cleanIdentifier(entry.clip.split('.').pop() ?? entry.clip);
-    let state = 'state_' + suffix, index = 2;
-    while (used.has(state)) state = 'state_' + suffix + '_' + index++;
-    used.add(state);
-    stateNames.push(state);
-    states[state] = {
-      animations: [entry.clip],
-      transitions: [{ default: invertCondition(entry.condition) }],
-    };
-    transitions.push({ [state]: entry.condition });
-  }
-  (states.default as { transitions: Array<Record<string, string>> }).transitions = transitions;
-  return { initialState: 'default', states, stateNames };
+  return graphs;
 }
 
 function ownerForController(controller: JvmClassIR, mobIds: string[], summaries: DecompileClassSummary[], playerClassNames: string[] = []): string | null {
@@ -339,28 +369,40 @@ export function synthesizeAnimationControllersFromBytecode(
       candidate.methods.some((method) => [...method.calls, ...method.fieldAccesses].some((reference) => reference.owner === item.name)),
     );
     if (enumCandidates.length === 0) {
-      const lambdaGraph = recoverLambdaStates(candidate, byName, knownClips);
+      const lambdaGraphs = recoverLambdaStates(candidate, byName, knownClips);
       const ownerId = ownerForController(candidate, mobIds, signals.entityClasses ?? [], signals.playerClassNames ?? []);
-      if (lambdaGraph && ownerId) {
+      if (lambdaGraphs.length > 0 && ownerId) {
         const modId = ownerId.split(':')[0] || 'java_mod';
-        const controllerId = 'controller.animation.' + cleanIdentifier(modId + '.' + candidate.name.split('.').pop());
-        const filePath = 'animation_controllers/' + cleanIdentifier(candidate.name.split('.').pop()) + '.controller.json';
-        const json = JSON.stringify({ format_version: '1.10.0', animation_controllers: {
-          [controllerId]: { initial_state: lambdaGraph.initialState, states: lambdaGraph.states },
-        } }, null, 2);
-        files[filePath] = json;
-        controllers.push({
-          filePath, controllerId, ownerId, sourceClass: candidate.name,
-          kind: 'animation-controller', states: lambdaGraph.stateNames, json,
-        });
-        controllerIdsByOwner[ownerId] = [...(controllerIdsByOwner[ownerId] ?? []), controllerId];
-        completeGraphsRecovered += 1;
+        const className = candidate.name.split('.').pop() ?? 'controller';
+        const usedNames = new Set<string>();
+        for (const lambdaGraph of lambdaGraphs) {
+          let token = cleanIdentifier(lambdaGraph.controllerName || lambdaGraph.sourceMethod);
+          if (usedNames.has(token)) token += '_' + cleanIdentifier(lambdaGraph.sourceMethod);
+          usedNames.add(token);
+          const controllerId = 'controller.animation.' + cleanIdentifier(modId + '.' + className + '.' + token);
+          const filePath = 'animation_controllers/' + cleanIdentifier(className + '_' + token) + '.controller.json';
+          const states = JSON.parse(JSON.stringify(lambdaGraph.states)) as Record<string, Record<string, unknown>>;
+          if (lambdaGraph.transitionTicks !== undefined && Number.isFinite(lambdaGraph.transitionTicks) && lambdaGraph.transitionTicks >= 0) {
+            const blendSeconds = Math.round((lambdaGraph.transitionTicks / 20) * 1000) / 1000;
+            for (const stateName of lambdaGraph.stateNames) {
+              if (stateName !== 'default') states[stateName].blend_transition = blendSeconds;
+            }
+          }
+          const json = JSON.stringify({ format_version: '1.10.0', animation_controllers: {
+            [controllerId]: { initial_state: lambdaGraph.initialState, states },
+          } }, null, 2);
+          files[filePath] = json;
+          controllers.push({
+            filePath, controllerId, ownerId, sourceClass: candidate.name,
+            kind: 'animation-controller', states: lambdaGraph.stateNames, json,
+          });
+          controllerIdsByOwner[ownerId] = [...(controllerIdsByOwner[ownerId] ?? []), controllerId];
+          completeGraphsRecovered += 1;
+        }
       } else {
-        candidatesWithheld.push({ sourceClass: candidate.name, reason: enumCandidates.length > 1
-          ? 'More than one enum state type is referenced; ownership of transitions is ambiguous.'
-          : lambdaGraph
-            ? 'The lambda graph was recovered but its owning entity could not be resolved uniquely.'
-            : 'No enum graph or branch-to-clip lambda graph with recognized query guards was recovered.' });
+        candidatesWithheld.push({ sourceClass: candidate.name, reason: lambdaGraphs.length > 0
+          ? 'The lambda graph was recovered but its owning entity could not be resolved uniquely.'
+          : 'No enum graph or branch-to-clip lambda graph with recognized query guards was recovered.' });
       }
       continue;
     }

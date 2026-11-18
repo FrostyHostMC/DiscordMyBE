@@ -118,9 +118,17 @@ try {
     reference: { index: 7, tag: 10, kind: 'Methodref', owner: 'fixture.LambdaController', name: 'lambda$controller$0', descriptor: '(Lfixture/AnimationState;)V' },
   };
   const lambdaRegistration = methodIR('registerControllers', [
-    ins(0, 'invokedynamic', 0xba, { index: 8, tag: 18, kind: 'InvokeDynamic', bootstrapMethod: { methodReference: undefined, arguments: [lambdaHandle] } }),
-    ins(5, 'invokespecial', 0xb7, method('software.bernie.geckolib.animation.AnimationController', '<init>')),
-  ], [block(0, [0,5])], [method('software.bernie.geckolib.animation.AnimationController', '<init>')]);
+    ins(0, 'ldc', 0x12, string('move_controller')),
+    ins(1, 'iconst_5', 0x08, undefined),
+    ins(2, 'invokedynamic', 0xba, { index: 8, tag: 18, kind: 'InvokeDynamic', bootstrapMethod: { methodReference: undefined, arguments: [lambdaHandle] } }),
+    ins(5, 'ldc', 0x12, string('attack_controller')),
+    ins(6, 'iconst_3', 0x06, undefined),
+    ins(7, 'invokedynamic', 0xba, { index: 9, tag: 18, kind: 'InvokeDynamic', bootstrapMethod: { methodReference: undefined, arguments: [{
+      index: 10, tag: 15, kind: 'MethodHandle',
+      reference: { index: 11, tag: 10, kind: 'Methodref', owner: 'fixture.LambdaController', name: 'lambda$controller$1', descriptor: '(Lfixture/AnimationState;)V' },
+    }] } }),
+    ins(10, 'invokespecial', 0xb7, method('software.bernie.geckolib.animation.AnimationController', '<init>')),
+  ], [block(0, [0,1,2,5,6,7,10])], [method('software.bernie.geckolib.animation.AnimationController', '<init>')]);
   const lambdaHandler = methodIR('lambda$controller$0', [
     ins(0, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isMoving')),
     ins(3, 'ifne', 0x9a, undefined, [20]),
@@ -137,11 +145,22 @@ try {
     path: 'fixture/LambdaController.class', name: 'fixture.LambdaController',
     superName: 'java.lang.Object', interfaces: [], access: 0x0001,
     majorVersion: 61, minorVersion: 0, fields: [],
-    methods: [lambdaRegistration, lambdaHandler], references: [], bootstrapMethods: [], decodeWarnings: [],
+    methods: [lambdaRegistration, lambdaHandler, methodIR('lambda$controller$1', [
+      ins(30, 'invokevirtual', 0xb6, method('fixture.AnimationState', 'isMoving')),
+      ins(33, 'ifne', 0x9a, undefined, [50]),
+      ins(40, 'ldc', 0x12, string('animation.fixture.attack_idle')),
+      ins(41, 'return', 0xb1, undefined),
+      ins(50, 'ldc', 0x12, string('animation.fixture.attack')),
+      ins(51, 'return', 0xb1, undefined),
+    ], [
+      block(30, [30,33], [50,40]),
+      block(40, [40,41], []),
+      block(50, [50,51], []),
+    ], [method('fixture.AnimationState', 'isMoving')])], references: [], bootstrapMethods: [], decodeWarnings: [],
   };
   const lambdaResult = synthesizeAnimationControllersFromBytecode(['player'], {
     controllerClasses: ['fixture.LambdaController'],
-    animationIds: ['animation.fixture.idle', 'animation.fixture.run'],
+    animationIds: ['animation.fixture.idle', 'animation.fixture.run', 'animation.fixture.attack_idle', 'animation.fixture.attack'],
     bytecodeClasses: [lambdaController],
     playerClassNames: ['fixture.LambdaController'],
     entityClasses: [{
@@ -149,19 +168,28 @@ try {
       role: 'entity', methods: [], registryIds: ['fixture:entity'],
     }],
   });
-  if (lambdaResult.controllers.length !== 1 || lambdaResult.controllers[0].ownerId !== 'player') {
-    throw new Error('A lambda-driven GeckoLib controller was not reconstructed: ' + JSON.stringify(lambdaResult.analysis));
+  if (lambdaResult.controllers.length !== 2 || lambdaResult.controllers.some((entry) => entry.ownerId !== 'player')) {
+    throw new Error('Multiple lambda-driven GeckoLib controllers were not reconstructed for the player owner: ' + JSON.stringify(lambdaResult.analysis));
   }
-  const lambdaDoc = JSON.parse(lambdaResult.controllers[0].json);
-  const lambdaGraph = lambdaDoc.animation_controllers[lambdaResult.controllers[0].controllerId];
-  const lambdaTransitions = lambdaGraph.states.default.transitions;
-  if (lambdaGraph.initial_state !== 'default' ||
-      !lambdaTransitions.some((entry) => Object.values(entry)[0] === 'query.is_moving') ||
-      !lambdaTransitions.some((entry) => Object.values(entry)[0] === '!query.is_moving')) {
-    throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions.');
+  if (new Set(lambdaResult.controllers.map((entry) => entry.controllerId)).size !== 2) {
+    throw new Error('Two Java-registered controllers collapsed to the same Bedrock identifier.');
+  }
+  for (const entry of lambdaResult.controllers) {
+    const lambdaDoc = JSON.parse(entry.json);
+    const lambdaGraph = lambdaDoc.animation_controllers[entry.controllerId];
+    const lambdaTransitions = lambdaGraph.states.default.transitions;
+    if (lambdaGraph.initial_state !== 'default' ||
+        !lambdaTransitions.some((item) => Object.values(item)[0] === 'query.is_moving') ||
+        !lambdaTransitions.some((item) => Object.values(item)[0] === '!query.is_moving')) {
+      throw new Error('Lambda branch predicates did not become ordered Bedrock state transitions.');
+    }
+    const activeStates = Object.values(lambdaGraph.states).filter((state) => Array.isArray(state.animations) && state.animations.length > 0);
+    if (activeStates.length !== 2 || !activeStates.every((state) => [0.25, 0.15].includes(state.blend_transition))) {
+      throw new Error('GeckoLib constructor transition ticks were not preserved as Bedrock blend_transition seconds.');
+    }
   }
 
-  console.log('[PASS] JVM enum states, constructor initial state, branch polarity, Molang guards, exact clip bindings, and entity ownership reconstruct into a Bedrock controller.');
+  console.log('[PASS] JVM enum states and multiple lambda-driven GeckoLib controllers preserve branch guards, exact clip bindings, unique identity, transition timing, and player ownership.');
 } finally {
   await server.close();
 }
