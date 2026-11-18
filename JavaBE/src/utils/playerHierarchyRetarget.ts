@@ -183,7 +183,10 @@ export function retargetJavaPlayerHierarchy(
       warnings.push(`clip ${clipId}: hierarchy compensation was retained only for arithmetic-safe branches; source-local expression, pre/post, or easing tracks on ${[...unsafeSubtree].join(', ')} and their descendants were preserved unchanged`);
     }
 
-    const rewritten: Record<string, Record<string, unknown>> = { ...original };
+    // Clone each bone track before writing: the retargeter must not mutate the caller's source IR.
+    const rewritten: Record<string, Record<string, unknown>> = Object.fromEntries(
+      Object.entries(original).map(([name, track]) => [name, { ...track }]),
+    );
     let changed = false;
     for (const time of times) {
       const sourceWorld = new Map<string, Transform>();

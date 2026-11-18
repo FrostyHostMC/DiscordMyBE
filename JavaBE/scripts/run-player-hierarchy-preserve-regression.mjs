@@ -49,10 +49,13 @@ try {
   if (JSON.stringify(discontinuityClip.bones.head.rotation) !== JSON.stringify(originalHead)) {
     throw new Error('A pre/post discontinuity was flattened or overwritten during hierarchy retargeting.');
   }
-  const originalArm = discontinuity['animation.fixture.prepost'].bones.rightArm.rotation;
+  const originalArm = JSON.parse(JSON.stringify(discontinuity['animation.fixture.prepost'].bones.rightArm.rotation));
   if (discontinuityResult.transformed < 1 ||
       JSON.stringify(discontinuityClip.bones.rightArm.rotation) === JSON.stringify(originalArm)) {
     throw new Error('A safe sibling arm branch was not retargeted when another branch used pre/post data.');
+  }
+  if (JSON.stringify(discontinuity['animation.fixture.prepost'].bones.rightArm.rotation) !== JSON.stringify(originalArm)) {
+    throw new Error('Player hierarchy retargeting mutated the caller\'s original source clip.');
   }
 
   const dynamicParent = {
