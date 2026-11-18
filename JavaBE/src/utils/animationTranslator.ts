@@ -147,11 +147,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
 
   type PartFrame = {
     position: Record<string, number>;
+    positionEasing: Record<string, string>;
     rotation: Record<string, number>;
+    rotationEasing: Record<string, string>;
+    rotationTurn: Record<string, number>;
     scale: Record<string, number>;
+    scaleEasing: Record<string, string>;
     bendAngle?: number;
-    easing: string;
-    turn: number;
+    bendEasing?: string;
   };
   const frames = new Map<number, Map<string, PartFrame>>();
   for (const move of moves) {
@@ -171,25 +174,37 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       const partName = version < 3 && sourcePartName === 'torso' ? 'body' : sourcePartName;
       const transform = move[sourcePartName];
       if (!isPlainObject(transform)) continue;
-      const part = parts.get(partName) ?? { position: {}, rotation: {}, scale: {}, easing, turn };
-      part.easing = easing;
-      part.turn = turn;
+      const part = parts.get(partName) ?? {
+        position: {}, positionEasing: {},
+        rotation: {}, rotationEasing: {}, rotationTurn: {},
+        scale: {}, scaleEasing: {},
+      };
       for (const axis of ['x', 'y', 'z']) {
         if (transform[axis] === undefined) continue;
         const value = Number(transform[axis]);
-        if (Number.isFinite(value)) part.position[axis] = value;
+        if (Number.isFinite(value)) {
+          part.position[axis] = value;
+          part.positionEasing[axis] = easing;
+        }
         else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric.');
       }
       for (const axis of ['pitch', 'yaw', 'roll']) {
         if (transform[axis] === undefined) continue;
         const value = Number(transform[axis]);
-        if (Number.isFinite(value)) part.rotation[axis] = value;
+        if (Number.isFinite(value)) {
+          part.rotation[axis] = value;
+          part.rotationEasing[axis] = easing;
+          part.rotationTurn[axis] = turn;
+        }
         else issues.push('Emotecraft ' + partName + '.' + axis + ' at tick ' + tick + ' is not numeric.');
       }
       for (const [sourceAxis, targetAxis] of [['scaleX', 'x'], ['scaleY', 'y'], ['scaleZ', 'z']] as const) {
         if (transform[sourceAxis] === undefined) continue;
         const value = Number(transform[sourceAxis]);
-        if (Number.isFinite(value)) part.scale[targetAxis] = value;
+        if (Number.isFinite(value)) {
+          part.scale[targetAxis] = value;
+          part.scaleEasing[targetAxis] = easing;
+        }
         else issues.push('Emotecraft ' + partName + '.' + sourceAxis + ' at tick ' + tick + ' is not numeric.');
       }
       if (transform.bend !== undefined) {
@@ -198,7 +213,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
         } else {
           const rawBend = isPlainObject(transform.bend) ? transform.bend.value : transform.bend;
           const bendValue = Number(rawBend);
-          if (Number.isFinite(bendValue)) part.bendAngle = bendValue;
+          if (Number.isFinite(bendValue)) {
+            part.bendAngle = bendValue;
+            part.bendEasing = easing;
+          }
           else issues.push('Emotecraft ' + partName + ' bend at tick ' + tick + ' is not a numeric angle.');
         }
       }
@@ -258,7 +276,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       const part = parts.get(partName);
       if (!part) continue;
       if (channel === 'bend') {
-        if (part.bendAngle !== undefined) entries.push({ tick, value: part.bendAngle, easing: part.easing });
+        if (part.bendAngle !== undefined) entries.push({ tick, value: part.bendAngle, easing: part.bendEasing ?? 'linear' });
         continue;
       }
       const raw = channel === 'position'
@@ -276,9 +294,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       } else if (channel === 'rotation') {
         value = degrees ? value : value * (180 / Math.PI);
         if (isBodyPart && (axis === 'pitch' || axis === 'yaw')) value *= -1;
-        value += part.turn * 360;
+        value += (part.rotationTurn[axis] ?? 0) * 360;
       }
-      entries.push({ tick, value, easing: part.easing });
+      const channelEasing = channel === 'position'
+        ? part.positionEasing[axis]
+        : channel === 'rotation'
+          ? part.rotationEasing[axis]
+          : part.scaleEasing[axis];
+      entries.push({ tick, value, easing: channelEasing ?? 'linear' });
     }
     return entries;
   };
