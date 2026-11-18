@@ -175,6 +175,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       const partName = version < 3 && sourcePartName === 'torso' ? 'body' : sourcePartName;
       const transform = move[sourcePartName];
       if (!isPlainObject(transform)) continue;
+      if (transform.axis !== undefined) {
+        issues.push('Emotecraft ' + sourcePartName + '.axis at tick ' + tick + ' is not consumed by the legacy PlayerAnimator runtime; its actual animated channels are x/y/z, pitch/yaw/roll, scaleX/Y/Z, and scalar bend.');
+      }
       const part = parts.get(partName) ?? {
         position: {}, positionEasing: {},
         rotation: {}, rotationEasing: {}, rotationTurn: {},
