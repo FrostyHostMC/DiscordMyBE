@@ -87,7 +87,7 @@ try {
     scriptDriven: false,
     runtimeEvent: undefined,
     runtimeTrigger: undefined,
-    condition: 'query.is_attacking',
+    condition: 'variable.attack_time > 0.05',
   };
 
   const controller = synthesizePlayerAnimationController({
