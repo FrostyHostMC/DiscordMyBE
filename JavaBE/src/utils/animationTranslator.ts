@@ -130,10 +130,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const rawStopTick = Number.isFinite(Number(emote.stopTick)) ? Number(emote.stopTick) : 0;
   const wantsLoop = emote.isLoop === true || String(emote.isLoop).toLowerCase() === 'true';
   const hasReturnTick = emote.returnTick !== undefined && emote.returnTick !== null;
-  const returnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick))
+  const hasValidReturnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick));
+  const returnTick = hasValidReturnTick
     ? Math.max(Number(emote.returnTick) - 1, 0)
     : 0;
-  const validLoop = wantsLoop && hasReturnTick && returnTick >= 0 && returnTick < endTick;
+  const validLoop = wantsLoop && hasValidReturnTick && returnTick >= 0 && returnTick < endTick;
   if (wantsLoop && !validLoop) {
     issues.push('Emotecraft loop has an invalid or missing returnTick/endTick interval; the clip was kept as a one-shot.');
   }
