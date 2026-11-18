@@ -809,6 +809,14 @@ export function portMobAndPlayerAnimations(
     bytecodeClasses: controllerSignals?.bytecodeClasses,
     entityClasses: controllerSignals?.entityClasses,
   });
+  if (controllerSynthesis.analysis.controllerCandidates > 0) {
+    log(
+      `[ANIMATION:BYTECODE] Inspected ${controllerSynthesis.analysis.bytecodeClassesInspected} animation-related class file(s); ${controllerSynthesis.analysis.controllerCandidates} controller candidate(s), ${controllerSynthesis.analysis.stateEnumsFound} enum state type(s), ${controllerSynthesis.analysis.completeGraphsRecovered} complete graph(s) recovered.`,
+    );
+    for (const withheld of controllerSynthesis.analysis.candidatesWithheld.slice(0, 8)) {
+      log(`[ANIMATION:BYTECODE:WITHHELD] ${withheld.sourceClass}: ${withheld.reason}`);
+    }
+  }
   for (const [synthPath, synthJson] of Object.entries(controllerSynthesis.files)) {
     resourcePackFiles[synthPath] = synthJson;
   }
