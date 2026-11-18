@@ -68,6 +68,17 @@ function readVector(track: Record<string, unknown> | undefined, channel: string,
   const sampled = sampleChannel(frames, time);
   return [sampled[0] ?? fallback[0], sampled[1] ?? fallback[1], sampled[2] ?? fallback[2]];
 }
+function hasSpecialChannelSemantics(channel: unknown): boolean {
+  if (!channel || typeof channel !== 'object' || Array.isArray(channel)) return false;
+  const record = channel as Record<string, unknown>;
+  if ('pre' in record || 'post' in record || 'lerp_mode' in record || 'easing' in record || 'easing_args' in record) return true;
+  return Object.values(record).some((value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    const keyframe = value as Record<string, unknown>;
+    return 'pre' in keyframe || 'post' in keyframe || 'lerp_mode' in keyframe || 'easing' in keyframe || 'easing_args' in keyframe;
+  });
+}
+
 function collectTimes(bones: Record<string, Record<string, unknown>>): number[] {
   const times = new Set<number>([0]);
   for (const track of Object.values(bones)) {
@@ -148,12 +159,28 @@ export function retargetJavaPlayerHierarchy(
     }
     const times = collectTimes(original);
     const unsupported = Object.entries(original).filter(([, track]) =>
-      ['rotation', 'position', 'scale'].some((channel) => track[channel] !== undefined && !readChannel(track[channel])),
+      ['rotation', 'position', 'scale'].some((channel) =>
+        track[channel] !== undefined && (!readChannel(track[channel]) || hasSpecialChannelSemantics(track[channel])),
+      ),
     );
-    if (unsupported.length > 0) {
-      warnings.push(`clip ${clipId}: hierarchy compensation skipped because expression/easing channels on ${unsupported.map(([name]) => name).slice(0, 4).join(', ')} cannot be safely sampled; original tracks preserved`);
-      output[clipId] = clip;
-      continue;
+    const unsafeSubtree = new Set(unsupported.map(([name]) => name));
+    const targetBySourceName = new Map<string, string>();
+    for (const [targetName, sourceBone] of javaSourceForTarget) targetBySourceName.set(sourceBone.name, targetName);
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const [targetName, sourceBone] of javaSourceForTarget) {
+        const parentTarget = sourceBone.parent ? targetBySourceName.get(sourceBone.parent) : undefined;
+        const layerParent = SOURCE_LAYER_PARENT[targetName];
+        if ((parentTarget && unsafeSubtree.has(parentTarget) || layerParent && unsafeSubtree.has(layerParent)) &&
+            !unsafeSubtree.has(targetName)) {
+          unsafeSubtree.add(targetName);
+          expanded = true;
+        }
+      }
+    }
+    if (unsafeSubtree.size > 0) {
+      warnings.push(`clip ${clipId}: hierarchy compensation was retained only for arithmetic-safe branches; source-local expression, pre/post, or easing tracks on ${[...unsafeSubtree].join(', ')} and their descendants were preserved unchanged`);
     }
 
     const rewritten: Record<string, Record<string, unknown>> = { ...original };
@@ -161,6 +188,7 @@ export function retargetJavaPlayerHierarchy(
     for (const time of times) {
       const sourceWorld = new Map<string, Transform>();
       for (const [targetName, sourceBone] of javaSourceForTarget) {
+        if (unsafeSubtree.has(targetName)) continue;
         const sourceTrack = original[targetName];
         const layerParent = SOURCE_LAYER_PARENT[targetName];
         const explicit = Boolean(sourceTrack);
