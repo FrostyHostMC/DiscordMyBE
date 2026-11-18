@@ -113,7 +113,8 @@ try {
     elapsed < intro ? elapsed + delta : start + ((elapsed - intro) % duration);
   if (Math.abs(loopTimeAt(1.5, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
       Math.abs(loopTimeAt(1.55, 1.5, 0.25, 1.25) - 0.30) > 1e-9 ||
-      Math.abs(loopTimeAt(2.8, 1.5, 0.25, 1.25) - 0.25) > 1e-9) {
+      Math.abs(loopTimeAt(2.75, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
+      Math.abs(loopTimeAt(2.8, 1.5, 0.25, 1.25) - 0.30) > 1e-9) {
     throw new Error('The returnTick clock did not land on the exact loop point and preserve the subsequent cycle.');
   }
 
