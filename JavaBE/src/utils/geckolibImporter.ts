@@ -320,6 +320,7 @@ export function importGeckolibAnimations(
   archiveEntries: ExtractedZipEntry[],
   modId: string,
   onLog?: (line: string) => void,
+  customEasings?: Record<string, (progress: number) => number>,
 ): GeckolibImportResult {
   const log: string[] = [];
   const logLine = (line: string) => {
@@ -388,7 +389,7 @@ export function importGeckolibAnimations(
     const prepared = molangizeDocument(parsed, molangCounter);
     stats.molangValuesTranslated += molangCounter.count;
 
-    const translation = translateJavaAnimationSet(prepared, { fileHint: fileOwner || modKey });
+    const translation = translateJavaAnimationSet(prepared, { fileHint: fileOwner || modKey, customEasings });
     const sourceIdByTranslatedId = new Map(
       Object.entries(translation.idMap).map(([sourceId, translatedId]) => [translatedId, sourceId]),
     );

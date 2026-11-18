@@ -471,6 +471,7 @@ export async function generateBedrockRemake(
       controllerClasses: decompileStats?.animationControllers,
       stateMachineClasses: decompileStats?.detectedStateMachines,
       entityClasses: decompileStats?.classes,
+      bytecodeClasses: decompileStats?.jvmAnalysis?.classes,
     },
     portAnalysis.entities,
   );

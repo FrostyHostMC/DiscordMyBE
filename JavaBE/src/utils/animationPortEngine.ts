@@ -24,6 +24,7 @@ import {
 import { inferMobBehaviorProfiles } from '@/utils/mobBehaviorProfiles';
 import { resolveMobStatProfile } from '@/utils/mobStatResolver';
 import { isPlayableModeEnabled } from '@/utils/provenance';
+import { buildJavaCustomEasingRegistry } from '@/utils/javaEasingCompiler';
 import { remapAnimationBones, type BedrockAnimationClip } from '@/utils/animationTranslator';
 import { mapClipsToPlayerSkeleton } from '@/utils/playerBoneMapping';
 import { retargetJavaPlayerHierarchy } from '@/utils/playerHierarchyRetarget';
@@ -452,7 +453,12 @@ export function portMobAndPlayerAnimations(
 
   // 1. GeckoLib / Java animation import: discover every animation document, attribute each clip
   // to the entity it belongs to, translate its channels and carry it forward into the pack.
-  const geckolib = importGeckolibAnimations(archiveEntries ?? [], modId, log);
+  const customEasingRegistry = buildJavaCustomEasingRegistry(controllerSignals?.bytecodeClasses ?? []);
+  if (customEasingRegistry.recovered.length > 0 || customEasingRegistry.withheld.length > 0) {
+    log(`[ANIMATION:EASING] Recovered ${customEasingRegistry.recovered.length} custom Java easing function(s); ${customEasingRegistry.withheld.length} withheld by the safe scalar bytecode compiler.`);
+    for (const item of customEasingRegistry.withheld.slice(0, 6)) log(`[ANIMATION:EASING:WITHHELD] ${item.name} from ${item.sourceClass}: ${item.reason}`);
+  }
+  const geckolib = importGeckolibAnimations(archiveEntries ?? [], modId, log, customEasingRegistry.functions);
   decompiledJavaAnims += geckolib.stats.clipsImported;
   animationChannelsTranslated += geckolib.stats.channels;
   animationKeyframesTranslated += geckolib.stats.keyframes;
@@ -481,6 +487,7 @@ export function portMobAndPlayerAnimations(
     modId,
     new Set(geckolib.files.map((file) => file.path)),
     log,
+    customEasingRegistry.functions,
   );
   for (const owner of additionalAnimations.owners) {
     const bucket = geckolib.clipsByOwner[owner] ?? {};
@@ -609,6 +616,7 @@ export function portMobAndPlayerAnimations(
       sourceClipIdsByClipId: playerRigBridge.sourceClipIdByPlayerClipId,
       archiveEntries,
       mainhandItemIds,
+      bytecodeClasses: controllerSignals?.bytecodeClasses,
       onLog: log,
     });
     playerTriggers = triggerReport;
@@ -639,6 +647,7 @@ export function portMobAndPlayerAnimations(
       triggers: triggerReport.triggers,
       decisions: rigClassification.decisions,
       evidence: playerEvidence,
+      geometryCandidates: [...(entityGeometries ?? new Map()).entries()].map(([key, geometry]) => ({ key, json: geometry.json, source: geometry.source })),
       onLog: log,
     });
     playerAnimationPort = playerPort.report;
@@ -801,11 +810,24 @@ export function portMobAndPlayerAnimations(
 
   // 2b. Bytecode-driven controller synthesis: every detected Java controller or
   // state-machine class becomes a real Bedrock animation controller document.
-  const controllerSynthesis = synthesizeAnimationControllersFromBytecode([...mobCandidates], {
+  const controllerOwners = [...mobCandidates];
+  if ((hasPlayerOwnership || playerEvidence.playerModelClasses.length > 0) && !controllerOwners.includes('player')) controllerOwners.push('player');
+  const controllerSynthesis = synthesizeAnimationControllersFromBytecode(controllerOwners, {
     controllerClasses: controllerSignals?.controllerClasses,
     stateMachineClasses: controllerSignals?.stateMachineClasses,
     animationIds: collectedAnimationIds,
+    bytecodeClasses: controllerSignals?.bytecodeClasses,
+    entityClasses: controllerSignals?.entityClasses,
+    playerClassNames: playerEvidence.playerModelClasses,
   });
+  if (controllerSynthesis.analysis.controllerCandidates > 0) {
+    log(
+      `[ANIMATION:BYTECODE] Inspected ${controllerSynthesis.analysis.bytecodeClassesInspected} animation-related class file(s); ${controllerSynthesis.analysis.controllerCandidates} controller candidate(s), ${controllerSynthesis.analysis.stateEnumsFound} enum state type(s), ${controllerSynthesis.analysis.completeGraphsRecovered} complete graph(s) recovered.`,
+    );
+    for (const withheld of controllerSynthesis.analysis.candidatesWithheld.slice(0, 8)) {
+      log(`[ANIMATION:BYTECODE:WITHHELD] ${withheld.sourceClass}: ${withheld.reason}`);
+    }
+  }
   for (const [synthPath, synthJson] of Object.entries(controllerSynthesis.files)) {
     resourcePackFiles[synthPath] = synthJson;
   }

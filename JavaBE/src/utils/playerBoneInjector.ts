@@ -1,4 +1,4 @@
-import { hasCustomBoneTokens, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { resolvePlayerBone } from '@/utils/playerBoneAliases';
 import { VANILLA_PLAYER_GEOMETRY_JSON } from '@/utils/vanillaPlayerGeometry';
 
 /** A geometry file the archive really shipped. */
@@ -93,7 +93,7 @@ function canonicalBendBone(raw: string): string | null {
   return null;
 }
 
-function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
+function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean, sourceBones: JsonObject[] = [], clipBones: string[] = []): {
   identifier: string;
   slimIdentifier: string;
   path: string;
@@ -101,7 +101,7 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
   injected: string[];
 } | null {
   const requested = new Set(bendBones.map(canonicalBendBone).filter((name): name is string => Boolean(name)));
-  if (requested.size === 0 && !needsWaistParenting) return null;
+  if (requested.size === 0 && !needsWaistParenting && sourceBones.length === 0) return null;
   const doc = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON) as JsonObject;
   const geometries = doc['minecraft:geometry'] as JsonObject[] | undefined;
   if (!Array.isArray(geometries) || geometries.length < 2) {
@@ -116,6 +116,7 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
     const bones = geometry.bones as JsonObject[] | undefined;
     if (!description || !Array.isArray(bones)) throw new Error('Mojang player geometry is missing its description or bones.');
     const additions: JsonObject[] = [];
+    for (const injectedName of appendCustomPlayerBones(geometry, sourceBones, clipBones)) injected.add(injectedName);
     if (needsWaistParenting) {
       // Emotecraft's body channel is the lower waist pivot and also drives the legs.
       // Mojang's stock player model keeps legs under root, so restore that parent chain here.
@@ -127,46 +128,66 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
     for (const baseName of ['body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
       if (!requested.has(baseName)) continue;
       const base = bones.find((bone) => bone.name === baseName);
-      const baseCube = base?.cubes?.[0] as JsonObject | undefined;
-      if (!base || !baseCube) continue;
-      const baseSplit = splitCube(baseCube, true);
-      if (!baseSplit) continue;
-      const originalHeight = Number(baseCube.size[1]);
-      base.cubes[0] = baseSplit.lower;
+      const baseCubes = Array.isArray(base?.cubes) ? base.cubes as JsonObject[] : [];
+      if (!base || baseCubes.length === 0) continue;
+      const baseLower: JsonObject[] = [];
+      const baseUpper: JsonObject[] = [];
+      const originalHeights: number[] = [];
+      for (const cube of baseCubes) {
+        const split = splitCube(cube, true);
+        if (!split) {
+          baseLower.push(clone(cube));
+          continue;
+        }
+        baseLower.push(split.lower);
+        baseUpper.push(split.upper);
+        originalHeights.push(Number(cube.size[1]));
+      }
+      if (baseUpper.length === 0) continue;
+      base.cubes = baseLower;
 
       const bendName = baseName + '_bend';
       const basePivot = Array.isArray(base.pivot) ? base.pivot : [0, 0, 0];
+      const primaryHalfHeight = originalHeights[0] / 2;
       additions.push({
         name: bendName,
         parent: baseName,
-        pivot: [basePivot[0], Number(basePivot[1]) - baseSplit.halfHeight, basePivot[2]],
-        cubes: [baseSplit.upper],
+        pivot: [basePivot[0], Number(basePivot[1]) - primaryHalfHeight, basePivot[2]],
+        cubes: baseUpper,
       });
       injected.add(bendName);
 
       for (const child of bones) {
         if (child.parent !== baseName || child.name === bendName) continue;
-        const childCube = child.cubes?.[0] as JsonObject | undefined;
-        const isMatchingOverlay = Boolean(
-          childCube && childCube.inflate !== undefined &&
-          Array.isArray(childCube.size) &&
-          Math.abs(Number(childCube.size[1]) - originalHeight) < 0.001,
-        );
-        if (isMatchingOverlay) {
-          const overlaySplit = splitCube(childCube!, false);
+        const childCubes = Array.isArray(child.cubes) ? child.cubes as JsonObject[] : [];
+        const overlayLower: JsonObject[] = [];
+        const overlayUpper: JsonObject[] = [];
+        let overlayHalfHeight: number | null = null;
+        for (const cube of childCubes) {
+          const height = Array.isArray(cube.size) ? Number(cube.size[1]) : Number.NaN;
+          const isMatchingOverlay = cube.inflate !== undefined &&
+            Number.isFinite(height) && originalHeights.some((original) => Math.abs(original - height) < 0.001);
+          const overlaySplit = isMatchingOverlay ? splitCube(cube, false) : null;
           if (overlaySplit) {
-            child.cubes[0] = overlaySplit.lower;
-            const overlayName = child.name + '_bend';
-            const overlayPivot = Array.isArray(child.pivot) ? child.pivot : basePivot;
-            additions.push({
-              name: overlayName,
-              parent: bendName,
-              pivot: [overlayPivot[0], Number(overlayPivot[1]) - overlaySplit.halfHeight, overlayPivot[2]],
-              cubes: [overlaySplit.upper],
-            });
-            injected.add(overlayName);
-            continue;
+            overlayLower.push(overlaySplit.lower);
+            overlayUpper.push(overlaySplit.upper);
+            overlayHalfHeight ??= overlaySplit.halfHeight;
+          } else {
+            overlayLower.push(clone(cube));
           }
+        }
+        if (overlayUpper.length > 0) {
+          child.cubes = overlayLower;
+          const overlayName = child.name + '_bend';
+          const overlayPivot = Array.isArray(child.pivot) ? child.pivot : basePivot;
+          additions.push({
+            name: overlayName,
+            parent: bendName,
+            pivot: [overlayPivot[0], Number(overlayPivot[1]) - (overlayHalfHeight ?? primaryHalfHeight), overlayPivot[2]],
+            cubes: overlayUpper,
+          });
+          injected.add(overlayName);
+          continue;
         }
         child.parent = bendName;
       }
@@ -187,6 +208,94 @@ function buildBendGeometry(bendBones: string[], needsWaistParenting: boolean): {
   };
 }
 
+
+/**
+ * Select a source rig only when its real joint names strongly match custom player
+ * animation tracks. Unrelated mob models in the same archive are not eligible.
+ */
+function canonicalBoneKey(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+function selectPlayerSourceBones(candidates: GeometryCandidate[], clipBones: string[]): JsonObject[] {
+  const wanted = [...new Set(clipBones.map((name) => name.toLowerCase()))];
+  const customWanted = wanted.filter((name) => !resolvePlayerBone(name.replace(/_bend$/i, '')));
+  let best: { bones: JsonObject[]; score: number } | null = null;
+  let tied = false;
+  for (const candidate of candidates) {
+    try {
+      const doc = JSON.parse(candidate.json) as JsonObject;
+      const geometries = doc['minecraft:geometry'] as JsonObject[] | undefined;
+      for (const geometry of geometries ?? []) {
+        const bones = geometry?.bones;
+        if (!Array.isArray(bones) || bones.length === 0) continue;
+        const names = new Map<string, JsonObject>();
+        for (const bone of bones) { const key = canonicalBoneKey(String(bone.name ?? '')); if (key && !names.has(key)) names.set(key, bone); }
+        const matched = customWanted.filter((name) => names.has(canonicalBoneKey(name)));
+        const keySuggestsPlayer = /player|avatar|humanoid/i.test(candidate.key);
+        if (matched.length === 0) continue;
+        const ratio = matched.length / Math.max(1, customWanted.length);
+        if (ratio < 0.75 || (matched.length === 1 && customWanted.length > 1 && !keySuggestsPlayer)) continue;
+        const description = geometry.description ?? {};
+        if (Number(description.texture_width ?? 64) !== 64 || Number(description.texture_height ?? 64) !== 64) continue;
+        const score = matched.length * 100 + ratio * 10 + (keySuggestsPlayer ? 1 : 0);
+        if (!best || score > best.score) { best = { bones, score }; tied = false; }
+        else if (score === best.score && best.bones !== bones) tied = true;
+      }
+    } catch {
+      // Invalid source geometry is ignored; it must never replace the player's skin rig.
+    }
+  }
+  if (!best || tied) return [];
+  const byName = new Map(best.bones.map((bone) => [canonicalBoneKey(String(bone.name ?? '')), bone]));
+  const required = new Set<string>();
+  const addAncestors = (name: string, depth = 0): void => {
+    const key = canonicalBoneKey(name);
+    if (depth > 64 || required.has(key)) return;
+    const bone = byName.get(key);
+    if (!bone) return;
+    required.add(key);
+    if (typeof bone.parent === 'string') addAncestors(bone.parent, depth + 1);
+  };
+  for (const name of customWanted) addAncestors(name);
+  return [...required].map((name) => byName.get(name)!).filter(Boolean);
+}
+function appendCustomPlayerBones(geometry: JsonObject, sourceBones: JsonObject[], clipBones: string[]): string[] {
+  const bones = geometry.bones as JsonObject[];
+  const used = new Set(bones.map((bone) => canonicalBoneKey(String(bone.name ?? ''))));
+  const sourceNames = new Set(sourceBones.map((bone) => canonicalBoneKey(String(bone.name ?? ''))));
+  const clipNameByKey = new Map<string, string>();
+  for (const name of clipBones) {
+    const key = canonicalBoneKey(name);
+    if (key && !resolvePlayerBone(name) && !clipNameByKey.has(key)) clipNameByKey.set(key, name);
+  }
+  const rename = new Map<string, string>();
+  for (const source of sourceBones) {
+    const raw = String(source.name ?? '').trim();
+    const key = canonicalBoneKey(raw);
+    if (!raw || !key || resolvePlayerBone(raw)) continue;
+    const preferred = clipNameByKey.get(key) ?? raw;
+    let name = preferred, suffix = 2;
+    while (used.has(canonicalBoneKey(name))) name = preferred + '_' + suffix++;
+    used.add(canonicalBoneKey(name));
+    rename.set(key, name);
+  }
+  const injected: string[] = [];
+  for (const source of sourceBones) {
+    const raw = String(source.name ?? '').trim();
+    const key = canonicalBoneKey(raw);
+    const name = rename.get(key);
+    if (!name) continue;
+    const copy = clone(source);
+    copy.name = name;
+    const parent = typeof source.parent === 'string' ? source.parent : '';
+    const parentKey = canonicalBoneKey(parent);
+    if (rename.has(parentKey)) copy.parent = rename.get(parentKey);
+    else if (parent && sourceNames.has(parentKey) && resolvePlayerBone(parent)) copy.parent = resolvePlayerBone(parent)?.bone;
+    else copy.parent = /head|skull|face|eye|jaw|hat/i.test(name) ? 'head' : 'body';
+    bones.push(copy);
+    injected.push(name);
+  }
+  return injected;
+}
 /**
  * Generates a skin-preserving copy of Mojang's published player model when source clips contain
  * real bend tracks. Each requested vanilla limb/body cube is split into lower and upper segments;
@@ -200,11 +309,13 @@ export function injectPlayerRigBones(options: {
   bendBones?: string[];
   needsWaistParenting?: boolean;
 }): BoneInjectionResult {
+  const sourceBones = selectPlayerSourceBones(options.candidates, options.clipBones);
+  const bendGeometry = buildBendGeometry(options.bendBones ?? [], options.needsWaistParenting === true, sourceBones, options.clipBones);
+  const injectedNames = new Set((bendGeometry?.injected ?? []).map((name) => name.toLowerCase()));
   const unresolvedBones = [...new Set(options.clipBones.filter((name) => {
     const base = name.replace(/_bend$/i, '');
-    return !resolvePlayerBone(base) || (!/_bend$/i.test(name) && hasCustomBoneTokens(name));
+    return !resolvePlayerBone(base) && !injectedNames.has(name.toLowerCase()) && !injectedNames.has(base.toLowerCase());
   }))];
-  const bendGeometry = buildBendGeometry(options.bendBones ?? [], options.needsWaistParenting === true);
   const files = bendGeometry ? { [bendGeometry.path]: bendGeometry.json } : {};
   const candidateNote = options.candidates.length > 0
     ? `${options.candidates.length} source geometry candidate(s) audited; the vanilla skin mesh remains the base`
@@ -218,10 +329,10 @@ export function injectPlayerRigBones(options: {
     geometryPath: bendGeometry?.path ?? null,
     files,
     injectedBones: bendGeometry?.injected ?? [],
-    approximatedBones: bendGeometry?.injected ?? [],
+    approximatedBones: (bendGeometry?.injected ?? []).filter((name) => /_bend$/i.test(name)),
     unresolvedBones,
     note: bendGeometry
-      ? `${candidateNote}; generated ${bendGeometry.injected.length} bend segment/overlay joint(s) for ${options.modId}; ${unresolvedNote}.`
+      ? `${candidateNote}; generated ${bendGeometry.injected.length} custom/bend joint(s) for ${options.modId}; ${unresolvedNote}.`
       : `${candidateNote}; no bend segment geometry was needed; ${unresolvedNote}.`,
   };
 }

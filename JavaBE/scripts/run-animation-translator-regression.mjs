@@ -75,7 +75,39 @@ try {
   if (!Array.isArray(emitted.document.timeline['0.75']) || emitted.document.timeline['0.75'].length !== 2) {
     throw new Error('The universal emitter did not retain timeline script events.');
   }
-  console.log('[PASS] Generic translator and universal IR/emitter preserve event-only clips, simultaneous cues, sound metadata, timing, blend, and timeline scripts.');
+  const loopTickSource = {
+    animations: {
+      returning_loop: {
+        animation_length: 1,
+        loop: false,
+        loopTick: 0.4,
+        anim_time_update: 'query.anim_time + query.delta_time',
+        bones: { body: { rotation: { '0': [0, 0, 0], '1': [0, 90, 0] } } },
+      },
+    },
+  };
+  const loopTickResult = translateJavaAnimationSet(loopTickSource, { fileHint: 'loop-tick-fixture' });
+  const loopTickClip = loopTickResult.animations[loopTickResult.idMap.returning_loop];
+  if (!loopTickClip || loopTickClip.loop !== true ||
+      !String(loopTickClip.anim_time_update ?? '').includes('0.4') ||
+      !String(loopTickClip.anim_time_update ?? '').includes('1') ||
+      !String(loopTickClip.anim_time_update ?? '').includes('query.anim_time + query.delta_time') ||
+      !String(loopTickClip.anim_time_update ?? '').includes('temp.javae_loop_source_time')) {
+    throw new Error('A nonzero PAL/Emotecraft loopTick was not converted into a Bedrock return-time expression.');
+  }
+  const loopIr = buildUniversalAnimationIR({
+    discoveryReport: {
+      skeletons: [],
+      clipsByOwner: { fixture: { [loopTickResult.idMap.returning_loop]: loopTickClip } },
+      animationGraph: {},
+      controllersDiscovered: [],
+    },
+  });
+  if (loopIr.clips[loopTickResult.idMap.returning_loop]?.timeline.loopStartSeconds !== 0.4) {
+    throw new Error('Universal Animation IR did not preserve the source loopTick in seconds.');
+  }
+
+  console.log('[PASS] Generic translator and universal IR/emitter preserve event-only clips, timing, and nonzero PAL/Emotecraft loopTick return points.');
 } finally {
   await server.close();
 }

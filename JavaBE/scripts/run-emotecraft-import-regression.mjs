@@ -97,14 +97,25 @@ try {
     },
   }, { fileHint: 'fixture' });
   const loopClip = loopIntro.animations[loopIntro.idMap.loop_intro];
-  if (loopClip.loop !== true || loopClip.animation_length !== 2.8 ||
+  if (loopClip.loop !== true || loopClip.animation_length !== 1.5 ||
       typeof loopClip.anim_time_update !== 'string' ||
       !loopClip.anim_time_update.includes('math.mod') ||
+      !loopClip.anim_time_update.includes('query.life_time') ||
+      loopClip.anim_time_update.includes('query.anim_time') ||
       !loopClip.anim_time_update.includes('1.5') ||
-      !loopClip.anim_time_update.includes('1.3') ||
+      !loopClip.anim_time_update.includes('0.25') ||
+      !loopClip.anim_time_update.includes('1.25') ||
       loopClip.bones.head.rotation['1.5'][1] !== 90 ||
-      loopClip.bones.head.rotation['1.8'][1] !== 45) {
-    throw new Error('A nonzero Emotecraft returnTick was not compiled into a full first play, loop seam blend, and returnTick-to-end cycle.');
+      loopClip.bones.head.rotation['1.8'] !== undefined) {
+    throw new Error('A nonzero Emotecraft returnTick was not compiled into an exact endTick-to-returnTick loop cycle.');
+  }
+  const loopTimeAt = (elapsed, intro, start, duration, delta = 0.05) =>
+    elapsed < intro ? elapsed + delta : start + ((elapsed - intro) % duration);
+  if (Math.abs(loopTimeAt(1.5, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
+      Math.abs(loopTimeAt(1.55, 1.5, 0.25, 1.25) - 0.30) > 1e-9 ||
+      Math.abs(loopTimeAt(2.75, 1.5, 0.25, 1.25) - 0.25) > 1e-9 ||
+      Math.abs(loopTimeAt(2.8, 1.5, 0.25, 1.25) - 0.30) > 1e-9) {
+    throw new Error('The returnTick clock did not land on the exact loop point and preserve the subsequent cycle.');
   }
 
   const fadeIn = translateJavaAnimationSet({
@@ -218,11 +229,21 @@ try {
     },
   }, { fileHint: 'fixture' });
   const zeroReturnClip = zeroReturnLoop.animations[zeroReturnLoop.idMap.zero_return_loop];
-  if (zeroReturnClip.loop !== true || zeroReturnClip.animation_length !== 3 ||
+  if (zeroReturnClip.loop !== true || zeroReturnClip.animation_length !== 1.5 ||
       typeof zeroReturnClip.anim_time_update !== 'string' ||
+      !zeroReturnClip.anim_time_update.includes('query.life_time') ||
+      zeroReturnClip.anim_time_update.includes('query.anim_time') ||
+      !zeroReturnClip.anim_time_update.includes('0.05') ||
+      !zeroReturnClip.anim_time_update.includes('1.45') ||
       zeroReturnClip.bones.head.rotation['1.5'][1] !== 90 ||
-      zeroReturnClip.bones.head.rotation['2'][1] !== 45) {
-    throw new Error('Emotecraft returnTick=1 did not preserve the source loop seam from tick zero.');
+      zeroReturnClip.bones.head.rotation['2'] !== undefined) {
+    throw new Error('Emotecraft returnTick=1 was incorrectly shifted to tick zero or extended past endTick.');
+  }
+  const zeroReturnTimeAt = (elapsed, delta = 0.05) =>
+    elapsed < 1.5 ? elapsed + delta : 0.05 + ((elapsed - 1.5) % 1.45);
+  if (Math.abs(zeroReturnTimeAt(1.5) - 0.05) > 1e-9 ||
+      Math.abs(zeroReturnTimeAt(1.55) - 0.10) > 1e-9) {
+    throw new Error('returnTick=1 did not land on exactly 0.05 seconds after the intro.');
   }
 
   const splitEasing = translateJavaAnimationSet({
@@ -368,7 +389,26 @@ try {
   const objectBend = bendObject.animations[bendObject.idMap.bend_value_object].bones.left_leg_bend.rotation['0.5'];
   if (objectBend[0] !== 45) throw new Error('PAL bend { value } keyframes were not imported.');
 
-  console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, player pivots/units, bend axes, stop reset, and nonzero returnTick looping are imported.');
+  const negativeBend = translateJavaAnimationSet({
+    name: 'negative_bend_arc',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 20,
+      degrees: true,
+      moves: [
+        { tick: 0, rightArm: { bend: 0 } },
+        { tick: 20, rightArm: { bend: -45 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const negativeBendTrack = negativeBend.animations[negativeBend.idMap.negative_bend_arc].bones.right_arm_bend;
+  if (negativeBendTrack.rotation['1'][0] !== -45 || negativeBendTrack.position['1'][2] <= 0) {
+    throw new Error('Negative Emotecraft bend angles must reverse the child segment arc instead of being forced positive.');
+  }
+
+  console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, player pivots/units, bend axes, stop reset, and exact nonzero returnTick looping are imported.');
 } finally {
   await server.close();
 }

@@ -74,8 +74,11 @@ const JAVA_LEAK = /Math\.|MathHelper|this\.|\bnew\s+[A-Z]|\bget[A-Z]\w*\(|\b(?:f
 function isJavaLeak(text: string): boolean {
   if (JAVA_LEAK.test(text)) return true;
   // Bedrock Molang uses -> to access another entity's query/variable/temp/context scope.
-  // A Java lambda is rejected unless the right side is a recognised Molang scope member.
-  return text.includes('->') && !/(?:^|[\w.)\]])\s*->\s*(?:query|q|variable|v|temp|t|context|c)\./i.test(text);
+  // Validate every arrow independently so a valid scope access cannot mask a Java lambda.
+  const arrows = text.match(/->/g) ?? [];
+  if (arrows.length === 0) return false;
+  const validArrows = text.match(/(?:^|[\w.)\]])\s*->\s*(?:query|q|variable|v|temp|t|context|c)\./gi) ?? [];
+  return validArrows.length !== arrows.length;
 }
 
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -371,6 +374,34 @@ export function geckoEase(name: string, progress: number, args: number[] = []): 
   return 1 - easeIn(kind, (1 - t) * 2) / 2;
 }
 
+function expressionVector(value: KeyframeValue, channel: BedrockChannel): Array<number | string> | null {
+  let raw: unknown = value;
+  if (isPlainObject(raw)) raw = raw.post ?? raw.pre ?? raw.vector ?? raw.value;
+  if (typeof raw === 'number' || typeof raw === 'string') {
+    const component = asMolangComponent(raw);
+    return component === null ? null : [component, component, component];
+  }
+  if (!Array.isArray(raw)) return null;
+  const values = raw.flat(Infinity as never).slice(0, 3);
+  if (values.length === 0) return null;
+  const components = values.map(asMolangComponent);
+  if (components.some((part) => part === null)) return null;
+  const result = components as Array<number | string>;
+  if (result.length === 1) return [result[0], result[0], result[0]];
+  if (result.length === 2) return [result[0], result[1], IDENTITY[channel]];
+  return result;
+}
+
+function interpolateMolangComponent(from: number | string, to: number | string, progress: number): number | string {
+  if (typeof from === 'number' && typeof to === 'number') {
+    return from + (to - from) * progress;
+  }
+  const left = typeof from === 'number' ? String(from) : '(' + from + ')';
+  const right = typeof to === 'number' ? String(to) : '(' + to + ')';
+  const weight = String(Math.round(progress * 1000000) / 1000000);
+  return '(' + left + ') + ((' + right + ') - (' + left + ')) * ' + weight;
+}
+
 function numericVector(value: KeyframeValue, channel: BedrockChannel): number[] | null {
   let raw: unknown = value;
   if (isPlainObject(raw)) raw = raw.post ?? raw.pre ?? raw.vector ?? raw.value;
@@ -388,7 +419,7 @@ function numericVector(value: KeyframeValue, channel: BedrockChannel): number[] 
  * The returned `value` is always safe to write into a shipped animation document, so a
  * caller can either report it or repair the file with it.
  */
-export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnalysis {
+export function analyzeChannel(sourceChannel: string, raw: unknown, options: { customEasings?: Record<string, (progress: number) => number> } = {}): ChannelAnalysis {
   const channel = CHANNEL_ALIASES[sourceChannel.trim().toLowerCase()] ?? null;
   if (!channel) {
     return {
@@ -452,12 +483,12 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
       approximated = true;
       continue;
     }
-    const from = numericVector(previous.value, channel);
-    const to = numericVector(current.value, channel);
+    const from = expressionVector(previous.value, channel);
+    const to = expressionVector(current.value, channel);
     if (!from || !to) {
       problems.push({
         kind: 'unsupported',
-        detail: `GeckoLib easing "${current.easing}" could not be baked because one or both endpoint vectors contain dynamic Molang expressions; the original endpoints were retained`,
+        detail: `GeckoLib easing "${current.easing}" could not be baked because one or both endpoint vectors contain expressions outside the validated Molang subset; the original endpoints were retained`,
       });
       approximated = true;
       continue;
@@ -473,14 +504,21 @@ export function analyzeChannel(sourceChannel: string, raw: unknown): ChannelAnal
     let recognized = true;
     for (let time = previous.time + sampleStep; time < current.time - 0.000001; time += sampleStep) {
       const easingProgress = Math.max(0, Math.min(1, Math.round(((time - previous.time) / duration) * 1e9) / 1e9));
-      const eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
+      let eased = geckoEase(current.easing, easingProgress, current.easingArgs ?? []);
+      if (eased === null) {
+        const normalizedName = current.easing.toLowerCase().replace(/[-_\\s]/g, '');
+        const custom = options.customEasings?.[current.easing] ?? options.customEasings?.[normalizedName];
+        if (custom) {
+          try { eased = custom(easingProgress); } catch { eased = null; }
+        }
+      }
       if (eased === null || !Number.isFinite(eased)) {
         recognized = false;
         break;
       }
       const timeKey = formatSeconds(time);
       if (originalTimes.has(timeKey)) continue;
-      keyframeMap[timeKey] = from.map((value, axis) => value + (to[axis] - value) * eased);
+      keyframeMap[timeKey] = from.map((value, axis) => interpolateMolangComponent(value, to[axis] ?? value, eased));
     }
     if (!recognized) {
       problems.push({

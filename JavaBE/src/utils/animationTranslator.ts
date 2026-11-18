@@ -18,6 +18,18 @@ import { retargetClips } from '@/utils/boneRetarget';
  * and duration preserved, and every unsupported expression recorded instead of dropped.
  */
 
+function isBalancedMolangExpression(expression: string): boolean {
+  let depth = 0;
+  for (const character of expression) {
+    if (character === '(') depth += 1;
+    else if (character === ')') {
+      depth -= 1;
+      if (depth < 0) return false;
+    }
+  }
+  return depth === 0;
+}
+
 export interface AnimationTranslationIssue {
   clip: string;
   bone: string;
@@ -87,6 +99,7 @@ const CLIP_MEMBERS = new Set([
   'version',
   'settings',
   '__emoteIssues',
+  'loopTick',
 ]);
 
 function emptyStats(): AnimationTranslationStats {
@@ -132,7 +145,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   const hasReturnTick = emote.returnTick !== undefined && emote.returnTick !== null;
   const hasValidReturnTick = hasReturnTick && Number.isFinite(Number(emote.returnTick));
   const returnTick = hasValidReturnTick
-    ? Math.max(Number(emote.returnTick) - 1, 0)
+    ? Math.max(Number(emote.returnTick), 0)
     : 0;
   const validLoop = wantsLoop && hasValidReturnTick && returnTick >= 0 && returnTick < endTick;
   if (wantsLoop && !validLoop) {
@@ -144,7 +157,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       ? endTick + 3
       : rawStopTick;
   const loopDurationTick = validLoop ? endTick - returnTick : 0;
-  const timelineEndTick = validLoop ? endTick + loopDurationTick : animationEndTick;
+  // Legacy Emotecraft returnTick is an exact source tick. The runtime jumps from endTick
+  // back to that tick; it does not blend to the next later keyframe or extend the clip timeline.
+  const timelineEndTick = validLoop ? endTick : animationEndTick;
 
   type PartFrame = {
     position: Record<string, number>;
@@ -480,7 +495,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
       }
       if (hasBend) {
         const bendAngle = sampleTrack(bendEntries, tick, 0, partName + ' bend');
-        const angle = Math.abs(bendAngle * Math.PI / 180);
+        const angle = bendAngle * Math.PI / 180;
         const boundary = constantBoundary(bendEntries, tick, 0);
         const bendPre = boundary?.[0] ?? bendAngle;
         const preAngle = Math.abs(bendPre * Math.PI / 180);
@@ -518,11 +533,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   };
   if (validLoop) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
-    const loopStart = intro;
+    const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
     const loopDuration = Math.round((loopDurationTick / 20) * 1000) / 1000;
     result.anim_time_update =
-      'query.anim_time < ' + intro + ' ? query.anim_time + query.delta_time : ' +
-      loopStart + ' + math.mod(query.anim_time - ' + loopStart + ' + query.delta_time, ' + loopDuration + ')';
+      'query.life_time < ' + intro + ' ? query.life_time + query.delta_time : ' +
+      loopStart + ' + math.mod(query.life_time - ' + intro + ', ' + loopDuration + ')';
   }
   return result;
 }
@@ -651,7 +666,7 @@ interface ClipTranslation {
   maxTime: number;
 }
 
-function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
+function translateClip(rawClip: unknown, clipId: string, customEasings?: Record<string, (progress: number) => number>): ClipTranslation {
   const issues: AnimationTranslationIssue[] = [];
   const result: ClipTranslation = {
     clip: null,
@@ -729,7 +744,7 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
         if (isPlainObject(rawValue)) track.relative_to = rawValue;
         continue;
       }
-      const analysis = analyzeChannel(sourceChannel, rawValue);
+      const analysis = analyzeChannel(sourceChannel, rawValue, { customEasings });
       if (!analysis.channel) {
         const detail = analysis.problems[0]?.detail ?? `channel "${sourceChannel}" has no Bedrock equivalent`;
         issues.push({ clip: clipId, bone: boneName, channel: sourceChannel, kind: 'unsupported', detail });
@@ -789,6 +804,33 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
   if (typeof rawClip.loop_delay === 'number' || typeof rawClip.loop_delay === 'string') clip.loop_delay = rawClip.loop_delay;
   if (typeof rawClip.blend_weight === 'number' || typeof rawClip.blend_weight === 'string') clip.blend_weight = rawClip.blend_weight;
   if (typeof rawClip.anim_time_update === 'string' && rawClip.anim_time_update.trim()) clip.anim_time_update = rawClip.anim_time_update.trim();
+  const rawLoopTick = rawClip.loopTick;
+  if (rawLoopTick !== undefined && rawLoopTick !== null) {
+    const loopStart = Number(rawLoopTick);
+    const duration = Number(clip.animation_length ?? result.maxTime);
+    if (!Number.isFinite(loopStart) || loopStart < 0 || !Number.isFinite(duration) || duration <= 0 || loopStart >= duration) {
+      issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'malformed', detail: 'loopTick must be a finite time in seconds earlier than the clip duration; the source loop point was not applied.' });
+    } else {
+      const start = Math.round(loopStart * 1000) / 1000;
+      const length = Math.round(duration * 1000) / 1000;
+      const loopDuration = Math.round((length - start) * 1000) / 1000;
+      const sourceUpdate = clip.anim_time_update;
+      if (sourceUpdate && (sourceUpdate.includes(';') || !isBalancedMolangExpression(sourceUpdate))) {
+        issues.push({ clip: clipId, bone: '', channel: 'loopTick', kind: 'unsupported', detail: 'loopTick could not be composed with the source anim_time_update because it is a multi-statement or unbalanced Molang expression; the original expression was preserved.' });
+      } else {
+        clip.loop = true;
+        const timeExpression = sourceUpdate
+          ? 'temp.javae_loop_source_time_' + clipId.toLowerCase().replace(/[^a-z0-9_]/g, '_') + ' = (' + sourceUpdate + '); '
+          : '';
+        const timeValue = sourceUpdate
+          ? 'temp.javae_loop_source_time_' + clipId.toLowerCase().replace(/[^a-z0-9_]/g, '_')
+          : 'query.anim_time + query.delta_time';
+        clip.anim_time_update = timeExpression +
+          timeValue + ' < ' + length + ' ? ' + timeValue + ' : ' +
+          start + ' + math.mod(' + timeValue + ' - ' + length + ', ' + loopDuration + ')';
+      }
+    }
+  }
   if (typeof rawClip.override_previous_animation === 'boolean') clip.override_previous_animation = rawClip.override_previous_animation;
 
   const sounds = translateEffectTrack(rawClip.sound_effects, clipId, 'sound_effects', issues);
@@ -816,6 +858,8 @@ function translateClip(rawClip: unknown, clipId: string): ClipTranslation {
 export interface AnimationTranslateOptions {
   /** File stem used as a fallback clip id prefix. */
   fileHint?: string;
+  /** Recovered scalar easing functions from this mod's JVM bytecode. */
+  customEasings?: Record<string, (progress: number) => number>;
 }
 
 /**
@@ -839,7 +883,7 @@ export function translateJavaAnimationSet(
   for (const [rawId, rawClip] of Object.entries(sourceClips)) {
     const clipId = normaliseClipId(rawId, hint, used);
     used.add(clipId);
-    const translated = translateClip(rawClip, clipId);
+    const translated = translateClip(rawClip, clipId, options.customEasings);
     issues.push(...translated.issues);
     stats.channels += translated.channels;
     stats.keyframes += translated.keyframes;

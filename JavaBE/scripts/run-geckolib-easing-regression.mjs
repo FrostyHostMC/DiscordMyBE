@@ -46,8 +46,11 @@ try {
     '1': { vector: [100, 0, 0], easing: 'easeInQuad' },
   });
   if (dynamic.value['0']?.[0] !== 'query.anim_time' ||
-      !dynamic.problems.some((p) => p.kind === 'unsupported' && p.detail.includes('dynamic Molang'))) {
-    throw new Error('Dynamic Molang easing endpoints were not preserved and reported.');
+      typeof dynamic.value['0.5']?.[0] !== 'string' ||
+      !dynamic.value['0.5'][0].includes('query.anim_time') ||
+      !dynamic.value['0.5'][0].includes('0.25') ||
+      !dynamic.problems.some((p) => p.kind === 'normalised' && p.detail.includes('easeInQuad'))) {
+    throw new Error('Dynamic Molang endpoints were not retained inside the sampled easing interpolation expressions.');
   }
 
   const dynamicArgs = analyzeChannel('rotation', {
@@ -67,7 +70,18 @@ try {
     throw new Error('Unknown/custom Java easing was silently misrepresented.');
   }
 
-  console.log('[PASS] GeckoLib built-in easing curves are baked; dynamic endpoints and custom easing are preserved/reported instead of falsely mapped.');
+  const { asMolangComponent } = await server.ssrLoadModule('/src/utils/animationChannelMath.ts');
+  if (asMolangComponent('q.target->q.is_alive') !== 'q.target->q.is_alive') {
+    throw new Error('A valid Molang cross-entity query scope was rejected as Java syntax.');
+  }
+  if (asMolangComponent('x -> x + 1') !== null) {
+    throw new Error('A Java lambda expression was incorrectly accepted as Molang.');
+  }
+  if (asMolangComponent('q.target->q.is_alive; x -> x + 1') !== null) {
+    throw new Error('A valid Molang arrow masked an unrelated Java lambda in the same expression.');
+  }
+
+  console.log('[PASS] GeckoLib easing diagnostics, dynamic Molang, and cross-entity scope arrows are validated without false Java-lambda acceptance.');
 } finally {
   await server.close();
 }

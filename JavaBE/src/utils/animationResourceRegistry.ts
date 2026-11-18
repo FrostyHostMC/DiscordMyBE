@@ -51,6 +51,8 @@ export interface RegistryController {
   /** Clip ids in states reachable from the controller's initial state. */
   reachableClips: string[];
   states: string[];
+  stateClips: Record<string, string[]>;
+  transitions: Array<{ from: string; to: string; condition: string }>;
 }
 
 export interface RegistryEntity {
@@ -226,57 +228,52 @@ function collectControllers(json: Map<string, Record<string, any>>): {
     definitionFiles += 1;
     for (const [controllerId, body] of Object.entries(root as Record<string, any>)) {
       const clips: string[] = [];
+      const stateClips: Record<string, string[]> = {};
+      const transitions: Array<{ from: string; to: string; condition: string }> = [];
       const states = body && typeof body === 'object' ? (body as Record<string, any>).states : null;
       const stateNames: string[] = states && typeof states === 'object' ? Object.keys(states) : [];
       if (states && typeof states === 'object') {
-        for (const state of Object.values(states as Record<string, any>)) {
-          const list = state && typeof state === 'object' ? (state as Record<string, any>).animations : null;
-          if (!Array.isArray(list)) continue;
-          for (const entry of list) {
-            if (typeof entry === 'string') clips.push(entry);
-            else if (entry && typeof entry === 'object') clips.push(...Object.keys(entry));
+        for (const [stateName, state] of Object.entries(states as Record<string, any>)) {
+          const list = state && typeof state === 'object' ? state.animations : null;
+          const selected: string[] = [];
+          if (Array.isArray(list)) for (const entry of list) {
+            if (typeof entry === 'string') selected.push(entry);
+            else if (entry && typeof entry === 'object') selected.push(...Object.keys(entry));
+          }
+          stateClips[stateName] = [...new Set(selected)];
+          clips.push(...selected);
+          const stateTransitions = state && typeof state === 'object' ? state.transitions : null;
+          if (Array.isArray(stateTransitions)) for (const transition of stateTransitions) {
+            if (!transition || typeof transition !== 'object' || Array.isArray(transition)) continue;
+            for (const [destination, condition] of Object.entries(transition)) {
+              if (typeof condition === 'string' && condition.trim()) transitions.push({ from: stateName, to: destination, condition });
+            }
           }
         }
       }
-      const initial = body && typeof body.initial_state === 'string'
-        ? body.initial_state
-        : stateNames[0];
+      const initial = body && typeof body.initial_state === 'string' ? body.initial_state : stateNames[0];
       const reachable = new Set<string>();
       const pending = initial && states && Object.hasOwn(states, initial) ? [initial] : [];
       while (pending.length > 0) {
         const stateName = pending.pop();
         if (!stateName || reachable.has(stateName)) continue;
         reachable.add(stateName);
-        const transitions = (states as Record<string, any>)[stateName]?.transitions;
-        if (!Array.isArray(transitions)) continue;
-        for (const transition of transitions) {
+        const stateTransitions = (states as Record<string, any>)[stateName]?.transitions;
+        if (!Array.isArray(stateTransitions)) continue;
+        for (const transition of stateTransitions) {
           if (!transition || typeof transition !== 'object' || Array.isArray(transition)) continue;
-          for (const destination of Object.keys(transition)) {
-            if (Object.hasOwn(states, destination) && !reachable.has(destination)) pending.push(destination);
-          }
+          for (const destination of Object.keys(transition)) if (Object.hasOwn(states, destination) && !reachable.has(destination)) pending.push(destination);
         }
       }
-      const reachableClips: string[] = [];
-      for (const stateName of reachable) {
-        const list = (states as Record<string, any>)[stateName]?.animations;
-        if (!Array.isArray(list)) continue;
-        for (const entry of list) {
-          if (typeof entry === 'string') reachableClips.push(entry);
-          else if (entry && typeof entry === 'object') reachableClips.push(...Object.keys(entry));
-        }
-      }
+      const reachableClips = [...reachable].flatMap((stateName) => stateClips[stateName] ?? []);
       controllers.set(controllerId, {
-        id: controllerId,
-        path,
-        clips: [...new Set(clips)],
-        reachableClips: [...new Set(reachableClips)],
-        states: stateNames,
+        id: controllerId, path, clips: [...new Set(clips)], reachableClips: [...new Set(reachableClips)],
+        states: stateNames, stateClips, transitions,
       });
     }
   }
   return { controllers, definitionFiles };
 }
-
 function collectGeometries(json: Map<string, Record<string, any>>): Map<string, string[]> {
   const geometries = new Map<string, string[]>();
   for (const doc of json.values()) {
@@ -390,6 +387,50 @@ function collectEntities(
   return entities;
 }
 
+function stripBalancedOuterParentheses(value: string): string {
+  let text = value.trim();
+  while (text.startsWith('(') && text.endsWith(')')) {
+    let depth = 0, quote = ''; let enclosesAll = true;
+    for (let index = 0; index < text.length; index++) {
+      const char = text[index];
+      if (quote) { if (char === quote && text.charCodeAt(index - 1) !== 92) quote = ''; continue; }
+      if (char === '\"' || char === "'") { quote = char; continue; }
+      if (char === '(') depth++; else if (char === ')') depth--;
+      if (depth === 0 && index < text.length - 1) { enclosesAll = false; break; }
+    }
+    if (!enclosesAll || depth !== 0) break;
+    text = text.slice(1, -1).trim();
+  }
+  return text;
+}
+
+function splitTopLevelConjunction(value: string): string[] {
+  const parts: string[] = []; let depth = 0, start = 0, quote = '';
+  for (let index = 0; index < value.length - 1; index++) {
+    const char = value[index];
+    if (quote) { if (char === quote && value.charCodeAt(index - 1) !== 92) quote = ''; continue; }
+    if (char === '\"' || char === "'") { quote = char; continue; }
+    if (char === '(') depth++; else if (char === ')') depth--;
+    if (depth === 0 && value.slice(index, index + 2) === '&&') { parts.push(value.slice(start, index).trim()); start = index + 2; index++; }
+  }
+  parts.push(value.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+function directViewGate(condition: string): 'first' | 'third' | null {
+  const pending = [condition];
+  while (pending.length) {
+    const current = pending.pop() ?? '';
+    const stripped = stripBalancedOuterParentheses(current);
+    if (stripped !== current) { pending.push(stripped); continue; }
+    const terms = splitTopLevelConjunction(stripped);
+    if (terms.length > 1) { pending.push(...terms); continue; }
+    const term = terms[0] ?? stripped;
+    if (term === 'query.is_first_person') return 'first';
+    if (term === '!query.is_first_person') return 'third';
+  }
+  return null;
+}
 function resolveControllerAnimationAlias(entity: RegistryEntity, reference: string): string | null {
   const target = entity.animations[reference];
   return typeof target === 'string' && target.startsWith('animation.') ? target : null;
@@ -541,6 +582,24 @@ export function buildAnimationResourceRegistry(input: {
         thirdPersonStates += 1;
       } else {
         otherConditionalStates += 1;
+      }
+    }
+    for (const controllerId of entity.activeControllers) {
+      const controller = controllers.get(controllerId);
+      if (!controller) continue;
+      for (const transition of controller.transitions) {
+        const gate = directViewGate(transition.condition);
+        if (!gate) continue;
+        conditionalStates += 1;
+        if (gate === 'first') {
+          firstPersonStates += 1;
+          for (const reference of controller.stateClips[transition.to] ?? []) {
+            const clipId = resolveControllerAnimationAlias(entity, reference) ?? reference;
+            if (clips.has(clipId)) firstPersonClipIds.add(clipId);
+          }
+        } else {
+          thirdPersonStates += 1;
+        }
       }
     }
     for (const [key, value] of Object.entries(entity.animations)) {

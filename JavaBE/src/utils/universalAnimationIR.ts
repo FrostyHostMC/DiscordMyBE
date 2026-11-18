@@ -30,6 +30,8 @@ export interface AnimTimeline {
   overridePreviousAnimation?: boolean;
   animTimeUpdate?: string;
   frameCount: number;
+  /** Source-format nonzero loop return point, in seconds (PAL/Emotecraft Blockbench loopTick). */
+  loopStartSeconds?: number;
 }
 
 export interface Vector3Keyframe {
@@ -246,6 +248,7 @@ const KNOWN_CLIP_FIELDS = new Set([
   'start_delay',
   'fps',
   'name',
+  'loopTick',
 ]);
 
 const KNOWN_CHANNEL_FIELDS = new Set([
@@ -981,6 +984,18 @@ export function buildUniversalAnimationIR(
       const inferredFps = timeUnit === 'ticks' ? 20 : 30;
       const frameCount = Math.max(1, Math.round(finalDuration * inferredFps));
 
+      const rawClipRecord = rawClip as Record<string, unknown>;
+      const rawLoopTick = Number(rawClipRecord.loopTick);
+      const timeUpdate = typeof rawClipRecord.anim_time_update === 'string' ? rawClipRecord.anim_time_update : '';
+      // The source loopTick is consumed into Bedrock's anim_time_update by the translator.
+      // Recover our emitted return point here so the IR retains the source timing without
+      // leaking a non-Bedrock metadata key into the exported animation JSON.
+      const emittedLoopReturn = /:\s*([0-9]+(?:\.[0-9]+)?)\s*\+\s*math\.mod\s*\(/i.exec(timeUpdate);
+      const parsedLoopStart = Number.isFinite(rawLoopTick) ? rawLoopTick :
+        emittedLoopReturn ? Number(emittedLoopReturn[1]) : Number.NaN;
+      const loopStartSeconds = Number.isFinite(parsedLoopStart) && parsedLoopStart >= 0 && parsedLoopStart < finalDuration
+        ? parsedLoopStart
+        : undefined;
       const timeline: AnimTimeline = {
         durationSeconds: finalDuration,
         timeUnit,
@@ -992,6 +1007,7 @@ export function buildUniversalAnimationIR(
         overridePreviousAnimation: overridePrevious,
         animTimeUpdate,
         frameCount,
+        loopStartSeconds,
       };
 
       // Dependency resolution
