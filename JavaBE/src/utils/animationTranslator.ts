@@ -245,6 +245,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
     let previousPositionTimeKey: string | undefined;
     let previousRotationTimeKey: string | undefined;
     let previousBendTimeKey: string | undefined;
+    let previousPositionEasing: string | undefined;
+    let previousRotationEasing: string | undefined;
+    let previousBendEasing: string | undefined;
 
     for (const [tick, frame] of orderedFrames) {
       const part = frame.parts.get(partName);
@@ -277,6 +280,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         const easing = easeBefore ? undefined : part.positionEasing;
         positionTrack[timeKey] = { vector: [...position], ...(easing ? { easing } : {}) };
         previousPositionTimeKey = timeKey;
+        previousPositionEasing = part.positionEasing ?? previousPositionEasing;
       }
       if (rotationChanged) {
         for (let axis = 0; axis < 3; axis += 1) {
@@ -296,6 +300,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
         const easing = easeBefore ? undefined : part.rotationEasing;
         rotationTrack[timeKey] = { vector: [...rotation], ...(easing ? { easing } : {}) };
         previousRotationTimeKey = timeKey;
+        previousRotationEasing = part.rotationEasing ?? previousRotationEasing;
       }
       if (part.bendAngle !== undefined) {
         const angleRadians = part.bendAngle * (Math.PI / 180);
@@ -321,6 +326,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>): Record<string, 
           position: bendPositionTrack,
         };
         previousBendTimeKey = timeKey;
+        previousBendEasing = part.bendEasing ?? previousBendEasing;
       }
     }
 
