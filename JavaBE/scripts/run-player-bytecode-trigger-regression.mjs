@@ -54,7 +54,7 @@ try {
   });
   const attack = report.triggers.find((trigger) => trigger.clipId === 'animation.fixture.attack');
   if (!attack || attack.status !== 'mapped' || attack.sourcePriority !== 12 || attack.runtimeTrigger !== 'triggerAnim') {
-    throw new Error('Player trigger bytecode did not recover the exact clip's attack condition, priority, and runtime trigger: ' + JSON.stringify(report));
+    throw new Error("Player trigger bytecode did not recover the exact clip's attack condition, priority, and runtime trigger: " + JSON.stringify(report));
   }
 
   const controller = synthesizePlayerAnimationController({
