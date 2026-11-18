@@ -93,11 +93,35 @@ try {
     },
   }, { fileHint: 'fixture' });
   const loopClip = loopIntro.animations[loopIntro.idMap.loop_intro];
-  if (loopClip.loop !== false || !loopIntro.issues.some((issue) => issue.detail.includes('intro/loop splitting'))) {
-    throw new Error('A nonzero Emotecraft returnTick was silently converted into an incorrect whole-clip loop.');
+  if (loopClip.loop !== true || typeof loopClip.anim_time_update !== 'string' ||
+      !loopClip.anim_time_update.includes('math.mod') || !loopClip.anim_time_update.includes('0.5')) {
+    throw new Error('A nonzero Emotecraft returnTick was not compiled into an intro-once / returnTick-to-end loop timeline.');
   }
 
-  console.log('[PASS] Emotecraft moves, tick timing, easing, radians, turns, stop reset, and nonzero loop-return diagnostics are imported.');
+  const splitEasing = translateJavaAnimationSet({
+    name: 'split_part_easing',
+    emote: {
+      isLoop: false,
+      beginTick: 0,
+      endTick: 20,
+      stopTick: 20,
+      degrees: true,
+      easeBeforeKeyframe: true,
+      moves: [
+        { tick: 0, head: { pitch: 0 }, torso: { pitch: 0 } },
+        { tick: 10, easing: 'easeInQuad', head: { pitch: 45 } },
+        { tick: 10, easing: 'easeOutQuad', torso: { pitch: 90 } },
+      ],
+    },
+  }, { fileHint: 'fixture' });
+  const splitClip = splitEasing.animations[splitEasing.idMap.split_part_easing];
+  if (splitClip.bones.head.rotation['0.5'].easing !== 'easeInQuad' ||
+      splitClip.bones.body.rotation['0.5'].easing !== 'easeOutQuad' ||
+      splitEasing.issues.some((issue) => issue.detail.includes('conflicting easing values across split part keyframes'))) {
+    throw new Error('Split Emotecraft part tracks did not retain their independent easing declarations.');
+  }
+
+  console.log('[PASS] Emotecraft moves, tick timing, per-part easing, radians, turns, stop reset, and nonzero returnTick looping are imported.');
 } finally {
   await server.close();
 }
