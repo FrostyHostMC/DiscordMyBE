@@ -331,7 +331,6 @@ function seriousPlayerAnimationTrigger(
   const tail = sourceLower.split(/[.:/]+/).pop() ?? sourceLower;
   const evidence = 'McVader34/Serious-Player-Animations 1.1.1 upstream source (JAR metadata version 1.1.0): SeriousPlayerAnimationsMixin.reloadAnimationVariables() and animate()';
   const move = 'variable.spa_move_speed';
-  const backwards = 'variable.spa_moving_backwards';
   const notSneaking = '!query.is_sneaking';
   const shieldHeld = "(query.is_item_name_any('slot.weapon.mainhand', 'minecraft:shield') || query.is_item_name_any('slot.weapon.offhand', 'minecraft:shield'))";
   const base = {
@@ -364,7 +363,7 @@ function seriousPlayerAnimationTrigger(
       return {
         ...base,
         concept: 'moving',
-        condition: move + ' > 0.0 && ' + move + ' < 0.23 && !' + backwards + ' && ' + notSneaking,
+        condition: move + ' > 0.0 && !query.is_sprinting && ' + notSneaking,
         status: 'mapped',
         note: 'Exact source state: horizontal speed below 0.23 blocks/tick, moving forward, and not sneaking.',
       };
@@ -372,15 +371,14 @@ function seriousPlayerAnimationTrigger(
       return {
         ...base,
         concept: 'moving',
-        condition: backwards + ' && ' + notSneaking,
-        status: 'mapped',
-        note: 'Exact source state: movement-vector dot look-vector is negative and the player is not sneaking.',
+        status: 'unresolved',
+        note: 'The source requires a signed movement-vector dot product. The target player Molang context reports query.position_delta without an entity on affected clients, and query.modified_move_speed exposes magnitude only; this clip is withheld rather than incorrectly playing it for forward movement.',
       };
     case 'running':
       return {
         ...base,
         concept: 'sprinting',
-        condition: move + ' > 0.23 && query.is_sprinting && !' + backwards + ' && ' + notSneaking,
+        condition: move + ' > 0.0 && query.is_sprinting && ' + notSneaking,
         status: 'mapped',
         note: 'Exact source state: speed above 0.23 blocks/tick, sprinting, moving forward, and not sneaking.',
       };
@@ -388,7 +386,7 @@ function seriousPlayerAnimationTrigger(
       return {
         ...base,
         concept: 'sneaking',
-        condition: 'query.is_sneaking && ' + move + ' == 0.0 && !' + backwards,
+        condition: 'query.is_sneaking && ' + move + ' == 0.0',
         status: 'mapped',
         note: 'Exact source state: sneaking with no horizontal movement.',
       };
@@ -396,7 +394,7 @@ function seriousPlayerAnimationTrigger(
       return {
         ...base,
         concept: 'sneaking',
-        condition: 'query.is_sneaking && ' + move + ' > 0.0 && !' + backwards,
+        condition: 'query.is_sneaking && ' + move + ' > 0.0',
         status: 'mapped',
         note: 'Exact source state: sneaking while moving forward.',
       };
