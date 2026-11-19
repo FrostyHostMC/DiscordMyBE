@@ -2360,8 +2360,8 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'the previous position and body-yaw variables start from source initial values',
     expected: 'spa_previous_body_yaw initializes to 0.0; position deltas are engine-provided each frame',
-    actual: initialize.filter((statement) => ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].some((name) => statement.startsWith('variable.' + name + ' ='))).join(', ') || 'missing',
-    passed: ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((statement) => statement.startsWith('variable.' + name + ' = 0.0')))
+    actual: initialize.filter((statement) => statement.startsWith('variable.spa_previous_body_yaw =')).join(', ') || 'missing',
+    passed: initialize.some((statement) => statement.startsWith('variable.spa_previous_body_yaw = 0.0'))
   }, {
     label: 'all reconstructed source variables pass the player dependency audit',
     expected: 'zero unresolved player variables',
