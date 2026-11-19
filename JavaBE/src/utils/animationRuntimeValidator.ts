@@ -587,7 +587,7 @@ export function validateAnimationRuntime(input: {
     detail:
       clipsRegistered === 0
         ? 'No registered final clip exists, so activation is not measured.'
-        : `${clipsActivated}/${playableRegisteredClips} playable registered clip id(s) have a runtime start path — ${deliberatelyInactive.size} source-proven unused definition(s) are intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} animate, ${registry.metrics.clipsActivatedByController} controller, ${registry.metrics.clipsActivatedByScript} verified script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path, ${expectedUnactivated.length} expected playable id(s) lack a path. A script path may be event-driven rather than continuously evaluated.`,
+        : `${clipsActivated}/${playableRegisteredClips} playable registered clip id(s) have a runtime start path — ${deliberatelyInactive.size} source-proven unused or explicitly withheld definition(s) are intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} animate, ${registry.metrics.clipsActivatedByController} controller, ${registry.metrics.clipsActivatedByScript} verified script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path, ${expectedUnactivated.length} expected playable id(s) lack a path. A script path may be event-driven rather than continuously evaluated.`,
     },
     {
       index: 9,
@@ -695,7 +695,7 @@ export function validateAnimationRuntime(input: {
               ? 'fail'
               : 'partial'
             : 'pass',
-      detail: `${clipsActivated}/${playableRegisteredClips} playable registered clip(s) reachable — ${deliberatelyInactive.size} source-proven unused definition(s) intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} scripts.animate, ${registry.metrics.clipsActivatedByController} activated controller state(s), ${registry.metrics.clipsActivatedByScript} script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path; ${registry.metrics.controllersDangling.length} controller state(s) select a clip that does not exist.`,
+      detail: `${clipsActivated}/${playableRegisteredClips} playable registered clip(s) reachable — ${deliberatelyInactive.size} source-proven unused or explicitly withheld definition(s) intentionally inactive; ${registry.metrics.clipsActivatedByAnimate} scripts.animate, ${registry.metrics.clipsActivatedByController} activated controller state(s), ${registry.metrics.clipsActivatedByScript} script call(s); ${unactivatedRegistrations.length} unexpected clip(s) have no path; ${registry.metrics.controllersDangling.length} controller state(s) select a clip that does not exist.`,
     },
     {
       id: 'molang-compatibility',
