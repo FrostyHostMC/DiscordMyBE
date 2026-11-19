@@ -1,16 +1,14 @@
 import type { PackFile } from '@/utils/entityTextureVariants';
+import { VANILLA_PLAYER_ANIMATION_IDS, VANILLA_PLAYER_CONTROLLER_IDS } from '@/utils/vanillaPlayerBaseline';
 
 const VANILLA_PLAYER_ANIMATIONS = new Set([
-  'animation.humanoid.base_pose',
-  'animation.humanoid.look_at_target',
+  ...VANILLA_PLAYER_ANIMATION_IDS,
+  // Retained for older Bedrock releases that still expose this compatibility alias.
   'animation.player.base_pose',
-  'animation.player.cape',
-  'animation.player.first_person.base_pose',
 ]);
 
 const VANILLA_PLAYER_CONTROLLERS = new Set([
-  'controller.animation.player.root',
-  'controller.animation.player.first_person_attack',
+  ...VANILLA_PLAYER_CONTROLLER_IDS,
 ]);
 
 /**
