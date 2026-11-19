@@ -15,6 +15,7 @@ const { parseAddonArchive, detectConflicts, sanitizeJsonString } = await import(
 const { executeMergePacks, ensureCombinedBlob, buildMergePlan } = await import('../src/utils/mergeEngine.ts');
 const { applySubpackSelection } = await import('../src/utils/subpackProcessor.ts');
 const { guardUnavailableEventSubscriptions } = await import('../src/utils/scriptCompatibility.ts');
+const { validateMergedArchive } = await import('../src/utils/mergedArchiveValidation.ts');
 
 let nextId = 0;
 async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, files: Record<string, string | Uint8Array>, scriptVersion?: string) {
@@ -507,3 +508,52 @@ assert.ok(renamedBehaviorId, 'the second behavior entity should be safely namesp
 assert.equal(renamedClientId, renamedBehaviorId,
   'the paired resource client_entity must receive the exact same rewritten identifier as its behavior entity');
 console.log('✓ paired behavior/resource entity identifiers remain synchronized when duplicate entities are prefixed');
+
+
+// Vanilla player resources are supplied by the Bedrock runtime and must not
+// be misreported as missing pack files. Custom unresolved references must
+// still be visible in the same audit.
+{
+  const vanillaPlayerZip = new JSZip();
+  vanillaPlayerZip.file('entity/player.entity.json', JSON.stringify({
+    format_version: '1.10.0',
+    'minecraft:client_entity': { description: {
+      identifier: 'minecraft:player',
+      textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible' },
+      geometry: { default: 'geometry.humanoid.custom', cape: 'geometry.cape' },
+      animations: {
+        root: 'controller.animation.player.root',
+        first_person_attack_controller: 'controller.animation.player.first_person_attack',
+        cape: 'animation.player.cape'
+      },
+      render_controllers: [
+        'controller.render.player.first_person',
+        'controller.render.player.third_person'
+      ]
+    } }
+  }));
+  const vanillaIssues = await validateMergedArchive(vanillaPlayerZip, 'Resource Pack');
+  const vanillaMissing = vanillaIssues.filter(issue =>
+    ['MISSING_TEXTURE_FILE', 'MISSING_GEOMETRY_REFERENCE', 'MISSING_ANIMATION_REFERENCE',
+      'MISSING_ANIMATION_CONTROLLER_REFERENCE', 'MISSING_RENDER_CONTROLLER_REFERENCE'].includes(issue.code));
+  assert.deepEqual(vanillaMissing, [],
+    'verified Bedrock base-game player assets/controllers must not be required inside the add-on ZIP');
+
+  const brokenPlayerZip = new JSZip();
+  brokenPlayerZip.file('entity/player.entity.json', JSON.stringify({
+    'minecraft:client_entity': { description: {
+      identifier: 'minecraft:player',
+      textures: { custom: 'textures/entity/not_shipped' },
+      geometry: { custom: 'geometry.fixture.not_shipped' },
+      animations: { custom: 'animation.fixture.not_shipped' },
+      render_controllers: ['controller.render.fixture.not_shipped', 'controller.render.player.cape']
+    } }
+  }));
+  const brokenIssues = await validateMergedArchive(brokenPlayerZip, 'Resource Pack');
+  const brokenCodes = new Set(brokenIssues.map(issue => issue.code));
+  assert.ok(brokenCodes.has('MISSING_TEXTURE_FILE'));
+  assert.ok(brokenCodes.has('MISSING_GEOMETRY_REFERENCE'));
+  assert.ok(brokenCodes.has('MISSING_ANIMATION_REFERENCE'));
+  assert.ok(brokenCodes.has('MISSING_RENDER_CONTROLLER_REFERENCE'));
+  console.log('✓ resource dependency audit distinguishes verified vanilla player resources from genuinely missing custom references');
+}
