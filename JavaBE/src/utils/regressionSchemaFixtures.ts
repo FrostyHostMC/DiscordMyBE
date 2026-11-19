@@ -1097,22 +1097,38 @@ export function measurePlayerClipActivationFallback(): RegressionFixtureResult {
       clipId: firstClip,
       shortName: 'ported_first_pose',
       concept: 'pose-overlay',
-      javaEvidence: 'no source trigger recovered',
-      status: 'unresolved' as const,
+      javaEvidence: 'source evidence establishes first-person-only activation but no narrower condition',
+      status: 'approximated' as const,
       scriptDriven: false,
       perspective: 'first' as const,
-      note: 'No trigger was recovered; use the documented perspective-only fallback.'
+      note: 'The source evidence establishes the view scope but no narrower condition; use the documented perspective-only fallback.'
     }, {
       clipId: thirdClip,
       shortName: 'ported_body_pose',
       concept: 'pose-overlay',
-      javaEvidence: 'no source trigger recovered',
-      status: 'unresolved' as const,
+      javaEvidence: 'source evidence establishes third-person-only activation but no narrower condition',
+      status: 'approximated' as const,
       scriptDriven: false,
       perspective: 'third' as const,
-      note: 'No trigger was recovered; use the documented perspective-only fallback.'
+      note: 'The source evidence establishes the view scope but no narrower condition; use the documented perspective-only fallback.'
     }],
     controllerIds: []
+  });
+  const unresolvedWiring = buildPlayerClientEntity({
+    portedClips: {
+      [firstClip]: { animation_length: 1, bones: { right_arm: { rotation: [0, 0, 0] } } },
+      [thirdClip]: { animation_length: 1, bones: { body: { rotation: [0, 0, 0] } } },
+    },
+    triggers: [{
+      clipId: firstClip, shortName: 'unresolved_first_pose', concept: 'pose-overlay',
+      javaEvidence: 'no source trigger recovered', status: 'unresolved' as const,
+      scriptDriven: false, perspective: 'first' as const, note: 'No source trigger was recovered.',
+    }, {
+      clipId: thirdClip, shortName: 'unresolved_body_pose', concept: 'pose-overlay',
+      javaEvidence: 'no source trigger recovered', status: 'unresolved' as const,
+      scriptDriven: false, perspective: 'third' as const, note: 'No source trigger was recovered.',
+    }],
+    controllerIds: [],
   });
   const resourcePackFiles: Record<string, PackFile> = {
     'animations/player.animation.json': JSON.stringify({
@@ -1151,6 +1167,14 @@ export function measurePlayerClipActivationFallback(): RegressionFixtureResult {
   const firstCondition = conditionFor('ported_first_pose');
   const thirdCondition = conditionFor('ported_body_pose');
   const checks: RegressionAssertion[] = [{
+    label: 'unresolved source clips remain registered but receive no perspective-only activation',
+    expected: '0 activated; both clips retained as unresolved',
+    actual: `${unresolvedWiring.report.clipsActivated} activated; unresolved=${unresolvedWiring.report.unresolvedClips.length}`,
+    passed: unresolvedWiring.report.clipsActivated === 0 &&
+      unresolvedWiring.report.unresolvedClips.includes(firstClip) &&
+      unresolvedWiring.report.unresolvedClips.includes(thirdClip) &&
+      unresolvedWiring.report.unconditionalClips.length === 0
+  }, {
     label: 'conditionless source clips still receive their documented activation fallback',
     expected: '2 activated, perspective-scoped clips',
     actual: `${wiring.report.clipsActivated} activated, ${wiring.report.unconditionalClips.length} continuous`,
@@ -1166,7 +1190,7 @@ export function measurePlayerClipActivationFallback(): RegressionFixtureResult {
     actual: `${validation.playerWiring.clipsWithoutActivationPath.length} without activation`,
     passed: validation.playerWiring.clipsWithoutActivationPath.length === 0
   }];
-  return build('player-clip-activation-fallback', 'Player animation activation fallback (unresolved triggers, perspective separation)', 'Animation', checks, [], ['Actual playback in a live Bedrock client is not measured by this structural fixture.'], started);
+  return build('player-clip-activation-fallback', 'Player animation activation fallback (evidence-backed perspective fallback; unresolved clips withheld)', 'Animation', checks, [], ['Actual playback in a live Bedrock client is not measured by this structural fixture.'], started);
 }
 
 /**
