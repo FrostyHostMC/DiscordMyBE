@@ -1016,7 +1016,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
             root: 'controller.animation.player.root',
             base_pose: 'animation.player.base_pose',
             humanoid_base_pose: 'animation.humanoid.base_pose',
-            look_at_target: 'animation.humanoid.look_at_target',
+            look_at_target: 'controller.animation.humanoid.look_at_target',
             cape: 'animation.player.cape',
             first_person_base_pose: 'animation.player.first_person.base_pose',
             first_person_attack_controller: 'controller.animation.player.first_person_attack',
@@ -1664,6 +1664,14 @@ export function measureSpawnEggSourceIntegration(): RegressionFixtureResult {
     expected: 'one_mob true, no_egg false',
     actual: `${String(registeredEntity?.is_spawnable)} / ${String(unregisteredEntity?.is_spawnable)}`,
     passed: registeredEntity?.is_spawnable === true && unregisteredEntity?.is_spawnable === false
+  }, {
+    label: 'spawn egg appearance stays in the client entity and never leaks into behavior entity schema',
+    expected: 'client spawn_egg declaration; no behavior-side spawn_egg fields',
+    actual: `${String(registeredClient?.spawn_egg?.base_color ?? 'no client colours')} / behavior fields: ${[registeredEntity?.spawn_egg, unregisteredEntity?.spawn_egg].filter((value) => value !== undefined).length}`,
+    passed: registeredClient?.spawn_egg?.base_color === '#123456' &&
+      !('spawn_egg' in (registeredEntity ?? {})) &&
+      !('spawn_egg' in (unregisteredEntity ?? {})) &&
+      report.behaviourSpawnEggSynced === 0,
   }, {
     label: 'the source egg uses entity colors instead of a duplicate standalone item or egg art',
     expected: 'no entity-placer item, icon texture, or atlas entry',
