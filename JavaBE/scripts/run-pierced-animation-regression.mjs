@@ -24,6 +24,7 @@ try {
   const { readZipArchive } = await server.ssrLoadModule('/src/utils/zip.ts');
   const { portMobAndPlayerAnimations } = await server.ssrLoadModule('/src/utils/animationPortEngine.ts');
   const { setPlayableMode } = await server.ssrLoadModule('/src/utils/provenance.ts');
+  const { runRegressionSuite } = await server.ssrLoadModule('/src/utils/regressionSuite.ts');
   const { resolvePlayerDependencies } = await server.ssrLoadModule('/src/utils/playerDependencyResolver.ts');
   const { guaranteePlayerBaselineWiring } = await server.ssrLoadModule('/src/utils/playerBaselineGuard.ts');
   const { decompileAndInspectJarAsync } = await server.ssrLoadModule('/src/utils/javaDecompiler.ts');
@@ -147,6 +148,30 @@ try {
   }
 
   setPlayableMode(false);
+  const regressionSuiteReport = await runRegressionSuite({
+    modId: 'fixture',
+    playableMode: false,
+    onLog: (line) => process.stdout.write(line + '\n'),
+  });
+  const regressionSuiteDiagnostics = {
+    total: regressionSuiteReport.total,
+    passed: regressionSuiteReport.passed,
+    partial: regressionSuiteReport.partial,
+    failed: regressionSuiteReport.failed,
+    summary: regressionSuiteReport.summary,
+    reviewedFixtures: regressionSuiteReport.fixtures
+      .filter((fixture) => fixture.status !== 'passed')
+      .map((fixture) => ({
+        id: fixture.id,
+        label: fixture.label,
+        category: fixture.category,
+        status: fixture.status,
+        findings: fixture.findings,
+        failedAssertions: fixture.assertions.filter((assertion) => !assertion.passed),
+        unavailable: fixture.unavailable,
+      })),
+  };
+  process.stdout.write('[REGRESSION:DIAGNOSTICS] ' + JSON.stringify(regressionSuiteDiagnostics) + '\\n');
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
   const entries = await readZipArchive(archiveBytes, {
     maxEntries: 5000,
@@ -341,6 +366,7 @@ try {
     duplicateDefinitions,
     invalidArmorQueries,
     assertions,
+    regressionSuiteDiagnostics,
     passed: assertions.every((assertion) => assertion.passed),
     recentLogs: logs.slice(-80),
   };
@@ -454,7 +480,7 @@ try {
     if (!report.fullConversion.passed) process.exitCode = 1;
   }
   fs.writeFileSync(path.join(reportDir, 'pierced-current-engine.json'), JSON.stringify(report, null, 2));
-  process.stdout.write(`${JSON.stringify({ passed: report.passed, assertions, sourceClipIds, emittedClipCount: emittedClipIds.length, playerWiring: wiring, triggers: triggers ? { inspected: triggers.clipsInspected, unresolved: triggers.unresolved, mapped: triggers.mapped, scriptDriven: triggers.scriptDriven } : null }, null, 2)}\n`);
+  process.stdout.write(`${JSON.stringify({ passed: report.passed, regressionSuiteDiagnostics, assertions, sourceClipIds, emittedClipCount: emittedClipIds.length, playerWiring: wiring, triggers: triggers ? { inspected: triggers.clipsInspected, unresolved: triggers.unresolved, mapped: triggers.mapped, scriptDriven: triggers.scriptDriven } : null }, null, 2)}\n`);
   if (!report.passed) process.exitCode = 1;
 } finally {
   await server.close();
