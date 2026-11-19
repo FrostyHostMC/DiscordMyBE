@@ -47,7 +47,7 @@ export const VANILLA_PLAYER_PRE_ANIMATION: string[] = [
   "v.attack_body_rot_y = Math.sin(360 * Math.sqrt(v.attack_time)) * 10.0;",
   "v.tcos0 = math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / v.gliding_speed_value * 57.3;",
   "v.first_person_item_rotation_factor = math.sin((1 - v.attack_time) * 180.0);",
-  "v.hand_bob = query.life_time < 0.01 ? 0.0 : v.hand_bob + ((query.is_on_ground && query.is_alive ? math.clamp(math.sqrt(math.pow(query.position_delta(0), 2.0) + math.pow(query.position_delta(2), 2.0)), 0.0, 0.1) : 0.0) - v.hand_bob) * 0.02;",
+  "v.hand_bob = query.life_time < 0.01 ? 0.0 : v.hand_bob + ((query.is_on_ground && query.is_alive ? math.clamp(query.modified_move_speed, 0.0, 0.1) : 0.0) - v.hand_bob) * 0.02;",
   "v.mainhand_map_or_photo = q.get_equipped_item_name('main_hand') == 'filled_map' || q.get_equipped_item_name('main_hand') == 'photo_item';",
   "v.offhand_map_or_photo = q.get_equipped_item_name('off_hand') == 'filled_map' || q.get_equipped_item_name('off_hand') == 'photo_item';",
   "v.two_handed_map = v.mainhand_map_or_photo && q.get_equipped_item_name('off_hand') == '';",
@@ -145,12 +145,7 @@ export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
   'player_x_rotation',
   'map_face_icon',
   'is_first_person',
-  // Vanilla player-controller inputs supplied by Bedrock's player animation runtime.
-  'is_holding_left',
-  'is_brandishing_spear',
-  'damage_nearby_mobs',
-  'swim_amount',
-  'use_item_interval_progress',
+  // Remaining vanilla player-controller inputs supplied by Bedrock's player animation runtime.
   'use_item_startup_progress',
   'is_holding_spyglass',
   'is_tooting_goat_horn',
@@ -175,36 +170,35 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
     evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
     always: true,
   },
+  // Reconstruct player controller inputs absent on some Bedrock runtime versions.
+  is_holding_left: {
+    expression: "query.get_equipped_item_name('off_hand') != ''",
+    evidence: 'The player off-hand slot contains an equipped item; reconstructed from the documented equipped-item-name query.',
+  },
+  is_brandishing_spear: {
+    expression: "query.is_using_item && query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
+    evidence: 'Spear brandishing is active while the player uses a main-hand item tagged minecraft:is_spear.',
+  },
+  damage_nearby_mobs: {
+    expression: 'query.is_delayed_attacking',
+    evidence: 'Approximation: delayed player attack state is the closest documented player query; Bedrock exposes no direct equivalent of the vanilla nearby-mob-damage runtime flag.',
+  },
+  swim_amount: {
+    expression: 'query.is_swimming ? 1.0 : 0.0',
+    evidence: 'Binary swimming state reconstructed from the documented player swimming query; smooth engine blend amount is not exposed on all target versions.',
+  },
+  use_item_interval_progress: {
+    expression: 'query.main_hand_item_max_duration > 0.0 ? math.clamp(query.main_hand_item_use_duration / query.main_hand_item_max_duration, 0.0, 1.0) : 0.0',
+    evidence: 'Main-hand item-use interval reconstructed from the documented remaining/max use-duration queries.',
+  },
   // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
-  spa_dx: {
-    expression: 'query.position_delta(0)',
-    evidence: 'Bedrock player Molang query_position_delta returns the current entity position delta; avoids query.position in player animation scope',
-  },
-  spa_dz: {
-    expression: 'query.position_delta(2)',
-    evidence: 'Bedrock player Molang query_position_delta returns the current entity position delta; avoids query.position in player animation scope',
-  },
   spa_move_speed: {
-    expression: 'math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0))',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz)',
-  },
-  spa_moving_backwards: {
-    expression: '(variable.spa_move_speed > 0.0) && ((variable.spa_dx * math.cos((query.body_y_rotation + 90.0) * 0.01745329252) + variable.spa_dz * math.sin((query.body_y_rotation + 90.0) * 0.01745329252)) < 0.0)',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): movementVector.length() > 0 && movementVector.dot(lookVector) < 0',
+    expression: 'query.modified_move_speed',
+    evidence: 'Bedrock player query.modified_move_speed is available in player animation scope; used as a safe movement magnitude where query.position_delta has no actor context on affected clients.',
   },
   spa_turn_delta: {
     expression: 'query.body_y_rotation - variable.spa_previous_body_yaw',
     evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = byaw - prevbyaw',
-  },
-  spa_last_x: {
-    expression: 'query.position_delta(0)',
-    initializeExpression: '0.0',
-    evidence: 'Player-scope movement uses the documented query.position_delta axis; absolute query.position is not valid in this player animation context',
-  },
-  spa_last_z: {
-    expression: 'query.position_delta(2)',
-    initializeExpression: '0.0',
-    evidence: 'Player-scope movement uses the documented query.position_delta axis; absolute query.position is not valid in this player animation context',
   },
   spa_previous_body_yaw: {
     expression: 'query.body_y_rotation',
