@@ -457,8 +457,8 @@ function measureSchemaGate(): RegressionFixtureResult {
   }, {
     label: 'the gate reports the defect count drop it really achieved',
     expected: `${report.errorsBefore} → ${report.errorsAfter}`,
-    actual: `${before.renderControllerTextures + before.emptyAnimationProperties + before.blockGeometryOverrides} defect class(es) cleared`,
-    passed: report.errorsBefore > report.errorsAfter && report.checks.length === 8
+    actual: `${report.errorsBefore} → ${report.errorsAfter}; ${report.checks.length} schema check(s)`,
+    passed: report.errorsBefore > report.errorsAfter && report.errorsAfter === 0 && report.checks.length === 9 && report.checks.every(check => check.status !== 'unresolved')
   }];
   const failures = checks.filter(check => !check.passed);
   return {
