@@ -73,6 +73,7 @@ export async function validateModpackContent(
     const clientEntity = entry.data?.['minecraft:client_entity']?.description?.identifier;
     if (typeof clientEntity === 'string') clientEntityIds.add(clientEntity);
   }
+
   for (const entry of behaviorEntries) {
     const item = entry.data?.['minecraft:item']?.description?.identifier;
     const block = entry.data?.['minecraft:block']?.description?.identifier;
@@ -83,14 +84,46 @@ export async function validateModpackContent(
   }
 
   const itemAliases = new Set<string>();
+  const itemTextureDefinitions = new Map<string, any>();
   const terrainAliases = new Set<string>();
   for (const entry of resourceEntries) {
     const path = entry.path.replace(/\\/g, '/').toLowerCase();
     if (path.endsWith('textures/item_texture.json')) {
-      Object.keys(entry.data?.texture_data || {}).forEach(alias => itemAliases.add(alias));
+      for (const [alias, definition] of Object.entries(entry.data?.texture_data || {})) {
+        itemAliases.add(alias);
+        itemTextureDefinitions.set(alias, definition);
+      }
     }
     if (path.endsWith('textures/terrain_texture.json')) {
       Object.keys(entry.data?.texture_data || {}).forEach(alias => terrainAliases.add(alias));
+    }
+  }
+
+  // Client-entity spawn_egg registers the egg for a mob; its texture must
+  // resolve through item_texture.json (except the verified vanilla spawn_egg
+  // alias). Validate the selected texture index against the alias's variants.
+  for (const entry of resourceEntries) {
+    const spawnEgg = entry.data?.['minecraft:client_entity']?.description?.spawn_egg;
+    if (!spawnEgg || typeof spawnEgg !== 'object' || Array.isArray(spawnEgg)) continue;
+    const textureAlias = typeof spawnEgg.texture === 'string' ? spawnEgg.texture.trim() : '';
+    if (textureAlias) {
+      if (!itemAliases.has(textureAlias) && textureAlias !== 'spawn_egg') {
+        add('MISSING_SPAWN_EGG_TEXTURE_ALIAS', entry.path,
+          'Client entity spawn egg references texture alias "' + textureAlias + '", but that alias is absent from the merged textures/item_texture.json.');
+      } else if (itemAliases.has(textureAlias) && spawnEgg.texture_index !== undefined) {
+        const definition: any = itemTextureDefinitions.get(textureAlias);
+        const textures = definition?.textures;
+        const variantCount = Array.isArray(textures) ? textures.length : typeof textures === 'string' && textures ? 1 : 0;
+        const index = spawnEgg.texture_index;
+        if (!Number.isInteger(index) || index < 0 || (variantCount > 0 && index >= variantCount)) {
+          add('INVALID_SPAWN_EGG_TEXTURE_INDEX', entry.path,
+            'Client entity spawn egg texture_index "' + String(index) + '" is not a valid variant for texture alias "' + textureAlias + '".');
+        }
+      }
+    } else if (!(typeof spawnEgg.base_color === 'string' && spawnEgg.base_color.trim()) ||
+               !(typeof spawnEgg.overlay_color === 'string' && spawnEgg.overlay_color.trim())) {
+      add('MISSING_SPAWN_EGG_APPEARANCE', entry.path,
+        'Client entity spawn_egg must provide a texture alias or both base_color and overlay_color.');
     }
   }
 

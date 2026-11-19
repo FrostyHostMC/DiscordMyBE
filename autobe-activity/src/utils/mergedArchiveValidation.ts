@@ -11,6 +11,56 @@ export interface PackValidationIssue {
 const IMAGE_EXTENSIONS = ['.png', '.tga', '.jpg', '.jpeg'];
 
 /**
+ * Verified base-game resources exposed by Mojang's current Bedrock samples.
+ * These are dependencies supplied by Minecraft itself, not files that every
+ * add-on must bundle. Keep this list explicit: never trust an entire namespace.
+ */
+const VANILLA_GEOMETRY_IDS = new Set(['geometry.humanoid.custom', 'geometry.cape']);
+const VANILLA_TEXTURE_PATHS = new Set(['textures/entity/steve', 'textures/entity/cape_invisible']);
+const VANILLA_ANIMATION_IDS = new Set([
+  'animation.humanoid.base_pose', 'animation.humanoid.look_at_target.default',
+  'animation.humanoid.look_at_target.gliding', 'animation.humanoid.look_at_target.swimming',
+  'animation.humanoid.brandish_spear', 'animation.humanoid.charging',
+  'animation.humanoid.damage_nearby_mobs', 'animation.humanoid.bow_and_arrow',
+  'animation.humanoid.fishing_rod', 'animation.humanoid.holding_spyglass',
+  'animation.humanoid.tooting_goat_horn', 'animation.humanoid.holding_brush',
+  'animation.humanoid.brushing', 'animation.humanoid.melee_spear_use',
+  'animation.skeleton.attack', 'animation.player.look_at_target.ui',
+  'animation.player.look_at_target.inverted', 'animation.player.cape',
+  'animation.player.move.arms', 'animation.player.move.legs', 'animation.player.swim',
+  'animation.player.swim.legs', 'animation.player.riding.arms', 'animation.player.riding.legs',
+  'animation.player.holding', 'animation.player.attack.positions', 'animation.player.attack.rotations',
+  'animation.player.sneaking', 'animation.player.bob', 'animation.player.sleeping',
+  'animation.player.first_person.base_pose', 'animation.player.first_person.empty_hand',
+  'animation.player.first_person.swap_item', 'animation.player.first_person.attack_rotation',
+  'animation.player.first_person.attack_rotation_item', 'animation.player.first_person.vr_attack_rotation',
+  'animation.player.first_person.walk', 'animation.player.first_person.map_hold',
+  'animation.player.first_person.map_hold_attack', 'animation.player.first_person.map_hold_off_hand',
+  'animation.player.first_person.map_hold_main_hand', 'animation.player.first_person.crossbow_equipped',
+  'animation.player.first_person.crossbow_hold', 'animation.player.first_person.breathing_bob',
+  'animation.player.first_person.shield_block', 'animation.player.first_person.melee_spear_use',
+  'animation.player.first_person.melee_spear_hold', 'animation.player.first_person.melee_spear_attack',
+  'animation.player.crossbow_equipped', 'animation.player.bow_equipped', 'animation.player.crossbow_hold',
+  'animation.player.shield_block_main_hand', 'animation.player.shield_block_off_hand',
+  'animation.player.crawl', 'animation.player.crawl.legs', 'animation.player.swim.no_right_arm',
+  'animation.player.crawl.no_right_arm', 'animation.player.riding.root',
+  'animation.player.holding_heavy_core', 'animation.player.melee_spear_attack'
+]);
+const VANILLA_ANIMATION_CONTROLLER_IDS = new Set([
+  'controller.animation.player.root', 'controller.animation.player.base',
+  'controller.animation.player.hudplayer', 'controller.animation.player.first_person_attack',
+  'controller.animation.player.first_person_map', 'controller.animation.player.crossbow',
+  'controller.animation.player.melee_spear', 'controller.animation.player.first_person_melee_spear',
+  'controller.animation.persona.blink', 'controller.animation.humanoid.look_at_target'
+]);
+const VANILLA_RENDER_CONTROLLER_IDS = new Set([
+  'controller.render.player.first_person', 'controller.render.player.third_person',
+  'controller.render.player.first_person_spectator', 'controller.render.player.third_person_spectator',
+  'controller.render.player.map'
+]);
+
+
+/**
  * Validate the actual merged archive, not just the source inputs. This pass is
  * intentionally conservative: it reports broken syntax and explicit file-path
  * references without guessing at Bedrock identifier semantics.
@@ -190,6 +240,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
 
   const geometryIds = new Set<string>();
   const animationIds = new Set<string>();
+  const animationControllerIds = new Set<string>();
   const renderControllerIds = new Set<string>();
   if (isResourcePack) {
     for (const entry of jsonEntries) {
@@ -205,7 +256,7 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
       }
       const animationControllers = entry.data?.animation_controllers;
       if (animationControllers && typeof animationControllers === 'object' && !Array.isArray(animationControllers)) {
-        for (const id of Object.keys(animationControllers)) animationIds.add(id);
+        for (const id of Object.keys(animationControllers)) animationControllerIds.add(id);
       }
       const controllers = entry.data?.render_controllers;
       if (controllers && typeof controllers === 'object' && !Array.isArray(controllers)) {
@@ -218,21 +269,29 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     if (!value || typeof value !== 'object') {
       if (typeof value === 'string' && isResourcePack) {
         const refId = value.trim();
-        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\./.test(refId) && !geometryIds.has(refId)) {
-          add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching geometry definition was found in this resource pack.' });
+        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\./.test(refId) &&
+            !geometryIds.has(refId) && !VANILLA_GEOMETRY_IDS.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game geometry was found.' });
         }
-        if (parentKey === 'animations' && /^(animation|controller\.animation)\./.test(refId) && !animationIds.has(refId)) {
-          add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching animation definition was found in this resource pack.' });
+        if (parentKey === 'animations' && /^animation\./.test(refId) &&
+            !animationIds.has(refId) && !VANILLA_ANIMATION_IDS.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game animation was found.' });
         }
-        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\.render\./.test(refId) && !renderControllerIds.has(refId)) {
-          add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching render-controller definition was found in this resource pack.' });
+        if ((parentKey === 'animations' || key === 'animation_controllers' || parentKey === 'animation_controllers') &&
+            /^controller\.animation\./.test(refId) &&
+            !animationControllerIds.has(refId) && !VANILLA_ANIMATION_CONTROLLER_IDS.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_ANIMATION_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Animation controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game controller was found.' });
+        }
+        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\.render\./.test(refId) &&
+            !renderControllerIds.has(refId) && !VANILLA_RENDER_CONTROLLER_IDS.has(refId)) {
+          add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game render controller was found.' });
         }
       }
       if (typeof value === 'string' && (insideTextureMap || /texture/i.test(key))) {
         const ref = value.trim();
         // Only validate explicit pack-relative paths. Namespaced aliases such
         // as "texture.item_name" and "textures.foo" are not file paths.
-        if (/^(\.\.?\/|textures\/)/i.test(ref) && !/[{}$]/.test(ref) && !existsAsImage(ref)) {
+        if (/^(\.\.?\/|textures\/)/i.test(ref) && !/[{}$]/.test(ref) && !VANILLA_TEXTURE_PATHS.has(ref.replace(/^\.\//, '').replace(/\\/g, '/').toLowerCase()) && !existsAsImage(ref)) {
           add({
             severity: 'warning',
             code: 'MISSING_TEXTURE_FILE',
