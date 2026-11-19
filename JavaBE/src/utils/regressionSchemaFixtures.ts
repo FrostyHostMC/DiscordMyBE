@@ -43,6 +43,9 @@ import { runUniversalAnimationDiscovery } from '@/utils/universalAnimationDiscov
  */
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 /** Minimal PNG header (signature + IHDR size fields) accepted by the dimension readers. */
 function pngHeader(width: number, height: number): Uint8Array {

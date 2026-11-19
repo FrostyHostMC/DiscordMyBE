@@ -35,6 +35,7 @@ try {
   const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
   const { buildAnimationResourceRegistry } = await server.ssrLoadModule('/src/utils/animationResourceRegistry.ts');
   const { VANILLA_PLAYER_ANIMATIONS, VANILLA_PLAYER_RENDER_CONTROLLERS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } = await server.ssrLoadModule('/src/utils/vanillaPlayerBaseline.ts');
+  const { VANILLA_PLAYER_GEOMETRY_JSON } = await server.ssrLoadModule('/src/utils/vanillaPlayerGeometry.ts');
 
 
   // The final generic entity pass must never reinterpret minecraft:player as a mob.
@@ -410,6 +411,81 @@ try {
       maxTotalBytes: 256 * 1024 * 1024,
     });
     const mcpackEntries = bundleEntries.filter((entry) => !entry.isDirectory && /\.mcpack$/i.test(entry.path));
+    const resourcePackEntry = mcpackEntries.find((entry) => /resource/i.test(entry.path));
+    const resourcePackBytes = resourcePackEntry?.data instanceof Uint8Array
+      ? resourcePackEntry.data
+      : resourcePackEntry?.data
+        ? new Uint8Array(resourcePackEntry.data)
+        : null;
+    const resourcePackEntries = resourcePackBytes
+      ? await readZipArchive(resourcePackBytes, {
+          maxEntries: 5000,
+          maxEntryBytes: 128 * 1024 * 1024,
+          maxTotalBytes: 256 * 1024 * 1024,
+        })
+      : [];
+    const archiveResourceText = new Map(resourcePackEntries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => [entry.path.toLowerCase(), new TextDecoder().decode(entry.data)]));
+    const readArchiveJson = (pathName) => {
+      const raw = archiveResourceText.get(pathName.toLowerCase());
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    };
+    const archivePlayerDescription = readArchiveJson('entity/player.entity.json')?.['minecraft:client_entity']?.description ?? null;
+    const archivePlayerGeometryMap = typeof archivePlayerDescription?.geometry === 'string'
+      ? { default: archivePlayerDescription.geometry }
+      : archivePlayerDescription?.geometry ?? {};
+    const archivePlayerDefaultGeometry = archivePlayerGeometryMap.default ?? '';
+    const vanillaPlayerGeometries = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON)['minecraft:geometry'];
+    const vanillaPlayerGeometry = vanillaPlayerGeometries.find((geometry) =>
+      geometry.description?.identifier === archivePlayerDefaultGeometry);
+    const shippedGeometryDocuments = resourcePackEntries
+      .filter((entry) => !entry.isDirectory && entry.path.toLowerCase().startsWith('models/') && entry.path.toLowerCase().endsWith('.json'))
+      .map((entry) => {
+        try { return JSON.parse(new TextDecoder().decode(entry.data)); } catch { return null; }
+      })
+      .filter(Boolean)
+      .flatMap((document) => document['minecraft:geometry'] ?? []);
+    const shippedPlayerGeometry = shippedGeometryDocuments.find((geometry) =>
+      geometry.description?.identifier === archivePlayerDefaultGeometry);
+    const effectivePlayerGeometry = shippedPlayerGeometry ?? vanillaPlayerGeometry;
+    const archivePlayerBones = new Set((effectivePlayerGeometry?.bones ?? []).map((bone) => bone.name));
+    const registeredPlayerClipIds = new Set(Object.values(archivePlayerDescription?.animations ?? {})
+      .filter((value) => typeof value === 'string' && value.startsWith('animation.')));
+    const archivePlayerClipBones = new Set();
+    for (const entry of resourcePackEntries) {
+      const lowerPath = entry.path.toLowerCase();
+      if (entry.isDirectory || !lowerPath.startsWith('animations/') || !lowerPath.endsWith('.animation.json')) continue;
+      let document;
+      try { document = JSON.parse(new TextDecoder().decode(entry.data)); } catch { continue; }
+      for (const [clipId, clip] of Object.entries(document?.animations ?? {})) {
+        if (!registeredPlayerClipIds.has(clipId)) continue;
+        for (const boneName of Object.keys(clip?.bones ?? {})) archivePlayerClipBones.add(boneName);
+      }
+    }
+    const unresolvedArchivePlayerBones = [...archivePlayerClipBones].filter((bone) => !archivePlayerBones.has(bone));
+    const genericPlayerFallbackPresent = archiveResourceText.has('models/entity/player.geo.json');
+    const archivePlayerGeometryAudit = {
+      entityFound: Boolean(archivePlayerDescription),
+      defaultGeometry: archivePlayerDefaultGeometry,
+      capeGeometry: archivePlayerGeometryMap.cape ?? null,
+      geometryResolves: Boolean(effectivePlayerGeometry),
+      geometryBoneCount: archivePlayerBones.size,
+      registeredClipBoneCount: archivePlayerClipBones.size,
+      unresolvedAnimationBones: unresolvedArchivePlayerBones,
+      genericPlayerFallbackPresent,
+      skinTexture: archivePlayerDescription?.textures?.default ?? null,
+      capeTexture: archivePlayerDescription?.textures?.cape ?? null,
+      passed: Boolean(archivePlayerDescription)
+        && Boolean(effectivePlayerGeometry)
+        && archivePlayerDefaultGeometry === 'geometry.humanoid.custom'
+        && archivePlayerGeometryMap.cape === 'geometry.cape'
+        && unresolvedArchivePlayerBones.length === 0
+        && !genericPlayerFallbackPresent
+        && archivePlayerDescription?.textures?.default === 'textures/entity/steve'
+        && archivePlayerDescription?.textures?.cape === 'textures/entity/cape_invisible',
+    };
     const finalPlayerRaw = fullResult.resourcePackFiles?.['entity/player.entity.json'];
     const finalPlayerDescription = typeof finalPlayerRaw === 'string'
       ? JSON.parse(finalPlayerRaw)?.['minecraft:client_entity']?.description
@@ -452,6 +528,7 @@ try {
       { id: 'full-converter-preserves-vanilla-player-initialize-and-pre-animation-scripts', expected: 'hand_bob + tcos0 + map_angle + item_use_normalized', actual: (finalPlayerDescription?.scripts?.initialize ?? []).length, passed: ['variable.hand_bob = 0.0;', 'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;', 'variable.map_angle = math.clamp(1 - variable.player_x_rotation / 45.1, 0.0, 1.0);', 'variable.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;'].every((statement) => [...(finalPlayerDescription?.scripts?.initialize ?? []), ...(finalPlayerDescription?.scripts?.pre_animation ?? [])].includes(statement)) },
       { id: 'full-converter-does-not-bind-player-to-generic-mob-render-controller', expected: false, actual: finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')), passed: !finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')) },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
+      { id: 'full-converter-final-mcpack-preserves-real-player-skeleton-and-all-player-bone-bindings', expected: 'Mojang humanoid.custom bone names; no generic player mob model', actual: archivePlayerGeometryAudit, passed: archivePlayerGeometryAudit.passed },
     ];
     report.fullConversion = {
       passed: fullAssertions.every((assertion) => assertion.passed),
@@ -466,6 +543,7 @@ try {
       resourcePackFileCount: Object.keys(fullResult.resourcePackFiles ?? {}).length,
       behaviorPackFileCount: Object.keys(fullResult.behaviorPackFiles ?? {}).length,
       mcpackEntries: mcpackEntries.map((entry) => entry.path),
+      archivePlayerGeometryAudit,
       playerWiring: fullResult.playerEntityWiring ?? null,
       playerTriggers: fullResult.playerTriggers ?? null,
       playerAnimationPort: fullResult.playerAnimationPort ?? null,
