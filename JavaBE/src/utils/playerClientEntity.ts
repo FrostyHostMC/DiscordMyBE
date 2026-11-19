@@ -5,7 +5,17 @@ import { translateMolangExpression } from '@/utils/molangCompatibility';
 import {
   VANILLA_PLAYER_ANIMATE as PLAYER_BASELINE_ANIMATE,
   VANILLA_PLAYER_ANIMATIONS as PLAYER_BASELINE_ANIMATIONS,
+  VANILLA_PLAYER_ENABLE_ATTACHABLES,
+  VANILLA_PLAYER_GEOMETRY,
   VANILLA_PLAYER_GEOMETRY_IDS,
+  VANILLA_PLAYER_INITIALIZE,
+  VANILLA_PLAYER_MATERIALS,
+  VANILLA_PLAYER_PRE_ANIMATION,
+  VANILLA_PLAYER_RENDER_CONTROLLERS,
+  VANILLA_PLAYER_SCALE,
+  VANILLA_PLAYER_SHOULD_UPDATE_EFFECTS_OFFSCREEN,
+  VANILLA_PLAYER_TEXTURES,
+  VANILLA_PLAYER_VARIABLES,
 } from '@/utils/vanillaPlayerBaseline';
 import { ARMOR_LAYER_VISIBILITY_MAP } from '@/utils/molangScopeBinder';
 
@@ -138,17 +148,19 @@ export function buildPlayerClientEntity(options: {
     ? existingDescription.textures as Record<string, string>
     : {};
   const existingRenderControllers = Array.isArray(existingDescription.render_controllers)
-    ? existingDescription.render_controllers.filter((entry): entry is string => typeof entry === 'string')
+    ? existingDescription.render_controllers.filter((entry): entry is string | Record<string, string> =>
+        typeof entry === 'string' ||
+        (typeof entry === 'object' && entry !== null && !Array.isArray(entry) &&
+          Object.values(entry as Record<string, unknown>).every((value) => typeof value === 'string')))
     : [];
+  const existingInitialize = Array.isArray(existingScripts.initialize)
+    ? existingScripts.initialize.filter((entry): entry is string => typeof entry === 'string')
+    : typeof existingScripts.initialize === 'string' ? [existingScripts.initialize] : [];
+  const existingVariables = existingScripts.variables && typeof existingScripts.variables === 'object' &&
+      !Array.isArray(existingScripts.variables)
+    ? existingScripts.variables as Record<string, string>
+    : {};
   const controllerDriven = new Set(options.controllerDrivenClipIds ?? []);
-  // A conditionless clip can safely use a perspective-only fallback when it is the
-  // sole conditionless clip in that view. Multiple unknown clips in one view would
-  // fight over the same bones, so those still require recovered state evidence.
-  const conditionlessPerspectiveCounts = new Map<'first' | 'third', number>();
-  for (const trigger of triggers) {
-    if (trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim()) continue;
-    conditionlessPerspectiveCounts.set(trigger.perspective, (conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0) + 1);
-  }
   const controllerDrivenClips: string[] = [];
   const animations: Record<string, string> = { ...existingAnimations, ...VANILLA_PLAYER_ANIMATIONS };
   const animate: Array<string | Record<string, string>> = uniqueEntries([...VANILLA_ANIMATE, ...existingAnimate]);
@@ -159,7 +171,7 @@ export function buildPlayerClientEntity(options: {
   const firstPersonClips: string[] = [];
   const thirdPersonClips: string[] = [];
   const unresolvedClips: string[] = [];
-  const preAnimation: string[] = [...existingPreAnimation];
+  const preAnimation: string[] = uniqueEntries([...VANILLA_PLAYER_PRE_ANIMATION, ...existingPreAnimation]);
   // Every variable is declared through the Molang compatibility analyzer: a query the player
   // client-entity context cannot evaluate (`query.attack_time`) is replaced by a proxy built from
   // queries it CAN evaluate, and each replacement is reported. Deleting the query would satisfy
@@ -268,24 +280,13 @@ export function buildPlayerClientEntity(options: {
     }
     const condition = conditionTranslation?.expression;
     if (!condition || (conditionTranslation?.unresolved.length ?? 0) > 0) {
-      const conditionlessCount = conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0;
-      if (!trigger.condition?.trim() && conditionlessCount === 1) {
-        // Perspective is genuine source evidence even when a Java state predicate was not
-        // recovered. A sole clip in that view cannot compete with another unknown pose, so
-        // play it continuously only in its own camera perspective.
-        animate.push({ [short]: viewGate });
-        activatedClips.push(trigger.clipId);
-        unconditionalClips.push(trigger.clipId);
-        molangRepairs.push(
-          `${trigger.clipId}: activated with a perspective-only fallback (${viewGate}); it is the only conditionless clip assigned to this view. The source-state trigger remains unresolved.`,
-        );
-        continue;
-      }
-      // Multiple conditionless clips in one view would fight over the same bones. Keep them
-      // registered, but require recovered source-state evidence or a controller before starting.
+      // Do not run an unknown state continuously: that makes every idle/attack/emote clip
+      // fight over the same player bones and can erase the entire pose. Keep the animation
+      // registered in the entity map and report it as awaiting a recovered source-state trigger.
+      // The controller owns all clips for which a valid trigger or structural inference exists.
       if (!unresolvedClips.includes(trigger.clipId)) unresolvedClips.push(trigger.clipId);
       const reason = conditionTranslation?.unresolved.map((entry) => entry.reason).join('; ') || 'no translated source-state condition was available';
-      molangRepairs.push(`${trigger.clipId}: REGISTERED BUT NOT AUTO-PLAYED — no safe activation condition; continuous playback was withheld to prevent pose conflicts. ${reason}`);
+      molangRepairs.push(`${trigger.clipId}: REGISTERED BUT NOT AUTO-PLAYED — no safe activation condition; continuous playback was deliberately withheld to prevent pose conflicts. ${reason}`);
       continue;
     }
     animate.push({
@@ -329,8 +330,8 @@ export function buildPlayerClientEntity(options: {
         description: {
           ...existingDescription,
           identifier: 'minecraft:player',
-          materials: { default: 'entity_alphatest', cape: 'entity_alphatest', ...existingMaterials },
-          textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible', ...existingTextures },
+          materials: { ...VANILLA_PLAYER_MATERIALS, ...existingMaterials },
+          textures: { ...VANILLA_PLAYER_TEXTURES, ...existingTextures },
           // A source mod's geometry file is not automatically a valid player skin rig.
           // In the fixture, the imported geometry used snake_case limb names while the converted
           // clips targeted Bedrock's camelCase player bones, so every limb track missed. Only keep
@@ -345,21 +346,23 @@ export function buildPlayerClientEntity(options: {
               : existingGeometry.default && VANILLA_PLAYER_GEOMETRY_IDS.has(existingGeometry.default)
                 ? existingGeometry.default
                 : 'geometry.humanoid.custom',
-            cape: existingGeometry.cape === 'geometry.cape' ? existingGeometry.cape : 'geometry.cape',
+            cape: VANILLA_PLAYER_GEOMETRY.cape,
           },
           scripts: {
             ...existingScripts,
-            scale: existingScripts.scale ?? '0.9375',
+            scale: existingScripts.scale ?? VANILLA_PLAYER_SCALE,
+            initialize: uniqueEntries([...VANILLA_PLAYER_INITIALIZE, ...existingInitialize]),
             pre_animation: uniqueEntries(preAnimation),
             animate: uniqueEntries(animate),
+            variables: { ...VANILLA_PLAYER_VARIABLES, ...existingVariables },
+            should_update_effects_offscreen: existingScripts.should_update_effects_offscreen ?? VANILLA_PLAYER_SHOULD_UPDATE_EFFECTS_OFFSCREEN,
           },
           animations,
           render_controllers: uniqueEntries([
-            'controller.render.player.first_person',
-            'controller.render.player.third_person',
-            'controller.render.player.cape',
+            ...VANILLA_PLAYER_RENDER_CONTROLLERS,
             ...existingRenderControllers,
           ]),
+          enable_attachables: existingDescription.enable_attachables ?? VANILLA_PLAYER_ENABLE_ATTACHABLES,
         },
       },
     },
