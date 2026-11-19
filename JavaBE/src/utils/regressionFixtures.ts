@@ -316,7 +316,7 @@ export const REGRESSION_FIXTURES: RegressionFixture[] = [{
     textures: {
       all: 'regress:block/gem_lamp_on'
     }
-  }), fixturePng('assets/regress/textures/block/gem_lamp_on.png', 16, 16, '#facc15'), fixturePng('assets/regress/textures/block/gem_lamp_off.png', 16, 16, '#fde68a')],
+  }), fixturePng('assets/regress/textures/block/gem_lamp.png', 16, 16, '#facc15'), fixturePng('assets/regress/textures/block/gem_lamp_on.png', 16, 16, '#facc15'), fixturePng('assets/regress/textures/block/gem_lamp_off.png', 16, 16, '#fde68a')],
   expect: {
     textures: [{
       tail: 'block/gem_lamp',

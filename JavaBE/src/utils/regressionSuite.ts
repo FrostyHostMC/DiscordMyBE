@@ -13,7 +13,7 @@ import { detectBlockInteraction, detectCooldownTicks, detectEffectLogic, detectE
 import { resolveEquipmentAttachments } from '@/utils/equipmentAttachments';
 import { runAssetValidationPipeline } from '@/utils/assetValidationPipeline';
 import type { Pack } from '@/utils/validationRules';
-import { REGRESSION_FIXTURES, type RegressionFixture } from '@/utils/regressionFixtures';
+import { REGRESSION_FIXTURES, fixturePng, type RegressionFixture } from '@/utils/regressionFixtures';
 import { compareGeometryUv, translateFaceUv, verifySheetCoverage } from '@/utils/uvMapping';
 import { findDuplicateIdentifierGroups, normalizeAssetIdentifier, normalizeAssetPath } from '@/utils/identifierNormalization';
 import { countSchemaErrors, runBedrockSchemaGate } from '@/utils/bedrockSchemaGate';
