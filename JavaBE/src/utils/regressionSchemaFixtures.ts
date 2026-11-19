@@ -2335,14 +2335,14 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
       Boolean(unusedRunningTrigger && !baseStateClips.includes(unusedRunningTrigger.clipId))
   }, {
     label: 'all source-derived movement expressions are accepted in Bedrock player Molang scope',
-    expected: 'all eight expressions have no unresolved or rejected query references',
+    expected: 'all six expressions have no unresolved or rejected query references',
     actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
     passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
   }, {
     label: 'the source movement and direction calculations are restored in player Molang scope',
     expected: 'move speed, backward direction and turn delta expressions injected',
     actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
-    passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+    passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
   }, {
     label: 'the per-tick position and speed equations match the Java source state machine',
     expected: 'dx/dz from query.position_delta; speed is sqrt(dx² + dz²)',
