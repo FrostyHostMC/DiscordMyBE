@@ -35,7 +35,7 @@ try {
   const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
   const { bindMobParity } = await server.ssrLoadModule('/src/utils/mobParityBinder.ts');
   const { buildAnimationResourceRegistry } = await server.ssrLoadModule('/src/utils/animationResourceRegistry.ts');
-  const { VANILLA_PLAYER_ANIMATIONS, VANILLA_PLAYER_RENDER_CONTROLLERS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } = await server.ssrLoadModule('/src/utils/vanillaPlayerBaseline.ts');
+  const { VANILLA_PLAYER_ANIMATIONS, VANILLA_PLAYER_RENDER_CONTROLLERS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS, VANILLA_PLAYER_INITIALIZE, VANILLA_PLAYER_PRE_ANIMATION, VANILLA_PLAYER_VARIABLES } = await server.ssrLoadModule('/src/utils/vanillaPlayerBaseline.ts');
   const { VANILLA_PLAYER_GEOMETRY_JSON } = await server.ssrLoadModule('/src/utils/vanillaPlayerGeometry.ts');
 
 
@@ -319,7 +319,7 @@ try {
   const initialize = Array.isArray(initializeRaw) ? initializeRaw : typeof initializeRaw === 'string' ? [initializeRaw] : [];
   const tcos0 = assignments.find((line) => /^variable\.tcos0\s*=/.test(line));
   const spear = assignments.find((line) => /^variable\.melee_spear_equipped\s*=/.test(line));
-  const sourceMovementVariables = ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'];
+  const sourceMovementVariables = ['spa_move_speed', 'spa_turn_delta', 'spa_previous_body_yaw'];
   const controllerFiles = Object.entries(result.resourcePackFiles)
     .filter(([file, raw]) => typeof raw === 'string' && /^animation_controllers\/pierced_fixture(?:_overlay)?\.player\.animation_controllers\.json$/i.test(file))
     .map(([file, raw]) => ({ file, doc: JSON.parse(raw) }));
@@ -331,6 +331,10 @@ try {
   }));
   const baseControllerClips = controllerStateClips.find((entry) => !entry.file.includes('_overlay'))?.clips ?? [];
   const overlayControllerClips = controllerStateClips.find((entry) => entry.file.includes('_overlay'))?.clips ?? [];
+  const invalidPlayerPositionQueries = Object.entries(result.resourcePackFiles)
+    .filter(([file]) => /player\.entity\.json$/i.test(file))
+    .filter(([, raw]) => typeof raw === 'string')
+    .flatMap(([file, raw]) => [...raw.matchAll(/query\.position\s*\(/g)].map((match) => ({ file, call: match[0] })));
   const invalidArmorQueries = Object.entries(result.resourcePackFiles)
     .filter(([, raw]) => typeof raw === 'string')
     .flatMap(([file, raw]) => [...raw.matchAll(/query\.get_equipped_item_name\(\s*['"]slot\.armor[^)]*\)/gi)].map((match) => ({ file, call: match[0] })));
@@ -350,18 +354,21 @@ try {
     { id: 'player-trigger-bridge-inspected-every-source-clip', expected: sourceClipIds.length, actual: triggers?.clipsInspected ?? 0, passed: Boolean(triggers && triggers.clipsInspected === sourceClipIds.length) },
     { id: 'all-java-loaded-clips-registered-on-player', expected: expectedPlayerClipIds.length, actual: wiring?.clipsRegistered ?? 0, passed: Boolean(wiring && wiring.clipsRegistered === expectedPlayerClipIds.length) },
     { id: 'verified-serious-player-animations-source-profile-recognized', expected: 'Serious Player Animations 1.1.1', actual: triggers?.sourceProfile ?? 'missing', passed: triggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
-    { id: 'six-source-locomotion-clips-mapped', expected: 6, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 6 },
+    { id: 'five-safe-source-locomotion-clips-mapped-and-backward-explicitly-withheld', expected: 5, actual: triggers?.mapped ?? -1, passed: triggers?.mapped === 5 && triggers?.triggers?.some((trigger) => trigger.sourceClipId === 'walking_backwards' && trigger.status === 'unresolved' && !trigger.condition) },
+    { id: 'deliberately-inactive-player-clip-is-not-in-animate-fallback', expected: 0, actual: (playerDescription?.scripts?.animate ?? []).filter((entry) => typeof entry === 'object' && Object.keys(entry).some((key) => key.includes('walking_backwards'))).length, passed: !(playerDescription?.scripts?.animate ?? []).some((entry) => typeof entry === 'object' && Object.keys(entry).some((key) => key.includes('walking_backwards'))) },
     { id: 'two-shield-overlays-preserved-as-approximations', expected: 2, actual: triggers?.approximated ?? -1, passed: triggers?.approximated === 2 },
     { id: 'unused-animation.running-source-definition-remains-unbound', expected: 'source animation.running unresolved', actual: unresolvedTrigger?.status ?? 'missing', passed: sourceRunningDefinition && unresolvedTrigger?.status === 'unresolved' && Boolean(wiring?.unresolvedClips?.includes(unresolvedTrigger.clipId)) },
     { id: 'java-running-resource-key-activates-the-correct-source-clip', expected: 'source key running mapped and controller-driven', actual: javaRunningTrigger?.clipId ?? 'missing', passed: javaRunningTrigger?.status === 'mapped' && Boolean(wiring?.controllerDrivenClips?.includes(javaRunningTrigger.clipId)) },
-    { id: 'eight-source-used-clips-have-activation-paths', expected: 8, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 8 && wiring.controllerDrivenClips?.length === 8) },
-    { id: 'base-and-overlay-player-controllers-are-separated', expected: '2 controller files; shield only in overlay', actual: `${controllerFiles.length} file(s), base=${baseControllerClips.length}, overlay=${overlayControllerClips.length}`, passed: controllerFiles.length === 2 && baseControllerClips.length === 6 && overlayControllerClips.length === 2 && overlayControllerClips.every((id) => id.includes('shield')) && !baseControllerClips.some((id) => id.includes('shield')) },
-    { id: 'source movement state variables are reconstructed in player scope', expected: sourceMovementVariables.join(', '), actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).join(', '), passed: sourceMovementVariables.every((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))) && ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((line) => line.startsWith('variable.' + name + ' = 0.0'))) },
+    { id: 'seven-safe-source-used-clips-have-activation-paths', expected: 7, actual: wiring?.clipsActivated ?? -1, passed: Boolean(wiring && wiring.clipsActivated === 7 && wiring.controllerDrivenClips?.length === 7) },
+    { id: 'unresolved-backward-clip-is-never-added-to-perspective-only-animate-fallback', expected: false, actual: Boolean(wiring?.unconditionalClips?.includes('animation.player.player.walking_backwards')), passed: !wiring?.unconditionalClips?.includes('animation.player.player.walking_backwards') && !playerDescription?.scripts?.animate?.some((entry) => typeof entry === 'object' && Object.keys(entry).some((key) => key.includes('walking_backwards'))) },
+    { id: 'base-and-overlay-player-controllers-are-separated', expected: '2 controller files; shield only in overlay', actual: `${controllerFiles.length} file(s), base=${baseControllerClips.length}, overlay=${overlayControllerClips.length}`, passed: controllerFiles.length === 2 && baseControllerClips.length === 5 && overlayControllerClips.length === 2 && overlayControllerClips.every((id) => id.includes('shield')) && !baseControllerClips.some((id) => id.includes('shield')) },
+    { id: 'source movement state variables are reconstructed in player scope', expected: sourceMovementVariables.join(', '), actual: sourceMovementVariables.filter((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))).join(', '), passed: sourceMovementVariables.every((name) => assignments.some((line) => line.startsWith(`variable.${name} =`))) && ['spa_previous_body_yaw'].every((name) => initialize.some((line) => line.startsWith('variable.' + name + ' = 0.0'))) },
     { id: 'all-nine-source-clip-definitions-emitted', expected: 'at least 9', actual: emittedClipIds.length, passed: emittedClipIds.length >= sourceClipIds.length },
     { id: 'no-duplicate-animation-identifiers', expected: 0, actual: duplicateDefinitions.length, passed: duplicateDefinitions.length === 0 },
     { id: 'vanilla-tcos0-variable-restored-from-source-baseline', expected: 'live Mojang movement expression', actual: tcos0 ?? 'missing', passed: Boolean(tcos0 && tcos0.includes('query.modified_distance_moved') && tcos0.includes('query.modified_move_speed')) },
     { id: 'spear-equipment-variable-uses-vanilla-item-tag', expected: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')", actual: spear ?? 'missing', passed: Boolean(spear && spear.includes("query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')")) },
     { id: 'no-invalid-armor-slot-hand-query-emitted', expected: 0, actual: invalidArmorQueries.length, passed: invalidArmorQueries.length === 0 },
+    { id: 'player-animation-scope-uses-position-delta-not-absolute-position-query', expected: 0, actual: invalidPlayerPositionQueries.length, passed: invalidPlayerPositionQueries.length === 0 },
     { id: 'vanilla-player-root-controller-wired', expected: 'root', actual: playerDescription?.scripts?.animate ?? [], passed: Array.isArray(playerDescription?.scripts?.animate) && playerDescription.scripts.animate.includes('root') },
     { id: 'player-variable-dependency-audit-has-no-unresolved-variables', expected: 0, actual: playerDependencies?.variables?.unresolved?.length ?? -1, passed: Boolean(playerDependencies && playerDependencies.variables.unresolved.length === 0) },
     { id: 'player-static-dependency-validation-passes', expected: true, actual: playerDependencies?.staticValidationPassed ?? false, passed: playerDependencies?.staticValidationPassed === true },
@@ -471,6 +478,8 @@ try {
     const registeredPlayerClipIds = new Set(Object.values(archivePlayerDescription?.animations ?? {})
       .filter((value) => typeof value === 'string' && value.startsWith('animation.')));
     const archivePlayerClipBones = new Set();
+    const archivePlayerClipOverrides = [];
+    const archivePlayerAnimationClips = new Map();
     for (const entry of resourcePackEntries) {
       const lowerPath = entry.path.toLowerCase();
       if (entry.isDirectory || !lowerPath.startsWith('animations/') || !lowerPath.endsWith('.animation.json')) continue;
@@ -478,11 +487,34 @@ try {
       try { document = JSON.parse(new TextDecoder().decode(entry.data)); } catch { continue; }
       for (const [clipId, clip] of Object.entries(document?.animations ?? {})) {
         if (!registeredPlayerClipIds.has(clipId)) continue;
+        archivePlayerAnimationClips.set(clipId, clip);
         for (const boneName of Object.keys(clip?.bones ?? {})) archivePlayerClipBones.add(boneName);
+        archivePlayerClipOverrides.push({ clipId, override: clip?.override_previous_animation === true });
       }
     }
     const unresolvedArchivePlayerBones = [...archivePlayerClipBones].filter((bone) => !archivePlayerBones.has(bone));
+    const idleStandingClip = archivePlayerAnimationClips.get('animation.player.player.idle_standing');
+    const walkingClip = archivePlayerAnimationClips.get('animation.player.player.walking');
+    const sourceRootSeparated = Boolean(
+      idleStandingClip?.bones?.root?.position &&
+      idleStandingClip?.bones?.body?.rotation &&
+      idleStandingClip?.bones?.body?.position === undefined &&
+      walkingClip?.bones?.root?.position &&
+      walkingClip?.bones?.body?.rotation &&
+      walkingClip?.bones?.body?.position === undefined &&
+      idleStandingClip?.bones?.root?.rotation === undefined &&
+      walkingClip?.bones?.root?.rotation === undefined,
+    );
     const genericPlayerFallbackPresent = archiveResourceText.has('models/entity/player.geo.json');
+    const playerFallbackAssignments = [
+      'is_holding_left', 'is_brandishing_spear', 'damage_nearby_mobs', 'swim_amount', 'use_item_interval_progress',
+    ];
+    const finalPreAnimation = Array.isArray(archivePlayerDescription?.scripts?.pre_animation)
+      ? archivePlayerDescription.scripts.pre_animation
+      : [];
+    const missingPlayerFallbackAssignments = playerFallbackAssignments.filter((name) =>
+      !finalPreAnimation.some((statement) => typeof statement === 'string' && statement.startsWith(`variable.${name} =`)),
+    );
     const archivePlayerGeometryAudit = {
       entityFound: Boolean(archivePlayerDescription),
       defaultGeometry: archivePlayerDefaultGeometry,
@@ -528,21 +560,30 @@ try {
       { id: 'full-converter-emits-behavior-pack-manifest', expected: true, actual: Boolean(behaviorManifest), passed: Boolean(behaviorManifest) },
       { id: 'full-converter-preserves-serious-player-source-profile', expected: 'Serious Player Animations 1.1.1', actual: fullResult.playerTriggers?.sourceProfile ?? 'missing', passed: fullResult.playerTriggers?.sourceProfile === 'Serious Player Animations 1.1.1' },
       { id: 'full-converter-registers-all-nine-supplied-player-clips', expected: 9, actual: fullResult.playerEntityWiring?.clipsRegistered ?? -1, passed: fullResult.playerEntityWiring?.clipsRegistered === 9 },
-      { id: 'full-converter-activates-eight-java-used-player-clips', expected: 8, actual: fullResult.playerEntityWiring?.clipsActivated ?? -1, passed: fullResult.playerEntityWiring?.clipsActivated === 8 },
-      { id: 'full-converter-classifies-the-unused-source-definition', expected: 1, actual: deliberatelyInactive.length, passed: deliberatelyInactive.length === 1 },
+      { id: 'full-converter-activates-seven-safe-java-used-player-clips', expected: 7, actual: fullResult.playerEntityWiring?.clipsActivated ?? -1, passed: fullResult.playerEntityWiring?.clipsActivated === 7 },
+      { id: 'full-converter-classifies-unused-and-unsupported-trigger-clips-as-intentionally-inactive', expected: 2, actual: deliberatelyInactive, passed: deliberatelyInactive.length === 2 && deliberatelyInactive.some((id) => id.includes('running')) && deliberatelyInactive.some((id) => id.includes('walking_backwards')) },
       { id: 'full-converter-player-variable-audit-is-clean', expected: 0, actual: unresolvedPlayerVariables.length, passed: unresolvedPlayerVariables.length === 0 },
+      { id: 'full-converter-reconstructs-player-controller-variables-missing-on-older-runtime', expected: 0, actual: missingPlayerFallbackAssignments.length, passed: missingPlayerFallbackAssignments.length === 0 },
+      { id: 'full-converter-player-animations-reset-vanilla-bone-poses-before-playing', expected: 'all registered player clips override previous animation', actual: archivePlayerClipOverrides.filter((entry) => !entry.override).map((entry) => entry.clipId), passed: archivePlayerClipOverrides.length > 0 && archivePlayerClipOverrides.every((entry) => entry.override) },
+      { id: 'full-converter-keeps-serious-player-root-translation-separate-from-torso-pose', expected: 'root.position and body.rotation are separate; body.position is absent', actual: sourceRootSeparated, passed: sourceRootSeparated },
       { id: 'full-converter-player-baseline-and-first-person-contract-pass', expected: true, actual: playerDependencyClean, passed: playerDependencyClean },
       { id: 'full-converter-animation-integration-audit-passes', expected: true, actual: fullResult.animationIntegration?.passed ?? false, passed: fullResult.animationIntegration?.passed === true },
       { id: 'full-converter-fidelity-matches-all-nine-source-definitions', expected: { shipped: 9, missing: 0 }, actual: { shipped: fullResult.animationFidelity?.clipsShipped ?? -1, missing: fullResult.animationFidelity?.clipsMissing ?? -1 }, passed: fullResult.animationFidelity?.clipsShipped === 9 && fullResult.animationFidelity?.clipsMissing === 0 },
       { id: 'full-converter-runtime-structure-audit-passes', expected: true, actual: fullResult.animationRuntime?.passed ?? false, passed: fullResult.animationRuntime?.passed === true },
-      { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 46 && fullResult.animationFidelity?.sourceBoneTracksRetained === 46 && fullResult.animationFidelity?.sourceBoneTracksInactive === 81 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
+      { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 39, retained: 39, inactive: 88, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 39 && fullResult.animationFidelity?.sourceBoneTracksRetained === 39 && fullResult.animationFidelity?.sourceBoneTracksInactive === 88 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
+      { id: 'full-converter-player-pre-animation-contains-no-standalone-conditional-block-braces', expected: 0, actual: (finalPlayerDescription?.scripts?.pre_animation ?? []).filter((statement) => /^\\s*[{};]+\\s*$/.test(statement)).length, passed: !(finalPlayerDescription?.scripts?.pre_animation ?? []).some((statement) => /^\\s*[{};]+\\s*$/.test(statement)) },
+      { id: 'full-converter-player-pre-animation-has-no-unbalanced-braces', expected: 0, actual: (finalPlayerDescription?.scripts?.pre_animation ?? []).filter((statement) => (statement.match(/{/g) ?? []).length !== (statement.match(/}/g) ?? []).length).length, passed: (finalPlayerDescription?.scripts?.pre_animation ?? []).every((statement) => (statement.match(/{/g) ?? []).length === (statement.match(/}/g) ?? []).length) },
+      { id: 'full-converter-does-not-activate-missing-legacy-base-controller', expected: false, actual: (finalPlayerDescription?.scripts?.animate ?? []).includes('base_controller'), passed: !(finalPlayerDescription?.scripts?.animate ?? []).includes('base_controller') },
+      { id: 'full-converter-player-molang-has-no-unsupported-query-references', expected: 0, actual: fullResult.animationRuntime?.molang?.unresolved?.length ?? -1, passed: fullResult.animationRuntime?.molang?.unresolved?.length === 0 },
       { id: 'full-converter-player-keeps-vanilla-geometry-after-final-entity-binding', expected: 'geometry.humanoid.custom', actual: finalPlayerDescription?.geometry?.default ?? 'missing', passed: finalPlayerDescription?.geometry?.default === 'geometry.humanoid.custom' },
       { id: 'full-converter-player-cape-keeps-vanilla-cape-geometry', expected: 'geometry.cape', actual: finalPlayerDescription?.geometry?.cape ?? 'missing', passed: finalPlayerDescription?.geometry?.cape === 'geometry.cape' },
       { id: 'full-converter-preserves-all-mojang-player-animation-aliases', expected: Object.keys(VANILLA_PLAYER_ANIMATIONS).length, actual: missingVanillaPlayerAliases.length, passed: missingVanillaPlayerAliases.length === 0 },
       { id: 'full-converter-preserves-all-five-conditional-vanilla-player-render-controllers', expected: 5, actual: finalPlayerRenderControllerIds.filter((id) => VANILLA_PLAYER_RENDER_CONTROLLER_IDS.has(id)).length, passed: missingVanillaPlayerRenderControllers.length === 0 },
       { id: 'full-converter-does-not-invent-a-cape-render-controller', expected: false, actual: finalPlayerRenderControllerIds.includes('controller.render.player.cape'), passed: !finalPlayerRenderControllerIds.includes('controller.render.player.cape') },
       { id: 'full-converter-preserves-vanilla-player-material-layers-and-attachables', expected: 'animated + spectator materials; attachables enabled', actual: `${String(finalPlayerDescription?.materials?.animated ?? 'missing')} / ${String(finalPlayerDescription?.materials?.spectator ?? 'missing')} / ${String(finalPlayerDescription?.enable_attachables)}`, passed: finalPlayerDescription?.materials?.animated === 'player_animated' && finalPlayerDescription?.materials?.spectator === 'player_spectator' && finalPlayerDescription?.enable_attachables === true },
-      { id: 'full-converter-preserves-vanilla-player-initialize-and-pre-animation-scripts', expected: 'hand_bob + tcos0 + map_angle + item_use_normalized', actual: (finalPlayerDescription?.scripts?.initialize ?? []).length, passed: ['variable.hand_bob = 0.0;', 'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;', 'variable.map_angle = math.clamp(1 - variable.player_x_rotation / 45.1, 0.0, 1.0);', 'variable.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;'].every((statement) => [...(finalPlayerDescription?.scripts?.initialize ?? []), ...(finalPlayerDescription?.scripts?.pre_animation ?? [])].includes(statement)) },
+      { id: 'full-converter-preserves-complete-mojang-player-initialize-and-pre-animation-baseline', expected: { initialize: VANILLA_PLAYER_INITIALIZE.length, preAnimation: VANILLA_PLAYER_PRE_ANIMATION.length }, actual: { initialize: finalPlayerDescription?.scripts?.initialize?.length ?? 0, preAnimation: finalPlayerDescription?.scripts?.pre_animation?.length ?? 0 }, passed: VANILLA_PLAYER_INITIALIZE.every((statement) => (finalPlayerDescription?.scripts?.initialize ?? []).includes(statement)) && VANILLA_PLAYER_PRE_ANIMATION.every((statement) => (finalPlayerDescription?.scripts?.pre_animation ?? []).includes(statement)) },
+      { id: 'full-converter-declares-public-vanilla-player-variables', expected: Object.keys(VANILLA_PLAYER_VARIABLES).length, actual: Object.keys(finalPlayerDescription?.scripts?.variables ?? {}).length, passed: Object.entries(VANILLA_PLAYER_VARIABLES).every(([name, scope]) => finalPlayerDescription?.scripts?.variables?.[name] === scope) },
+      { id: 'full-converter-restores-spear-arm-rotation-variable-expressions', expected: ['tp_melee_spear_base_arm_rotation_x', 'tp_melee_spear_use_arm_rotation_x', 'tp_melee_spear_use_arm_rotation_y', 'tp_melee_spear_use_arm_rotation_z', 'tp_melee_spear_use_item_rotation_x'], actual: VANILLA_PLAYER_PRE_ANIMATION.filter((statement) => /tp_melee_spear_(?:base_arm_rotation_x|use_arm_rotation_[xyz]|use_item_rotation_x)/.test(statement)).length, passed: ['tp_melee_spear_base_arm_rotation_x', 'tp_melee_spear_use_arm_rotation_x', 'tp_melee_spear_use_arm_rotation_y', 'tp_melee_spear_use_arm_rotation_z', 'tp_melee_spear_use_item_rotation_x'].every((name) => VANILLA_PLAYER_PRE_ANIMATION.some((statement) => statement.includes(name))) },
       { id: 'full-converter-does-not-bind-player-to-generic-mob-render-controller', expected: false, actual: finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')), passed: !finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')) },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
       { id: 'full-converter-final-mcpack-preserves-real-player-skeleton-and-all-player-bone-bindings', expected: 'Mojang humanoid.custom bone names; no generic player mob model', actual: archivePlayerGeometryAudit, passed: archivePlayerGeometryAudit.passed },
@@ -561,6 +602,9 @@ try {
       behaviorPackFileCount: Object.keys(fullResult.behaviorPackFiles ?? {}).length,
       mcpackEntries: mcpackEntries.map((entry) => entry.path),
       archivePlayerGeometryAudit,
+      archivePlayerClipOverrides,
+      sourceRootSeparated,
+      missingPlayerFallbackAssignments,
       playerWiring: fullResult.playerEntityWiring ?? null,
       playerTriggers: fullResult.playerTriggers ?? null,
       playerAnimationPort: fullResult.playerAnimationPort ?? null,

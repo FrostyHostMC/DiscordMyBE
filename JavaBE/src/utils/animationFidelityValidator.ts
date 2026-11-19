@@ -338,6 +338,7 @@ function compareBedrockClips(
 function compareClip(
   source: IRAnimationClip,
   shipped: ShippedClip | undefined,
+  sourceBoneToPlayerBone: Record<string, string> = {},
 ): { channelsCompared: number; channelsLost: string[]; bonesLost: string[]; maxDrift: number; keyframesShipped: number; bonesShipped: number } {
   const result = {
     channelsCompared: 0,
@@ -366,8 +367,9 @@ function compareClip(
   // resolves the source bone before a track is reported as lost.
   const shippedIndex = buildBoneIndex(Object.keys(shipped.bones));
   for (const bone of Object.values(source.bones)) {
-    const resolvedBone = matchBoneName(bone.boneName, shippedIndex).bone;
-    const track = shipped.bones[bone.boneName] ?? (resolvedBone ? shipped.bones[resolvedBone] : undefined);
+    const explicitTarget = sourceBoneToPlayerBone[bone.boneName];
+    const resolvedBone = explicitTarget ?? matchBoneName(bone.boneName, shippedIndex).bone;
+    const track = (resolvedBone ? shipped.bones[resolvedBone] : undefined) ?? shipped.bones[bone.boneName];
     if (!track) {
       result.bonesLost.push(bone.boneName);
       continue;
@@ -555,7 +557,7 @@ export function validateAnimationFidelity(input: {
         severity: 'info',
         rule: 'source-clip-deliberately-inactive',
         subject: clip.id,
-        detail: 'The source Java state machine does not load this definition. It is retained in the exported pack but excluded from player-pose fidelity scoring and automatic activation.',
+        detail: 'The clip is retained but deliberately withheld: either the source Java state machine does not load the definition or no safe destination trigger can be reconstructed. It is excluded from automatic activation and playable-clip fidelity scoring.',
       });
       continue;
     }
@@ -563,7 +565,7 @@ export function validateAnimationFidelity(input: {
     const preRetargetClip = preRetargetRaw ? asShippedClip(clip.id, preRetargetRaw) : undefined;
     const expectedRetargetedRaw = input.expectedRetargetedPlayerClips?.[shippedClipId];
     const expectedRetargetedClip = expectedRetargetedRaw ? asShippedClip(shippedClipId, expectedRetargetedRaw) : undefined;
-    const sourceComparison = compareClip(clip, preRetargetClip ?? shippedClip);
+    const sourceComparison = compareClip(clip, preRetargetClip ?? shippedClip, input.sourceBoneToPlayerBone ?? {});
     const exportComparison = expectedRetargetedClip && shippedClip ? compareBedrockClips(expectedRetargetedClip, shippedClip) : null;
     const comparison = {
       channelsCompared: sourceComparison.channelsCompared,

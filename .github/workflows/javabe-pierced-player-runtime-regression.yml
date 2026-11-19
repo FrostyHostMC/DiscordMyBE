@@ -1,0 +1,43 @@
+name: JavaBE Pierced player runtime regression
+on:
+  push:
+    branches:
+      - javabe/pierced-player-runtime-errors
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pierced-runtime-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: JavaBE
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.10.0
+      - name: Install JavaBE dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Fetch pinned Serious Player Animations source evidence
+        run: |
+          curl --fail --location --silent --show-error \
+            https://raw.githubusercontent.com/McVader34/Serious-Player-Animations/2dc73ceb744a4fb861437b51f1fe6c95ca4ac902/fabric/src/main/java/net/mcvader/seriousplayeranimations/mixin/SeriousPlayerAnimationsMixin.java \
+            --output /tmp/SeriousPlayerAnimationsMixin.java
+      - name: Run source-to-addon and full-converter regression
+        env:
+          SERIOUS_PLAYER_ANIMATIONS_SOURCE: /tmp/SeriousPlayerAnimationsMixin.java
+        run: node scripts/run-pierced-animation-regression.mjs
+      - name: Upload regenerated addon and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: javabe-pierced-player-runtime-fixed
+          path: |
+            fixture-analysis/SeriousPlayerAnimations-1.1.1.mcaddon
+            fixture-analysis/pierced-current-engine.json
+          if-no-files-found: warn
+          retention-days: 14

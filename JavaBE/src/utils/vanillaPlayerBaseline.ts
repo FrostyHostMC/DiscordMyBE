@@ -1,6 +1,6 @@
 /**
  * Bedrock player baseline copied from Mojang/bedrock-samples
- * resource_pack/entity/player.entity.json (main, blob c5d368d1f32cce943ef4473fb1e75594c8bee222).
+ * resource_pack/entity/player.entity.json (preview; fetched from Mojang/bedrock-samples).
  *
  * A resource pack that ships entity/player.entity.json replaces the engine file.
  * Preserve its complete animation alias map, render-controller gates, materials,
@@ -32,23 +32,80 @@ export const VANILLA_PLAYER_GEOMETRY: Record<string, string> = {
   "cape": "geometry.cape"
 };
 export const VANILLA_PLAYER_INITIALIZE: string[] = [
-  "variable.is_holding_right = 0.0;",
-  "variable.is_blinking = 0.0;",
-  "variable.last_blink_time = 0.0;",
-  "variable.hand_bob = 0.0;"
+  "v.is_holding_right = 0.0;",
+  "v.is_blinking = 0.0;",
+  "v.last_blink_time = 0.0;",
+  "v.hand_bob = 0.0;",
+  "v.melee_spear_java_to_bedrock_scale = 40.0;"
 ];
+// The current stable target lacks the newer kinetic-weapon Molang queries. Keep the Mojang spear pose graph live using documented item-use/attack timing fallbacks instead of shipping unsupported query calls.
 export const VANILLA_PLAYER_PRE_ANIMATION: string[] = [
-  "variable.helmet_layer_visible = !query.has_head_gear;",
-  "variable.leg_layer_visible = 1.0;",
-  "variable.boot_layer_visible = 1.0;",
-  "variable.chest_layer_visible = 1.0;",
-  "variable.attack_body_rot_y = Math.sin(360*Math.sqrt(variable.attack_time)) * 5.0;",
-  "variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;",
-  "variable.first_person_rotation_factor = math.sin((1 - variable.attack_time) * 180.0);",
-  "variable.hand_bob = query.life_time < 0.01 ? 0.0 : variable.hand_bob + ((query.is_on_ground && query.is_alive ? math.clamp(math.sqrt(math.pow(query.position_delta(0), 2.0) + math.pow(query.position_delta(2), 2.0)), 0.0, 0.1) : 0.0) - variable.hand_bob) * 0.02;",
-  "variable.map_angle = math.clamp(1 - variable.player_x_rotation / 45.1, 0.0, 1.0);",
-  "variable.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;",
-  "variable.riding_y_offset = query.is_riding_any_entity_of_type('minecraft:minecart', 'minecraft:boat', 'minecraft:chest_boat', 'minecraft:strider') ? -3.0 : 0.0;"
+  "v.helmet_layer_visible = !query.has_head_gear;",
+  "v.leg_layer_visible = 1.0;",
+  "v.boot_layer_visible = 1.0;",
+  "v.chest_layer_visible = 1.0;",
+  "v.attack_body_rot_y = Math.sin(360 * Math.sqrt(v.attack_time)) * 10.0;",
+  "v.tcos0 = math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / v.gliding_speed_value * 57.3;",
+  "v.first_person_item_rotation_factor = math.sin((1 - v.attack_time) * 180.0);",
+  "v.hand_bob = query.life_time < 0.01 ? 0.0 : v.hand_bob + ((query.is_on_ground && query.is_alive ? math.clamp(query.modified_move_speed, 0.0, 0.1) : 0.0) - v.hand_bob) * 0.02;",
+  "v.mainhand_map_or_photo = q.get_equipped_item_name('main_hand') == 'filled_map' || q.get_equipped_item_name('main_hand') == 'photo_item';",
+  "v.offhand_map_or_photo = q.get_equipped_item_name('off_hand') == 'filled_map' || q.get_equipped_item_name('off_hand') == 'photo_item';",
+  "v.two_handed_map = v.mainhand_map_or_photo && q.get_equipped_item_name('off_hand') == '';",
+  "v.map_angle = math.clamp(1 - v.player_x_rotation / 45.1, 0.0, 1.0);",
+  "v.item_use_duration = query.main_hand_item_use_duration > 0.0 ? (query.main_hand_item_max_duration - (query.main_hand_item_use_duration - query.frame_alpha + 1.0)) : 0.0;",
+  "v.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;",
+  "v.riding_y_offset = query.is_riding_any_entity_of_type('minecraft:minecart', 'minecraft:boat', 'minecraft:chest_boat', 'minecraft:strider') ? -3.0 : 0.0;",
+  "v.melee_spear_equipped = query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear');",
+  "v.tp_melee_spear_base_arm_rotation_x = (query.is_swimming || query.is_gliding) ? (-115.0 - query.target_x_rotation) : (query.is_crawling ? -115.0 : -30.0);",
+  "t.melee_spear_use_finish_raise_tick = v.melee_spear_equipped ? (20.0) : 0.0;",
+  "t.melee_spear_use_finish_sway_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_raise_tick + 20.0) : 0.0;",
+  "t.melee_spear_use_start_sway_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_sway_tick - 20.0) : 0.0;",
+  "t.melee_spear_use_finish_lower_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_raise_tick + 20.0) : 0.0;",
+  "t.melee_spear_use_start_lower_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_lower_tick - 40.0) : 0.0;",
+  "t.melee_spear_use_finish_raise_back_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_raise_tick + 20.0) : 0.0;",
+  "t.melee_spear_use_start_raise_back_tick = v.melee_spear_equipped ? (t.melee_spear_use_finish_raise_back_tick - 5.0) : 0.0;",
+  "t.melee_spear_use_raise_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.0, t.melee_spear_use_finish_raise_tick, v.item_use_duration), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_raise_progress_start = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.0, 0.5, t.melee_spear_use_raise_progress), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_raise_progress_middle = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.5, 0.8, t.melee_spear_use_raise_progress), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_raise_progress_end = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.8, 1.0, t.melee_spear_use_raise_progress), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_sway_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(t.melee_spear_use_start_sway_tick, t.melee_spear_use_finish_sway_tick, v.item_use_duration), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_lower_progress = v.melee_spear_equipped ? (math.ease_in_out_elastic(0.0, 1.0, math.clamp(math.inverse_lerp(t.melee_spear_use_start_lower_tick, t.melee_spear_use_finish_lower_tick, v.item_use_duration - 20.0), 0.0, 1.0))) : 0.0;",
+  "t.melee_spear_use_raise_back_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(t.melee_spear_use_start_raise_back_tick, t.melee_spear_use_finish_raise_back_tick, v.item_use_duration), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_use_sway_intensity = v.melee_spear_equipped ? (math.ease_out_circ(0.0, 2.0, t.melee_spear_use_sway_progress) + math.ease_in_circ(0.0, -2.0, t.melee_spear_use_raise_back_progress)) : 0.0;",
+  "t.melee_spear_use_sway_scale_slow = v.melee_spear_equipped ? (math.sin(v.item_use_duration * 19.0) * t.melee_spear_use_sway_intensity) : 0.0;",
+  "t.melee_spear_use_sway_scale_fast = v.melee_spear_equipped ? (math.sin(v.item_use_duration * 30.0) * t.melee_spear_use_sway_intensity) : 0.0;",
+  "v.fp_melee_spear_use_item_position_x = v.melee_spear_equipped ? ((t.melee_spear_use_raise_progress_start * 0.05 + t.melee_spear_use_raise_progress_end * -0.05 + t.melee_spear_use_sway_scale_slow * 0.005) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_use_item_position_y = v.melee_spear_equipped ? ((t.melee_spear_use_raise_progress_start * -0.075 + t.melee_spear_use_raise_progress_middle * 0.075 + t.melee_spear_use_sway_scale_fast * 0.01) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_use_item_position_z = v.melee_spear_equipped ? ((t.melee_spear_use_raise_progress_start * 0.05 + t.melee_spear_use_raise_progress_end * -0.05 + t.melee_spear_use_sway_scale_slow * 0.005) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_use_item_rotation_y = v.melee_spear_equipped ? (t.melee_spear_use_raise_progress * 20.0 + t.melee_spear_use_lower_progress * 20.0 + t.melee_spear_use_sway_scale_slow * 0.5 + t.melee_spear_use_raise_back_progress * -40.0) : 0.0;",
+  "v.fp_melee_spear_use_item_rotation_z = v.melee_spear_equipped ? (math.ease_in_out_back(0.0, -60.0, t.melee_spear_use_raise_progress) + t.melee_spear_use_lower_progress * -25.0 + t.melee_spear_use_raise_back_progress * 85.0 + t.melee_spear_use_sway_scale_fast * 0.5) : 0.0;",
+  "v.fp_melee_spear_use_attachable_rotation_z = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.5, 0.55, t.melee_spear_use_raise_progress), 0.0, 1.0) * -50.0 + t.melee_spear_use_sway_progress * 90.0 + t.melee_spear_use_raise_back_progress * -40.0) : 0.0;",
+  "v.tp_melee_spear_use_arm_rotation_x = v.melee_spear_equipped ? (t.melee_spear_use_raise_progress_start * -40.0 + t.melee_spear_use_raise_progress_middle * 30.0 + t.melee_spear_use_raise_progress_end * -20.0 + t.melee_spear_use_lower_progress * 20.0 + t.melee_spear_use_raise_back_progress * 10.0) : 0.0;",
+  "v.tp_melee_spear_use_arm_rotation_x = v.melee_spear_equipped ? (v.tp_melee_spear_use_arm_rotation_x + t.melee_spear_use_sway_scale_slow * 0.6) : 0.0;",
+  "v.tp_melee_spear_use_arm_rotation_y = v.melee_spear_equipped ? (t.melee_spear_use_sway_scale_fast * 1.0) : 0.0;",
+  "v.tp_melee_spear_use_arm_rotation_z = v.melee_spear_equipped ? (t.melee_spear_use_sway_scale_slow * 0.5) : 0.0;",
+  "v.tp_melee_spear_use_item_rotation_x = v.melee_spear_equipped ? (t.melee_spear_use_raise_progress * 60.0 + t.melee_spear_use_raise_back_progress * -60.0) : 0.0;",
+  "v.tp_melee_spear_use_attachable_rotation_z = v.melee_spear_equipped ? (t.melee_spear_use_raise_progress * 90.0 + t.melee_spear_use_sway_progress * -90.0) : 0.0;",
+  "t.melee_spear_attack_duration_ratio = v.melee_spear_equipped ? (1.0 / 1.0) : 0.0;",
+  "t.melee_spear_attack_raise_end = v.melee_spear_equipped ? (0.05 * t.melee_spear_attack_duration_ratio) : 0.0;",
+  "t.melee_spear_attack_thrust_end = v.melee_spear_equipped ? (0.2 * t.melee_spear_attack_duration_ratio) : 0.0;",
+  "t.melee_spear_attack_recover_start = v.melee_spear_equipped ? (1.0 - (0.6 * t.melee_spear_attack_duration_ratio)) : 0.0;",
+  "t.melee_spear_attack_raise_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(0.0, t.melee_spear_attack_raise_end, v.attack_time), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_attack_thrust_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(t.melee_spear_attack_raise_end, t.melee_spear_attack_thrust_end, v.attack_time), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_attack_recover_progress = v.melee_spear_equipped ? (math.clamp(math.inverse_lerp(t.melee_spear_attack_recover_start, 1.0, v.attack_time), 0.0, 1.0)) : 0.0;",
+  "t.melee_spear_attack_raise_scale = v.melee_spear_equipped ? (math.ease_in_out_sine(0.0, 1.0, t.melee_spear_attack_raise_progress)) : 0.0;",
+  "t.melee_spear_attack_thrust_scale = v.melee_spear_equipped ? (math.ease_in_quad(0.0, 1.0, t.melee_spear_attack_thrust_progress)) : 0.0;",
+  "t.melee_spear_attack_recover_scale = v.melee_spear_equipped ? (math.ease_in_out_expo(0.0, 1.0, t.melee_spear_attack_recover_progress)) : 0.0;",
+  "v.fp_melee_spear_attack_item_position_x = v.melee_spear_equipped ? ((t.melee_spear_attack_raise_scale * 0.1 + t.melee_spear_attack_thrust_scale * -0.1) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_attack_item_position_y = v.melee_spear_equipped ? ((t.melee_spear_attack_raise_scale * -0.075 + t.melee_spear_attack_recover_scale * 0.075) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_attack_item_position_z = v.melee_spear_equipped ? ((t.melee_spear_attack_raise_scale * 0.65 + t.melee_spear_attack_thrust_scale * -0.65) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+  "v.fp_melee_spear_attack_item_rotation_y = v.melee_spear_equipped ? (t.melee_spear_attack_raise_scale * 20.0 + t.melee_spear_attack_recover_scale * -20.0) : 0.0;",
+  "v.fp_melee_spear_attack_item_rotation_z = v.melee_spear_equipped ? (t.melee_spear_attack_raise_scale * -60.0 + t.melee_spear_attack_recover_scale * 60.0) : 0.0;",
+  "v.fp_melee_spear_attack_attachable_rotation_z = v.melee_spear_equipped ? (t.melee_spear_attack_raise_scale * 40.0 + t.melee_spear_attack_recover_scale * -40.0) : 0.0;",
+  "v.tp_melee_spear_attack_arm_rotation_x = v.melee_spear_equipped ? (t.melee_spear_attack_raise_scale * 90.0 + t.melee_spear_attack_thrust_scale * -120.0 + t.melee_spear_attack_recover_scale * 30.0) : 0.0;",
+  "v.tp_melee_spear_attack_item_rotation_x = v.melee_spear_equipped ? (t.melee_spear_attack_thrust_scale * 60.0 + t.melee_spear_attack_recover_scale * -60.0) : 0.0;",
+  "v.tp_melee_spear_attack_attachable_position_z = v.melee_spear_equipped ? ((t.melee_spear_attack_thrust_scale * -0.15 + t.melee_spear_attack_recover_scale * 0.15) * v.melee_spear_java_to_bedrock_scale) : 0.0;",
+
 ];
 export const VANILLA_PLAYER_VARIABLES: Record<string, string> = {
   "variable.fp_melee_spear_use_attachable_rotation_z": "public",
@@ -88,6 +145,13 @@ export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
   'player_x_rotation',
   'map_face_icon',
   'is_first_person',
+  // Remaining vanilla player-controller inputs supplied by Bedrock's player animation runtime.
+  'use_item_startup_progress',
+  'is_holding_spyglass',
+  'is_tooting_goat_horn',
+  'is_using_brush',
+  'is_using_vr',
+  'bob_animation',
 ]);
 
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
@@ -106,36 +170,40 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
     evidence: 'Mojang Bedrock spear item definitions carry the minecraft:is_spear tag; the documented equipped_item_any_tag query detects every spear material without hardcoding one item id',
     always: true,
   },
+  // Reconstruct player controller inputs absent on some Bedrock runtime versions.
+  is_holding_left: {
+    expression: "query.get_equipped_item_name('off_hand') != ''",
+    evidence: 'The player off-hand slot contains an equipped item; reconstructed from the documented equipped-item-name query.',
+    always: true
+  },
+  is_brandishing_spear: {
+    expression: "query.is_using_item && query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
+    evidence: 'Spear brandishing is active while the player uses a main-hand item tagged minecraft:is_spear.',
+    always: true
+  },
+  damage_nearby_mobs: {
+    expression: 'query.is_delayed_attacking',
+    evidence: 'Approximation: delayed player attack state is the closest documented player query; Bedrock exposes no direct equivalent of the vanilla nearby-mob-damage runtime flag.',
+    always: true
+  },
+  swim_amount: {
+    expression: 'query.is_swimming ? 1.0 : 0.0',
+    evidence: 'Binary swimming state reconstructed from the documented player swimming query; smooth engine blend amount is not exposed on all target versions.',
+    always: true
+  },
+  use_item_interval_progress: {
+    expression: 'query.main_hand_item_max_duration > 0.0 ? math.clamp(query.main_hand_item_use_duration / query.main_hand_item_max_duration, 0.0, 1.0) : 0.0',
+    evidence: 'Main-hand item-use interval reconstructed from the documented remaining/max use-duration queries.',
+    always: true
+  },
   // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
-  spa_dx: {
-    expression: 'query.position(0) - variable.spa_last_x',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): vx = pos.x - lastPos.x',
-  },
-  spa_dz: {
-    expression: 'query.position(2) - variable.spa_last_z',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): vz = pos.z - lastPos.z',
-  },
   spa_move_speed: {
-    expression: 'math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0))',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): moveSpeed = sqrt(vx*vx + vz*vz)',
-  },
-  spa_moving_backwards: {
-    expression: '(variable.spa_move_speed > 0.0) && ((variable.spa_dx * math.cos((query.body_y_rotation + 90.0) * 0.01745329252) + variable.spa_dz * math.sin((query.body_y_rotation + 90.0) * 0.01745329252)) < 0.0)',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): movementVector.length() > 0 && movementVector.dot(lookVector) < 0',
+    expression: 'query.modified_move_speed',
+    evidence: 'Bedrock player query.modified_move_speed is available in player animation scope; used as a safe movement magnitude where query.position_delta has no actor context on affected clients.',
   },
   spa_turn_delta: {
     expression: 'query.body_y_rotation - variable.spa_previous_body_yaw',
     evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = byaw - prevbyaw',
-  },
-  spa_last_x: {
-    expression: 'query.position(0)',
-    initializeExpression: '0.0',
-    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.x to 0 and updates it to pos.x after each tick',
-  },
-  spa_last_z: {
-    expression: 'query.position(2)',
-    initializeExpression: '0.0',
-    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.z to 0 and updates it to pos.z after each tick',
   },
   spa_previous_body_yaw: {
     expression: 'query.body_y_rotation',

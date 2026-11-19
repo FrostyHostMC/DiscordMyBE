@@ -168,7 +168,7 @@ export function buildPlayerClientEntity(options: {
   const hasExplicitNoRuntimePath = (trigger: PlayerClipTrigger): boolean =>
     /unreferenced|no runtime start path|not loaded by|not referenced by|no Java trigger/i.test(trigger.note ?? '');
   for (const trigger of triggers) {
-    if (trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim() || hasExplicitNoRuntimePath(trigger)) continue;
+    if (trigger.status === 'unresolved' || trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim() || hasExplicitNoRuntimePath(trigger)) continue;
     conditionlessPerspectiveCounts.set(trigger.perspective, (conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0) + 1);
   }
   const controllerDrivenClips: string[] = [];
@@ -254,6 +254,14 @@ export function buildPlayerClientEntity(options: {
     else thirdPersonClips.push(trigger.clipId);
     if (trigger.status === 'unresolved') unresolvedClips.push(trigger.clipId);
 
+    // A source adapter can prove that a clip has no usable runtime state on this target.
+    // Keep its definition registered for diagnostics, but do not let a generated controller
+    // or perspective-only fallback start it: an always-playing pose can tear the player rig.
+    if (trigger.deliberatelyInactive) {
+      if (!unresolvedClips.includes(trigger.clipId)) unresolvedClips.push(trigger.clipId);
+      continue;
+    }
+
     // Molang cannot express arbitrary Java control flow, so one-shot logic is fired from the
     // behaviour-pack script. Those clips stay out of scripts.animate or they would loop.
     if (trigger.scriptDriven) {
@@ -289,6 +297,9 @@ export function buildPlayerClientEntity(options: {
       molangRepairs.push(`${trigger.clipId}: REJECTED ${entry.call} — ${entry.reason}`);
     }
     const condition = conditionTranslation?.expression;
+    // An unresolved source trigger is not evidence for a perspective-only playback fallback.
+    // Keep the clip registered and report it, but never start an unknown pose unconditionally.
+    if (trigger.status === 'unresolved') continue;
     if (!condition || (conditionTranslation?.unresolved.length ?? 0) > 0) {
       const conditionlessCount = conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0;
       if (!trigger.condition?.trim() && conditionlessCount === 1 && !hasExplicitNoRuntimePath(trigger)) {

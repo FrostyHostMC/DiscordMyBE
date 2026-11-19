@@ -168,6 +168,7 @@ function bridgePlayerRigClips(
   log: (line: string) => void,
   sourceSkeletons: UniversalAnimationDiscoveryReport['skeletons'] = [],
   sourceClipIdsByOwner: Record<string, Record<string, string>> = {},
+  seriousPlayerAnimationsSource = false,
 ): {
   clips: Record<string, BedrockAnimationClip>;
   clipIds: string[];
@@ -198,6 +199,34 @@ function bridgePlayerRigClips(
   }
   if (Object.keys(merged).length === 0) {
     return { clips: {}, clipIds: [], sourceClipIds: [], sourceClipIdByPlayerClipId: {}, sourceClipIdToPlayerClipId: {}, preRetargetClips: {}, expectedRetargetedClips: {}, sourceBoneToPlayerBone: {}, mappingCount: 0, unmappedBones: [], learnedAliases: 0 };
+  }
+  if (seriousPlayerAnimationsSource) {
+    // The upstream Blockbench template has a BODY root group with HEAD, TORSO, arms and
+    // legs as siblings. Its body animation track is a whole-player translation, while torso
+    // is the actual torso joint. Folding both onto Bedrock body composes root translation
+    // with torso rotation and makes the limbs inherit the wrong pose.
+    // Move only the root group's translation to Bedrock root; torso continues to resolve
+    // to Bedrock body. Root rotation/scale require pivot-aware geometry compensation, so
+    // withhold those channels instead of scattering the whole player.
+    for (const [clipId, clip] of Object.entries(merged)) {
+      const bones = { ...(clip.bones ?? {}) };
+      const sourceBodyRoot = bones.body;
+      if (!sourceBodyRoot) continue;
+      if (bones.root) {
+        log(`[PLAYER-HIERARCHY] ${clipId}: source body root and explicit root tracks collide; root channels are not merged without source transform evidence.`);
+        continue;
+      }
+      const rootTrack = { ...sourceBodyRoot };
+      if (rootTrack.rotation !== undefined || rootTrack.scale !== undefined) {
+        log(`[PLAYER-HIERARCHY] ${clipId}: source body-root rotation/scale withheld; the vanilla Bedrock root pivot differs from the Blockbench template pivot and requires pivot-compensating geometry.`);
+        delete rootTrack.rotation;
+        delete rootTrack.scale;
+      }
+      if (rootTrack.position !== undefined) bones.root = rootTrack;
+      delete bones.body;
+      merged[clipId] = { ...clip, bones };
+      log(`[PLAYER-HIERARCHY] ${clipId}: source BODY root translation separated onto Bedrock root; TORSO remains mapped to Bedrock body.`);
+    }
   }
   const sourceBoneNames = new Set(Object.values(merged).flatMap((clip) => Object.keys(clip.bones ?? {})));
   const sourceSkeleton = [...sourceSkeletons].sort((a, b) => {
@@ -235,6 +264,7 @@ function bridgePlayerRigClips(
   const sourceClipIdByPlayerClipId: Record<string, string> = {};
   const sourceClipIdToPlayerClipId: Record<string, string> = {};
   const sourceBoneToPlayerBone = Object.fromEntries(fit.mappings.map((mapping) => [mapping.source, mapping.bone]));
+  if (seriousPlayerAnimationsSource) sourceBoneToPlayerBone.body = 'root';
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
@@ -250,7 +280,10 @@ function bridgePlayerRigClips(
       id = `animation.player.${ownerSlug}.${tail}_${index}`;
       index += 1;
     }
-    renamed[id] = mapped;
+    // Player clips run after the vanilla root controller. Reset every animated bone to its
+    // bind pose before applying this source pose; otherwise vanilla locomotion + Java pose
+    // rotations/positions compound and visibly twist or separate the player's limbs.
+    renamed[id] = { ...mapped, override_previous_animation: true };
     sourceClipIds.push(clipId);
     sourceClipIdByPlayerClipId[id] = sourceClipIdByMergedClipId[clipId] ?? clipId;
     sourceClipIdToPlayerClipId[clipId] = id;
@@ -568,6 +601,9 @@ export function portMobAndPlayerAnimations(
     log,
     additionalAnimations.discoveryReport?.skeletons ?? [],
     geckolib.sourceClipIdsByOwner ?? {},
+    rigClassification.decisions.some((decision) =>
+      /SeriousPlayerAnimationsMixin/i.test(`${decision.owner} ${decision.reason}`),
+    ),
   );
   if (playerRigBridge.clipIds.length === 0) {
     log(

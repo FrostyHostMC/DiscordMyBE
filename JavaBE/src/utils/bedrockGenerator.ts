@@ -2114,7 +2114,10 @@ export async function convertJavaToBedrockAddon(
       ...scriptDrivenClips,
       ...(remake.playerEntityWiring?.scriptedClips ?? []),
       ...(remake.playerTriggers?.triggers ?? [])
-        .filter((trigger) => trigger.status === 'unresolved' && trigger.concept === 'unreferenced-source-definition')
+        .filter((trigger) =>
+          trigger.status === 'unresolved' &&
+          (trigger.concept === 'unreferenced-source-definition' || trigger.deliberatelyInactive === true),
+        )
         .map((trigger) => trigger.clipId),
     ]),
   ];
