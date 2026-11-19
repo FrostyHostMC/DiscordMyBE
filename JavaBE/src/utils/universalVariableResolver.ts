@@ -4,6 +4,7 @@ import { ARMOR_LAYER_VISIBILITY_MAP } from '@/utils/molangScopeBinder';
 import { slotOccupancyExpression } from '@/utils/molangSlotQueries';
 import type { UniversalAnimationDiscoveryReport } from '@/utils/universalAnimationDiscovery';
 import type { UniversalAnimationIRReport } from '@/utils/universalAnimationIR';
+import { VANILLA_PLAYER_VARIABLES } from '@/utils/vanillaPlayerBaseline';
 
 /**
  * Universal Variable Resolver
@@ -380,6 +381,16 @@ export function resolveUniversalVariables(
           for (const [rawName, scope] of Object.entries(declarations)) {
             if (scope !== 'public' && scope !== 'private') continue;
             const name = rawName.replace(/^variable\./i, '').trim().toLowerCase();
+            if (name) assigned.add(name);
+          }
+        }
+        const clientIdentifier = doc?.['minecraft:client_entity']?.description?.identifier;
+        if (clientIdentifier === 'minecraft:player') {
+          // Resolve Mojang's public attachable variables even when this pass runs before
+          // buildPlayerClientEntity merges the baseline scripts.variables map into the pack.
+          for (const [rawName, scope] of Object.entries(VANILLA_PLAYER_VARIABLES)) {
+            if (scope !== 'public' && scope !== 'private') continue;
+            const name = rawName.replace(/^variable\\./i, '').trim().toLowerCase();
             if (name) assigned.add(name);
           }
         }
