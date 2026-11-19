@@ -42,6 +42,8 @@ export interface PlayerClipTrigger {
   /** Overlay clips run in a separate controller so they can blend with locomotion. */
   layer?: 'base' | 'overlay';
   note: string;
+  /** The source clip is intentionally withheld because its runtime condition has no safe Bedrock equivalent. */
+  deliberatelyInactive?: boolean;
   /** Explicit Java animation-layer priority recovered from the same bytecode method as this clip. */
   sourcePriority?: number;
   /** Java runtime API used to fire or stop this clip, when recovered. */
@@ -372,7 +374,8 @@ function seriousPlayerAnimationTrigger(
         ...base,
         concept: 'moving',
         status: 'unresolved',
-        note: 'The source requires a signed movement-vector dot product. The target player Molang context reports query.position_delta without an entity on affected clients, and query.modified_move_speed exposes magnitude only; this clip is withheld rather than incorrectly playing it for forward movement.',
+        deliberatelyInactive: true,
+        note: 'The source requires a signed movement-vector dot product. The target player Molang context reports query.position_delta without an entity on affected clients, and query.modified_move_speed exposes magnitude only; this clip is deliberately withheld rather than incorrectly playing it for forward movement.',
       };
     case 'running':
       return {
