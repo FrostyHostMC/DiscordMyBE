@@ -331,6 +331,12 @@ export function bindMobParity(options: {
     }
     const desc = client?.['minecraft:client_entity']?.description;
     if (!desc || typeof desc !== 'object') continue;
+    // The player is engine-owned, not a source-backed mob. Never bind it to a
+    // geometry-pool fallback or rewrite its animation/controller graph here.
+    if (mobId.toLowerCase() === 'player' || desc.identifier === 'minecraft:player') {
+      onLog?.('[BIND] Skipped engine-owned minecraft:player; the player-specific rig pipeline owns its geometry and animation bindings.');
+      continue;
+    }
 
     // Link-first binding: the skin and the mesh this entity's own renderer/model
     // classes declared are the ones that ship for it.

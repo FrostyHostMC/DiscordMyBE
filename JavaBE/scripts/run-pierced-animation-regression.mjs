@@ -33,6 +33,7 @@ try {
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
   const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
   const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
+  const { bindMobParity } = await server.ssrLoadModule('/src/utils/mobParityBinder.ts');
   const { buildAnimationResourceRegistry } = await server.ssrLoadModule('/src/utils/animationResourceRegistry.ts');
   const { VANILLA_PLAYER_ANIMATIONS, VANILLA_PLAYER_RENDER_CONTROLLERS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } = await server.ssrLoadModule('/src/utils/vanillaPlayerBaseline.ts');
   const { VANILLA_PLAYER_GEOMETRY_JSON } = await server.ssrLoadModule('/src/utils/vanillaPlayerGeometry.ts');
@@ -68,6 +69,13 @@ try {
       items: [],
       assetIndex: null
     });
+    const parityLogs = [];
+    const parityPass = bindMobParity({
+      modId: 'fixture',
+      resourcePackFiles: playerPack,
+      behaviorPackFiles: {},
+      onLog: (line) => parityLogs.push(line)
+    });
     const afterPlayer = JSON.parse(playerPack['entity/player.entity.json']);
     const beforeDescription = beforePlayer['minecraft:client_entity'].description;
     const afterDescription = afterPlayer['minecraft:client_entity'].description;
@@ -77,6 +85,8 @@ try {
     assert.deepEqual(afterDescription.render_controllers, beforeDescription.render_controllers);
     assert.equal(entityPass.mobs, 0);
     assert.equal(entityPass.renderControllersGenerated, 0);
+    assert.equal(parityPass.mobs, 0);
+    assert.ok(parityLogs.some((line) => line.includes('Skipped engine-owned minecraft:player')));
     assert.ok(entityPass.skipped.some((entry) => entry.includes('engine-owned minecraft:player rig preserved')));
   }
 
