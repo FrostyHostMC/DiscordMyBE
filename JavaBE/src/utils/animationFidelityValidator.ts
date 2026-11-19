@@ -555,7 +555,7 @@ export function validateAnimationFidelity(input: {
         severity: 'info',
         rule: 'source-clip-deliberately-inactive',
         subject: clip.id,
-        detail: 'The source Java state machine does not load this definition. It is retained in the exported pack but excluded from player-pose fidelity scoring and automatic activation.',
+        detail: 'The clip is retained but deliberately withheld: either the source Java state machine does not load the definition or no safe destination trigger can be reconstructed. It is excluded from automatic activation and playable-clip fidelity scoring.',
       });
       continue;
     }
