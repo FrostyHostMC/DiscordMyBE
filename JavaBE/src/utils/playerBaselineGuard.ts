@@ -159,7 +159,13 @@ export function guaranteePlayerBaselineWiring(input: {
     const existingVariables = isRecord(scripts.variables) ? scripts.variables : {};
     const variables = { ...existingVariables, ...VANILLA_PLAYER_VARIABLES };
     const variablesChanged = JSON.stringify(existingVariables) !== JSON.stringify(variables);
-    const animate: unknown[] = Array.isArray(scripts.animate) ? [...scripts.animate] : [];
+    const animate: unknown[] = Array.isArray(scripts.animate)
+      ? scripts.animate.filter((entry) => !(typeof entry === 'string'
+        ? entry === 'base_controller'
+        : isRecord(entry) && 'base_controller' in entry))
+      : [];
+    // Mojang's current player controller set does not define controller.animation.player.base.
+    // Do not activate the stale base_controller alias copied in older player.entity baselines.
     const existingRenderControllers: unknown[] = Array.isArray(description.render_controllers)
       ? [...description.render_controllers]
       : [];
