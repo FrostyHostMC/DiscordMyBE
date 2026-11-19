@@ -250,7 +250,10 @@ function bridgePlayerRigClips(
       id = `animation.player.${ownerSlug}.${tail}_${index}`;
       index += 1;
     }
-    renamed[id] = mapped;
+    // Player clips run after the vanilla root controller. Reset every animated bone to its
+    // bind pose before applying this source pose; otherwise vanilla locomotion + Java pose
+    // rotations/positions compound and visibly twist or separate the player's limbs.
+    renamed[id] = { ...mapped, override_previous_animation: true };
     sourceClipIds.push(clipId);
     sourceClipIdByPlayerClipId[id] = sourceClipIdByMergedClipId[clipId] ?? clipId;
     sourceClipIdToPlayerClipId[clipId] = id;
