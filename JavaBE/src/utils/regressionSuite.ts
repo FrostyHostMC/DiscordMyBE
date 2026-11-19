@@ -1072,6 +1072,14 @@ export async function runRegressionSuite(options: RegressionRunOptions = {}): Pr
     try {
       const result = await measureFixture(fixture, modId, playableMode);
       log(`[REGRESSION] ${result.status.toUpperCase()} ${fixture.label} (${result.durationMs} ms).`);
+      if (result.status !== 'passed') {
+        for (const finding of result.findings) {
+          log(`[REGRESSION:DETAIL] ${fixture.id}: ${finding}`);
+        }
+        for (const assertion of result.assertions.filter((entry) => !entry.passed)) {
+          log(`[REGRESSION:ASSERTION] ${fixture.id}: ${assertion.label} | expected=${assertion.expected} | actual=${assertion.actual}`);
+        }
+      }
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1122,6 +1130,14 @@ export async function runRegressionSuite(options: RegressionRunOptions = {}): Pr
   fixtures.push(...extraFixtures);
   for (const extra of extraFixtures) {
     log(`[REGRESSION] ${extra.status.toUpperCase()} ${extra.label} (${extra.durationMs} ms).`);
+    if (extra.status !== 'passed') {
+      for (const finding of extra.findings) {
+        log(`[REGRESSION:DETAIL] ${extra.id}: ${finding}`);
+      }
+      for (const assertion of extra.assertions.filter((entry) => !entry.passed)) {
+        log(`[REGRESSION:ASSERTION] ${extra.id}: ${assertion.label} | expected=${assertion.expected} | actual=${assertion.actual}`);
+      }
+    }
   }
   const metricIds: RegressionMetricId[] = ['assetPreservation', 'geometryAccuracy', 'uvAccuracy', 'textureAccuracy', 'animationAccuracy', 'behaviorPreservation', 'dependencyCompleteness', 'packLoadingSuccess'];
   const metrics: Partial<Record<RegressionMetricId, number>> = {};
