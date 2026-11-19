@@ -22,6 +22,7 @@
 
 import { MOB_ONLY_QUERIES, isQuerySupported, molangContextForFile, translateMolangExpression } from '@/utils/molangCompatibility';
 import { inspectAnimationControllerGraphs } from '@/utils/animationControllerValidation';
+import { VANILLA_PLAYER_ANIMATION_IDS, VANILLA_PLAYER_CONTROLLER_IDS, VANILLA_PLAYER_GEOMETRY_IDS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } from '@/utils/vanillaPlayerBaseline';
 import {
   buildAnimationResourceRegistry,
   assertAnimationResourceRegistryCurrent,
@@ -89,23 +90,10 @@ export interface PortValidationReport {
 
 /** Base-game resources a pack may reference without shipping them. */
 const VANILLA_TEXTURES = new Set(['textures/entity/steve', 'textures/entity/alex', 'textures/entity/cape_invisible']);
-const VANILLA_GEOMETRY = new Set(['geometry.humanoid.custom', 'geometry.humanoid.customSlim', 'geometry.humanoid', 'geometry.cape']);
-const VANILLA_CONTROLLERS = new Set([
-  'controller.animation.player.root',
-  'controller.animation.player.first_person_attack',
-  'controller.animation.humanoid.look_at_target',
-]);
-const VANILLA_RENDER_CONTROLLERS = new Set([
-  'controller.render.player.first_person',
-  'controller.render.player.third_person',
-  'controller.render.player.third_person_map',
-  'controller.render.player.cape',
-]);
-const VANILLA_ANIMATIONS = new Set([
-  'animation.humanoid.base_pose',
-  'animation.player.cape',
-  'animation.player.first_person.base_pose',
-]);
+const VANILLA_GEOMETRY = new Set([...VANILLA_PLAYER_GEOMETRY_IDS, 'geometry.humanoid']);
+const VANILLA_CONTROLLERS = new Set(VANILLA_PLAYER_CONTROLLER_IDS);
+const VANILLA_RENDER_CONTROLLERS = new Set([...VANILLA_PLAYER_RENDER_CONTROLLER_IDS, 'controller.render.armor_stand']);
+const VANILLA_ANIMATIONS = new Set(VANILLA_PLAYER_ANIMATION_IDS);
 
 /**
  * The query allow-list is owned by the Molang compatibility analyzer. The repair pass that rewrites
@@ -323,9 +311,9 @@ export function runPortValidation(options: ValidatorOptions): PortValidationRepo
       .filter((p) => p.toLowerCase().endsWith('.png'))
       .map((p) => p.replace(/\.png$/i, '')),
   );
-  const resolvesAnimation = (id: string) => animations.has(id) || VANILLA_ANIMATIONS.has(id);
-  const resolvesController = (id: string) => controllers.has(id) || VANILLA_CONTROLLERS.has(id);
-  const resolvesRenderController = (id: string) => renderControllers.has(id) || VANILLA_RENDER_CONTROLLERS.has(id);
+  const resolvesAnimation = (id: string, isPlayer = false) => animations.has(id) || (isPlayer && VANILLA_ANIMATIONS.has(id));
+  const resolvesController = (id: string, isPlayer = false) => controllers.has(id) || (isPlayer && VANILLA_CONTROLLERS.has(id));
+  const resolvesRenderController = (id: string, isPlayer = false) => renderControllers.has(id) || (isPlayer && VANILLA_RENDER_CONTROLLERS.has(id)) || id === 'controller.render.armor_stand';
   const resolvesGeometry = (id: string) => geometries.has(id) || VANILLA_GEOMETRY.has(id);
   const resolvesTexture = (path: string) => shippedTextures.has(path) || VANILLA_TEXTURES.has(path);
 
@@ -354,11 +342,11 @@ export function runPortValidation(options: ValidatorOptions): PortValidationRepo
       }
       if (typeof clipId !== 'string') continue;
       if (clipId.startsWith('controller.animation.')) {
-        if (!resolvesController(clipId)) {
+        if (!resolvesController(clipId, isPlayer)) {
           add({ check: 'reference', severity: 'error', file: path, subject: shortName, detail: `Controller "${clipId}" is not defined in the pack and is not a base-game player controller.` });
         }
       } else if (clipId.startsWith('animation.')) {
-        if (!resolvesAnimation(clipId)) {
+        if (!resolvesAnimation(clipId, isPlayer)) {
           add({ check: 'reference', severity: 'error', file: path, subject: shortName, detail: `Animation "${clipId}" is not defined in the pack and is not a base-game animation.` });
         }
       } else {
@@ -378,13 +366,13 @@ export function runPortValidation(options: ValidatorOptions): PortValidationRepo
     }
     for (const value of Object.values((description.geometry ?? {}) as Record<string, string>)) {
       if (typeof value !== 'string') continue;
-      if (!resolvesGeometry(value)) {
+      if (!resolvesGeometry(value) && !(isPlayer && VANILLA_PLAYER_GEOMETRY_IDS.has(value))) {
         add({ check: 'reference', severity: 'error', file: path, subject: value, detail: `Geometry "${value}" is not declared by any shipped model and is not a base-game geometry.` });
       }
     }
     for (const value of (description.render_controllers ?? []) as string[]) {
       if (typeof value !== 'string') continue;
-      if (!resolvesRenderController(value)) {
+      if (!resolvesRenderController(value, isPlayer)) {
         add({ check: 'reference', severity: 'error', file: path, subject: value, detail: `Render controller "${value}" is not shipped and is not a base-game controller.` });
       }
     }

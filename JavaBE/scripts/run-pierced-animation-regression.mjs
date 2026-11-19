@@ -49,7 +49,7 @@ try {
         geometry: { default: 'geometry.humanoid.custom', cape: 'geometry.cape' },
         textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible' },
         materials: { default: 'entity_alphatest', cape: 'entity_alphatest' },
-        render_controllers: VANILLA_PLAYER_RENDER_CONTROLLERS
+        render_controllers: ['controller.render.player.first_person', 'controller.render.player.third_person', 'controller.render.fixture.player_generic']
       } }
     };
     const playerPack = {
@@ -60,7 +60,10 @@ try {
           { name: 'root' }, { name: 'body', parent: 'root' }, { name: 'left_arm', parent: 'body' }
         ] }]
       }),
-      'textures/entity/player.png': new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+      'textures/entity/player.png': new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+      'render_controllers/player.render_controllers.json': JSON.stringify({ render_controllers: {
+        'controller.render.fixture.player_generic': { geometry: 'Geometry.default', materials: [{ '*': 'Material.default' }], textures: ['Texture.default'] }
+      } })
     };
     const beforePlayer = JSON.parse(playerPack['entity/player.entity.json']);
     const entityPass = applyEntityAnimationEngine({
@@ -76,6 +79,8 @@ try {
       behaviorPackFiles: {},
       onLog: (line) => parityLogs.push(line)
     });
+    const baselineLogs = [];
+    const baselineGuard = guaranteePlayerBaselineWiring({ resourcePackFiles: playerPack, onLog: (line) => baselineLogs.push(line) });
     const afterPlayer = JSON.parse(playerPack['entity/player.entity.json']);
     const beforeDescription = beforePlayer['minecraft:client_entity'].description;
     const afterDescription = afterPlayer['minecraft:client_entity'].description;
@@ -87,6 +92,9 @@ try {
     assert.equal(entityPass.renderControllersGenerated, 0);
     assert.equal(parityPass.mobs, 0);
     assert.ok(parityLogs.some((line) => line.includes('Skipped engine-owned minecraft:player')));
+    assert.deepEqual(JSON.parse(playerPack['entity/player.entity.json'])['minecraft:client_entity'].description.render_controllers, VANILLA_PLAYER_RENDER_CONTROLLERS);
+    assert.ok(baselineGuard.renderControllersRestored > 0);
+    assert.ok(baselineLogs.some((line) => line.includes('render-controller binding(s) restored')));
     assert.ok(entityPass.skipped.some((entry) => entry.includes('engine-owned minecraft:player rig preserved')));
   }
 

@@ -3,6 +3,8 @@ import {
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
   VANILLA_PLAYER_ANIMATE,
+  VANILLA_PLAYER_RENDER_CONTROLLERS,
+  VANILLA_PLAYER_RENDER_CONTROLLER_IDS,
 } from '@/utils/vanillaPlayerBaseline';
 
 /**
@@ -25,6 +27,7 @@ export interface PlayerBaselineGuardReport {
   documents: string[];
   aliasesRestored: number;
   animateEntriesRestored: number;
+  renderControllersRestored: number;
   /** Animate entries that still address no alias and no shipped definition, reported per document. */
   danglingEntries: Array<{ document: string; alias: string }>;
   summary: string;
@@ -34,6 +37,30 @@ type Json = Record<string, any>;
 
 function isRecord(value: unknown): value is Json {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function collectGenericFallbackRenderControllerIds(files: Record<string, string | Uint8Array>): Set<string> {
+  const ids = new Set<string>();
+  for (const [path, raw] of Object.entries(files)) {
+    if (!path.startsWith('render_controllers/') || !path.endsWith('.json') || typeof raw !== 'string') continue;
+    const doc = parseJson(raw);
+    const controllers = isRecord(doc?.render_controllers) ? doc.render_controllers : {};
+    for (const [id, rawController] of Object.entries(controllers)) {
+      if (!isRecord(rawController)) continue;
+      const materials = rawController.materials;
+      const textures = rawController.textures;
+      const defaultMaterial = Array.isArray(materials) && materials.length === 1
+        && isRecord(materials[0]) && materials[0]['*'] === 'Material.default';
+      const defaultTexture = textures === 'Texture.default'
+        || (Array.isArray(textures) && textures.length === 1 && textures[0] === 'Texture.default');
+      const onlyGenericBindings = rawController.geometry === 'Geometry.default'
+        && defaultMaterial && defaultTexture
+        && !rawController.arrays && !rawController.part_visibility
+        && !rawController.color && !rawController.is_hurt_color && !rawController.on_fire_color;
+      if (onlyGenericBindings && id.startsWith('controller.render.')) ids.add(id);
+    }
+  }
+  return ids;
 }
 
 function parseJson(raw: string | Uint8Array | undefined): Json | null {
@@ -74,10 +101,12 @@ export function guaranteePlayerBaselineWiring(input: {
     documents: [],
     aliasesRestored: 0,
     animateEntriesRestored: 0,
+    renderControllersRestored: 0,
     danglingEntries: [],
     summary: '',
   };
   const defined = indexDefinitions(files);
+  const genericFallbackRenderControllerIds = collectGenericFallbackRenderControllerIds(files);
 
   for (const [path, raw] of Object.entries(files)) {
     if (typeof raw !== 'string' || !/\.entity\.json$/i.test(path)) continue;
@@ -92,7 +121,25 @@ export function guaranteePlayerBaselineWiring(input: {
       : {};
     const scripts: Record<string, unknown> = isRecord(description.scripts) ? { ...description.scripts } : {};
     const animate: unknown[] = Array.isArray(scripts.animate) ? [...scripts.animate] : [];
-    let changed = !isRecord(description.animations);
+    const existingRenderControllers: unknown[] = Array.isArray(description.render_controllers)
+      ? [...description.render_controllers]
+      : [];
+    const existingRenderControllerIds = new Set(existingRenderControllers.flatMap((entry) =>
+      typeof entry === 'string' ? [entry] : isRecord(entry) ? Object.keys(entry) : [],
+    ));
+    const retainedCustomRenderControllers = existingRenderControllers.filter((entry) => {
+      const ids = typeof entry === 'string' ? [entry] : isRecord(entry) ? Object.keys(entry) : [];
+      return ids.some((id) => !VANILLA_PLAYER_RENDER_CONTROLLER_IDS.has(id)
+        && !genericFallbackRenderControllerIds.has(id));
+    });
+    const nextRenderControllers = [...VANILLA_PLAYER_RENDER_CONTROLLERS, ...retainedCustomRenderControllers];
+    const renderControllersChanged = JSON.stringify(existingRenderControllers) !== JSON.stringify(nextRenderControllers);
+    if (renderControllersChanged) {
+      report.renderControllersRestored += [...VANILLA_PLAYER_RENDER_CONTROLLER_IDS]
+        .filter((id) => !existingRenderControllerIds.has(id)).length
+        + [...existingRenderControllerIds].filter((id) => genericFallbackRenderControllerIds.has(id)).length;
+    }
+    let changed = !isRecord(description.animations) || renderControllersChanged;
 
     for (const entry of PLAYER_BASELINE_ENTRIES) {
       if (animations[entry.alias] !== entry.identifier) {
@@ -129,6 +176,7 @@ export function guaranteePlayerBaselineWiring(input: {
 
     if (!changed) continue;
     description.animations = animations;
+    description.render_controllers = nextRenderControllers;
     scripts.animate = animate;
     description.scripts = scripts;
     files[path] = JSON.stringify(doc, null, 2);
@@ -139,6 +187,7 @@ export function guaranteePlayerBaselineWiring(input: {
       ? 'No document in the exported pack declares minecraft:player, so no baseline player wiring exists to guarantee. Nothing was invented in its place.'
       : `${report.documents.length} player client-entity document(s) carried the engine baseline: ` +
         `${report.aliasesRestored} alias(es) restored, ${report.animateEntriesRestored} scripts.animate entry/ies restored, ` +
+        `${report.renderControllersRestored} vanilla render-controller binding(s) restored or generic fallback(s) removed, ` +
         `${report.danglingEntries.length} activation entry/ies still address no definition (reported, not replaced).`;
   log(`[PLAYER:GUARD] ${report.summary}`);
   if (report.documents.length > 1) {
