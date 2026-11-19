@@ -259,8 +259,8 @@ function measureSchemaGate(): RegressionFixtureResult {
   const started = performance.now();
   const rp: Pack = {};
   const bp: Pack = {};
-  rp[assetsData.IMAGE_FQCN] = fixturePngHeader(64, 64);
-  rp[assetsData.IMAGE_QDFQ] = fixturePngHeader(16, 16);
+  const alphaTexture = fixturePng('textures/entity/alpha.png', 64, 64, '#808080');
+  rp[alphaTexture.path] = alphaTexture.data;
   rp['models/entity/alpha.geo.json'] = JSON.stringify({
     format_version: '1.12.0',
     'minecraft:geometry': [{

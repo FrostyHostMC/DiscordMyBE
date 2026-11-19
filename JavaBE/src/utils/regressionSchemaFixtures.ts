@@ -1,4 +1,5 @@
 import assetsData from "@/config/assets";
+import { fixturePng } from '@/utils/regressionFixtures';
 import type { RegressionAssertion, RegressionFixtureResult } from '@/types/remaker';
 import type { PackFile } from '@/utils/entityTextureVariants';
 import { isTextureExpression, sanitizeRenderControllers } from '@/utils/renderControllerSchema';
@@ -44,14 +45,7 @@ const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /** Minimal PNG header (signature + IHDR size fields) accepted by the dimension readers. */
 function pngHeader(width: number, height: number): Uint8Array {
-  const bytes = new Uint8Array(33);
-  for (let index = 0; index < PNG_SIGNATURE.length; index += 1) bytes[index] = PNG_SIGNATURE[index];
-  const view = new DataView(bytes.buffer);
-  view.setUint32(16, width);
-  view.setUint32(20, height);
-  bytes[24] = 8;
-  bytes[25] = 6;
-  return bytes;
+  return fixturePng('fixture.png', width, height, '#808080').data;
 }
 function ascii(text: string, padTo = 16): Uint8Array {
   const bytes = new Uint8Array(Math.max(padTo, text.length));
