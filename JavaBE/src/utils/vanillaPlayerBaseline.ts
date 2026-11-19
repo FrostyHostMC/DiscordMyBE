@@ -173,23 +173,28 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
   // Reconstruct player controller inputs absent on some Bedrock runtime versions.
   is_holding_left: {
     expression: "query.get_equipped_item_name('off_hand') != ''",
-    evidence: 'The player off-hand slot contains an equipped item; reconstructed from the documented equipped-item-name query.',
+    evidence: 'The player off-hand slot contains an equipped item; reconstructed from the documented equipped-item-name query.',,
+    always: true
   },
   is_brandishing_spear: {
     expression: "query.is_using_item && query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')",
-    evidence: 'Spear brandishing is active while the player uses a main-hand item tagged minecraft:is_spear.',
+    evidence: 'Spear brandishing is active while the player uses a main-hand item tagged minecraft:is_spear.',,
+    always: true
   },
   damage_nearby_mobs: {
     expression: 'query.is_delayed_attacking',
-    evidence: 'Approximation: delayed player attack state is the closest documented player query; Bedrock exposes no direct equivalent of the vanilla nearby-mob-damage runtime flag.',
+    evidence: 'Approximation: delayed player attack state is the closest documented player query; Bedrock exposes no direct equivalent of the vanilla nearby-mob-damage runtime flag.',,
+    always: true
   },
   swim_amount: {
     expression: 'query.is_swimming ? 1.0 : 0.0',
-    evidence: 'Binary swimming state reconstructed from the documented player swimming query; smooth engine blend amount is not exposed on all target versions.',
+    evidence: 'Binary swimming state reconstructed from the documented player swimming query; smooth engine blend amount is not exposed on all target versions.',,
+    always: true
   },
   use_item_interval_progress: {
     expression: 'query.main_hand_item_max_duration > 0.0 ? math.clamp(query.main_hand_item_use_duration / query.main_hand_item_max_duration, 0.0, 1.0) : 0.0',
-    evidence: 'Main-hand item-use interval reconstructed from the documented remaining/max use-duration queries.',
+    evidence: 'Main-hand item-use interval reconstructed from the documented remaining/max use-duration queries.',,
+    always: true
   },
   // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
   spa_move_speed: {
