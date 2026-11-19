@@ -17,8 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22.23.4"
-          cache: pnpm
-          cache-dependency-path: JavaBE/pnpm-lock.yaml
       - uses: pnpm/action-setup@v4
         with:
           version: 10.10.0
@@ -39,7 +37,7 @@ jobs:
         with:
           name: javabe-pierced-player-runtime-fixed
           path: |
-            JavaBE/fixture-analysis/SeriousPlayerAnimations-1.1.1.mcaddon
-            JavaBE/fixture-analysis/pierced-current-engine.json
+            fixture-analysis/SeriousPlayerAnimations-1.1.1.mcaddon
+            fixture-analysis/pierced-current-engine.json
           if-no-files-found: warn
           retention-days: 14
