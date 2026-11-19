@@ -194,7 +194,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
       const partName = rawPartName.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
       partNames.add(partName);
       if (transform.axis !== undefined) {
-        issues.push('Emotecraft ' + sourcePartName + '.axis at tick ' + tick + ' is not consumed by the legacy PlayerAnimator runtime; its actual animated channels are x/y/z, pitch/yaw/roll, scaleX/Y/Z, and scalar bend.');
+        issues.push('Emotecraft ' + rawPartName + '.axis at tick ' + tick + ' is not consumed by the legacy PlayerAnimator runtime; its actual animated channels are x/y/z, pitch/yaw/roll, scaleX/Y/Z, and scalar bend.');
       }
       const part = parts.get(partName) ?? {
         position: {}, positionEasing: {},
