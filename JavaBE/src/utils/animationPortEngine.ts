@@ -264,6 +264,7 @@ function bridgePlayerRigClips(
   const sourceClipIdByPlayerClipId: Record<string, string> = {};
   const sourceClipIdToPlayerClipId: Record<string, string> = {};
   const sourceBoneToPlayerBone = Object.fromEntries(fit.mappings.map((mapping) => [mapping.source, mapping.bone]));
+  if (seriousPlayerAnimationsSource) sourceBoneToPlayerBone.body = 'root';
   // The bridge receives only owners already classified as player-owned. A source clip can
   // nevertheless appear in more than one owner bucket (for example, once from the GeckoLib
   // importer and once from universal discovery). Map each source identifier exactly once and
