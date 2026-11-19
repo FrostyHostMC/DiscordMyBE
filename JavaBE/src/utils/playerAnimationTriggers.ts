@@ -248,7 +248,7 @@ function hasPalPlayerAnimationProfile(entries: ExtractedZipEntry[]): boolean {
     if (!entry.path.toLowerCase().endsWith('.class')) return false;
     try {
       const text = decoder.decode(entry.data);
-      return /PlayerAnimationController|PlayerAnimationFactory|PlayerRawAnimationBuilder|com\\/zigythebird\\/playeranim/i.test(text);
+      return /PlayerAnimationController|PlayerAnimationFactory|PlayerRawAnimationBuilder|com\/zigythebird\/playeranim/i.test(text);
     } catch {
       return false;
     }
