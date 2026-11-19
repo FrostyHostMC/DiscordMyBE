@@ -21,7 +21,7 @@ jobs:
         with:
           version: 10.10.0
       - name: Install JavaBE dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
       - name: Fetch pinned Serious Player Animations source evidence
         run: |
           curl --fail --location --silent --show-error \
