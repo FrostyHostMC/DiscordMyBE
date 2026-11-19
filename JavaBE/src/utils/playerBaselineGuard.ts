@@ -3,6 +3,9 @@ import {
   VANILLA_PLAYER_ANIMATION_IDS,
   VANILLA_PLAYER_CONTROLLER_IDS,
   VANILLA_PLAYER_ANIMATE,
+  VANILLA_PLAYER_INITIALIZE,
+  VANILLA_PLAYER_PRE_ANIMATION,
+  VANILLA_PLAYER_VARIABLES,
   VANILLA_PLAYER_RENDER_CONTROLLERS,
   VANILLA_PLAYER_RENDER_CONTROLLER_IDS,
 } from '@/utils/vanillaPlayerBaseline';
@@ -63,6 +66,37 @@ function collectGenericFallbackRenderControllerIds(files: Record<string, string 
   return ids;
 }
 
+
+/** Merge the vanilla player script contract without dropping mod-owned script entries. */
+function mergeBaselineScriptEntries(existing: unknown, baseline: string[]): { entries: string[]; changed: boolean } {
+  const entries = Array.isArray(existing)
+    ? existing.filter((entry): entry is string => typeof entry === 'string')
+    : typeof existing === 'string' ? [existing] : [];
+  let changed = false;
+  const baselineNames = new Set<string>();
+  for (const statement of baseline) {
+    for (const match of statement.matchAll(/\\b(?:variable|v|temp|t)\\.([a-zA-Z0-9_]+)\\s*=(?!=)/g)) {
+      baselineNames.add(String(match[1]));
+    }
+  }
+  // Replace old vanilla assignments by variable name so an older partial baseline cannot
+  // override the current Mojang expression later in the same pre_animation pass.
+  const filtered = entries.filter((entry) => {
+    const assigned = [...entry.matchAll(/\\b(?:variable|v)\\.([a-zA-Z0-9_]+)\\s*=(?!=)/g)].map((match) => String(match[1]));
+    const isSuperseded = assigned.some((name) => baselineNames.has(name));
+    if (isSuperseded) changed = true;
+    return !isSuperseded;
+  });
+  const merged = [...filtered];
+  for (const statement of baseline) {
+    if (!merged.includes(statement)) {
+      merged.push(statement);
+      changed = true;
+    }
+  }
+  return { entries: merged, changed };
+}
+
 function parseJson(raw: string | Uint8Array | undefined): Json | null {
   if (typeof raw !== 'string') return null;
   try {
@@ -120,6 +154,11 @@ export function guaranteePlayerBaselineWiring(input: {
       ? { ...description.animations }
       : {};
     const scripts: Record<string, unknown> = isRecord(description.scripts) ? { ...description.scripts } : {};
+    const initializeMerge = mergeBaselineScriptEntries(scripts.initialize, VANILLA_PLAYER_INITIALIZE);
+    const preAnimationMerge = mergeBaselineScriptEntries(scripts.pre_animation, VANILLA_PLAYER_PRE_ANIMATION);
+    const existingVariables = isRecord(scripts.variables) ? scripts.variables : {};
+    const variables = { ...existingVariables, ...VANILLA_PLAYER_VARIABLES };
+    const variablesChanged = JSON.stringify(existingVariables) !== JSON.stringify(variables);
     const animate: unknown[] = Array.isArray(scripts.animate) ? [...scripts.animate] : [];
     const existingRenderControllers: unknown[] = Array.isArray(description.render_controllers)
       ? [...description.render_controllers]
@@ -139,7 +178,11 @@ export function guaranteePlayerBaselineWiring(input: {
         .filter((id) => !existingRenderControllerIds.has(id)).length
         + [...existingRenderControllerIds].filter((id) => genericFallbackRenderControllerIds.has(id)).length;
     }
-    let changed = !isRecord(description.animations) || renderControllersChanged;
+    let changed = !isRecord(description.animations) || renderControllersChanged
+      || initializeMerge.changed || preAnimationMerge.changed || variablesChanged;
+    scripts.initialize = initializeMerge.entries;
+    scripts.pre_animation = preAnimationMerge.entries;
+    scripts.variables = variables;
 
     for (const entry of PLAYER_BASELINE_ENTRIES) {
       if (animations[entry.alias] !== entry.identifier) {
