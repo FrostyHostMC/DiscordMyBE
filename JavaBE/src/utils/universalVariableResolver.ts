@@ -390,7 +390,7 @@ export function resolveUniversalVariables(
           // buildPlayerClientEntity merges the baseline scripts.variables map into the pack.
           for (const [rawName, scope] of Object.entries(VANILLA_PLAYER_VARIABLES)) {
             if (scope !== 'public' && scope !== 'private') continue;
-            const name = rawName.replace(/^variable\\./i, '').trim().toLowerCase();
+            const name = rawName.replace(/^variable\./i, '').trim().toLowerCase();
             if (name) assigned.add(name);
           }
         }
