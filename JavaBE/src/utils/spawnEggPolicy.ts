@@ -299,12 +299,12 @@ export function applySpawnEggPolicy(options: {
     registrations.has(mobId) || hasSpawnEggAppearance(client.description.spawn_egg) || options.playableMode;
 
   for (const key of Object.keys(bp)) {
-    if (!/^items\\/.+\\.json$/i.test(key)) continue;
+    if (!/^items\/.+\.json$/i.test(key)) continue;
     const doc = parseJson(bp[key]);
     const body = doc?.['minecraft:item'];
     const components = body?.components ?? {};
     if (!components['minecraft:entity_placer']) continue;
-    const itemId = String(body?.description?.identifier ?? '').split(':').pop() || key.replace(/^items\\/|\\.json$/gi, '');
+    const itemId = String(body?.description?.identifier ?? '').split(':').pop() || key.replace(/^items\/|\.json$/gi, '');
     const placer = components['minecraft:entity_placer'] as { entity?: unknown } | undefined;
     const placedRaw = typeof placer?.entity === 'string' ? placer.entity : '';
     const placedMob = placedRaw ? compactKey(placedRaw.split(':').pop() ?? placedRaw) : '';
@@ -329,7 +329,7 @@ export function applySpawnEggPolicy(options: {
     if (canGenerateEggForMob(mobId, client)) autoEggTextureStems.add(`${mobId}_spawn_egg`);
   }
   for (const key of Object.keys(rp)) {
-    if (!/^textures\\/.+\\.png$/i.test(key)) continue;
+    if (!/^textures\/.+\.png$/i.test(key)) continue;
     const stem = key.slice(0, -4).split('/').pop() ?? '';
     if (!autoEggTextureStems.has(stem)) continue;
     delete rp[key];
