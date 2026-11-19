@@ -196,7 +196,7 @@ export function guaranteePlayerBaselineWiring(input: {
         report.aliasesRestored += 1;
         changed = true;
       }
-      const shouldAnimateDirectly = VANILLA_PLAYER_ANIMATE.some((item) =>
+      const shouldAnimateDirectly = entry.alias !== 'base_controller' && VANILLA_PLAYER_ANIMATE.some((item) =>
         typeof item === 'string' ? item === entry.alias : isRecord(item) && entry.alias in item,
       );
       const bound = animate.some((item) =>
