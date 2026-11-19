@@ -165,8 +165,10 @@ export function buildPlayerClientEntity(options: {
   // sole conditionless clip in that view. Multiple unknown clips in one view would
   // fight over the same bones, so those still require recovered state evidence.
   const conditionlessPerspectiveCounts = new Map<'first' | 'third', number>();
+  const hasExplicitNoRuntimePath = (trigger: PlayerClipTrigger): boolean =>
+    /unreferenced|no runtime start path|not loaded by|not referenced by|no Java trigger/i.test(trigger.note ?? '');
   for (const trigger of triggers) {
-    if (trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim()) continue;
+    if (trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim() || hasExplicitNoRuntimePath(trigger)) continue;
     conditionlessPerspectiveCounts.set(trigger.perspective, (conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0) + 1);
   }
   const controllerDrivenClips: string[] = [];
@@ -289,7 +291,7 @@ export function buildPlayerClientEntity(options: {
     const condition = conditionTranslation?.expression;
     if (!condition || (conditionTranslation?.unresolved.length ?? 0) > 0) {
       const conditionlessCount = conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0;
-      if (!trigger.condition?.trim() && conditionlessCount === 1) {
+      if (!trigger.condition?.trim() && conditionlessCount === 1 && !hasExplicitNoRuntimePath(trigger)) {
         // Perspective is genuine source evidence even when a Java state predicate was not
         // recovered. A sole clip in that view cannot compete with another unknown pose, so
         // play it continuously only in its own camera perspective.
