@@ -1204,6 +1204,8 @@ export function measureContentLogConformance(): RegressionFixtureResult {
       textures: ['minecraft:particle/mob_glow']
     }),
     [assetsData.IMAGE_LDJY]: pngHeader(16, 16),
+    [assetsData.IMAGE_RDSE]: pngHeader(16, 16),
+    'textures/entity/capac_mer.png': pngHeader(16, 16),
     'textures/entity/capac.texture_set.json': JSON.stringify({
       format_version: '1.21.0',
       'minecraft:texture_set': {
@@ -1249,10 +1251,10 @@ export function measureContentLogConformance(): RegressionFixtureResult {
         }
       }
     }),
-    [assetsData.IMAGE_QDFQ]: pngHeader(16, 16),
+    'textures/items/rune.png': pngHeader(16, 16),
     // A block-only sheet: the item below is a block item whose identifier does not match the
     // texture the block renders with, exactly as Java block/stairs/slab items ship.
-    [assetsData.IMAGE_KWNL]: pngHeader(16, 16)
+    'textures/blocks/mudbrick.png': pngHeader(16, 16)
   };
   const bp: Record<string, PackFile> = {
     'items/rune.json': JSON.stringify({
