@@ -1,5 +1,5 @@
 import { buildBoneIndex, matchBoneName } from '@/utils/boneRetarget';
-import { PLAYER_SKELETON_BONES, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { PLAYER_SKELETON_BONES } from '@/utils/playerBoneAliases';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
 import { VANILLA_PLAYER_GEOMETRY_IDS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } from '@/utils/vanillaPlayerBaseline';
 import { snapshotAnimationResourceRegistry } from '@/utils/animationRegistrySnapshot';
@@ -487,7 +487,12 @@ function auditBones(
     for (const clipId of owned) {
       for (const bone of clips.get(clipId)?.bones ?? []) {
         const key = JSON.stringify([entity.path, clipId, bone]);
-        const matched = Boolean(matchBoneName(bone, index).bone) || Boolean(entity.isPlayer && resolvePlayerBone(bone));
+        // Similarity is useful during retargeting, but Bedrock resolves animation
+        // channels by exact bone key. A player alias is not proof that the rendered geometry
+        // actually declares that key; require exact names after the final export pass.
+        const matched = entity.isPlayer
+          ? skeleton.bones.includes(bone)
+          : Boolean(matchBoneName(bone, index).bone);
         resolvedPairs.set(key, { entityPath: entity.path, identifier: entity.identifier, clipId, bone, resolved: matched });
       }
     }
