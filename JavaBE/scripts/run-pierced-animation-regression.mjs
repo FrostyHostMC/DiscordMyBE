@@ -311,11 +311,14 @@ try {
       geometry.description?.identifier === playerDefaultGeometry);
     const effectivePlayerGeometry = customPlayerGeometry ?? vanillaPlayerGeometry;
     const playerGeometryBones = new Set((effectivePlayerGeometry?.bones ?? []).map((bone) => bone.name));
+    const registeredPlayerClipIds = new Set(Object.values(playerDescription?.animations ?? {})
+      .filter((value) => typeof value === 'string' && value.startsWith('animation.')));
     const playerClipBones = new Set();
     for (const entry of resourcePackEntries) {
       if (entry.isDirectory || !entry.path.toLowerCase().startsWith('animations/') || !entry.path.toLowerCase().endsWith('.animation.json')) continue;
       const document = readResourceJson(entry.path);
-      for (const clip of Object.values(document?.animations ?? {})) {
+      for (const [clipId, clip] of Object.entries(document?.animations ?? {})) {
+        if (!registeredPlayerClipIds.has(clipId)) continue;
         for (const boneName of Object.keys(clip?.bones ?? {})) playerClipBones.add(boneName);
       }
     }
@@ -333,6 +336,7 @@ try {
       capeTexture: playerDescription?.textures?.cape ?? null,
       passed: Boolean(playerDescription)
         && Boolean(effectivePlayerGeometry)
+        && playerDefaultGeometry === 'geometry.humanoid.custom'
         && playerGeometryMap.cape === 'geometry.cape'
         && unresolvedPlayerBoneTracks.length === 0
         && !resourceText.has('models/entity/player.geo.json')
