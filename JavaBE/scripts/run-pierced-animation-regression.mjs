@@ -301,7 +301,7 @@ try {
     const vanillaPlayerGeometry = vanillaPlayerGeometries.find((geometry) =>
       geometry.description?.identifier === playerDefaultGeometry);
     const shippedPlayerGeometry = resourcePackEntries
-      .filter((entry) => !entry.isDirectory && /^models\\/i.test(entry.path) && /\\.json$/i.test(entry.path))
+      .filter((entry) => !entry.isDirectory && entry.path.toLowerCase().startsWith('models/') && entry.path.toLowerCase().endsWith('.json'))
       .map((entry) => {
         try { return JSON.parse(decoder.decode(entry.data)); } catch { return null; }
       })
@@ -313,7 +313,7 @@ try {
     const playerGeometryBones = new Set((effectivePlayerGeometry?.bones ?? []).map((bone) => bone.name));
     const playerClipBones = new Set();
     for (const entry of resourcePackEntries) {
-      if (entry.isDirectory || !/^animations\\//i.test(entry.path) || !/\\.animation\\.json$/i.test(entry.path)) continue;
+      if (entry.isDirectory || !entry.path.toLowerCase().startsWith('animations/') || !entry.path.toLowerCase().endsWith('.animation.json')) continue;
       const document = readResourceJson(entry.path);
       for (const clip of Object.values(document?.animations ?? {})) {
         for (const boneName of Object.keys(clip?.bones ?? {})) playerClipBones.add(boneName);
