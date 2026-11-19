@@ -331,6 +331,10 @@ try {
   }));
   const baseControllerClips = controllerStateClips.find((entry) => !entry.file.includes('_overlay'))?.clips ?? [];
   const overlayControllerClips = controllerStateClips.find((entry) => entry.file.includes('_overlay'))?.clips ?? [];
+  const invalidPlayerPositionQueries = Object.entries(result.resourcePackFiles)
+    .filter(([file]) => /player\.entity\.json$/i.test(file))
+    .filter(([, raw]) => typeof raw === 'string')
+    .flatMap(([file, raw]) => [...raw.matchAll(/query\.position\s*\(/g)].map((match) => ({ file, call: match[0] })));
   const invalidArmorQueries = Object.entries(result.resourcePackFiles)
     .filter(([, raw]) => typeof raw === 'string')
     .flatMap(([file, raw]) => [...raw.matchAll(/query\.get_equipped_item_name\(\s*['"]slot\.armor[^)]*\)/gi)].map((match) => ({ file, call: match[0] })));
@@ -362,6 +366,7 @@ try {
     { id: 'vanilla-tcos0-variable-restored-from-source-baseline', expected: 'live Mojang movement expression', actual: tcos0 ?? 'missing', passed: Boolean(tcos0 && tcos0.includes('query.modified_distance_moved') && tcos0.includes('query.modified_move_speed')) },
     { id: 'spear-equipment-variable-uses-vanilla-item-tag', expected: "query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')", actual: spear ?? 'missing', passed: Boolean(spear && spear.includes("query.equipped_item_any_tag('slot.weapon.mainhand', 'minecraft:is_spear')")) },
     { id: 'no-invalid-armor-slot-hand-query-emitted', expected: 0, actual: invalidArmorQueries.length, passed: invalidArmorQueries.length === 0 },
+    { id: 'player-animation-scope-uses-position-delta-not-absolute-position-query', expected: 0, actual: invalidPlayerPositionQueries.length, passed: invalidPlayerPositionQueries.length === 0 },
     { id: 'vanilla-player-root-controller-wired', expected: 'root', actual: playerDescription?.scripts?.animate ?? [], passed: Array.isArray(playerDescription?.scripts?.animate) && playerDescription.scripts.animate.includes('root') },
     { id: 'player-variable-dependency-audit-has-no-unresolved-variables', expected: 0, actual: playerDependencies?.variables?.unresolved?.length ?? -1, passed: Boolean(playerDependencies && playerDependencies.variables.unresolved.length === 0) },
     { id: 'player-static-dependency-validation-passes', expected: true, actual: playerDependencies?.staticValidationPassed ?? false, passed: playerDependencies?.staticValidationPassed === true },
