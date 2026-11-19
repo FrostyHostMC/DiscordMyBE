@@ -24,39 +24,128 @@ export function fixtureText(path: string, value: string): ExtractedZipEntry {
 }
 const pngCache = new Map<string, Uint8Array>();
 
-/** Deterministic fixture PNG. Returns an empty payload when no canvas is available. */
+function concatBytes(parts: Uint8Array[]): Uint8Array {
+  const length = parts.reduce((total, part) => total + part.length, 0);
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    output.set(part, offset);
+    offset += part.length;
+  }
+  return output;
+}
+
+function writeUint32BE(target: Uint8Array, offset: number, value: number): void {
+  target[offset] = (value >>> 24) & 0xff;
+  target[offset + 1] = (value >>> 16) & 0xff;
+  target[offset + 2] = (value >>> 8) & 0xff;
+  target[offset + 3] = value & 0xff;
+}
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ ((crc & 1) ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeBytes = new TextEncoder().encode(type);
+  const crcInput = concatBytes([typeBytes, data]);
+  const chunk = new Uint8Array(12 + data.length);
+  writeUint32BE(chunk, 0, data.length);
+  chunk.set(typeBytes, 4);
+  chunk.set(data, 8);
+  writeUint32BE(chunk, 8 + data.length, crc32(crcInput));
+  return chunk;
+}
+
+function adler32(bytes: Uint8Array): number {
+  let a = 1;
+  let b = 0;
+  for (const byte of bytes) {
+    a = (a + byte) % 65521;
+    b = (b + a) % 65521;
+  }
+  return (((b << 16) | a) >>> 0);
+}
+
+function deflateStored(bytes: Uint8Array): Uint8Array {
+  const parts: Uint8Array[] = [new Uint8Array([0x78, 0x01])];
+  let offset = 0;
+  while (offset < bytes.length) {
+    const length = Math.min(65535, bytes.length - offset);
+    const final = offset + length >= bytes.length;
+    const inverse = (~length) & 0xffff;
+    parts.push(new Uint8Array([
+      final ? 1 : 0,
+      length & 0xff,
+      (length >>> 8) & 0xff,
+      inverse & 0xff,
+      (inverse >>> 8) & 0xff,
+    ]));
+    parts.push(bytes.subarray(offset, offset + length));
+    offset += length;
+  }
+  const checksum = adler32(bytes);
+  const trailer = new Uint8Array(4);
+  writeUint32BE(trailer, 0, checksum);
+  parts.push(trailer);
+  return concatBytes(parts);
+}
+
+function encodeFixturePng(width: number, height: number, colour: string): Uint8Array {
+  const match = /^#?([0-9a-f]{6})$/i.exec(colour.trim());
+  const hex = match?.[1] ?? '808080';
+  const red = Number.parseInt(hex.slice(0, 2), 16);
+  const green = Number.parseInt(hex.slice(2, 4), 16);
+  const blue = Number.parseInt(hex.slice(4, 6), 16);
+  const rowBytes = width * 4 + 1;
+  const raw = new Uint8Array(rowBytes * height);
+  let offset = 0;
+  for (let y = 0; y < height; y += 1) {
+    raw[offset++] = 0; // PNG filter: None
+    for (let x = 0; x < width; x += 1) {
+      raw[offset++] = red;
+      raw[offset++] = green;
+      raw[offset++] = blue;
+      raw[offset++] = 255;
+    }
+  }
+
+  const ihdr = new Uint8Array(13);
+  writeUint32BE(ihdr, 0, width);
+  writeUint32BE(ihdr, 4, height);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // RGBA
+  ihdr[10] = 0;
+  ihdr[11] = 0;
+  ihdr[12] = 0;
+
+  return concatBytes([
+    new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateStored(raw)),
+    pngChunk('IEND', new Uint8Array(0)),
+  ]);
+}
+
+/**
+ * Deterministic, fully valid PNG fixture. This is pure TypeScript and works in both
+ * browsers and Node-based CI; it never depends on document, canvas, or browser codecs.
+ */
 export function fixturePng(path: string, width: number, height: number, color: string): ExtractedZipEntry {
   const key = `${width}x${height}:${color}`;
   let bytes = pngCache.get(key);
   if (!bytes) {
-    bytes = new Uint8Array(0);
-    if (typeof document !== 'undefined') {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = color;
-          ctx.fillRect(0, 0, width, height);
-          ctx.fillStyle = 'rgba(255,255,255,0.35)';
-          ctx.fillRect(1, 1, Math.max(1, width / 2), Math.max(1, height / 2));
-          const base64 = canvas.toDataURL('image/png').split(',')[1] ?? '';
-          const binary = atob(base64);
-          const out = new Uint8Array(binary.length);
-          for (let index = 0; index < binary.length; index += 1) out[index] = binary.charCodeAt(index);
-          bytes = out;
-        }
-      } catch {
-        bytes = new Uint8Array(0);
-      }
-    }
+    bytes = encodeFixturePng(width, height, color);
     pngCache.set(key, bytes);
   }
-  return {
-    path,
-    data: bytes
-  };
+  return { path, data: bytes };
 }
 export interface EntityModelExpectation {
   path: string;
