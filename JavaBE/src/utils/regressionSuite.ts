@@ -17,7 +17,7 @@ import { REGRESSION_FIXTURES, fixturePng, type RegressionFixture } from '@/utils
 import { compareGeometryUv, translateFaceUv, verifySheetCoverage } from '@/utils/uvMapping';
 import { findDuplicateIdentifierGroups, normalizeAssetIdentifier, normalizeAssetPath } from '@/utils/identifierNormalization';
 import { countSchemaErrors, runBedrockSchemaGate } from '@/utils/bedrockSchemaGate';
-import { measureAnimationPropertyPolicy, measureClientEntityReferencePruning, measureContentLogConformance, measureEventDeclarationIntegrity, measureGeometryIdentitySync, measureMissingItemIconReporting, measureMissingTextureReporting, measurePerFaceUvAcceptance, measureRenderControllerSchema, measureSoundConversion, measureClientEntityLinking, measureItemModelNormalization, measurePlayerAnimationBindingPreservation, measurePlayerClipActivationFallback, measureAnimationControllerReferenceGraph, measurePlayerMolangVariableInitialization, measureSpawnEggSourceIntegration } from '@/utils/regressionSchemaFixtures';
+import { measureAnimationPropertyPolicy, measureClientEntityReferencePruning, measureContentLogConformance, measureEventDeclarationIntegrity, measureGeometryIdentitySync, measureMissingItemIconReporting, measureMissingTextureReporting, measurePerFaceUvAcceptance, measureRenderControllerSchema, measureSoundConversion, measureClientEntityLinking, measureItemModelNormalization, measurePlayerAnimationBindingPreservation, measurePlayerClipActivationFallback, measureAnimationControllerReferenceGraph, measurePlayerMolangVariableInitialization, measureSpawnEggSourceIntegration, measurePalPlayerAnimatorFormat } from '@/utils/regressionSchemaFixtures';
 
 import { inferMobBehaviorProfiles } from '@/utils/mobBehaviorProfiles';
 
@@ -1129,6 +1129,7 @@ export async function runRegressionSuite(options: RegressionRunOptions = {}): Pr
     measureSpawnEggSourceIntegration(),
     measureItemModelNormalization(),
     measureNestedMobBehaviorEvidence(),
+    measurePalPlayerAnimatorFormat(),
   ];
   fixtures.push(...extraFixtures);
   for (const extra of extraFixtures) {
