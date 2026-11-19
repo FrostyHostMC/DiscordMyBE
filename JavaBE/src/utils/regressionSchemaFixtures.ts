@@ -2278,8 +2278,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const hasVariable = (name: string, statements: string[]) => statements.some((statement) => statement.startsWith(`variable.${name} =`));
   const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
   const sourceMovementVariables = [
-    'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
-    'spa_turn_delta', 'spa_previous_body_yaw',
+    'spa_move_speed', 'spa_turn_delta', 'spa_previous_body_yaw',
   ] as const;
   const sourceVariableTranslations = sourceMovementVariables.map((name) => {
     const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
@@ -2290,6 +2289,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     return { name, unresolved: translated.unresolved, rejected: translated.rejected };
   });
   const locomotion = triggerReport.triggers.filter((trigger) => trigger.status === 'mapped');
+  const backwardTrigger = triggerReport.triggers.find((trigger) => trigger.sourceClipId === 'walking_backwards');
   const shieldIds = [
     'animation.seriousplayeranimations.shield',
     'animation.seriousplayeranimations.shield_sneak',
@@ -2305,10 +2305,10 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     actual: assetOnlyReport.sourceProfileCandidate ?? `${assetOnlyReport.unresolved} unresolved clip(s)`,
     passed: !assetOnlyReport.sourceProfile && assetOnlyReport.sourceProfileCandidate?.includes('base Java mod JAR required') === true && assetOnlyReport.unresolved === assetOnlyReport.clipsInspected
   }, {
-    label: 'all six supplied locomotion clips receive source-derived conditions',
-    expected: 'idle, walk, backwards, sprint, sneak idle and sneak walk mapped',
-    actual: `${locomotion.length} mapped locomotion trigger(s)`,
-    passed: locomotion.length === 6 && locomotion.every((trigger) => Boolean(trigger.condition))
+    label: 'all safely expressible locomotion clips receive source-derived conditions',
+    expected: 'standing idle, forward walk, sprint, sneak idle and sneak walk mapped; backwards explicitly withheld',
+    actual: `${locomotion.length} mapped locomotion trigger(s); backwards=${backwardTrigger?.status ?? 'missing'}`,
+    passed: locomotion.length === 5 && locomotion.every((trigger) => Boolean(trigger.condition)) && backwardTrigger?.status === 'unresolved' && !backwardTrigger.condition
   }, {
     label: 'the extra animation.running definition is not falsely activated',
     expected: 'unreferenced source definition remains unresolved',
@@ -2326,9 +2326,9 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     passed: controller.controllerIds.length === 2 && controllerDocs.length === 2 && Boolean(baseId && overlayId)
   }, {
     label: 'locomotion and shield states do not compete in the same controller',
-    expected: 'six locomotion clips in base; two shield clips in overlay',
+    expected: 'five supported locomotion clips in base; two shield clips in overlay',
     actual: `base=${baseStateClips.length}, overlay=${overlayStateClips.length}`,
-    passed: clipNames.filter((name) => name !== 'shield' && name !== 'shield_sneak').every((name) => baseStateClips.includes(`animation.seriousplayeranimations.${name}`)) &&
+    passed: clipNames.filter((name) => !['shield', 'shield_sneak', 'walking_backwards'].includes(name)).every((name) => baseStateClips.includes(`animation.seriousplayeranimations.${name}`)) &&
       shieldIds.every((id) => overlayStateClips.includes(id)) &&
       shieldIds.every((id) => !baseStateClips.includes(id)) &&
       Boolean(javaRunningTrigger && baseStateClips.includes(javaRunningTrigger.clipId)) &&
@@ -2339,27 +2339,24 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     actual: JSON.stringify(sourceVariableTranslations.filter((entry) => entry.unresolved.length > 0 || entry.rejected.length > 0)),
     passed: sourceVariableTranslations.every((entry) => entry.unresolved.length === 0 && entry.rejected.length === 0)
   }, {
-    label: 'the source movement and direction calculations are restored in player Molang scope',
-    expected: 'move speed, backward direction and turn delta expressions injected',
-    actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
-    passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
+    label: 'safe movement magnitude and body-turn inputs are restored in player Molang scope',
+    expected: 'modified_move_speed and body-yaw delta variables injected',
+    actual: sourceMovementVariables.filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
+    passed: sourceMovementVariables.every((name) => hasVariable(name, preAnimation))
   }, {
-    label: 'the per-tick position and speed equations match the Java source state machine',
-    expected: 'dx/dz from query.position_delta; speed is sqrt(dx² + dz²)',
-    actual: [statementFor('spa_dx'), statementFor('spa_dz'), statementFor('spa_move_speed')].filter(Boolean).join(' | ') || 'missing',
-    passed: statementFor('spa_dx').includes('query.position_delta(0)') &&
-      statementFor('spa_dz').includes('query.position_delta(2)') &&
-      statementFor('spa_move_speed').includes('math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0)')
+    label: 'player locomotion no longer invokes position_delta without a player entity context',
+    expected: 'spa_move_speed reads query.modified_move_speed; no position_delta dependency',
+    actual: statementFor('spa_move_speed') || 'missing',
+    passed: statementFor('spa_move_speed').includes('query.modified_move_speed') &&
+      !preAnimation.some((statement) => statement.includes('query.position_delta'))
   }, {
-    label: 'backward movement and turning equations match the Java source state machine',
-    expected: 'movement dot look direction < 0; body yaw minus previous body yaw',
-    actual: [statementFor('spa_moving_backwards'), statementFor('spa_turn_delta')].filter(Boolean).join(' | ') || 'missing',
-    passed: statementFor('spa_moving_backwards').includes('math.cos((query.body_y_rotation + 90.0)') &&
-      statementFor('spa_moving_backwards').includes('math.sin((query.body_y_rotation + 90.0)') &&
-      statementFor('spa_turn_delta').includes('query.body_y_rotation - variable.spa_previous_body_yaw')
+    label: 'backward locomotion is reported rather than guessed from movement magnitude',
+    expected: 'walking_backwards unresolved without a signed movement vector',
+    actual: backwardTrigger?.status ?? 'missing',
+    passed: backwardTrigger?.status === 'unresolved' && !backwardTrigger.condition
   }, {
     label: 'the previous position and body-yaw variables start from source initial values',
-    expected: 'spa_previous_body_yaw initializes to 0.0; position deltas are engine-provided each frame',
+    expected: 'spa_previous_body_yaw initializes to 0.0; no position-delta variables are emitted',
     actual: initialize.filter((statement) => statement.startsWith('variable.spa_previous_body_yaw =')).join(', ') || 'missing',
     passed: initialize.some((statement) => statement.startsWith('variable.spa_previous_body_yaw = 0.0'))
   }, {
