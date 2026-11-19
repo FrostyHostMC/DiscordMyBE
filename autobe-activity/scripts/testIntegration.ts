@@ -545,7 +545,10 @@ console.log('✓ paired behavior/resource entity identifiers remain synchronized
       identifier: 'minecraft:player',
       textures: { custom: 'textures/entity/not_shipped' },
       geometry: { custom: 'geometry.fixture.not_shipped' },
-      animations: { custom: 'animation.fixture.not_shipped' },
+      animations: {
+        custom: 'animation.fixture.not_shipped',
+        missing_controller: 'controller.animation.fixture.not_shipped'
+      },
       render_controllers: ['controller.render.fixture.not_shipped', 'controller.render.player.cape']
     } }
   }));
@@ -554,6 +557,7 @@ console.log('✓ paired behavior/resource entity identifiers remain synchronized
   assert.ok(brokenCodes.has('MISSING_TEXTURE_FILE'));
   assert.ok(brokenCodes.has('MISSING_GEOMETRY_REFERENCE'));
   assert.ok(brokenCodes.has('MISSING_ANIMATION_REFERENCE'));
+  assert.ok(brokenCodes.has('MISSING_ANIMATION_CONTROLLER_REFERENCE'));
   assert.ok(brokenCodes.has('MISSING_RENDER_CONTROLLER_REFERENCE'));
   console.log('✓ resource dependency audit distinguishes verified vanilla player resources from genuinely missing custom references');
 }

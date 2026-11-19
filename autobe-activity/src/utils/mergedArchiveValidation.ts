@@ -269,20 +269,20 @@ export async function validateMergedArchive(zip: JSZip, label: string): Promise<
     if (!value || typeof value !== 'object') {
       if (typeof value === 'string' && isResourcePack) {
         const refId = value.trim();
-        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\\./.test(refId) &&
+        if ((key === 'geometry' || parentKey === 'geometry') && /^geometry\./.test(refId) &&
             !geometryIds.has(refId) && !VANILLA_GEOMETRY_IDS.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_GEOMETRY_REFERENCE', path: sourcePath, message: '[' + label + '] Geometry identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game geometry was found.' });
         }
-        if (parentKey === 'animations' && /^animation\\./.test(refId) &&
+        if (parentKey === 'animations' && /^animation\./.test(refId) &&
             !animationIds.has(refId) && !VANILLA_ANIMATION_IDS.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_ANIMATION_REFERENCE', path: sourcePath, message: '[' + label + '] Animation identifier "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game animation was found.' });
         }
         if ((parentKey === 'animations' || key === 'animation_controllers' || parentKey === 'animation_controllers') &&
-            /^controller\\.animation\\./.test(refId) &&
+            /^controller\.animation\./.test(refId) &&
             !animationControllerIds.has(refId) && !VANILLA_ANIMATION_CONTROLLER_IDS.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_ANIMATION_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Animation controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game controller was found.' });
         }
-        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\\.render\\./.test(refId) &&
+        if ((key === 'render_controllers' || parentKey === 'render_controllers') && /^controller\.render\./.test(refId) &&
             !renderControllerIds.has(refId) && !VANILLA_RENDER_CONTROLLER_IDS.has(refId)) {
           add({ severity: 'warning', code: 'MISSING_RENDER_CONTROLLER_REFERENCE', path: sourcePath, message: '[' + label + '] Render controller "' + refId + '" is referenced in ' + sourcePath + ' but no matching custom or verified base-game render controller was found.' });
         }
