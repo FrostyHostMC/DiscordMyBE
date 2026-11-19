@@ -479,6 +479,7 @@ try {
       .filter((value) => typeof value === 'string' && value.startsWith('animation.')));
     const archivePlayerClipBones = new Set();
     const archivePlayerClipOverrides = [];
+    const archivePlayerAnimationClips = new Map();
     for (const entry of resourcePackEntries) {
       const lowerPath = entry.path.toLowerCase();
       if (entry.isDirectory || !lowerPath.startsWith('animations/') || !lowerPath.endsWith('.animation.json')) continue;
@@ -486,11 +487,24 @@ try {
       try { document = JSON.parse(new TextDecoder().decode(entry.data)); } catch { continue; }
       for (const [clipId, clip] of Object.entries(document?.animations ?? {})) {
         if (!registeredPlayerClipIds.has(clipId)) continue;
+        archivePlayerAnimationClips.set(clipId, clip);
         for (const boneName of Object.keys(clip?.bones ?? {})) archivePlayerClipBones.add(boneName);
         archivePlayerClipOverrides.push({ clipId, override: clip?.override_previous_animation === true });
       }
     }
     const unresolvedArchivePlayerBones = [...archivePlayerClipBones].filter((bone) => !archivePlayerBones.has(bone));
+    const idleStandingClip = archivePlayerAnimationClips.get('animation.player.player.idle_standing');
+    const walkingClip = archivePlayerAnimationClips.get('animation.player.player.walking');
+    const sourceRootSeparated = Boolean(
+      idleStandingClip?.bones?.root?.position &&
+      idleStandingClip?.bones?.body?.rotation &&
+      idleStandingClip?.bones?.body?.position === undefined &&
+      walkingClip?.bones?.root?.position &&
+      walkingClip?.bones?.body?.rotation &&
+      walkingClip?.bones?.body?.position === undefined &&
+      idleStandingClip?.bones?.root?.rotation === undefined &&
+      walkingClip?.bones?.root?.rotation === undefined,
+    );
     const genericPlayerFallbackPresent = archiveResourceText.has('models/entity/player.geo.json');
     const playerFallbackAssignments = [
       'is_holding_left', 'is_brandishing_spear', 'damage_nearby_mobs', 'swim_amount', 'use_item_interval_progress',
@@ -551,6 +565,7 @@ try {
       { id: 'full-converter-player-variable-audit-is-clean', expected: 0, actual: unresolvedPlayerVariables.length, passed: unresolvedPlayerVariables.length === 0 },
       { id: 'full-converter-reconstructs-player-controller-variables-missing-on-older-runtime', expected: 0, actual: missingPlayerFallbackAssignments.length, passed: missingPlayerFallbackAssignments.length === 0 },
       { id: 'full-converter-player-animations-reset-vanilla-bone-poses-before-playing', expected: 'all registered player clips override previous animation', actual: archivePlayerClipOverrides.filter((entry) => !entry.override).map((entry) => entry.clipId), passed: archivePlayerClipOverrides.length > 0 && archivePlayerClipOverrides.every((entry) => entry.override) },
+      { id: 'full-converter-keeps-serious-player-root-translation-separate-from-torso-pose', expected: 'root.position and body.rotation are separate; body.position is absent', actual: sourceRootSeparated, passed: sourceRootSeparated },
       { id: 'full-converter-player-baseline-and-first-person-contract-pass', expected: true, actual: playerDependencyClean, passed: playerDependencyClean },
       { id: 'full-converter-animation-integration-audit-passes', expected: true, actual: fullResult.animationIntegration?.passed ?? false, passed: fullResult.animationIntegration?.passed === true },
       { id: 'full-converter-fidelity-matches-all-nine-source-definitions', expected: { shipped: 9, missing: 0 }, actual: { shipped: fullResult.animationFidelity?.clipsShipped ?? -1, missing: fullResult.animationFidelity?.clipsMissing ?? -1 }, passed: fullResult.animationFidelity?.clipsShipped === 9 && fullResult.animationFidelity?.clipsMissing === 0 },
@@ -588,6 +603,7 @@ try {
       mcpackEntries: mcpackEntries.map((entry) => entry.path),
       archivePlayerGeometryAudit,
       archivePlayerClipOverrides,
+      sourceRootSeparated,
       missingPlayerFallbackAssignments,
       playerWiring: fullResult.playerEntityWiring ?? null,
       playerTriggers: fullResult.playerTriggers ?? null,
