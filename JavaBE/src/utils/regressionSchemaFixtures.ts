@@ -1,4 +1,5 @@
 import assetsData from "@/config/assets";
+import { fixturePng } from '@/utils/regressionFixtures';
 import type { RegressionAssertion, RegressionFixtureResult } from '@/types/remaker';
 import type { PackFile } from '@/utils/entityTextureVariants';
 import { isTextureExpression, sanitizeRenderControllers } from '@/utils/renderControllerSchema';
@@ -18,7 +19,7 @@ import { inspectAnimationControllerGraphs, normalizeEmptyControllerArrays } from
 import { reconstructAnimationDependencies } from '@/utils/animationDependencyReconstructor';
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
-import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES, VANILLA_PLAYER_ANIMATIONS } from '@/utils/vanillaPlayerBaseline';
 import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
 import { translateMolangExpression } from '@/utils/molangCompatibility';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
@@ -30,6 +31,7 @@ import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
 import { runPortValidation } from '@/utils/packPortValidator';
 import type { ExtractedZipEntry } from '@/utils/zip';
+import { runUniversalAnimationDiscovery } from '@/utils/universalAnimationDiscovery';
 
 /**
  * Conversion-specific regression fixtures for the content-log error classes.
@@ -41,17 +43,13 @@ import type { ExtractedZipEntry } from '@/utils/zip';
  */
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
 
 /** Minimal PNG header (signature + IHDR size fields) accepted by the dimension readers. */
 function pngHeader(width: number, height: number): Uint8Array {
-  const bytes = new Uint8Array(33);
-  for (let index = 0; index < PNG_SIGNATURE.length; index += 1) bytes[index] = PNG_SIGNATURE[index];
-  const view = new DataView(bytes.buffer);
-  view.setUint32(16, width);
-  view.setUint32(20, height);
-  bytes[24] = 8;
-  bytes[25] = 6;
-  return bytes;
+  return fixturePng('fixture.png', width, height, '#808080').data;
 }
 function ascii(text: string, padTo = 16): Uint8Array {
   const bytes = new Uint8Array(Math.max(padTo, text.length));
@@ -1016,7 +1014,7 @@ export function measurePlayerAnimationBindingPreservation(): RegressionFixtureRe
             root: 'controller.animation.player.root',
             base_pose: 'animation.player.base_pose',
             humanoid_base_pose: 'animation.humanoid.base_pose',
-            look_at_target: 'animation.humanoid.look_at_target',
+            look_at_target: 'controller.animation.humanoid.look_at_target',
             cape: 'animation.player.cape',
             first_person_base_pose: 'animation.player.first_person.base_pose',
             first_person_attack_controller: 'controller.animation.player.first_person_attack',
@@ -1204,6 +1202,8 @@ export function measureContentLogConformance(): RegressionFixtureResult {
       textures: ['minecraft:particle/mob_glow']
     }),
     [assetsData.IMAGE_LDJY]: pngHeader(16, 16),
+    [assetsData.IMAGE_RDSE]: pngHeader(16, 16),
+    'textures/entity/capac_mer.png': pngHeader(16, 16),
     'textures/entity/capac.texture_set.json': JSON.stringify({
       format_version: '1.21.0',
       'minecraft:texture_set': {
@@ -1249,10 +1249,10 @@ export function measureContentLogConformance(): RegressionFixtureResult {
         }
       }
     }),
-    [assetsData.IMAGE_QDFQ]: pngHeader(16, 16),
+    'textures/items/rune.png': pngHeader(16, 16),
     // A block-only sheet: the item below is a block item whose identifier does not match the
     // texture the block renders with, exactly as Java block/stairs/slab items ship.
-    [assetsData.IMAGE_KWNL]: pngHeader(16, 16)
+    'textures/blocks/mudbrick.png': pngHeader(16, 16)
   };
   const bp: Record<string, PackFile> = {
     'items/rune.json': JSON.stringify({
@@ -1665,6 +1665,14 @@ export function measureSpawnEggSourceIntegration(): RegressionFixtureResult {
     actual: `${String(registeredEntity?.is_spawnable)} / ${String(unregisteredEntity?.is_spawnable)}`,
     passed: registeredEntity?.is_spawnable === true && unregisteredEntity?.is_spawnable === false
   }, {
+    label: 'spawn egg appearance stays in the client entity and never leaks into behavior entity schema',
+    expected: 'client spawn_egg declaration; no behavior-side spawn_egg fields',
+    actual: `${String(registeredClient?.spawn_egg?.base_color ?? 'no client colours')} / behavior fields: ${[registeredEntity?.spawn_egg, unregisteredEntity?.spawn_egg].filter((value) => value !== undefined).length}`,
+    passed: registeredClient?.spawn_egg?.base_color === '#123456' &&
+      !('spawn_egg' in (registeredEntity ?? {})) &&
+      !('spawn_egg' in (unregisteredEntity ?? {})) &&
+      report.behaviourSpawnEggSynced === 0,
+  }, {
     label: 'the source egg uses entity colors instead of a duplicate standalone item or egg art',
     expected: 'no entity-placer item, icon texture, or atlas entry',
     actual: `${'items/one_mob_spawn_egg.json' in behaviorPackFiles ? 'item remains' : 'item removed'} / ${assetsData.IMAGE_FJGP in resourcePackFiles ? 'art remains' : 'art removed'} / ${'one_mob_spawn_egg' in atlas ? 'atlas remains' : 'atlas pruned'}`,
@@ -1714,8 +1722,10 @@ export function measureItemModelNormalization(): RegressionFixtureResult {
   const goldFace = models.get('gold_face');
   const broken = models.get('broken');
   const rp: Record<string, PackFile> = {
-    [assetsData.IMAGE_IWBM]: pngHeader(16, 16),
-    [assetsData.IMAGE_LZSV]: pngHeader(16, 16)
+    // Ship the actual sheets declared by the Java model documents. Unrelated PNGs cannot
+    // legitimately satisfy a model's own layer0 or cube-face texture dependency.
+    'textures/items/ancient_etching.png': pngHeader(16, 16),
+    'textures/blocks/gold_face.png': pngHeader(16, 16),
   };
   const bp: Record<string, PackFile> = {
     'items/rune_blade.json': JSON.stringify({
@@ -2036,11 +2046,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const resolverAnimations = resolverPlayerEntity?.animations ?? {};
   const resolverCorrectedVanillaAliases =
     resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    resolverAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    resolverAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
     resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
   // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
-  resolverAnimations.look_at_target = 'controller.animation.humanoid.look_at_target';
-  resolverAnimations.first_person_base_pose = 'animation.player.first_person.base_pose';
+  resolverAnimations.look_at_target = 'animation.humanoid.look_at_target';
+  resolverAnimations.first_person_base_pose = 'controller.animation.player.first_person_base_pose';
   files['entity/player.entity.json'] = JSON.stringify({
     format_version: '1.10.0',
     'minecraft:client_entity': {
@@ -2082,11 +2092,17 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const correctVanillaAliases =
     resolverCorrectedVanillaAliases &&
     finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    finalAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    finalAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
     finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
-    baselineByAlias.get('look_at_target')?.kind === 'animation';
+    baselineByAlias.get('look_at_target')?.kind === 'controller';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
+    label: 'the full current Mojang player animation alias map is preserved',
+    expected: 'all official player aliases including base, HUD, look-at, first-person, crossbow, shield and melee-spear entries',
+    actual: `${Object.keys(VANILLA_PLAYER_ANIMATIONS).length} aliases; ${['base_controller', 'hudplayer', 'look_at_target_ui', 'first_person_map_controller', 'crossbow_controller', 'third_person_melee_spear_controller'].filter((alias) => typeof finalAnimations[alias] === 'string').length}/6 critical aliases`,
+    passed: Object.keys(VANILLA_PLAYER_ANIMATIONS).length >= 70 &&
+      ['base_controller', 'hudplayer', 'look_at_target_ui', 'first_person_map_controller', 'crossbow_controller', 'third_person_melee_spear_controller'].every((alias) => typeof finalAnimations[alias] === 'string'),
+  }, {
     label: 'all vanilla player baseline aliases resolve to recognized Bedrock engine identifiers',
     expected: 'every baseline identifier is in the engine-provided player animation/controller registry',
     actual: PLAYER_BASELINE_ENTRIES.filter((entry) => !isKnownVanillaPlayerAnimationReference(entry.identifier)).map((entry) => `${entry.alias} -> ${entry.identifier}`).join(', ') || 'all recognized',
@@ -2361,4 +2377,53 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     ['Offhand shield mirroring remains an explicit approximation; live Bedrock playback is not measured by this structural fixture.'],
     started,
   );
+}
+
+
+/** PAL / PlayerAnimator emote.moves regression for the player_animations source path. */
+export function measurePalPlayerAnimatorFormat(): RegressionFixtureResult {
+  const started = performance.now();
+  const source = {
+    version: 3,
+    name: 'PAL All Channels',
+    particleEffects: 'demo:impact',
+    emote: {
+      beginTick: 0, endTick: 20, stopTick: 21, isLoop: false, returnTick: 0, degrees: false,
+      moves: [
+        { tick: 0, easing: 'LINEAR', torso: { yaw: 0 }, cape: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, right_item: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, left_item: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, body: { bend: 0 } },
+        { tick: 20, easing: 'EASEOUTQUAD', torso: { yaw: -3.1415927 }, cape: { x: 1, y: 2, z: 3, pitch: 1, yaw: 2, roll: 3 }, right_item: { x: 1, y: 2, z: 3, pitch: 1, yaw: 2, roll: 3 }, left_item: { x: 2, y: 3, z: 4, pitch: 2, yaw: 3, roll: 4 }, body: { bend: 30 } },
+      ],
+    },
+  };
+  const entry: ExtractedZipEntry = {
+    path: 'assets/demo/player_animations/pal_all_channels.json',
+    data: new TextEncoder().encode(JSON.stringify(source)),
+  };
+  const discovery = runUniversalAnimationDiscovery({ entries: [entry], modId: 'demo' });
+  const playerClips = discovery.clipsByOwner.player ?? {};
+  const clip = Object.values(playerClips)[0] as Record<string, any> | undefined;
+  const bones = clip && isPlainObject(clip.bones) ? clip.bones as Record<string, any> : {};
+  const itemPosition = bones.right_item?.position?.['1'];
+  const itemVector = Array.isArray(itemPosition) ? itemPosition : itemPosition?.post;
+  const capePosition = bones.cape?.position?.['1'];
+  const capeVector = Array.isArray(capePosition) ? capePosition : capePosition?.post;
+  const checks: RegressionAssertion[] = [
+    { label: 'PAL player_animations path is discovered as a player source', expected: 'one player-owned clip', actual: String(Object.keys(playerClips).length), passed: Object.keys(playerClips).length === 1 },
+    { label: 'cape and held-item transforms are preserved', expected: 'cape, right_item, left_item', actual: ['cape', 'right_item', 'left_item'].filter((key) => Boolean(bones[key])).join(', ') || 'none', passed: ['cape', 'right_item', 'left_item'].every((key) => Boolean(bones[key])) },
+    { label: 'held-item Y/Z position axes match PAL conversion', expected: '[-16, 48, -32]', actual: JSON.stringify(itemVector ?? null), passed: Array.isArray(itemVector) && Math.abs(itemVector[0] + 16) < 0.01 && Math.abs(itemVector[1] - 48) < 0.01 && Math.abs(itemVector[2] + 32) < 0.01 },
+    { label: 'cape position signs and bend geometry tracks survive', expected: '[-16, -32, -48] and body_bend', actual: JSON.stringify(capeVector ?? null) + '; ' + String(Boolean(bones.body_bend)), passed: Array.isArray(capeVector) && Math.abs(capeVector[0] + 16) < 0.01 && Math.abs(capeVector[1] + 32) < 0.01 && Math.abs(capeVector[2] + 48) < 0.01 && Boolean(bones.body_bend) },
+    { label: 'PAL particle effects and stop-tick duration survive', expected: 'demo:impact at 0s; 1.05s', actual: JSON.stringify(clip?.particle_effects ?? null) + '; ' + String(clip?.animation_length), passed: isPlainObject(clip?.particle_effects) && JSON.stringify(clip.particle_effects).includes('demo:impact') && Math.abs(Number(clip?.animation_length) - 1.05) < 0.001 },
+  ];
+  const failures = checks.filter((check) => !check.passed);
+  return {
+    id: 'pal-player-animator-format',
+    label: 'PAL / PlayerAnimator player_animations format and all-part conversion',
+    category: 'Animation',
+    status: failures.length === 0 ? 'passed' : 'failed',
+    metrics: { animationAccuracy: Math.round(((checks.length - failures.length) / checks.length) * 100) },
+    assertions: checks,
+    findings: failures.map((failure) => `${failure.label}: expected ${failure.expected}, got ${failure.actual}`),
+    unavailable: ['Structural conversion does not prove live Bedrock playback.'],
+    durationMs: Math.round(performance.now() - started),
+  };
 }

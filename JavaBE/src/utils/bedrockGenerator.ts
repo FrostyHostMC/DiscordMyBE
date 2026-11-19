@@ -2279,7 +2279,7 @@ export async function convertJavaToBedrockAddon(
   // animation auditor. This is the fix for "127/127 bones resolved" printed next to "116 unresolved
   // bones": each auditor used to re-derive its own population from the same files, so two numbers
   // could describe two different archives. After this line there is one registry and one answer.
-  const exportedRegistry = buildAnimationResourceRegistry({
+  let exportedRegistry = buildAnimationResourceRegistry({
     resourcePackFiles: remake.resourcePackFiles,
     behaviorPackFiles: remake.behaviorPackFiles,
     scriptDrivenClips: [...new Set([...scriptDrivenClips, ...(remake.playerEntityWiring?.scriptedClips ?? [])])],
@@ -2660,6 +2660,35 @@ export async function convertJavaToBedrockAddon(
   });
   remake.playerBaselineGuard = playerBaselineGuard;
   if (remake.parityHealth) remake.parityHealth.playerBaselineGuard = playerBaselineGuard;
+
+  // The final player dependency and baseline passes above can rewrite entity JSON after the
+  // earlier animation registry was measured. Rebuild the shared registry from the exact files
+  // that are about to be zipped so the final port validator never consumes a stale snapshot.
+  exportedRegistry = buildAnimationResourceRegistry({
+    resourcePackFiles: remake.resourcePackFiles,
+    behaviorPackFiles: remake.behaviorPackFiles,
+    scriptDrivenClips: [...new Set([...scriptDrivenClips, ...(remake.playerEntityWiring?.scriptedClips ?? [])])],
+    deactivatedClips: deliberatelyDeactivated,
+  });
+  referenceIntegrity = reconcileReferenceIntegrityMetrics(referenceIntegrity, exportedRegistry);
+  remake.referenceIntegrity = referenceIntegrity;
+  if (remake.parityHealth) remake.parityHealth.referenceIntegrity = referenceIntegrity;
+  const finalPostBaselineEntityValidation = validateEntityReferences(remake.resourcePackFiles, exportedRegistry);
+  if (remake.parityHealth?.entityEngine) {
+    remake.parityHealth.entityEngine = {
+      ...remake.parityHealth.entityEngine,
+      validation: finalPostBaselineEntityValidation,
+    };
+  }
+  if (remake.parityHealth?.fidelityAudit?.entityEngine) {
+    remake.parityHealth.fidelityAudit.entityEngine = {
+      ...remake.parityHealth.fidelityAudit.entityEngine,
+      validation: finalPostBaselineEntityValidation,
+    };
+  }
+  integrityLog(
+    `[ANIM:FINAL-REGISTRY] Rebuilt after final player dependency/baseline wiring: ${exportedRegistry.metrics.clipsDefined} clip(s), ${exportedRegistry.metrics.clipsRegistered} registered, ${exportedRegistry.metrics.clipsActivated} activated, ${exportedRegistry.metrics.bones.resolved}/${exportedRegistry.metrics.bones.checked} exact bone bindings.`,
+  );
 
   // The audit point. Every animation verdict above was measured on exactly this file set; anything
   // created, rewritten or removed after it is reported as a stale result instead of a silent pass.

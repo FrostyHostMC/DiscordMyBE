@@ -9,6 +9,7 @@ import {
   VANILLA_PLAYER_CONTROLLER_IDS,
   PLAYER_SCOPE_VARIABLE_EXPRESSIONS,
   ENGINE_PROVIDED_MOLANG_VARIABLES,
+  VANILLA_PLAYER_VARIABLES,
   findPlayerClientEntityPath,
   isVanillaPlayerBaselineIdentifier,
   isVanillaPlayerDocumentPath,
@@ -634,6 +635,22 @@ export function resolvePlayerDependencies(input: {
   const declaredInPlayerScope = new Set<string>();
   for (const match of JSON.stringify([initialize, preAnimation, animate]).matchAll(VARIABLE_ASSIGN)) {
     declaredInPlayerScope.add(String(match[1]));
+  }
+  // scripts.variables is a real Bedrock declaration surface: public variables are shared
+  // with attachables and need not have a local assignment in the player entity. The player
+  // baseline may be injected after this audit, so seed Mojang's public declarations here too.
+  const declaredVariableScopes = isRecord(scripts.variables) ? scripts.variables : {};
+  for (const [rawName, scope] of Object.entries(declaredVariableScopes)) {
+    if (scope !== 'public' && scope !== 'private') continue;
+    const name = rawName.replace(/^variable\./i, '').trim();
+    if (name) declaredInPlayerScope.add(name);
+  }
+  if (description.identifier === 'minecraft:player') {
+    for (const [rawName, scope] of Object.entries(VANILLA_PLAYER_VARIABLES)) {
+      if (scope !== 'public' && scope !== 'private') continue;
+      const name = rawName.replace(/^variable\./i, '').trim();
+      if (name) declaredInPlayerScope.add(name);
+    }
   }
   /** A whole `variable.x = <expr>` the archive already contains, reused as the declaration. */
   const shippedAssignment = (name: string): string | null => {

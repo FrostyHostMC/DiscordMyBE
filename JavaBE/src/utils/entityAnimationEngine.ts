@@ -56,6 +56,19 @@ export function applyEntityAnimationEngine(options: {
     }
     const desc = doc?.['minecraft:client_entity']?.description;
     if (!desc || typeof desc !== 'object') continue;
+
+    // The player is an engine-owned rig, not a converted mob. A generic entity binding
+    // pass would replace the player-specific geometry, skin layers, materials and render
+    // controllers after the animation port has already wired them. Keep the player entity
+    // completely outside mob geometry/texture/render-controller discovery.
+    if (desc.identifier === 'minecraft:player') {
+      report.skipped.push(
+        `${mobId}: engine-owned minecraft:player rig preserved; generic mob geometry, texture and render-controller binding skipped`,
+      );
+      log(`[ENTITY] ${mobId}: preserved engine-owned minecraft:player geometry, textures, materials and render controllers.`);
+      continue;
+    }
+
     report.mobs += 1;
 
     // Geometry: keep the primary identifier plus any extra variants the file declares.

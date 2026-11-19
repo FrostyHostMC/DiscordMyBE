@@ -1,49 +1,93 @@
 /**
- * Destination-platform contract for the vanilla player rig.
+ * Bedrock player baseline copied from Mojang/bedrock-samples
+ * resource_pack/entity/player.entity.json (main, blob c5d368d1f32cce943ef4473fb1e75594c8bee222).
  *
- * A resource pack that ships `entity/player.entity.json` REPLACES the whole vanilla file, so
- * every baseline animation, controller and document that file points at has to keep resolving
- * afterwards. This module is the single record of what the destination engine already provides for
- * `minecraft:player` — the equivalent of a table of contents for the engine's own resources.
- *
- * Nothing here is mod-specific: these identifiers are part of Bedrock's contract, exactly like the
- * render controllers and the `geometry.humanoid.*` skeleton. A conversion never invents them; it
- * either preserves the reference or reports that it cannot be resolved.
+ * A resource pack that ships entity/player.entity.json replaces the engine file.
+ * Preserve its complete animation alias map, render-controller gates, materials,
+ * textures, geometry, initialization, pre-animation variables and attachable support.
+ * Mod-specific clips are layered on top; the baseline is not reconstructed from guesses.
  */
-
 export type PlayerBaselineKind = 'animation' | 'controller';
-
 export interface PlayerBaselineEntry {
-  /** Short alias the vanilla entity declares in its `animations` map. */
   alias: string;
-  /** Identifier the alias resolves to in the vanilla resource set. */
   identifier: string;
   kind: PlayerBaselineKind;
-  /** Molang gate the vanilla file applies to this entry, or null when it always plays. */
   gate: string | null;
-  /** False for compatibility aliases resolved by a controller rather than played directly. */
   animate?: boolean;
 }
-
-/** Gate Bedrock uses to keep hand/first-person resources out of the third-person body. */
 export const FIRST_PERSON_GATE = 'query.is_first_person';
 
-/**
- * Player-scope variables required by the vanilla player animation contract.
- *
- * These expressions are based on Mojang's published Bedrock player resources. They are
- * restored into the player entity because a custom player.entity.json replaces the vanilla
- * script scope along with its animation map.
- */
-/**
- * Variables supplied by the Bedrock engine itself. Mojang's published entity resources
- * read these without declaring them in entity scripts, so the resolver must not synthesize
- * a constant or report them as missing player-scope assignments.
- */
+export const VANILLA_PLAYER_MATERIALS: Record<string, string> = {
+  "default": "entity_alphatest",
+  "cape": "entity_alphatest",
+  "animated": "player_animated",
+  "spectator": "player_spectator"
+};
+export const VANILLA_PLAYER_TEXTURES: Record<string, string> = {
+  "default": "textures/entity/steve",
+  "cape": "textures/entity/cape_invisible"
+};
+export const VANILLA_PLAYER_GEOMETRY: Record<string, string> = {
+  "default": "geometry.humanoid.custom",
+  "cape": "geometry.cape"
+};
+export const VANILLA_PLAYER_INITIALIZE: string[] = [
+  "variable.is_holding_right = 0.0;",
+  "variable.is_blinking = 0.0;",
+  "variable.last_blink_time = 0.0;",
+  "variable.hand_bob = 0.0;"
+];
+export const VANILLA_PLAYER_PRE_ANIMATION: string[] = [
+  "variable.helmet_layer_visible = !query.has_head_gear;",
+  "variable.leg_layer_visible = 1.0;",
+  "variable.boot_layer_visible = 1.0;",
+  "variable.chest_layer_visible = 1.0;",
+  "variable.attack_body_rot_y = Math.sin(360*Math.sqrt(variable.attack_time)) * 5.0;",
+  "variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;",
+  "variable.first_person_rotation_factor = math.sin((1 - variable.attack_time) * 180.0);",
+  "variable.hand_bob = query.life_time < 0.01 ? 0.0 : variable.hand_bob + ((query.is_on_ground && query.is_alive ? math.clamp(math.sqrt(math.pow(query.position_delta(0), 2.0) + math.pow(query.position_delta(2), 2.0)), 0.0, 0.1) : 0.0) - variable.hand_bob) * 0.02;",
+  "variable.map_angle = math.clamp(1 - variable.player_x_rotation / 45.1, 0.0, 1.0);",
+  "variable.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;",
+  "variable.riding_y_offset = query.is_riding_any_entity_of_type('minecraft:minecart', 'minecraft:boat', 'minecraft:chest_boat', 'minecraft:strider') ? -3.0 : 0.0;"
+];
+export const VANILLA_PLAYER_VARIABLES: Record<string, string> = {
+  "variable.fp_melee_spear_use_attachable_rotation_z": "public",
+  "variable.tp_melee_spear_use_attachable_rotation_z": "public",
+  "variable.fp_melee_spear_attack_attachable_rotation_z": "public",
+  "variable.tp_melee_spear_attack_attachable_position_z": "public",
+  "variable.attack_time": "public",
+  "variable.item_use_normalized": "public"
+};
+export const VANILLA_PLAYER_SCALE = "0.9375";
+export const VANILLA_PLAYER_SHOULD_UPDATE_EFFECTS_OFFSCREEN = "1.0";
+export const VANILLA_PLAYER_ENABLE_ATTACHABLES = true;
+export const VANILLA_PLAYER_RENDER_CONTROLLERS: Array<string | Record<string, string>> = [
+  {
+    "controller.render.player.first_person_spectator": "variable.is_first_person && query.is_spectator"
+  },
+  {
+    "controller.render.player.third_person_spectator": "!variable.is_first_person && !variable.map_face_icon && query.is_spectator"
+  },
+  {
+    "controller.render.player.first_person": "variable.is_first_person && !query.is_spectator"
+  },
+  {
+    "controller.render.player.third_person": "!variable.is_first_person && !variable.map_face_icon && !query.is_spectator"
+  },
+  {
+    "controller.render.player.map": "variable.map_face_icon"
+  }
+];
+
 export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
   'gliding_speed_value',
   'short_arm_offset_left',
   'short_arm_offset_right',
+  // Current Mojang player.entity.json reads these without declaring an assignment:
+  // player_x_rotation feeds map_angle; map_face_icon gates the map render controller.
+  'player_x_rotation',
+  'map_face_icon',
+  'is_first_person',
 ]);
 
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
@@ -100,74 +144,109 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
   },
 };
 
-/**
- * Baseline wiring of `minecraft:player`. `base_pose` builds the rest pose, `look_at_target`
- * rotates the head, the first-person entries only exist in first person, and `root` is the
- * controller every other pose is layered under.
- */
-export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = [
-  // `base_pose` is retained as a compatibility alias for older/generated player
-  // controllers, but it resolves to the real vanilla humanoid base-pose animation.
-  { alias: 'base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null, animate: false },
-  { alias: 'humanoid_base_pose', identifier: 'animation.humanoid.base_pose', kind: 'animation', gate: null },
-  // The vanilla humanoid look-at pose is an animation, not an animation controller.
-  { alias: 'look_at_target', identifier: 'animation.humanoid.look_at_target', kind: 'animation', gate: null },
-  { alias: 'cape', identifier: 'animation.player.cape', kind: 'animation', gate: null },
-  { alias: 'root', identifier: 'controller.animation.player.root', kind: 'controller', gate: null },
-  {
-    alias: 'first_person_base_pose',
-    identifier: 'animation.player.first_person.base_pose',
-    kind: 'animation',
-    gate: FIRST_PERSON_GATE,
-  },
-  {
-    alias: 'first_person_attack_controller',
-    identifier: 'controller.animation.player.first_person_attack',
-    kind: 'controller',
-    gate: FIRST_PERSON_GATE,
-  },
-];
 
-/** Alias -> identifier map every player definition must declare. */
-export const VANILLA_PLAYER_ANIMATIONS: Record<string, string> = Object.fromEntries(
-  PLAYER_BASELINE_ENTRIES.map((entry) => [entry.alias, entry.identifier]),
-);
-
-/** The vanilla player runs its root controller; that controller layers the remaining aliases. */
+export const VANILLA_PLAYER_ANIMATIONS: Record<string, string> = {
+  "root": "controller.animation.player.root",
+  "base_controller": "controller.animation.player.base",
+  "hudplayer": "controller.animation.player.hudplayer",
+  "humanoid_base_pose": "animation.humanoid.base_pose",
+  "look_at_target": "controller.animation.humanoid.look_at_target",
+  "look_at_target_ui": "animation.player.look_at_target.ui",
+  "look_at_target_default": "animation.humanoid.look_at_target.default",
+  "look_at_target_gliding": "animation.humanoid.look_at_target.gliding",
+  "look_at_target_swimming": "animation.humanoid.look_at_target.swimming",
+  "look_at_target_inverted": "animation.player.look_at_target.inverted",
+  "cape": "animation.player.cape",
+  "move.arms": "animation.player.move.arms",
+  "move.legs": "animation.player.move.legs",
+  "swimming": "animation.player.swim",
+  "swimming.legs": "animation.player.swim.legs",
+  "riding.arms": "animation.player.riding.arms",
+  "riding.legs": "animation.player.riding.legs",
+  "holding": "animation.player.holding",
+  "brandish_spear": "animation.humanoid.brandish_spear",
+  "charging": "animation.humanoid.charging",
+  "attack.positions": "animation.player.attack.positions",
+  "attack.rotations": "animation.player.attack.rotations",
+  "sneaking": "animation.player.sneaking",
+  "bob": "animation.player.bob",
+  "damage_nearby_mobs": "animation.humanoid.damage_nearby_mobs",
+  "bow_and_arrow": "animation.humanoid.bow_and_arrow",
+  "use_item_progress": "animation.humanoid.use_item_progress",
+  "skeleton_attack": "animation.skeleton.attack",
+  "sleeping": "animation.player.sleeping",
+  "first_person_base_pose": "animation.player.first_person.base_pose",
+  "first_person_empty_hand": "animation.player.first_person.empty_hand",
+  "first_person_swap_item": "animation.player.first_person.swap_item",
+  "first_person_attack_controller": "controller.animation.player.first_person_attack",
+  "first_person_attack_rotation": "animation.player.first_person.attack_rotation",
+  "first_person_attack_rotation_item": "animation.player.first_person.attack_rotation_item",
+  "first_person_vr_attack_rotation": "animation.player.first_person.vr_attack_rotation",
+  "first_person_walk": "animation.player.first_person.walk",
+  "first_person_map_controller": "controller.animation.player.first_person_map",
+  "first_person_map_hold": "animation.player.first_person.map_hold",
+  "first_person_map_hold_attack": "animation.player.first_person.map_hold_attack",
+  "first_person_map_hold_off_hand": "animation.player.first_person.map_hold_off_hand",
+  "first_person_map_hold_main_hand": "animation.player.first_person.map_hold_main_hand",
+  "first_person_crossbow_equipped": "animation.player.first_person.crossbow_equipped",
+  "first_person_crossbow_hold": "animation.player.first_person.crossbow_hold",
+  "first_person_breathing_bob": "animation.player.first_person.breathing_bob",
+  "third_person_crossbow_equipped": "animation.player.crossbow_equipped",
+  "third_person_bow_equipped": "animation.player.bow_equipped",
+  "crossbow_hold": "animation.player.crossbow_hold",
+  "crossbow_controller": "controller.animation.player.crossbow",
+  "shield_block_main_hand": "animation.player.shield_block_main_hand",
+  "shield_block_off_hand": "animation.player.shield_block_off_hand",
+  "blink": "controller.animation.persona.blink",
+  "fishing_rod": "animation.humanoid.fishing_rod",
+  "holding_spyglass": "animation.humanoid.holding_spyglass",
+  "first_person_shield_block": "animation.player.first_person.shield_block",
+  "tooting_goat_horn": "animation.humanoid.tooting_goat_horn",
+  "holding_brush": "animation.humanoid.holding_brush",
+  "brushing": "animation.humanoid.brushing",
+  "crawling": "animation.player.crawl",
+  "crawling.legs": "animation.player.crawl.legs",
+  "swimming.no_right_arm": "animation.player.swim.no_right_arm",
+  "crawling.no_right_arm": "animation.player.crawl.no_right_arm",
+  "riding.root": "animation.player.riding.root",
+  "holding_heavy_core": "animation.player.holding_heavy_core",
+  "first_person_melee_spear_use": "animation.player.first_person.melee_spear_use",
+  "first_person_melee_spear_hold": "animation.player.first_person.melee_spear_hold",
+  "first_person_melee_spear_attack": "animation.player.first_person.melee_spear_attack",
+  "first_person_melee_spear_controller": "controller.animation.player.first_person_melee_spear",
+  "third_person_melee_spear_use": "animation.humanoid.melee_spear_use",
+  "third_person_melee_spear_hold": "animation.humanoid.melee_spear_hold",
+  "third_person_melee_spear_attack": "animation.player.melee_spear_attack",
+  "third_person_melee_spear_controller": "controller.animation.player.melee_spear",
+  "base_pose": "animation.humanoid.base_pose"
+};
+export const PLAYER_BASELINE_ENTRIES: PlayerBaselineEntry[] = Object.entries(VANILLA_PLAYER_ANIMATIONS).map(([alias, identifier]) => ({
+  alias,
+  identifier,
+  kind: identifier.startsWith('controller.') ? 'controller' : 'animation',
+  gate: alias.startsWith('first_person') ? FIRST_PERSON_GATE : null,
+  animate: alias === 'root',
+}));
 export const VANILLA_PLAYER_ANIMATE: Array<string | Record<string, string>> = ['root'];
-
-/** Animation identifiers the base game defines for the player/humanoid rig. */
 export const VANILLA_PLAYER_ANIMATION_IDS = new Set<string>(
-  PLAYER_BASELINE_ENTRIES.filter((entry) => entry.kind === 'animation').map((entry) => entry.identifier),
+  Object.values(VANILLA_PLAYER_ANIMATIONS).filter((identifier) => identifier.startsWith('animation.')),
 );
-
-/** Controller identifiers the base game defines for the player rig. */
 export const VANILLA_PLAYER_CONTROLLER_IDS = new Set<string>(
-  PLAYER_BASELINE_ENTRIES.filter((entry) => entry.kind === 'controller').map((entry) => entry.identifier),
+  Object.values(VANILLA_PLAYER_ANIMATIONS).filter((identifier) => identifier.startsWith('controller.animation.')),
 );
-
-/** Render controllers the engine already ships for `minecraft:player`. */
 export const VANILLA_PLAYER_RENDER_CONTROLLER_IDS = new Set<string>([
-  'controller.render.player.first_person',
-  'controller.render.player.third_person',
-  'controller.render.player.cape',
-  'controller.render.player.armor',
-  'controller.render.player.map',
+  "controller.render.player.first_person_spectator",
+  "controller.render.player.third_person_spectator",
+  "controller.render.player.first_person",
+  "controller.render.player.third_person",
+  "controller.render.player.map"
 ]);
-
-/** Player geometries the engine already provides; a ported skin rig may reuse them. */
 export const VANILLA_PLAYER_GEOMETRY_IDS = new Set<string>([
   'geometry.humanoid.custom',
   'geometry.humanoid.customSlim',
   'geometry.cape',
   'geometry.player.armor',
 ]);
-
-/**
- * Documents the vanilla resource set owns. A conversion that writes to one of these paths
- * silently deletes the engine's own definitions, which is how a pack ends up reporting
- * "missing base_pose / look_at_target / first_person_base_pose" while it ships animation files.
- */
 export const VANILLA_PLAYER_DOCUMENT_PATHS = new Set<string>([
   'entity/player.entity.json',
   'animations/player.animation.json',
@@ -176,20 +255,10 @@ export const VANILLA_PLAYER_DOCUMENT_PATHS = new Set<string>([
   'animation_controllers/humanoid.animation_controllers.json',
   'render_controllers/player.render_controllers.json',
 ]);
-
-/** Identifiers whose absence breaks first-person rendering outright. */
 export const FIRST_PERSON_BASELINE_IDS = new Set<string>(
   PLAYER_BASELINE_ENTRIES.filter((entry) => entry.gate === FIRST_PERSON_GATE).map((entry) => entry.identifier),
 );
 
-/**
- * The shipped client-entity document that really defines `minecraft:player`.
- *
- * A port may write the player definition under a generated file name, so locating it by path alone
- * reports "no player client entity ships" while the archive really contains one — and every pass
- * that depends on it (baseline wiring, variable declaration, perspective binding) silently does
- * nothing. The identifier is the contract; the path is only a fallback.
- */
 export function findPlayerClientEntityPath(files: Record<string, string | Uint8Array>): string | null {
   let fallback: string | null = null;
   for (const [path, raw] of Object.entries(files)) {

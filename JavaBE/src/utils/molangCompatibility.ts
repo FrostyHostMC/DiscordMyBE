@@ -67,6 +67,8 @@ export const ENTITY_QUERIES = new Set([
   'body_y_rotation', 'body_x_rotation', 'head_x_rotation', 'head_y_rotation', 'variant',
   'mark_variant', 'is_baby', 'is_adult', 'is_sleeping', 'is_gliding', 'is_on_fire', 'is_tamed',
   'is_sitting', 'is_powered', 'is_charged', 'is_crawling', 'is_eating', 'is_chested',
+  // Verified in Mojang's current resource_pack/entity/player.entity.json (1.26.0).
+  'main_hand_item_use_duration', 'main_hand_item_max_duration', 'is_riding_any_entity_of_type',
   'armor_slot_count', 'knockback_resistance', 'scale', 'get_equipped_item_name',
   'get_equipped_item_slot', 'delta_time', 'frame_alpha', 'all_animations_finished',
   'any_animation_finished', 'is_delayed_attacking_bool', 'has_head_gear', 'equipped_item_any_tag',

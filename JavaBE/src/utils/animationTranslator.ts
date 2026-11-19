@@ -131,7 +131,7 @@ const PLAYER_ANIM_EASING_NAMES = new Set([
   'catmullrom', 'bezier',
 ]);
 
-function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Record<string, unknown> {
+function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, document?: Record<string, unknown>): Record<string, unknown> {
   const issues: string[] = [];
   const moves = Array.isArray(emote.moves) ? emote.moves.filter(isPlainObject) : [];
   const beginTick = Number.isFinite(Number(emote.beginTick)) ? Number(emote.beginTick) : 0;
@@ -173,6 +173,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     bendEasing?: string;
   };
   const frames = new Map<number, Map<string, PartFrame>>();
+  const partNames = new Set<string>();
   for (const move of moves) {
     const tick = Number(move.tick);
     if (!Number.isFinite(tick) || tick < 0 || tick > endTick) {
@@ -186,12 +187,14 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     }
     const easing = typeof move.easing === 'string' && move.easing.trim() ? move.easing.trim() : 'linear';
     const turn = Number.isFinite(Number(move.turn)) ? Number(move.turn) : 0;
-    for (const sourcePartName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-      const partName = version < 3 && sourcePartName === 'torso' ? 'body' : sourcePartName;
-      const transform = move[sourcePartName];
-      if (!isPlainObject(transform)) continue;
+    for (const [rawPartName, transform] of Object.entries(move)) {
+      if (['tick', 'comment', 'easing', 'turn'].includes(rawPartName) || !isPlainObject(transform)) continue;
+      // PAL/PlayerAnimator normalises camelCase part names to snake_case and accepts
+      // additional player bones (cape, held-item pivots, and custom rig parts).
+      const partName = rawPartName.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+      partNames.add(partName);
       if (transform.axis !== undefined) {
-        issues.push('Emotecraft ' + sourcePartName + '.axis at tick ' + tick + ' is not consumed by the legacy PlayerAnimator runtime; its actual animated channels are x/y/z, pitch/yaw/roll, scaleX/Y/Z, and scalar bend.');
+        issues.push('Emotecraft ' + rawPartName + '.axis at tick ' + tick + ' is not consumed by the legacy PlayerAnimator runtime; its actual animated channels are x/y/z, pitch/yaw/roll, scaleX/Y/Z, and scalar bend.');
       }
       const part = parts.get(partName) ?? {
         position: {}, positionEasing: {},
@@ -245,10 +248,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
 
   const orderedFrames = Array.from(frames.entries()).sort((a, b) => a[0] - b[0]);
   const defaults: Record<string, number[]> = {
-    rightArm: [-5, 2, 0],
-    leftArm: [5, 2, 0],
-    leftLeg: [1.9, 12, 0.1],
-    rightLeg: [-1.9, 12, 0.1],
+    right_arm: [-5, 2, 0],
+    left_arm: [5, 2, 0],
+    left_leg: [1.9, 12, 0.1],
+    right_leg: [-1.9, 12, 0.1],
   };
   const sampleTicks = new Set<number>();
   for (let tick = 0; tick <= Math.floor(timelineEndTick); tick += 1) sampleTicks.add(tick);
@@ -290,7 +293,9 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     axis: string,
   ): Array<{ tick: number; value: number; easing: string }> => {
     const entries: Array<{ tick: number; value: number; easing: string }> = [];
-    const isBodyPart = partName === 'body';
+    const isBodyPart = partName === 'body' || (version < 3 && partName === 'torso');
+    const isItemPart = partName === 'right_item' || partName === 'left_item';
+    const isCapePart = partName === 'cape';
     const base = defaults[partName] ?? [0, 0, 0];
     for (const [tick, parts] of orderedFrames) {
       const part = parts.get(partName);
@@ -299,22 +304,34 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
         if (part.bendAngle !== undefined) entries.push({ tick, value: part.bendAngle, easing: part.bendEasing ?? 'linear' });
         continue;
       }
+      // PlayerAnimator swaps Y/Z for held-item position and rotation stacks after applying
+      // its per-axis sign rules. Reproduce that order here instead of treating item pivots
+      // like ordinary limb bones.
+      const sourceAxis = isItemPart && channel === 'position'
+        ? axis === 'y' ? 'z' : axis === 'z' ? 'y' : axis
+        : isItemPart && channel === 'rotation'
+          ? axis === 'yaw' ? 'roll' : axis === 'roll' ? 'yaw' : axis
+          : axis;
       const raw = channel === 'position'
-        ? part.position[axis]
+        ? part.position[sourceAxis]
         : channel === 'rotation'
-          ? part.rotation[axis]
-          : part.scale[axis];
+          ? part.rotation[sourceAxis]
+          : part.scale[sourceAxis];
       if (raw === undefined) continue;
       let value = raw;
       if (channel === 'position') {
-        if (!isBodyPart) value -= base[['x', 'y', 'z'].indexOf(axis)] ?? 0;
-        if (axis === 'y' && !isBodyPart) value *= -1;
-        if (axis === 'x' && isBodyPart) value *= -1;
+        if (!isBodyPart) value -= base[['x', 'y', 'z'].indexOf(sourceAxis)] ?? 0;
+        if (isBodyPart && sourceAxis === 'x') value *= -1;
+        else if (isCapePart) value *= -1;
+        else if (isItemPart && (sourceAxis === 'x' || sourceAxis === 'y')) value *= -1;
+        else if (!isBodyPart && sourceAxis === 'y') value *= -1;
         value *= 16;
       } else if (channel === 'rotation') {
         value = degrees ? value : value * (180 / Math.PI);
-        if (isBodyPart && (axis === 'pitch' || axis === 'yaw')) value *= -1;
-        value += (part.rotationTurn[axis] ?? 0) * 360;
+        if (isBodyPart && (sourceAxis === 'pitch' || sourceAxis === 'yaw')) value *= -1;
+        else if (isItemPart) value *= -1;
+        else if (isCapePart && (sourceAxis === 'pitch' || sourceAxis === 'roll')) value *= -1;
+        value += (part.rotationTurn[sourceAxis] ?? 0) * 360;
       }
       const channelEasing = channel === 'position'
         ? part.positionEasing[axis]
@@ -436,15 +453,10 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
   };
 
   const bones: Record<string, Record<string, unknown>> = {};
-  for (const partName of ['head', 'torso', 'body', 'rightArm', 'leftArm', 'rightLeg', 'leftLeg']) {
-    const boneName = ({
-      torso: 'body',
-      body: version >= 3 ? 'waist' : 'waist',
-      rightArm: 'right_arm',
-      leftArm: 'left_arm',
-      rightLeg: 'right_leg',
-      leftLeg: 'left_leg',
-    } as Record<string, string>)[partName] ?? partName;
+  for (const partName of partNames) {
+    // PlayerAnimator v1/v2 renamed torso to body; v3 keeps torso distinct.
+    // The v3 body channel maps to Bedrock's waist pivot.
+    const boneName = partName === 'torso' ? 'body' : partName === 'body' ? 'waist' : partName;
     const positionAxes = ['x', 'y', 'z'];
     const rotationAxes = ['pitch', 'yaw', 'roll'];
     const positionEntries = positionAxes.map((axis) => getEntries(partName, 'position', axis));
@@ -531,6 +543,16 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1): Re
     loop: validLoop,
     __emoteIssues: issues,
   };
+  const particleEffect = document?.particleEffects ?? document?.particle_effects ??
+    emote.particleEffects ?? emote.particle_effects;
+  if (typeof particleEffect === 'string' && particleEffect.trim()) {
+    result.particle_effects = {
+      [String(Math.round((beginTick / 20) * 1000) / 1000)]: [{ effect: particleEffect.trim(), locator: 'body' }],
+    };
+  }
+  if (version < 3 || document?.applyBendToOtherBones === true || emote.applyBendToOtherBones === true) {
+    issues.push('PlayerAnimator applyBendToOtherBones metadata was detected; individual bend tracks were preserved, but cross-bone bend propagation is not yet proven equivalent.');
+  }
   if (validLoop) {
     const intro = Math.round((endTick / 20) * 1000) / 1000;
     const loopStart = Math.round((returnTick / 20) * 1000) / 1000;
@@ -557,7 +579,7 @@ function collectClipMap(document: unknown): Record<string, unknown> {
     if (Array.isArray(emote.moves)) {
       const id = typeof document.name === 'string' && document.name.trim() ? document.name : 'emote';
       const version = Number.isFinite(Number(document.version)) ? Number(document.version) : 1;
-      return { [id]: convertEmotecraftEmote(emote, version) };
+      return { [id]: convertEmotecraftEmote(emote, version, document) };
     }
     if (isPlainObject(emote.bones) || isPlainObject(emote.bone) || isPlainObject(emote.animators) || isPlainObject(emote.parts)) {
       const id = typeof document.name === 'string' && document.name.trim() ? document.name : 'emote';

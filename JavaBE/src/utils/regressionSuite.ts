@@ -13,11 +13,11 @@ import { detectBlockInteraction, detectCooldownTicks, detectEffectLogic, detectE
 import { resolveEquipmentAttachments } from '@/utils/equipmentAttachments';
 import { runAssetValidationPipeline } from '@/utils/assetValidationPipeline';
 import type { Pack } from '@/utils/validationRules';
-import { REGRESSION_FIXTURES, type RegressionFixture } from '@/utils/regressionFixtures';
+import { REGRESSION_FIXTURES, fixturePng, type RegressionFixture } from '@/utils/regressionFixtures';
 import { compareGeometryUv, translateFaceUv, verifySheetCoverage } from '@/utils/uvMapping';
 import { findDuplicateIdentifierGroups, normalizeAssetIdentifier, normalizeAssetPath } from '@/utils/identifierNormalization';
 import { countSchemaErrors, runBedrockSchemaGate } from '@/utils/bedrockSchemaGate';
-import { measureAnimationPropertyPolicy, measureClientEntityReferencePruning, measureContentLogConformance, measureEventDeclarationIntegrity, measureGeometryIdentitySync, measureMissingItemIconReporting, measureMissingTextureReporting, measurePerFaceUvAcceptance, measureRenderControllerSchema, measureSoundConversion, measureClientEntityLinking, measureItemModelNormalization, measurePlayerAnimationBindingPreservation, measurePlayerClipActivationFallback, measureAnimationControllerReferenceGraph, measurePlayerMolangVariableInitialization, measureSpawnEggSourceIntegration } from '@/utils/regressionSchemaFixtures';
+import { measureAnimationPropertyPolicy, measureClientEntityReferencePruning, measureContentLogConformance, measureEventDeclarationIntegrity, measureGeometryIdentitySync, measureMissingItemIconReporting, measureMissingTextureReporting, measurePerFaceUvAcceptance, measureRenderControllerSchema, measureSoundConversion, measureClientEntityLinking, measureItemModelNormalization, measurePlayerAnimationBindingPreservation, measurePlayerClipActivationFallback, measureAnimationControllerReferenceGraph, measurePlayerMolangVariableInitialization, measureSpawnEggSourceIntegration, measurePalPlayerAnimatorFormat } from '@/utils/regressionSchemaFixtures';
 
 import { inferMobBehaviorProfiles } from '@/utils/mobBehaviorProfiles';
 
@@ -259,8 +259,8 @@ function measureSchemaGate(): RegressionFixtureResult {
   const started = performance.now();
   const rp: Pack = {};
   const bp: Pack = {};
-  rp[assetsData.IMAGE_FQCN] = fixturePngHeader(64, 64);
-  rp[assetsData.IMAGE_QDFQ] = fixturePngHeader(16, 16);
+  const alphaTexture = fixturePng('textures/entity/alpha.png', 64, 64, '#808080');
+  rp[alphaTexture.path] = alphaTexture.data;
   rp['models/entity/alpha.geo.json'] = JSON.stringify({
     format_version: '1.12.0',
     'minecraft:geometry': [{
@@ -347,6 +347,9 @@ function measureSchemaGate(): RegressionFixtureResult {
       }
     }
   });
+  // The gate can only create an inventory icon when the source PNG actually ships.
+  const runeIconPng = fixturePng('textures/items/rune.png', 16, 16, '#9b59b6');
+  rp[runeIconPng.path] = runeIconPng.data;
   rp['textures/item_texture.json'] = JSON.stringify({
     resource_pack_name: 'vanilla',
     texture_name: 'atlas.items',
@@ -454,8 +457,8 @@ function measureSchemaGate(): RegressionFixtureResult {
   }, {
     label: 'the gate reports the defect count drop it really achieved',
     expected: `${report.errorsBefore} → ${report.errorsAfter}`,
-    actual: `${before.renderControllerTextures + before.emptyAnimationProperties + before.blockGeometryOverrides} defect class(es) cleared`,
-    passed: report.errorsBefore > report.errorsAfter && report.checks.length === 8
+    actual: `${report.errorsBefore} → ${report.errorsAfter}; ${report.checks.length} schema check(s)`,
+    passed: report.errorsBefore > report.errorsAfter && report.errorsAfter === 0 && report.checks.length === 9 && report.checks.every(check => check.status !== 'unresolved')
   }];
   const failures = checks.filter(check => !check.passed);
   return {
@@ -1072,6 +1075,14 @@ export async function runRegressionSuite(options: RegressionRunOptions = {}): Pr
     try {
       const result = await measureFixture(fixture, modId, playableMode);
       log(`[REGRESSION] ${result.status.toUpperCase()} ${fixture.label} (${result.durationMs} ms).`);
+      if (result.status !== 'passed') {
+        for (const finding of result.findings) {
+          log(`[REGRESSION:DETAIL] ${fixture.id}: ${finding}`);
+        }
+        for (const assertion of result.assertions.filter((entry) => !entry.passed)) {
+          log(`[REGRESSION:ASSERTION] ${fixture.id}: ${assertion.label} | expected=${assertion.expected} | actual=${assertion.actual}`);
+        }
+      }
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -1118,10 +1129,19 @@ export async function runRegressionSuite(options: RegressionRunOptions = {}): Pr
     measureSpawnEggSourceIntegration(),
     measureItemModelNormalization(),
     measureNestedMobBehaviorEvidence(),
+    measurePalPlayerAnimatorFormat(),
   ];
   fixtures.push(...extraFixtures);
   for (const extra of extraFixtures) {
     log(`[REGRESSION] ${extra.status.toUpperCase()} ${extra.label} (${extra.durationMs} ms).`);
+    if (extra.status !== 'passed') {
+      for (const finding of extra.findings) {
+        log(`[REGRESSION:DETAIL] ${extra.id}: ${finding}`);
+      }
+      for (const assertion of extra.assertions.filter((entry) => !entry.passed)) {
+        log(`[REGRESSION:ASSERTION] ${extra.id}: ${assertion.label} | expected=${assertion.expected} | actual=${assertion.actual}`);
+      }
+    }
   }
   const metricIds: RegressionMetricId[] = ['assetPreservation', 'geometryAccuracy', 'uvAccuracy', 'textureAccuracy', 'animationAccuracy', 'behaviorPreservation', 'dependencyCompleteness', 'packLoadingSuccess'];
   const metrics: Partial<Record<RegressionMetricId, number>> = {};

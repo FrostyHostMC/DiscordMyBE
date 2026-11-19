@@ -170,15 +170,16 @@ function bytecodeEvidenceForClip(
   clipId: string,
 ): { evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string; runtimeEvent?: PlayerRuntimeEvent } | null {
   const keys = new Set([sourceClipId, clipId].map((value) => value.trim().toLowerCase()).filter(Boolean));
-  const runtimeCalls = /^(triggerAnim|triggerAnimation|playAnimation|setAnimation|startAnimation|stopAnimation|stopTriggeredAnim)$/i;
-  const priorityCalls = /^(setPriority|setLayerPriority|setAnimationPriority)$/i;
+  const keyTails = new Set([...keys].map((value) => value.split(/[.:/]+/).pop() ?? value).filter((value) => value.length >= 4));
+  const runtimeCalls = /^(triggerAnim|triggerAnimation|playAnimation|setAnimation|startAnimation|stopAnimation|stopTriggeredAnim|replaceAnimationWithFade)$/i;
+  const priorityCalls = /^(setPriority|setLayerPriority|setAnimationPriority|registerFactory)$/i;
   const matches: Array<{ evidence: string; conceptEvidence: string; sourcePriority?: number; runtimeTrigger?: string; runtimeEvent?: PlayerRuntimeEvent }> = [];
   for (const item of classes) {
     for (const method of item.methods) {
       const stringValues = method.instructions
         .filter((instruction) => instruction.mnemonic.startsWith('ldc') && typeof instruction.constant?.value === 'string')
         .map((instruction) => String(instruction.constant?.value).trim().toLowerCase());
-      if (!stringValues.some((value) => keys.has(value))) continue;
+      if (!stringValues.some((value) => keys.has(value) || [...keyTails].some((tail) => value === tail || value.endsWith(':' + tail) || value.endsWith('/' + tail)))) continue;
       const callNames = method.instructions
         .map((instruction) => instruction.constant?.name)
         .filter((name): name is string => typeof name === 'string');
@@ -233,6 +234,27 @@ function perspectiveOf(clipId: string): 'first' | 'third' {
 }
 
 /** Require the actual Java mod identity and mixin class; an asset-only pack is not proof of its state machine. */
+function hasPalPlayerAnimationNamespace(entries: ExtractedZipEntry[]): boolean {
+  return entries.some((entry) => {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    return path.includes('/player_animations/') || path.includes('/player_animation_library/');
+  });
+}
+
+function hasPalPlayerAnimationProfile(entries: ExtractedZipEntry[]): boolean {
+  const hasAssets = hasPalPlayerAnimationNamespace(entries);
+  if (!hasAssets) return false;
+  return entries.some((entry) => {
+    if (!entry.path.toLowerCase().endsWith('.class')) return false;
+    try {
+      const text = decoder.decode(entry.data);
+      return /PlayerAnimationController|PlayerAnimationFactory|PlayerRawAnimationBuilder|com\/zigythebird\/playeranim/i.test(text);
+    } catch {
+      return false;
+    }
+  });
+}
+
 function hasSeriousPlayerAnimationsNamespace(entries: ExtractedZipEntry[]): boolean {
   return entries.some((entry) =>
     entry.path.replace(/\\/g, '/').toLowerCase().includes('assets/seriousplayeranimations/player_animation/'),
@@ -421,6 +443,8 @@ export function translatePlayerTriggers(options: {
   const { classesScanned, hits, classEvidence } = scanJavaSignals(archiveEntries);
   const seriousPlayerProfile = hasSeriousPlayerAnimationsProfile(archiveEntries);
   const seriousPlayerNamespace = hasSeriousPlayerAnimationsNamespace(archiveEntries);
+  const palPlayerProfile = hasPalPlayerAnimationProfile(archiveEntries);
+  const palPlayerNamespace = hasPalPlayerAnimationNamespace(archiveEntries);
   const usedShortNames = new Set<string>();
   const triggers: PlayerClipTrigger[] = [];
   const itemIds = options.mainhandItemIds ?? [];
@@ -584,8 +608,14 @@ export function translatePlayerTriggers(options: {
     unresolved: triggers.filter((t) => t.status === 'unresolved').length,
     classesScanned,
     javaSignals: [...hits.keys()],
-    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : undefined,
-    sourceProfileCandidate: !seriousPlayerProfile && seriousPlayerNamespace ? 'Serious Player Animations 1.1.1 (base Java mod JAR required)' : undefined,
+    sourceProfile: seriousPlayerProfile ? 'Serious Player Animations 1.1.1' : palPlayerProfile ? 'Player Animation Library (PAL)' : undefined,
+    sourceProfileCandidate: !seriousPlayerProfile && !palPlayerProfile
+      ? seriousPlayerNamespace
+        ? 'Serious Player Animations 1.1.1 (base Java mod JAR required)'
+        : palPlayerNamespace
+          ? 'Player Animation Library (PAL) (matching Java controller classes not found)'
+          : undefined
+      : undefined,
     triggers,
     summary: '',
   };
@@ -593,7 +623,7 @@ export function translatePlayerTriggers(options: {
   if (report.clipsInspected > 0) {
     log(`[TRIGGER-BRIDGE] ${report.summary}`);
     if (report.sourceProfile) {
-      log(`[TRIGGER-BRIDGE] Recognized versioned source profile ${report.sourceProfile} from matching Java class and mod metadata.`);
+      log(`[TRIGGER-BRIDGE] Recognized source framework/profile ${report.sourceProfile} from matching Java class and mod metadata.`);
     } else if (report.sourceProfileCandidate) {
       log('[TRIGGER-BRIDGE] Found the Serious Player Animations resource namespace, but the verified base Java mod JAR is missing; no playback conditions were guessed.');
     }

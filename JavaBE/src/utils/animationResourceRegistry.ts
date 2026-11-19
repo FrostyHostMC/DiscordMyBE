@@ -1,6 +1,7 @@
 import { buildBoneIndex, matchBoneName } from '@/utils/boneRetarget';
-import { PLAYER_SKELETON_BONES, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { PLAYER_SKELETON_BONES } from '@/utils/playerBoneAliases';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
+import { VANILLA_PLAYER_GEOMETRY_IDS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } from '@/utils/vanillaPlayerBaseline';
 import { snapshotAnimationResourceRegistry } from '@/utils/animationRegistrySnapshot';
 export { assertAnimationResourceRegistryCurrent } from '@/utils/animationRegistrySnapshot';
 
@@ -30,8 +31,16 @@ export { assertAnimationResourceRegistryCurrent } from '@/utils/animationRegistr
 export const ENGINE_ANIMATION_ID = {
   test: isKnownVanillaPlayerAnimationReference,
 };
-export const VANILLA_GEOMETRY_ID = /^geometry\.(humanoid|cape|armor_stand|player)\b/i;
-export const VANILLA_RENDER_CONTROLLER_ID = /^controller\.render\.(player|armor_stand)\b/i;
+export const VANILLA_GEOMETRY_ID = /^geometry\.armor_stand\b/i;
+export const VANILLA_RENDER_CONTROLLER_ID = /^controller\.render\.armor_stand\b/i;
+
+function isEngineProvidedPlayerGeometry(identifier: string): boolean {
+  return VANILLA_PLAYER_GEOMETRY_IDS.has(identifier) || VANILLA_GEOMETRY_ID.test(identifier);
+}
+
+function isEngineProvidedRenderController(identifier: string): boolean {
+  return VANILLA_PLAYER_RENDER_CONTROLLER_IDS.has(identifier) || VANILLA_RENDER_CONTROLLER_ID.test(identifier);
+}
 
 type FileMap = Record<string, string | Uint8Array>;
 
@@ -378,9 +387,11 @@ function collectEntities(
           )
         : [],
       renderControllers: Array.isArray(description.render_controllers)
-        ? (description.render_controllers as unknown[]).filter(
-            (value): value is string => typeof value === 'string',
-          )
+        ? (description.render_controllers as unknown[]).flatMap((value) => {
+            if (typeof value === 'string') return [value];
+            if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+            return Object.keys(value as Record<string, unknown>).filter((identifier) => identifier.startsWith('controller.render.'));
+          })
         : Object.values(animations).filter((value) => value.startsWith('controller.render.')),
     });
   }
@@ -451,7 +462,7 @@ export function skeletonFor(
     for (const bone of geometries.get(geometryId) ?? []) bones.add(bone);
   }
   const engineRig =
-    entity.isPlayer && (entity.geometryIds.length === 0 || entity.geometryIds.some((id) => VANILLA_GEOMETRY_ID.test(id)));
+    entity.isPlayer && (entity.geometryIds.length === 0 || entity.geometryIds.some((id) => isEngineProvidedPlayerGeometry(id)));
   if (engineRig) for (const bone of PLAYER_SKELETON_BONES) bones.add(bone);
   return { bones: [...bones], measured: bones.size > 0 };
 }
@@ -476,7 +487,12 @@ function auditBones(
     for (const clipId of owned) {
       for (const bone of clips.get(clipId)?.bones ?? []) {
         const key = JSON.stringify([entity.path, clipId, bone]);
-        const matched = Boolean(matchBoneName(bone, index).bone) || Boolean(entity.isPlayer && resolvePlayerBone(bone));
+        // Similarity is useful during retargeting, but Bedrock resolves animation
+        // channels by exact bone key. A player alias is not proof that the rendered geometry
+        // actually declares that key; require exact names after the final export pass.
+        const matched = entity.isPlayer
+          ? skeleton.bones.includes(bone)
+          : Boolean(matchBoneName(bone, index).bone);
         resolvedPairs.set(key, { entityPath: entity.path, identifier: entity.identifier, clipId, bone, resolved: matched });
       }
     }
@@ -700,10 +716,10 @@ export function buildAnimationResourceRegistry(input: {
     (controllerId) => controllerId.startsWith('controller.render.'),
   );
   const engineProvided = renderControllerIds.filter(
-    (controllerId) => !renderControllers.has(controllerId) && VANILLA_RENDER_CONTROLLER_ID.test(controllerId),
+    (controllerId) => !renderControllers.has(controllerId) && isEngineProvidedRenderController(controllerId),
   );
   const renderUnresolved = renderControllerIds.filter(
-    (controllerId) => !renderControllers.has(controllerId) && !VANILLA_RENDER_CONTROLLER_ID.test(controllerId),
+    (controllerId) => !renderControllers.has(controllerId) && !isEngineProvidedRenderController(controllerId),
   );
   const bones = auditBones(clips, entities, geometries);
 

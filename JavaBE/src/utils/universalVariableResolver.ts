@@ -4,6 +4,7 @@ import { ARMOR_LAYER_VISIBILITY_MAP } from '@/utils/molangScopeBinder';
 import { slotOccupancyExpression } from '@/utils/molangSlotQueries';
 import type { UniversalAnimationDiscoveryReport } from '@/utils/universalAnimationDiscovery';
 import type { UniversalAnimationIRReport } from '@/utils/universalAnimationIR';
+import { VANILLA_PLAYER_VARIABLES } from '@/utils/vanillaPlayerBaseline';
 
 /**
  * Universal Variable Resolver
@@ -365,6 +366,37 @@ export function resolveUniversalVariables(
     const assigned = new Set<string>();
     for (const match of content.matchAll(/\bvariable\.([a-zA-Z0-9_]+)\s*=/g)) {
       assigned.add(String(match[1]).toLowerCase());
+    }
+    // Bedrock's scripts.variables declares entity-scope variables without assigning a
+    // Molang expression. In particular, Mojang exposes player attachable hand transforms
+    // as "public"; treating them as missing made a correct vanilla player pack fail its
+    // dependency gate even though the complete declaration is present in player.entity.json.
+    if (filePath.toLowerCase().endsWith('.entity.json')) {
+      try {
+        const doc = JSON.parse(content) as Record<string, any>;
+        const scripts = doc?.['minecraft:client_entity']?.description?.scripts ??
+          doc?.['minecraft:entity']?.description?.scripts;
+        const declarations = scripts?.variables;
+        if (declarations && typeof declarations === 'object' && !Array.isArray(declarations)) {
+          for (const [rawName, scope] of Object.entries(declarations)) {
+            if (scope !== 'public' && scope !== 'private') continue;
+            const name = rawName.replace(/^variable\./i, '').trim().toLowerCase();
+            if (name) assigned.add(name);
+          }
+        }
+        const clientIdentifier = doc?.['minecraft:client_entity']?.description?.identifier;
+        if (clientIdentifier === 'minecraft:player') {
+          // Resolve Mojang's public attachable variables even when this pass runs before
+          // buildPlayerClientEntity merges the baseline scripts.variables map into the pack.
+          for (const [rawName, scope] of Object.entries(VANILLA_PLAYER_VARIABLES)) {
+            if (scope !== 'public' && scope !== 'private') continue;
+            const name = rawName.replace(/^variable\./i, '').trim().toLowerCase();
+            if (name) assigned.add(name);
+          }
+        }
+      } catch {
+        // Invalid JSON is diagnosed by the schema gate; it does not create variable declarations.
+      }
     }
     if (assigned.size > 0) assignedVariablesByFile.set(filePath, assigned);
   }
