@@ -161,6 +161,14 @@ export function buildPlayerClientEntity(options: {
     ? existingScripts.variables as Record<string, string>
     : {};
   const controllerDriven = new Set(options.controllerDrivenClipIds ?? []);
+  // A conditionless clip can safely use a perspective-only fallback when it is the
+  // sole conditionless clip in that view. Multiple unknown clips in one view would
+  // fight over the same bones, so those still require recovered state evidence.
+  const conditionlessPerspectiveCounts = new Map<'first' | 'third', number>();
+  for (const trigger of triggers) {
+    if (trigger.scriptDriven || controllerDriven.has(trigger.clipId) || trigger.condition?.trim()) continue;
+    conditionlessPerspectiveCounts.set(trigger.perspective, (conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0) + 1);
+  }
   const controllerDrivenClips: string[] = [];
   const animations: Record<string, string> = { ...existingAnimations, ...VANILLA_PLAYER_ANIMATIONS };
   const animate: Array<string | Record<string, string>> = uniqueEntries([...VANILLA_ANIMATE, ...existingAnimate]);
@@ -280,13 +288,24 @@ export function buildPlayerClientEntity(options: {
     }
     const condition = conditionTranslation?.expression;
     if (!condition || (conditionTranslation?.unresolved.length ?? 0) > 0) {
-      // Do not run an unknown state continuously: that makes every idle/attack/emote clip
-      // fight over the same player bones and can erase the entire pose. Keep the animation
-      // registered in the entity map and report it as awaiting a recovered source-state trigger.
-      // The controller owns all clips for which a valid trigger or structural inference exists.
+      const conditionlessCount = conditionlessPerspectiveCounts.get(trigger.perspective) ?? 0;
+      if (!trigger.condition?.trim() && conditionlessCount === 1) {
+        // Perspective is genuine source evidence even when a Java state predicate was not
+        // recovered. A sole clip in that view cannot compete with another unknown pose, so
+        // play it continuously only in its own camera perspective.
+        animate.push({ [short]: viewGate });
+        activatedClips.push(trigger.clipId);
+        unconditionalClips.push(trigger.clipId);
+        molangRepairs.push(
+          `${trigger.clipId}: activated with a perspective-only fallback (${viewGate}); it is the only conditionless clip assigned to this view. The source-state trigger remains unresolved.`,
+        );
+        continue;
+      }
+      // Multiple conditionless clips in one view would fight over the same bones. Keep them
+      // registered, but require recovered source-state evidence or a controller before starting.
       if (!unresolvedClips.includes(trigger.clipId)) unresolvedClips.push(trigger.clipId);
       const reason = conditionTranslation?.unresolved.map((entry) => entry.reason).join('; ') || 'no translated source-state condition was available';
-      molangRepairs.push(`${trigger.clipId}: REGISTERED BUT NOT AUTO-PLAYED — no safe activation condition; continuous playback was deliberately withheld to prevent pose conflicts. ${reason}`);
+      molangRepairs.push(`${trigger.clipId}: REGISTERED BUT NOT AUTO-PLAYED — no safe activation condition; continuous playback was withheld to prevent pose conflicts. ${reason}`);
       continue;
     }
     animate.push({
