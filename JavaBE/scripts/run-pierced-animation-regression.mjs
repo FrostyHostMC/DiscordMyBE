@@ -30,6 +30,54 @@ try {
   const { convertJavaToBedrockAddon } = await server.ssrLoadModule('/src/utils/bedrockGenerator.ts');
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
   const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
+  const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
+
+
+  // The final generic entity pass must never reinterpret minecraft:player as a mob.
+  // This late stage previously overwrote the player-specific animation rig.
+  {
+    const playerEntity = {
+      format_version: '1.10.0',
+      'minecraft:client_entity': { description: {
+        identifier: 'minecraft:player',
+        geometry: { default: 'geometry.humanoid.custom', cape: 'geometry.cape' },
+        textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible' },
+        materials: { default: 'entity_alphatest', cape: 'entity_alphatest' },
+        render_controllers: [
+          'controller.render.player.first_person',
+          'controller.render.player.third_person',
+          'controller.render.player.cape'
+        ]
+      } }
+    };
+    const playerPack = {
+      'entity/player.entity.json': JSON.stringify(playerEntity),
+      'models/entity/player.geo.json': JSON.stringify({
+        format_version: '1.12.0',
+        'minecraft:geometry': [{ description: { identifier: 'geometry.fixture.player_mob_fallback' }, bones: [
+          { name: 'root' }, { name: 'body', parent: 'root' }, { name: 'left_arm', parent: 'body' }
+        ] }]
+      }),
+      'textures/entity/player.png': new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])
+    };
+    const beforePlayer = JSON.parse(playerPack['entity/player.entity.json']);
+    const entityPass = applyEntityAnimationEngine({
+      modId: 'fixture',
+      resourcePackFiles: playerPack,
+      items: [],
+      assetIndex: null
+    });
+    const afterPlayer = JSON.parse(playerPack['entity/player.entity.json']);
+    const beforeDescription = beforePlayer['minecraft:client_entity'].description;
+    const afterDescription = afterPlayer['minecraft:client_entity'].description;
+    assert.deepEqual(afterDescription.geometry, beforeDescription.geometry);
+    assert.deepEqual(afterDescription.textures, beforeDescription.textures);
+    assert.deepEqual(afterDescription.materials, beforeDescription.materials);
+    assert.deepEqual(afterDescription.render_controllers, beforeDescription.render_controllers);
+    assert.equal(entityPass.mobs, 0);
+    assert.equal(entityPass.renderControllersGenerated, 0);
+    assert.ok(entityPass.skipped.some((entry) => entry.includes('engine-owned minecraft:player rig preserved')));
+  }
 
   setPlayableMode(false);
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
@@ -269,6 +317,10 @@ try {
       maxTotalBytes: 256 * 1024 * 1024,
     });
     const mcpackEntries = bundleEntries.filter((entry) => !entry.isDirectory && /\.mcpack$/i.test(entry.path));
+    const finalPlayerRaw = fullResult.resourcePackFiles?.['entity/player.entity.json'];
+    const finalPlayerDescription = typeof finalPlayerRaw === 'string'
+      ? JSON.parse(finalPlayerRaw)?.['minecraft:client_entity']?.description
+      : null;
     const resourceManifest = fullResult.resourcePackFiles?.['manifest.json'];
     const behaviorManifest = fullResult.behaviorPackFiles?.['manifest.json'];
     const unresolvedPlayerVariables = fullResult.playerDependencyResolution?.variables?.unresolved ?? [];
@@ -290,6 +342,10 @@ try {
       { id: 'full-converter-fidelity-matches-all-nine-source-definitions', expected: { shipped: 9, missing: 0 }, actual: { shipped: fullResult.animationFidelity?.clipsShipped ?? -1, missing: fullResult.animationFidelity?.clipsMissing ?? -1 }, passed: fullResult.animationFidelity?.clipsShipped === 9 && fullResult.animationFidelity?.clipsMissing === 0 },
       { id: 'full-converter-runtime-structure-audit-passes', expected: true, actual: fullResult.animationRuntime?.passed ?? false, passed: fullResult.animationRuntime?.passed === true },
       { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 46 && fullResult.animationFidelity?.sourceBoneTracksRetained === 46 && fullResult.animationFidelity?.sourceBoneTracksInactive === 81 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
+      { id: 'full-converter-player-keeps-vanilla-geometry-after-final-entity-binding', expected: 'geometry.humanoid.custom', actual: finalPlayerDescription?.geometry?.default ?? 'missing', passed: finalPlayerDescription?.geometry?.default === 'geometry.humanoid.custom' },
+      { id: 'full-converter-player-cape-keeps-vanilla-cape-geometry', expected: 'geometry.cape', actual: finalPlayerDescription?.geometry?.cape ?? 'missing', passed: finalPlayerDescription?.geometry?.cape === 'geometry.cape' },
+      { id: 'full-converter-player-keeps-vanilla-view-and-cape-renderers', expected: 3, actual: (finalPlayerDescription?.render_controllers ?? []).filter((id) => ['controller.render.player.first_person', 'controller.render.player.third_person', 'controller.render.player.cape'].includes(id)).length, passed: ['controller.render.player.first_person', 'controller.render.player.third_person', 'controller.render.player.cape'].every((id) => finalPlayerDescription?.render_controllers?.includes(id)) },
+      { id: 'full-converter-does-not-bind-player-to-generic-mob-render-controller', expected: false, actual: (finalPlayerDescription?.render_controllers ?? []).some((id) => id.includes('seriousplayeranimations_1_1_1.player')), passed: !(finalPlayerDescription?.render_controllers ?? []).some((id) => id.includes('seriousplayeranimations_1_1_1.player')) },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
     ];
     report.fullConversion = {
