@@ -19,6 +19,7 @@ import { generateEggColors } from '@/utils/bedrockIds';
 type PackFiles = Record<string, string | Uint8Array>;
 
 const decoder = new TextDecoder();
+// Only matching registration-bearing classes consume this generous safety ceiling.
 const MAX_CLASSES = 10_000;
 
 export interface SpawnEggRegistration {
@@ -311,18 +312,11 @@ export function applySpawnEggPolicy(options: {
       `[SPAWN-EGG] Removed standalone spawn egg item "${itemId}" — the egg is produced by the entity's own client entity colours, so a second item would duplicate it.`,
     );
   }
-  const autoEggTextureStems = new Set<string>(removedIconKeys);
-  for (const [mobId, client] of clientByMob) {
-    if (registrations.has(mobId) || client.description.spawn_egg) {
-      autoEggTextureStems.add(`${mobId}_spawn_egg`);
-    }
-  }
   for (const key of Object.keys(rp)) {
-    if (!/^textures\/.+\.png$/i.test(key)) continue;
-    const stem = key.slice(0, -4).split('/').pop() ?? '';
-    // Egg art can be imported under entity/, item/, or another texture subfolder.
-    // Remove only art belonging to an egg that Bedrock can generate for this entity.
-    if (!autoEggTextureStems.has(stem)) continue;
+    if (!/^textures\/items\/.+\.png$/i.test(key)) continue;
+    const stem = key.replace(/^textures\/items\/|\.png$/gi, '');
+    const isEggArt = /(^|_)spawn_egg$/i.test(stem) || removedIconKeys.has(stem);
+    if (!isEggArt) continue;
     delete rp[key];
     removedArt.add(key);
     report.eggArtRemoved += 1;
