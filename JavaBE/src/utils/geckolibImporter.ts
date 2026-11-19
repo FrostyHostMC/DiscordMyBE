@@ -172,7 +172,10 @@ export function detectGeckolibDependency(archiveEntries: ExtractedZipEntry[]): G
       if (evidence.length < 6) evidence.push(path);
       continue;
     }
-    if (lower.endsWith('.geo.json') || lower.endsWith('.animation.json')) {
+    // GeckoLib commonly stores many clips in a generic all_animations.json container,
+    // not only in files ending *.animation.json. Count any discovered animation document
+    // when paired with the source model's .geo.json format.
+    if (lower.endsWith('.geo.json') || isAnimationDocument(path)) {
       geckolibFormats += 1;
       continue;
     }

@@ -793,7 +793,7 @@ export const REGRESSION_FIXTURES: RegressionFixture[] = [{
         }
       }
     }
-  }), fixturePng(assetsData.IMAGE_HUGP, 32, 32, '#f97316')],
+  }), fixturePng('textures/entity/ember_wisp.png', 32, 32, '#f97316')],
   expect: {
     geckolib: {
       clips: 4,
@@ -801,7 +801,7 @@ export const REGRESSION_FIXTURES: RegressionFixture[] = [{
       controllers: 2
     },
     textures: [{
-      tail: 'entity/hover_mite',
+      tail: 'entity/ember_wisp',
       width: 32,
       height: 32
     }]
