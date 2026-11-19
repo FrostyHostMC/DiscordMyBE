@@ -293,7 +293,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
     axis: string,
   ): Array<{ tick: number; value: number; easing: string }> => {
     const entries: Array<{ tick: number; value: number; easing: string }> = [];
-    const isBodyPart = partName === 'body' || partName === 'torso';
+    const isBodyPart = partName === 'body' || (version < 3 && partName === 'torso');
     const isItemPart = partName === 'right_item' || partName === 'left_item';
     const isCapePart = partName === 'cape';
     const base = defaults[partName] ?? [0, 0, 0];
