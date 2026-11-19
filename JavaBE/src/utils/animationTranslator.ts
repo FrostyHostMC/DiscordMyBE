@@ -307,9 +307,11 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
       // PlayerAnimator swaps Y/Z for held-item position and rotation stacks after applying
       // its per-axis sign rules. Reproduce that order here instead of treating item pivots
       // like ordinary limb bones.
-      const sourceAxis = isItemPart && (channel === 'position' || channel === 'rotation')
+      const sourceAxis = isItemPart && channel === 'position'
         ? axis === 'y' ? 'z' : axis === 'z' ? 'y' : axis
-        : axis;
+        : isItemPart && channel === 'rotation'
+          ? axis === 'yaw' ? 'roll' : axis === 'roll' ? 'yaw' : axis
+          : axis;
       const raw = channel === 'position'
         ? part.position[sourceAxis]
         : channel === 'rotation'
@@ -552,7 +554,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
       [String(Math.round((beginTick / 20) * 1000) / 1000)]: [{ effect: particleEffect.trim(), locator: 'body' }],
     };
   }
-  if (document?.applyBendToOtherBones === true || emote.applyBendToOtherBones === true) {
+  if (version < 3 || document?.applyBendToOtherBones === true || emote.applyBendToOtherBones === true) {
     issues.push('PlayerAnimator applyBendToOtherBones metadata was detected; individual bend tracks were preserved, but cross-bone bend propagation is not yet proven equivalent.');
   }
   if (validLoop) {
