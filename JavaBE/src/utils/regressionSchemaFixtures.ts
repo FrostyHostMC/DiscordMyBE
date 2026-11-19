@@ -31,6 +31,7 @@ import { auditReferenceIntegrity } from '@/utils/referenceIntegrityAuditor';
 import { buildPlayerClientEntity } from '@/utils/playerClientEntity';
 import { runPortValidation } from '@/utils/packPortValidator';
 import type { ExtractedZipEntry } from '@/utils/zip';
+import { runUniversalAnimationDiscovery } from '@/utils/universalAnimationDiscovery';
 
 /**
  * Conversion-specific regression fixtures for the content-log error classes.
@@ -2373,4 +2374,53 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
     ['Offhand shield mirroring remains an explicit approximation; live Bedrock playback is not measured by this structural fixture.'],
     started,
   );
+}
+
+
+/** PAL / PlayerAnimator emote.moves regression for the player_animations source path. */
+export function measurePalPlayerAnimatorFormat(): RegressionFixtureResult {
+  const started = performance.now();
+  const source = {
+    version: 3,
+    name: 'PAL All Channels',
+    particleEffects: 'demo:impact',
+    emote: {
+      beginTick: 0, endTick: 20, stopTick: 21, isLoop: false, returnTick: 0, degrees: false,
+      moves: [
+        { tick: 0, easing: 'LINEAR', torso: { yaw: 0 }, cape: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, right_item: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, left_item: { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0 }, body: { bend: 0 } },
+        { tick: 20, easing: 'EASEOUTQUAD', torso: { yaw: -3.1415927 }, cape: { x: 1, y: 2, z: 3, pitch: 1, yaw: 2, roll: 3 }, right_item: { x: 1, y: 2, z: 3, pitch: 1, yaw: 2, roll: 3 }, left_item: { x: 2, y: 3, z: 4, pitch: 2, yaw: 3, roll: 4 }, body: { bend: 30 } },
+      ],
+    },
+  };
+  const entry: ExtractedZipEntry = {
+    path: 'assets/demo/player_animations/pal_all_channels.json',
+    data: new TextEncoder().encode(JSON.stringify(source)),
+  };
+  const discovery = runUniversalAnimationDiscovery({ entries: [entry], modId: 'demo' });
+  const playerClips = discovery.clipsByOwner.player ?? {};
+  const clip = Object.values(playerClips)[0] as Record<string, any> | undefined;
+  const bones = clip && isPlainObject(clip.bones) ? clip.bones as Record<string, any> : {};
+  const itemPosition = bones.right_item?.position?.['1'];
+  const itemVector = Array.isArray(itemPosition) ? itemPosition : itemPosition?.post;
+  const capePosition = bones.cape?.position?.['1'];
+  const capeVector = Array.isArray(capePosition) ? capePosition : capePosition?.post;
+  const checks: RegressionAssertion[] = [
+    { label: 'PAL player_animations path is discovered as a player source', expected: 'one player-owned clip', actual: String(Object.keys(playerClips).length), passed: Object.keys(playerClips).length === 1 },
+    { label: 'cape and held-item transforms are preserved', expected: 'cape, right_item, left_item', actual: ['cape', 'right_item', 'left_item'].filter((key) => Boolean(bones[key])).join(', ') || 'none', passed: ['cape', 'right_item', 'left_item'].every((key) => Boolean(bones[key])) },
+    { label: 'held-item Y/Z position axes match PAL conversion', expected: '[-16, 48, -32]', actual: JSON.stringify(itemVector ?? null), passed: Array.isArray(itemVector) && Math.abs(itemVector[0] + 16) < 0.01 && Math.abs(itemVector[1] - 48) < 0.01 && Math.abs(itemVector[2] + 32) < 0.01 },
+    { label: 'cape position signs and bend geometry tracks survive', expected: '[-16, -32, -48] and body_bend', actual: JSON.stringify(capeVector ?? null) + '; ' + String(Boolean(bones.body_bend)), passed: Array.isArray(capeVector) && Math.abs(capeVector[0] + 16) < 0.01 && Math.abs(capeVector[1] + 32) < 0.01 && Math.abs(capeVector[2] + 48) < 0.01 && Boolean(bones.body_bend) },
+    { label: 'PAL particle effects and stop-tick duration survive', expected: 'demo:impact at 0s; 1.05s', actual: JSON.stringify(clip?.particle_effects ?? null) + '; ' + String(clip?.animation_length), passed: isPlainObject(clip?.particle_effects) && JSON.stringify(clip.particle_effects).includes('demo:impact') && Math.abs(Number(clip?.animation_length) - 1.05) < 0.001 },
+  ];
+  const failures = checks.filter((check) => !check.passed);
+  return {
+    id: 'pal-player-animator-format',
+    label: 'PAL / PlayerAnimator player_animations format and all-part conversion',
+    category: 'Animation',
+    status: failures.length === 0 ? 'passed' : 'failed',
+    metrics: { animationAccuracy: Math.round(((checks.length - failures.length) / checks.length) * 100) },
+    assertions: checks,
+    findings: failures.map((failure) => `${failure.label}: expected ${failure.expected}, got ${failure.actual}`),
+    unavailable: ['Structural conversion does not prove live Bedrock playback.'],
+    durationMs: Math.round(performance.now() - started),
+  };
 }
