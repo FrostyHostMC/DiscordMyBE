@@ -254,6 +254,14 @@ export function buildPlayerClientEntity(options: {
     else thirdPersonClips.push(trigger.clipId);
     if (trigger.status === 'unresolved') unresolvedClips.push(trigger.clipId);
 
+    // A source adapter can prove that a clip has no usable runtime state on this target.
+    // Keep its definition registered for diagnostics, but do not let a generated controller
+    // or perspective-only fallback start it: an always-playing pose can tear the player rig.
+    if (trigger.deliberatelyInactive) {
+      if (!unresolvedClips.includes(trigger.clipId)) unresolvedClips.push(trigger.clipId);
+      continue;
+    }
+
     // Molang cannot express arbitrary Java control flow, so one-shot logic is fired from the
     // behaviour-pack script. Those clips stay out of scripts.animate or they would loop.
     if (trigger.scriptDriven) {
