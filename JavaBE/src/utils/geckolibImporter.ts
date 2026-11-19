@@ -175,7 +175,7 @@ export function detectGeckolibDependency(archiveEntries: ExtractedZipEntry[]): G
     // GeckoLib commonly stores many clips in a generic all_animations.json container,
     // not only in files ending *.animation.json. Count any discovered animation document
     // when paired with the source model's .geo.json format.
-    if (lower.endsWith('.geo.json') || isAnimationDocument(path)) {
+    if (lower.endsWith('.geo.json') || isAnimationJsonPath(path)) {
       geckolibFormats += 1;
       continue;
     }
