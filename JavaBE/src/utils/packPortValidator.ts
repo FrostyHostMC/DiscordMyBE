@@ -370,10 +370,29 @@ export function runPortValidation(options: ValidatorOptions): PortValidationRepo
         add({ check: 'reference', severity: 'error', file: path, subject: value, detail: `Geometry "${value}" is not declared by any shipped model and is not a base-game geometry.` });
       }
     }
-    for (const value of (description.render_controllers ?? []) as string[]) {
-      if (typeof value !== 'string') continue;
-      if (!resolvesRenderController(value, isPlayer)) {
-        add({ check: 'reference', severity: 'error', file: path, subject: value, detail: `Render controller "${value}" is not shipped and is not a base-game controller.` });
+    const renderControllerEntries = Array.isArray(description.render_controllers)
+      ? description.render_controllers
+      : [];
+    for (const value of renderControllerEntries) {
+      const bindings = typeof value === 'string'
+        ? [[value, null] as const]
+        : value && typeof value === 'object' && !Array.isArray(value)
+          ? Object.entries(value as Record<string, unknown>)
+          : [];
+      if (bindings.length === 0) {
+        add({ check: 'reference', severity: 'error', file: path, subject: 'render_controllers', detail: 'Render controller entry is empty or malformed; expected an identifier or a one-entry identifier-to-Molang-condition object.' });
+        continue;
+      }
+      if (bindings.length !== 1) {
+        add({ check: 'reference', severity: 'error', file: path, subject: 'render_controllers', detail: `Render controller condition object has ${bindings.length} bindings; Bedrock expects one controller id per entry.` });
+        continue;
+      }
+      const [controllerId, condition] = bindings[0];
+      if (!resolvesRenderController(controllerId, isPlayer)) {
+        add({ check: 'reference', severity: 'error', file: path, subject: controllerId, detail: `Render controller "${controllerId}" is not shipped and is not a base-game controller.` });
+      }
+      if (condition !== null && (typeof condition !== 'string' || !condition.trim())) {
+        add({ check: 'reference', severity: 'error', file: path, subject: controllerId, detail: 'Render controller condition must be a non-empty Molang expression.' });
       }
     }
     for (const value of Object.values((description.textures ?? {}) as Record<string, string>)) {
