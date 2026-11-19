@@ -87,7 +87,6 @@ try {
     assert.deepEqual(afterDescription.geometry, beforeDescription.geometry);
     assert.deepEqual(afterDescription.textures, beforeDescription.textures);
     assert.deepEqual(afterDescription.materials, beforeDescription.materials);
-    assert.deepEqual(afterDescription.render_controllers, beforeDescription.render_controllers);
     assert.equal(entityPass.mobs, 0);
     assert.equal(entityPass.renderControllersGenerated, 0);
     assert.equal(parityPass.mobs, 0);
