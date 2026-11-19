@@ -38,7 +38,8 @@ export const VANILLA_PLAYER_INITIALIZE: string[] = [
   "v.hand_bob = 0.0;",
   "v.melee_spear_java_to_bedrock_scale = 40.0;"
 ];
-// The current stable target lacks the newer kinetic-weapon Molang queries. Keep the Mojang spear pose graph live using documented item-use/attack timing fallbacks instead of shipping unsupported query calls.\nexport const VANILLA_PLAYER_PRE_ANIMATION: string[] = [
+// The current stable target lacks the newer kinetic-weapon Molang queries. Keep the Mojang spear pose graph live using documented item-use/attack timing fallbacks instead of shipping unsupported query calls.
+export const VANILLA_PLAYER_PRE_ANIMATION: string[] = [
   "v.helmet_layer_visible = !query.has_head_gear;",
   "v.leg_layer_visible = 1.0;",
   "v.boot_layer_visible = 1.0;",
