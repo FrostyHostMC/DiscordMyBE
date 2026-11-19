@@ -338,6 +338,7 @@ function compareBedrockClips(
 function compareClip(
   source: IRAnimationClip,
   shipped: ShippedClip | undefined,
+  sourceBoneToPlayerBone: Record<string, string> = {},
 ): { channelsCompared: number; channelsLost: string[]; bonesLost: string[]; maxDrift: number; keyframesShipped: number; bonesShipped: number } {
   const result = {
     channelsCompared: 0,
