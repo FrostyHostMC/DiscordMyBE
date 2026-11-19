@@ -32,6 +32,7 @@ try {
   const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
   const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
   const { buildAnimationResourceRegistry } = await server.ssrLoadModule('/src/utils/animationResourceRegistry.ts');
+  const { VANILLA_PLAYER_ANIMATIONS, VANILLA_PLAYER_RENDER_CONTROLLERS, VANILLA_PLAYER_RENDER_CONTROLLER_IDS } = await server.ssrLoadModule('/src/utils/vanillaPlayerBaseline.ts');
 
 
   // The final generic entity pass must never reinterpret minecraft:player as a mob.
@@ -44,11 +45,7 @@ try {
         geometry: { default: 'geometry.humanoid.custom', cape: 'geometry.cape' },
         textures: { default: 'textures/entity/steve', cape: 'textures/entity/cape_invisible' },
         materials: { default: 'entity_alphatest', cape: 'entity_alphatest' },
-        render_controllers: [
-          'controller.render.player.first_person',
-          'controller.render.player.third_person',
-          'controller.render.player.cape'
-        ]
+        render_controllers: VANILLA_PLAYER_RENDER_CONTROLLERS
       } }
     };
     const playerPack = {
@@ -373,6 +370,14 @@ try {
     const finalPlayerDescription = typeof finalPlayerRaw === 'string'
       ? JSON.parse(finalPlayerRaw)?.['minecraft:client_entity']?.description
       : null;
+    const finalPlayerRenderControllerIds = (finalPlayerDescription?.render_controllers ?? []).flatMap((entry) =>
+      typeof entry === 'string' ? [entry] : entry && typeof entry === 'object' ? Object.keys(entry) : [],
+    );
+    const missingVanillaPlayerAliases = Object.entries(VANILLA_PLAYER_ANIMATIONS)
+      .filter(([alias, identifier]) => finalPlayerDescription?.animations?.[alias] !== identifier)
+      .map(([alias]) => alias);
+    const missingVanillaPlayerRenderControllers = [...VANILLA_PLAYER_RENDER_CONTROLLER_IDS]
+      .filter((id) => !finalPlayerRenderControllerIds.includes(id));
     const resourceManifest = fullResult.resourcePackFiles?.['manifest.json'];
     const behaviorManifest = fullResult.behaviorPackFiles?.['manifest.json'];
     const unresolvedPlayerVariables = fullResult.playerDependencyResolution?.variables?.unresolved ?? [];
@@ -396,8 +401,12 @@ try {
       { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 46 && fullResult.animationFidelity?.sourceBoneTracksRetained === 46 && fullResult.animationFidelity?.sourceBoneTracksInactive === 81 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
       { id: 'full-converter-player-keeps-vanilla-geometry-after-final-entity-binding', expected: 'geometry.humanoid.custom', actual: finalPlayerDescription?.geometry?.default ?? 'missing', passed: finalPlayerDescription?.geometry?.default === 'geometry.humanoid.custom' },
       { id: 'full-converter-player-cape-keeps-vanilla-cape-geometry', expected: 'geometry.cape', actual: finalPlayerDescription?.geometry?.cape ?? 'missing', passed: finalPlayerDescription?.geometry?.cape === 'geometry.cape' },
-      { id: 'full-converter-player-keeps-vanilla-view-and-cape-renderers', expected: 3, actual: (finalPlayerDescription?.render_controllers ?? []).filter((id) => ['controller.render.player.first_person', 'controller.render.player.third_person', 'controller.render.player.cape'].includes(id)).length, passed: ['controller.render.player.first_person', 'controller.render.player.third_person', 'controller.render.player.cape'].every((id) => finalPlayerDescription?.render_controllers?.includes(id)) },
-      { id: 'full-converter-does-not-bind-player-to-generic-mob-render-controller', expected: false, actual: (finalPlayerDescription?.render_controllers ?? []).some((id) => id.includes('seriousplayeranimations_1_1_1.player')), passed: !(finalPlayerDescription?.render_controllers ?? []).some((id) => id.includes('seriousplayeranimations_1_1_1.player')) },
+      { id: 'full-converter-preserves-all-mojang-player-animation-aliases', expected: Object.keys(VANILLA_PLAYER_ANIMATIONS).length, actual: missingVanillaPlayerAliases.length, passed: missingVanillaPlayerAliases.length === 0 },
+      { id: 'full-converter-preserves-all-five-conditional-vanilla-player-render-controllers', expected: 5, actual: finalPlayerRenderControllerIds.filter((id) => VANILLA_PLAYER_RENDER_CONTROLLER_IDS.has(id)).length, passed: missingVanillaPlayerRenderControllers.length === 0 },
+      { id: 'full-converter-does-not-invent-a-cape-render-controller', expected: false, actual: finalPlayerRenderControllerIds.includes('controller.render.player.cape'), passed: !finalPlayerRenderControllerIds.includes('controller.render.player.cape') },
+      { id: 'full-converter-preserves-vanilla-player-material-layers-and-attachables', expected: 'animated + spectator materials; attachables enabled', actual: `${String(finalPlayerDescription?.materials?.animated ?? 'missing')} / ${String(finalPlayerDescription?.materials?.spectator ?? 'missing')} / ${String(finalPlayerDescription?.enable_attachables)}`, passed: finalPlayerDescription?.materials?.animated === 'player_animated' && finalPlayerDescription?.materials?.spectator === 'player_spectator' && finalPlayerDescription?.enable_attachables === true },
+      { id: 'full-converter-preserves-vanilla-player-initialize-and-pre-animation-scripts', expected: 'hand_bob + tcos0 + map_angle + item_use_normalized', actual: (finalPlayerDescription?.scripts?.initialize ?? []).length, passed: ['variable.hand_bob = 0.0;', 'variable.tcos0 = (math.cos(query.modified_distance_moved * 38.17) * query.modified_move_speed / variable.gliding_speed_value) * 57.3;', 'variable.map_angle = math.clamp(1 - variable.player_x_rotation / 45.1, 0.0, 1.0);', 'variable.item_use_normalized = query.main_hand_item_use_duration / query.main_hand_item_max_duration;'].every((statement) => [...(finalPlayerDescription?.scripts?.initialize ?? []), ...(finalPlayerDescription?.scripts?.pre_animation ?? [])].includes(statement)) },
+      { id: 'full-converter-does-not-bind-player-to-generic-mob-render-controller', expected: false, actual: finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')), passed: !finalPlayerRenderControllerIds.some((id) => id.includes('seriousplayeranimations_1_1_1.player')) },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
     ];
     report.fullConversion = {
