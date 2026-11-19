@@ -127,6 +127,23 @@ try {
     const vanillaRegistry = buildAnimationResourceRegistry({ resourcePackFiles: vanillaPlayerPack });
     assert.deepEqual(vanillaRegistry.metrics.bones.unresolved, [],
       'the exact canonical leftArm track must resolve against the engine-owned player skeleton');
+
+    const renderControllerRegistry = buildAnimationResourceRegistry({
+      resourcePackFiles: {
+        'entity/player.entity.json': JSON.stringify({
+          'minecraft:client_entity': { description: {
+            identifier: 'minecraft:player',
+            render_controllers: [
+              { 'controller.render.player.first_person': 'query.is_first_person' },
+              { 'controller.render.player.cape': '1.0' }
+            ]
+          } }
+        })
+      }
+    });
+    assert.ok(renderControllerRegistry.metrics.renderControllersEngineProvided.includes('controller.render.player.first_person'));
+    assert.ok(renderControllerRegistry.metrics.renderControllersUnresolved.includes('controller.render.player.cape'),
+      'the registry must not treat a nonexistent player cape controller as a vanilla engine resource');
   }
 
   setPlayableMode(false);
