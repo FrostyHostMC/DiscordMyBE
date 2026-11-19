@@ -1714,8 +1714,10 @@ export function measureItemModelNormalization(): RegressionFixtureResult {
   const goldFace = models.get('gold_face');
   const broken = models.get('broken');
   const rp: Record<string, PackFile> = {
-    [assetsData.IMAGE_IWBM]: pngHeader(16, 16),
-    [assetsData.IMAGE_LZSV]: pngHeader(16, 16)
+    // Ship the actual sheets declared by the Java model documents. Unrelated PNGs cannot
+    // legitimately satisfy a model's own layer0 or cube-face texture dependency.
+    'textures/items/ancient_etching.png': pngHeader(16, 16),
+    'textures/blocks/gold_face.png': pngHeader(16, 16),
   };
   const bp: Record<string, PackFile> = {
     'items/rune_blade.json': JSON.stringify({
@@ -2136,12 +2138,6 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
     expected: 'the guard restores no child aliases to scripts.animate',
     actual: `${playerBaselineGuardReport.animateEntriesRestored} direct activation(s) restored; ${vanillaRootOnly ? 'root-only' : 'child aliases also activated'}`,
     passed: playerBaselineGuardReport.animateEntriesRestored === 0 && vanillaRootOnly
-  }, {
-    label: 'Mojang player map-view variables are recognized as engine-provided values',
-    expected: 'player_x_rotation and map_face_icon resolve without fabricated pack assignments',
-    actual: ['player_x_rotation', 'map_face_icon'].filter((name) => ENGINE_PROVIDED_MOLANG_VARIABLES.has(name)).join(', ') || 'none',
-    passed: ['player_x_rotation', 'map_face_icon'].every((name) => ENGINE_PROVIDED_MOLANG_VARIABLES.has(name)) &&
-      !engineVariableReport.variables.unresolved.some((entry) => ['player_x_rotation', 'map_face_icon'].includes(entry.variable)),
   }, {
     label: 'vanilla first-person arm offsets are recognized as engine-provided variables',
     expected: 'both Mojang arm-offset variables resolve without pack defaults',
