@@ -200,6 +200,15 @@ export function scanSpawnEggRegistrations(options: {
   return found;
 }
 
+function hasSpawnEggAppearance(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const egg = value as Record<string, unknown>;
+  const colourEgg = typeof egg.base_color === 'string' && typeof egg.overlay_color === 'string';
+  const textureEgg = typeof egg.texture === 'string' && egg.texture.trim().length > 0 &&
+    (egg.texture_index === undefined || (Number.isInteger(egg.texture_index) && Number(egg.texture_index) >= 0));
+  return colourEgg || textureEgg;
+}
+
 function parseJson(raw: string | Uint8Array | undefined): Record<string, any> | null {
   if (typeof raw !== 'string') return null;
   try {
@@ -281,27 +290,29 @@ export function applySpawnEggPolicy(options: {
     log('[SPAWN-EGG] No spawn egg registration colour was recovered from the mod\'s code; egg colours stay UNRESOLVED rather than generated.');
   }
 
-  // 3. Remove standalone egg items and their hand-drawn art.
+  // 3. Remove a standalone egg only when the client entity can genuinely provide one.
+  // A mere client-entity file is not enough: it needs recovered registration colours,
+  // an existing valid spawn_egg declaration, or explicit Playable Mode invention.
   const removedArt = new Set<string>();
   const removedIconKeys = new Set<string>();
+  const canGenerateEggForMob = (mobId: string, client: { description: Record<string, any> }): boolean =>
+    registrations.has(mobId) || hasSpawnEggAppearance(client.description.spawn_egg) || options.playableMode;
+
   for (const key of Object.keys(bp)) {
-    if (!/^items\/.+\.json$/i.test(key)) continue;
+    if (!/^items\\/.+\\.json$/i.test(key)) continue;
     const doc = parseJson(bp[key]);
     const body = doc?.['minecraft:item'];
     const components = body?.components ?? {};
     if (!components['minecraft:entity_placer']) continue;
-    const itemId = String(body?.description?.identifier ?? '').split(':').pop() || key.replace(/^items\/|\.json$/gi, '');
-    // Bedrock only auto-generates an egg for an entity that has a client entity to draw it.
-    // When the target mob did not ship one, deleting the only egg item erased the mob from the
-    // creative menu entirely, so the item is kept and the gap is reported.
+    const itemId = String(body?.description?.identifier ?? '').split(':').pop() || key.replace(/^items\\/|\\.json$/gi, '');
     const placer = components['minecraft:entity_placer'] as { entity?: unknown } | undefined;
     const placedRaw = typeof placer?.entity === 'string' ? placer.entity : '';
     const placedMob = placedRaw ? compactKey(placedRaw.split(':').pop() ?? placedRaw) : '';
-    const autoEggExists = placedMob.length > 0
-      && [...clientByMob.keys()].some((mob) => compactKey(mob) === placedMob);
+    const target = [...clientByMob.entries()].find(([mob]) => compactKey(mob) === placedMob);
+    const autoEggExists = Boolean(target && canGenerateEggForMob(target[0], target[1]));
     if (!autoEggExists) {
       log(
-        `[SPAWN-EGG] Kept standalone spawn egg item "${itemId}" — its target ${placedRaw ? `"${placedRaw}"` : 'entity'} ships no client entity, so the game cannot build an egg for it and removing this item would leave nothing to spawn the mob with.`,
+        `[SPAWN-EGG] Kept standalone spawn egg item "${itemId}" — the target has no recovered or declared client-entity egg, so removing it would remove the only spawn item.`,
       );
       continue;
     }
@@ -309,71 +320,115 @@ export function applySpawnEggPolicy(options: {
     delete bp[key];
     report.standaloneEggItemsRemoved += 1;
     log(
-      `[SPAWN-EGG] Removed standalone spawn egg item "${itemId}" — the egg is produced by the entity's own client entity colours, so a second item would duplicate it.`,
+      `[SPAWN-EGG] Removed standalone spawn egg item "${itemId}" — the client entity has a valid or recovered egg appearance.`,
     );
   }
+
+  const autoEggTextureStems = new Set<string>(removedIconKeys);
+  for (const [mobId, client] of clientByMob) {
+    if (canGenerateEggForMob(mobId, client)) autoEggTextureStems.add(`${mobId}_spawn_egg`);
+  }
   for (const key of Object.keys(rp)) {
-    if (!/^textures\/items\/.+\.png$/i.test(key)) continue;
-    const stem = key.replace(/^textures\/items\/|\.png$/gi, '');
-    const isEggArt = /(^|_)spawn_egg$/i.test(stem) || removedIconKeys.has(stem);
-    if (!isEggArt) continue;
+    if (!/^textures\\/.+\\.png$/i.test(key)) continue;
+    const stem = key.slice(0, -4).split('/').pop() ?? '';
+    if (!autoEggTextureStems.has(stem)) continue;
     delete rp[key];
     removedArt.add(key);
     report.eggArtRemoved += 1;
   }
-  if (removedArt.size > 0) {
-    log(`[SPAWN-EGG] Removed ${removedArt.size} generated egg texture(s) — no egg art is drawn by this conversion.`);
-    const raw = rp['textures/item_texture.json'];
-    const atlas = parseJson(raw);
-    const data = atlas?.texture_data as Record<string, { textures?: string | string[] }> | undefined;
-    if (data) {
-      let changed = false;
-      for (const [name, entry] of Object.entries(data)) {
-        const list = Array.isArray(entry.textures) ? entry.textures : [entry.textures ?? ''];
-        const alive = list.filter((texture) => texture && !removedArt.has(`${texture}.png`));
-        if (alive.length === list.length) continue;
+  const atlasRaw = rp['textures/item_texture.json'];
+  const atlas = parseJson(atlasRaw);
+  const data = atlas?.texture_data as Record<string, { textures?: string | string[] }> | undefined;
+  if (data) {
+    let changed = false;
+    for (const [name, entry] of Object.entries(data)) {
+      if (autoEggTextureStems.has(name) || removedIconKeys.has(name)) {
+        delete data[name];
         changed = true;
-        if (alive.length === 0) delete data[name];
-        else entry.textures = alive.length === 1 ? alive[0] : alive;
+        continue;
       }
-      if (changed) rp['textures/item_texture.json'] = JSON.stringify(atlas, null, 2);
+      const list = Array.isArray(entry.textures) ? entry.textures : [entry.textures ?? ''];
+      const alive = list.filter((texture) => {
+        if (!texture) return false;
+        const stem = texture.split('/').pop() ?? '';
+        return !autoEggTextureStems.has(stem) && !removedArt.has(`${texture}.png`);
+      });
+      if (alive.length === list.length) continue;
+      changed = true;
+      if (alive.length === 0) delete data[name];
+      else entry.textures = alive.length === 1 ? alive[0] : alive;
     }
+    if (changed) rp['textures/item_texture.json'] = JSON.stringify(atlas, null, 2);
+  }
+  if (report.eggArtRemoved > 0) {
+    log(`[SPAWN-EGG] Removed ${report.eggArtRemoved} duplicate egg texture(s) across texture folders and pruned their atlas entries.`);
   }
 
-  // 4. Colours live in the client entity, read from the Java registration.
+  // 4. Keep source registration as the authority. In normal mode, never invent
+  // colours or make a mob spawnable when the Java mod did not register an egg.
   for (const mobId of mobIds) {
     const client = clientByMob.get(mobId);
     if (!client) continue;
     const description = client.description;
     const registration = registrations.get(mobId);
     const behavior = behaviorByMob.get(compactKey(mobId));
-    if (behavior) {
-      behavior.description.is_spawnable = true;
-      behavior.description.is_summonable = true;
-      report.spawnableEntitiesEnabled.push(mobId);
-      log(
-        `[SPAWN-EGG] Behavior entity "${behavior.description.identifier}" is player-spawnable — the mob ships in this pack, so it is summonable and its egg is creatable.`,
-      );
-    }
-    // The mob must never disappear from the creative menu just because the mod's compiled
-    // registration could not be read. An egg declaration the pack already carries is preserved;
-    // otherwise a deterministic colour pair derived from the mob's own identifier keeps the egg
-    // visible and is reported honestly as derived, never as a recovered registration value.
-    const existing = description.spawn_egg as { base_color?: unknown; overlay_color?: unknown } | undefined;
-    if (existing && typeof existing.base_color === 'string' && typeof existing.overlay_color === 'string') {
+    const existing = description.spawn_egg;
+
+    if (registration) {
+      description.spawn_egg = { base_color: registration.base, overlay_color: registration.overlay };
       report.coloursApplied.push(mobId);
-      log(
-        `[SPAWN-EGG] Mob "${mobId}" keeps its existing spawn_egg ${existing.base_color} / ${existing.overlay_color} — no registration colour was recovered, so the declaration already in the pack is preserved rather than deleted.`,
-      );
+      if (behavior) {
+        behavior.description.is_spawnable = true;
+        behavior.description.is_summonable = true;
+        report.spawnableEntitiesEnabled.push(mobId);
+      }
+      log(`[SPAWN-EGG] Mob "${mobId}" uses recovered Java registration colours ${registration.base} / ${registration.overlay}.`);
       continue;
     }
-    const colours = generateEggColors(mobId);
-    description.spawn_egg = { base_color: colours.base, overlay_color: colours.overlay };
+
+    if (hasSpawnEggAppearance(existing)) {
+      report.coloursApplied.push(mobId);
+      if (behavior) {
+        behavior.description.is_spawnable = true;
+        behavior.description.is_summonable = true;
+        report.spawnableEntitiesEnabled.push(mobId);
+      }
+      log(`[SPAWN-EGG] Mob "${mobId}" keeps its existing valid client-entity spawn egg declaration.`);
+      continue;
+    }
+
+    if (options.playableMode) {
+      const colours = generateEggColors(mobId);
+      description.spawn_egg = { base_color: colours.base, overlay_color: colours.overlay };
+      report.coloursInvented.push(mobId);
+      if (behavior) {
+        behavior.description.is_spawnable = true;
+        behavior.description.is_summonable = true;
+        report.spawnableEntitiesEnabled.push(mobId);
+      }
+      log(`[SPAWN-EGG] Mob "${mobId}" receives Playable Mode invented colours ${colours.base} / ${colours.overlay}; these are not source-recovered values.`);
+      continue;
+    }
+
+    if (existing !== undefined) {
+      delete description.spawn_egg;
+      log(`[SPAWN-EGG] Removed invalid/incomplete spawn_egg declaration for "${mobId}"; no complete source appearance was recovered.`);
+    }
     report.coloursUnresolved.push(mobId);
-    log(
-      `[SPAWN-EGG] Mob "${mobId}" -> spawn_egg colours UNRESOLVED in the mod's code; deterministic colours ${colours.base} / ${colours.overlay} derived from the mob identifier keep the egg present and the mob visible. The colour values are derived, not recovered from the source registration.`,
-    );
+    log(`[SPAWN-EGG] Mob "${mobId}" has no Java egg registration or valid client-entity egg; no colours or spawnability were invented.`);
   }
+  for (const behavior of behaviorByMob.values()) {
+    // Spawn-egg appearance belongs only to minecraft:client_entity.description.
+    // The behavior entity owns is_spawnable/is_summonable, not a spawn_egg object.
+    if (Object.prototype.hasOwnProperty.call(behavior.description, 'spawn_egg')) {
+      delete behavior.description.spawn_egg;
+    }
+    bp[behavior.path] = JSON.stringify(behavior.doc, null, 2);
+  }
+  for (const client of clientByMob.values()) {
+    rp[client.path] = JSON.stringify(client.doc, null, 2);
+  }
+
   for (const behavior of behaviorByMob.values()) {
     bp[behavior.path] = JSON.stringify(behavior.doc, null, 2);
   }
@@ -381,32 +436,5 @@ export function applySpawnEggPolicy(options: {
     rp[client.path] = JSON.stringify(client.doc, null, 2);
   }
 
-  // 5. The behaviour entity's `description.spawn_egg` is the declaration the engine actually reads
-  // when it builds the egg, so it is written from the same colour evidence as the client entity.
-  // The field used to be stripped here, which left every ported mob with an engine-default egg and,
-  // on hosts that need the behaviour-side declaration, no egg in the creative menu at all.
-  for (const behavior of behaviorByMob.values()) {
-    const mobId = typeof behavior.description.identifier === 'string'
-      ? behavior.description.identifier.split(':').pop() ?? ''
-      : '';
-    if (!mobId) continue;
-    const client = clientByMob.get(mobId);
-    const colours = (client?.description.spawn_egg ?? behavior.description.spawn_egg) as
-      | { base_color?: unknown; overlay_color?: unknown }
-      | undefined;
-    if (!colours || typeof colours.base_color !== 'string' || typeof colours.overlay_color !== 'string') continue;
-    const existing = behavior.description.spawn_egg as { base_color?: unknown; overlay_color?: unknown } | undefined;
-    if (existing && existing.base_color === colours.base_color && existing.overlay_color === colours.overlay_color) {
-      continue;
-    }
-    behavior.description.spawn_egg = { base_color: colours.base_color, overlay_color: colours.overlay_color };
-    bp[behavior.path] = JSON.stringify(behavior.doc, null, 2);
-    report.behaviourSpawnEggSynced += 1;
-  }
-  if (report.behaviourSpawnEggSynced > 0) {
-    log(
-      `[SPAWN-EGG] ${report.behaviourSpawnEggSynced} behaviour entit(ies) carry the same spawn_egg colour declaration as their client entity, so the creative-menu egg is built with the mob's own colours.`,
-    );
-  }
   return report;
 }
