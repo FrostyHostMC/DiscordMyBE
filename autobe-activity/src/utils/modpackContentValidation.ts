@@ -73,6 +73,32 @@ export async function validateModpackContent(
     const clientEntity = entry.data?.['minecraft:client_entity']?.description?.identifier;
     if (typeof clientEntity === 'string') clientEntityIds.add(clientEntity);
   }
+
+  for (const entry of behaviorEntries) {
+    const item = entry.data?.['minecraft:item']?.description?.identifier;
+    const block = entry.data?.['minecraft:block']?.description?.identifier;
+    const entity = entry.data?.['minecraft:entity']?.description?.identifier;
+    if (typeof item === 'string') itemIds.add(item);
+    if (typeof block === 'string') blockIds.add(block);
+    if (typeof entity === 'string') entityIds.add(entity);
+  }
+
+  const itemAliases = new Set<string>();
+  const itemTextureDefinitions = new Map<string, any>();
+  const terrainAliases = new Set<string>();
+  for (const entry of resourceEntries) {
+    const path = entry.path.replace(/\\/g, '/').toLowerCase();
+    if (path.endsWith('textures/item_texture.json')) {
+      for (const [alias, definition] of Object.entries(entry.data?.texture_data || {})) {
+        itemAliases.add(alias);
+        itemTextureDefinitions.set(alias, definition);
+      }
+    }
+    if (path.endsWith('textures/terrain_texture.json')) {
+      Object.keys(entry.data?.texture_data || {}).forEach(alias => terrainAliases.add(alias));
+    }
+  }
+
   // Client-entity spawn_egg registers the egg for a mob; its texture must
   // resolve through item_texture.json (except the verified vanilla spawn_egg
   // alias). Validate the selected texture index against the alias's variants.
@@ -98,31 +124,6 @@ export async function validateModpackContent(
                !(typeof spawnEgg.overlay_color === 'string' && spawnEgg.overlay_color.trim())) {
       add('MISSING_SPAWN_EGG_APPEARANCE', entry.path,
         'Client entity spawn_egg must provide a texture alias or both base_color and overlay_color.');
-    }
-  }
-
-  for (const entry of behaviorEntries) {
-    const item = entry.data?.['minecraft:item']?.description?.identifier;
-    const block = entry.data?.['minecraft:block']?.description?.identifier;
-    const entity = entry.data?.['minecraft:entity']?.description?.identifier;
-    if (typeof item === 'string') itemIds.add(item);
-    if (typeof block === 'string') blockIds.add(block);
-    if (typeof entity === 'string') entityIds.add(entity);
-  }
-
-  const itemAliases = new Set<string>();
-  const itemTextureDefinitions = new Map<string, any>();
-  const terrainAliases = new Set<string>();
-  for (const entry of resourceEntries) {
-    const path = entry.path.replace(/\\/g, '/').toLowerCase();
-    if (path.endsWith('textures/item_texture.json')) {
-      for (const [alias, definition] of Object.entries(entry.data?.texture_data || {})) {
-        itemAliases.add(alias);
-        itemTextureDefinitions.set(alias, definition);
-      }
-    }
-    if (path.endsWith('textures/terrain_texture.json')) {
-      Object.keys(entry.data?.texture_data || {}).forEach(alias => terrainAliases.add(alias));
     }
   }
 

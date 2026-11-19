@@ -583,10 +583,16 @@ console.log('✓ paired behavior/resource entity identifiers remain synchronized
   assert.ok(!validEggIssues.some(issue => issue.code === 'MISSING_SPAWN_EGG_TEXTURE_ALIAS' || issue.code === 'INVALID_SPAWN_EGG_TEXTURE_INDEX'));
 
   const brokenResourceZip = new JSZip();
-  brokenResourceZip.file('entity/mob.entity.json', JSON.stringify({
+  brokenResourceZip.file('entity/mob_missing_egg.entity.json', JSON.stringify({
     'minecraft:client_entity': { description: {
-      identifier: 'demo:mob',
-      spawn_egg: { texture: 'demo:missing_egg', texture_index: 4 }
+      identifier: 'demo:mob_missing_egg',
+      spawn_egg: { texture: 'demo:missing_egg', texture_index: 0 }
+    } }
+  }));
+  brokenResourceZip.file('entity/mob_bad_index.entity.json', JSON.stringify({
+    'minecraft:client_entity': { description: {
+      identifier: 'demo:mob_bad_index',
+      spawn_egg: { texture: 'demo:other_egg', texture_index: 4 }
     } }
   }));
   brokenResourceZip.file('textures/item_texture.json', JSON.stringify({
@@ -595,5 +601,6 @@ console.log('✓ paired behavior/resource entity identifiers remain synchronized
   const brokenEggIssues = await validateModpackContent(brokenResourceZip, []);
   const brokenEggCodes = new Set(brokenEggIssues.map(issue => issue.code));
   assert.ok(brokenEggCodes.has('MISSING_SPAWN_EGG_TEXTURE_ALIAS'));
+  assert.ok(brokenEggCodes.has('INVALID_SPAWN_EGG_TEXTURE_INDEX'));
   console.log('✓ client-entity spawn eggs resolve their item texture alias and indexed variant');
 }
