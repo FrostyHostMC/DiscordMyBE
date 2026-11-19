@@ -1455,7 +1455,9 @@ export function createPackFiles(name: string, id: string, description: string, m
   // and it also drops sleeves, pants, item anchors and cape. Identify by both path and engine id
   // so nested resource-pack paths cannot accidentally turn the player into a mob fallback.
   const isPlayerClientEntity = (path: string): boolean => {
-    const mobId = path.replace(/^entity\\//i, '').replace(/\\.entity\\.json$/i, '');
+    const fileName = path.split('/').pop() ?? path;
+    const entitySuffix = '.entity.json';
+    const mobId = fileName.toLowerCase().endsWith(entitySuffix) ? fileName.slice(0, -entitySuffix.length) : fileName;
     if (mobId.toLowerCase() === 'player') return true;
     const raw = resourcePackFiles[path];
     if (typeof raw !== 'string') return false;

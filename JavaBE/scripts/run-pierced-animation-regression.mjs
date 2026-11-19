@@ -285,7 +285,7 @@ try {
       : [];
     const resourceText = new Map(resourcePackEntries
       .filter((entry) => !entry.isDirectory)
-      .map((entry) => [entry.path.replace(/\\\\/g, '/').toLowerCase(), decoder.decode(entry.data)]));
+      .map((entry) => [entry.path.toLowerCase(), decoder.decode(entry.data)]));
     const readResourceJson = (pathName) => {
       const raw = resourceText.get(pathName.toLowerCase());
       if (!raw) return null;
