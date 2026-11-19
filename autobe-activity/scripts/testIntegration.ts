@@ -16,6 +16,7 @@ const { executeMergePacks, ensureCombinedBlob, buildMergePlan } = await import('
 const { applySubpackSelection } = await import('../src/utils/subpackProcessor.ts');
 const { guardUnavailableEventSubscriptions } = await import('../src/utils/scriptCompatibility.ts');
 const { validateMergedArchive } = await import('../src/utils/mergedArchiveValidation.ts');
+const { validateModpackContent } = await import('../src/utils/modpackContentValidation.ts');
 
 let nextId = 0;
 async function makePack(type: 'Behavior Pack' | 'Resource Pack', name: string, files: Record<string, string | Uint8Array>, scriptVersion?: string) {
@@ -560,4 +561,39 @@ console.log('✓ paired behavior/resource entity identifiers remain synchronized
   assert.ok(brokenCodes.has('MISSING_ANIMATION_CONTROLLER_REFERENCE'));
   assert.ok(brokenCodes.has('MISSING_RENDER_CONTROLLER_REFERENCE'));
   console.log('✓ resource dependency audit distinguishes verified vanilla player resources from genuinely missing custom references');
+}
+
+
+// Spawn eggs can be registered from the client-entity description. Verify the
+// texture alias and variant index against the merged item texture registry.
+{
+  const resourceZip = new JSZip();
+  resourceZip.file('entity/mob.entity.json', JSON.stringify({
+    'minecraft:client_entity': { description: {
+      identifier: 'demo:mob',
+      spawn_egg: { texture: 'demo:mob_egg', texture_index: 2 }
+    } }
+  }));
+  resourceZip.file('textures/item_texture.json', JSON.stringify({
+    texture_data: {
+      'demo:mob_egg': { textures: ['textures/items/mob_egg_0', 'textures/items/mob_egg_1', 'textures/items/mob_egg_2'] }
+    }
+  }));
+  const validEggIssues = await validateModpackContent(resourceZip, []);
+  assert.ok(!validEggIssues.some(issue => issue.code === 'MISSING_SPAWN_EGG_TEXTURE_ALIAS' || issue.code === 'INVALID_SPAWN_EGG_TEXTURE_INDEX'));
+
+  const brokenResourceZip = new JSZip();
+  brokenResourceZip.file('entity/mob.entity.json', JSON.stringify({
+    'minecraft:client_entity': { description: {
+      identifier: 'demo:mob',
+      spawn_egg: { texture: 'demo:missing_egg', texture_index: 4 }
+    } }
+  }));
+  brokenResourceZip.file('textures/item_texture.json', JSON.stringify({
+    texture_data: { 'demo:other_egg': { textures: ['textures/items/other_egg'] } }
+  }));
+  const brokenEggIssues = await validateModpackContent(brokenResourceZip, []);
+  const brokenEggCodes = new Set(brokenEggIssues.map(issue => issue.code));
+  assert.ok(brokenEggCodes.has('MISSING_SPAWN_EGG_TEXTURE_ALIAS'));
+  console.log('✓ client-entity spawn eggs resolve their item texture alias and indexed variant');
 }
