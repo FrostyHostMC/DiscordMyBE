@@ -347,6 +347,8 @@ function measureSchemaGate(): RegressionFixtureResult {
       }
     }
   });
+  // The gate can only create an inventory icon when the source PNG actually ships.
+  rp['textures/items/rune.png'] = pngHeader(16, 16);
   rp['textures/item_texture.json'] = JSON.stringify({
     resource_pack_name: 'vanilla',
     texture_name: 'atlas.items',
