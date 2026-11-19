@@ -213,7 +213,12 @@ export function inferMobBehaviorProfiles(
     const signals = related.flatMap(({ entry }) => entry.signals ?? [])
       .filter((signal) => signal.startsWith('bytecode-signature:'));
     const text = related.map(({ entry }) => [entry.className, ...entry.methods, ...(entry.signals ?? [])].join(' ')).join(' ');
-    const sourceNames = related.map(({ entry }) => entry.className);
+    // Keep the qualified owner path as well as the simple class name. Nested Java
+    // goals (OuterMob$RangedGoal) are separate bytecode classes; dropping their owner
+    // path made the evidence look detached even after the relationship was resolved.
+    const sourceNames = related.flatMap(({ entry }) =>
+      [...new Set([entry.qualifiedClassName, entry.className].filter((name): name is string => Boolean(name)))],
+    );
     const spawnPath = findDataEvidence(mobId, archivePaths, 'spawn');
     const lootPath = findDataEvidence(mobId, archivePaths, 'loot');
     const codeSpawn = /spawnrestriction|spawneggitem|spawngroup|naturalspawn|spawnplacement|registerSpawn/i.test(text);
