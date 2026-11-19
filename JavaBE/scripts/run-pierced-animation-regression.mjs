@@ -31,6 +31,7 @@ try {
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
   const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
   const { applyEntityAnimationEngine } = await server.ssrLoadModule('/src/utils/entityAnimationEngine.ts');
+  const { buildAnimationResourceRegistry } = await server.ssrLoadModule('/src/utils/animationResourceRegistry.ts');
 
 
   // The final generic entity pass must never reinterpret minecraft:player as a mob.
@@ -77,6 +78,57 @@ try {
     assert.equal(entityPass.mobs, 0);
     assert.equal(entityPass.renderControllersGenerated, 0);
     assert.ok(entityPass.skipped.some((entry) => entry.includes('engine-owned minecraft:player rig preserved')));
+  }
+
+
+  // A fuzzy player-bone synonym is not a valid Bedrock runtime binding. The final
+  // geometry's bone names must exactly match the exported animation track keys.
+  {
+    const animation = {
+      format_version: '1.8.0',
+      animations: {
+        'animation.fixture.player_move': {
+          animation_length: 0.4,
+          bones: { leftArm: { rotation: { '0.0': [0, 0, 0], '0.4': [30, 0, 0] } } }
+        }
+      }
+    };
+    const customGeometryPack = {
+      'entity/player.entity.json': JSON.stringify({
+        'minecraft:client_entity': { description: {
+          identifier: 'minecraft:player',
+          geometry: { default: 'geometry.fixture.player' },
+          animations: { move: 'animation.fixture.player_move' },
+          scripts: { animate: ['move'] }
+        } }
+      }),
+      'models/entity/player.geo.json': JSON.stringify({
+        format_version: '1.12.0',
+        'minecraft:geometry': [{
+          description: { identifier: 'geometry.fixture.player' },
+          bones: [{ name: 'root' }, { name: 'body', parent: 'root' }, { name: 'left_arm', parent: 'body' }]
+        }]
+      }),
+      'animations/player.animation.json': JSON.stringify(animation)
+    };
+    const customRegistry = buildAnimationResourceRegistry({ resourcePackFiles: customGeometryPack });
+    assert.ok(customRegistry.metrics.bones.unresolved.some((entry) => entry.includes('leftArm')),
+      'a leftArm track must fail against custom geometry that only declares left_arm');
+
+    const vanillaPlayerPack = {
+      'entity/player.entity.json': JSON.stringify({
+        'minecraft:client_entity': { description: {
+          identifier: 'minecraft:player',
+          geometry: { default: 'geometry.humanoid.custom' },
+          animations: { move: 'animation.fixture.player_move' },
+          scripts: { animate: ['move'] }
+        } }
+      }),
+      'animations/player.animation.json': JSON.stringify(animation)
+    };
+    const vanillaRegistry = buildAnimationResourceRegistry({ resourcePackFiles: vanillaPlayerPack });
+    assert.deepEqual(vanillaRegistry.metrics.bones.unresolved, [],
+      'the exact canonical leftArm track must resolve against the engine-owned player skeleton');
   }
 
   setPlayableMode(false);

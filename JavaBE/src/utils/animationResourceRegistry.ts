@@ -1,5 +1,5 @@
 import { buildBoneIndex, matchBoneName } from '@/utils/boneRetarget';
-import { PLAYER_SKELETON_BONES, resolvePlayerBone } from '@/utils/playerBoneAliases';
+import { PLAYER_SKELETON_BONES } from '@/utils/playerBoneAliases';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
 import { snapshotAnimationResourceRegistry } from '@/utils/animationRegistrySnapshot';
 export { assertAnimationResourceRegistryCurrent } from '@/utils/animationRegistrySnapshot';
@@ -476,7 +476,13 @@ function auditBones(
     for (const clipId of owned) {
       for (const bone of clips.get(clipId)?.bones ?? []) {
         const key = JSON.stringify([entity.path, clipId, bone]);
-        const matched = Boolean(matchBoneName(bone, index).bone) || Boolean(entity.isPlayer && resolvePlayerBone(bone));
+        // Java/Blockbench name similarity is useful during retargeting, but it is not a
+        // Bedrock runtime binding. The final track key must exactly match a bone in the
+        // geometry this entity actually renders. Player aliases are accepted only after the
+        // player bridge has rewritten the exported clip to the canonical engine bone name.
+        const matched = entity.isPlayer
+          ? skeleton.bones.includes(bone)
+          : Boolean(matchBoneName(bone, index).bone);
         resolvedPairs.set(key, { entityPath: entity.path, identifier: entity.identifier, clipId, bone, resolved: matched });
       }
     }
