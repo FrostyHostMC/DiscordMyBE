@@ -293,7 +293,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
     axis: string,
   ): Array<{ tick: number; value: number; easing: string }> => {
     const entries: Array<{ tick: number; value: number; easing: string }> = [];
-    const isBodyPart = partName === 'body' || (version < 3 && partName === 'torso');
+    const isBodyPart = partName === 'body' || partName === 'torso';
     const isItemPart = partName === 'right_item' || partName === 'left_item';
     const isCapePart = partName === 'cape';
     const base = defaults[partName] ?? [0, 0, 0];
@@ -456,11 +456,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
   for (const partName of partNames) {
     // PlayerAnimator v1/v2 renamed torso to body; v3 keeps torso distinct.
     // The v3 body channel maps to Bedrock's waist pivot.
-    const boneName = partName === 'torso' && version < 3
-      ? 'body'
-      : partName === 'body'
-        ? 'waist'
-        : partName;
+    const boneName = partName === 'torso' ? 'body' : partName === 'body' ? 'waist' : partName;
     const positionAxes = ['x', 'y', 'z'];
     const rotationAxes = ['pitch', 'yaw', 'roll'];
     const positionEntries = positionAxes.map((axis) => getEntries(partName, 'position', axis));
@@ -532,7 +528,7 @@ function convertEmotecraftEmote(emote: Record<string, unknown>, version = 1, doc
     if (hasRotation) bones[boneName] = { ...(bones[boneName] ?? {}), rotation: rotationTrack };
     if (hasScale) bones[boneName] = { ...(bones[boneName] ?? {}), scale: scaleTrack };
     if (hasBend) {
-      const bendBoneName = partName === 'body' || (partName === 'torso' && version < 3) ? 'body_bend' : boneName + '_bend';
+      const bendBoneName = partName === 'body' || partName === 'torso' ? 'body_bend' : boneName + '_bend';
       bones[bendBoneName] = {
         ...(bones[bendBoneName] ?? {}),
         rotation: bendRotationTrack,
