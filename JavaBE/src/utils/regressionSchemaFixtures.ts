@@ -2279,7 +2279,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   const statementFor = (name: string) => preAnimation.find((statement) => statement.startsWith(`variable.${name} =`)) ?? '';
   const sourceMovementVariables = [
     'spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards',
-    'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw',
+    'spa_turn_delta', 'spa_previous_body_yaw',
   ] as const;
   const sourceVariableTranslations = sourceMovementVariables.map((name) => {
     const baseline = PLAYER_SCOPE_VARIABLE_EXPRESSIONS[name];
@@ -2341,14 +2341,14 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
   }, {
     label: 'the source movement and direction calculations are restored in player Molang scope',
     expected: 'move speed, backward direction and turn delta expressions injected',
-    actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
+    actual: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_previous_body_yaw'].filter((name) => hasVariable(name, preAnimation)).join(', ') || 'none',
     passed: ['spa_dx', 'spa_dz', 'spa_move_speed', 'spa_moving_backwards', 'spa_turn_delta', 'spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => hasVariable(name, preAnimation))
   }, {
     label: 'the per-tick position and speed equations match the Java source state machine',
-    expected: 'dx/dz from current position minus prior position; speed is sqrt(dx² + dz²)',
+    expected: 'dx/dz from query.position_delta; speed is sqrt(dx² + dz²)',
     actual: [statementFor('spa_dx'), statementFor('spa_dz'), statementFor('spa_move_speed')].filter(Boolean).join(' | ') || 'missing',
-    passed: statementFor('spa_dx').includes('query.position(0) - variable.spa_last_x') &&
-      statementFor('spa_dz').includes('query.position(2) - variable.spa_last_z') &&
+    passed: statementFor('spa_dx').includes('query.position_delta(0)') &&
+      statementFor('spa_dz').includes('query.position_delta(2)') &&
       statementFor('spa_move_speed').includes('math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0)')
   }, {
     label: 'backward movement and turning equations match the Java source state machine',
@@ -2359,7 +2359,7 @@ export function measureSeriousPlayerAnimationSourceAdapter(): RegressionFixtureR
       statementFor('spa_turn_delta').includes('query.body_y_rotation - variable.spa_previous_body_yaw')
   }, {
     label: 'the previous position and body-yaw variables start from source initial values',
-    expected: 'spa_last_x, spa_last_z and spa_previous_body_yaw initialize to 0.0',
+    expected: 'spa_previous_body_yaw initializes to 0.0; position deltas are engine-provided each frame',
     actual: initialize.filter((statement) => ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].some((name) => statement.startsWith('variable.' + name + ' ='))).join(', ') || 'missing',
     passed: ['spa_last_x', 'spa_last_z', 'spa_previous_body_yaw'].every((name) => initialize.some((statement) => statement.startsWith('variable.' + name + ' = 0.0')))
   }, {
