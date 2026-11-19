@@ -108,12 +108,12 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
   },
   // Serious Player Animations 1.1.0 mirrors its Java fields: lastPos and prevbyaw both start at zero.
   spa_dx: {
-    expression: 'query.position(0) - variable.spa_last_x',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): vx = pos.x - lastPos.x',
+    expression: 'query.position_delta(0)',
+    evidence: 'Bedrock player Molang query_position_delta returns the current entity position delta; avoids query.position in player animation scope',
   },
   spa_dz: {
-    expression: 'query.position(2) - variable.spa_last_z',
-    evidence: 'SeriousPlayerAnimationsMixin.animate(): vz = pos.z - lastPos.z',
+    expression: 'query.position_delta(2)',
+    evidence: 'Bedrock player Molang query_position_delta returns the current entity position delta; avoids query.position in player animation scope',
   },
   spa_move_speed: {
     expression: 'math.sqrt(math.pow(variable.spa_dx, 2.0) + math.pow(variable.spa_dz, 2.0))',
@@ -128,14 +128,14 @@ export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
     evidence: 'SeriousPlayerAnimationsMixin.animate(): turn = byaw - prevbyaw',
   },
   spa_last_x: {
-    expression: 'query.position(0)',
+    expression: 'query.position_delta(0)',
     initializeExpression: '0.0',
-    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.x to 0 and updates it to pos.x after each tick',
+    evidence: 'Player-scope movement uses the documented query.position_delta axis; absolute query.position is not valid in this player animation context',
   },
   spa_last_z: {
-    expression: 'query.position(2)',
+    expression: 'query.position_delta(2)',
     initializeExpression: '0.0',
-    evidence: 'SeriousPlayerAnimationsMixin initializes lastPos.z to 0 and updates it to pos.z after each tick',
+    evidence: 'Player-scope movement uses the documented query.position_delta axis; absolute query.position is not valid in this player animation context',
   },
   spa_previous_body_yaw: {
     expression: 'query.body_y_rotation',
