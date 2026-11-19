@@ -1448,8 +1448,27 @@ export function createPackFiles(name: string, id: string, description: string, m
 
   // Scan for all client entity files and ensure their geometry & texture files exist in resource pack
   const clientEntityFiles = Object.keys(resourcePackFiles).filter(k => k.startsWith('entity/') && k.endsWith('.entity.json'));
+  // The player is not an ordinary mob. Its skin, classic/slim skeleton, cape, held-item
+  // attachment bones and vanilla animation graph are supplied by Minecraft. Generating a
+  // generic seven-bone mob rig for entity/player.entity.json silently replaces that contract:
+  // the generated model uses left_arm/right_arm while Bedrock player clips target leftArm/rightArm,
+  // and it also drops sleeves, pants, item anchors and cape. Identify by both path and engine id
+  // so nested resource-pack paths cannot accidentally turn the player into a mob fallback.
+  const isPlayerClientEntity = (path: string): boolean => {
+    const mobId = path.replace(/^entity\\//i, '').replace(/\\.entity\\.json$/i, '');
+    if (mobId.toLowerCase() === 'player') return true;
+    const raw = resourcePackFiles[path];
+    if (typeof raw !== 'string') return false;
+    try {
+      const parsed = JSON.parse(raw) as Record<string, any>;
+      return parsed?.['minecraft:client_entity']?.description?.identifier === 'minecraft:player';
+    } catch {
+      return false;
+    }
+  };
   for (const cef of clientEntityFiles) {
     const mobId = cef.replace(/^entity\/|\.entity\.json$/g, '');
+    if (isPlayerClientEntity(cef)) continue;
     const expectedGeoPath = `models/entity/${mobId}.geo.json`;
     if (!resourcePackState.has(expectedGeoPath)) {
       const rigged = generateRiggedMobGeometry(id, mobId);
@@ -1480,6 +1499,33 @@ export function createPackFiles(name: string, id: string, description: string, m
     try {
       const parsed = JSON.parse(resourcePackFiles[cef] as string) as Record<string, any>;
       const desc = parsed['minecraft:client_entity']?.description;
+      if (desc && isPlayerClientEntity(cef)) {
+        // Preserve the exact player rig selected by the animation port. If it injected a
+        // skin-preserving bend rig, its geometry id remains untouched; otherwise the native
+        // classic player geometry is used. The cape is a separate engine geometry.
+        const geometry = typeof desc.geometry === 'string'
+          ? { default: desc.geometry }
+          : desc.geometry && typeof desc.geometry === 'object' && !Array.isArray(desc.geometry)
+            ? { ...desc.geometry }
+            : {};
+        if (typeof geometry.default !== 'string' || !geometry.default.trim()) geometry.default = 'geometry.humanoid.custom';
+        if (typeof geometry.cape !== 'string' || !geometry.cape.trim()) geometry.cape = 'geometry.cape';
+        desc.geometry = geometry;
+        const textures = desc.textures && typeof desc.textures === 'object' && !Array.isArray(desc.textures)
+          ? { ...desc.textures }
+          : {};
+        if (typeof textures.default !== 'string' || !textures.default.trim()) textures.default = 'textures/entity/steve';
+        if (typeof textures.cape !== 'string' || !textures.cape.trim()) textures.cape = 'textures/entity/cape_invisible';
+        desc.textures = textures;
+        const materials = desc.materials && typeof desc.materials === 'object' && !Array.isArray(desc.materials)
+          ? { ...desc.materials }
+          : {};
+        if (typeof materials.default !== 'string' || !materials.default.trim()) materials.default = 'entity_alphatest';
+        if (typeof materials.cape !== 'string' || !materials.cape.trim()) materials.cape = 'entity_alphatest';
+        desc.materials = materials;
+        resourcePackFiles[cef] = JSON.stringify(parsed, null, 2);
+        continue;
+      }
       if (desc) {
         // Strip out any accidental 'lighting' animation script that crashes Bedrock with "can't find animation lighting"
         if (desc.scripts?.animate && Array.isArray(desc.scripts.animate)) {

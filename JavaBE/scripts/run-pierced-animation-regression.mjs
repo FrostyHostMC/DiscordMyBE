@@ -30,6 +30,7 @@ try {
   const { convertJavaToBedrockAddon } = await server.ssrLoadModule('/src/utils/bedrockGenerator.ts');
   const { translatePlayerTriggers } = await server.ssrLoadModule('/src/utils/playerAnimationTriggers.ts');
   const { translateJavaAnimationSet } = await server.ssrLoadModule('/src/utils/animationTranslator.ts');
+  const { VANILLA_PLAYER_GEOMETRY_JSON } = await server.ssrLoadModule('/src/utils/vanillaPlayerGeometry.ts');
 
   setPlayableMode(false);
   const archiveBytes = new Uint8Array(fs.readFileSync(sourcePath));
@@ -269,6 +270,75 @@ try {
       maxTotalBytes: 256 * 1024 * 1024,
     });
     const mcpackEntries = bundleEntries.filter((entry) => !entry.isDirectory && /\.mcpack$/i.test(entry.path));
+    const resourcePackEntry = mcpackEntries.find((entry) => /resource/i.test(entry.path));
+    const resourcePackBytes = resourcePackEntry?.data instanceof Uint8Array
+      ? resourcePackEntry.data
+      : resourcePackEntry?.data
+        ? new Uint8Array(resourcePackEntry.data)
+        : null;
+    const resourcePackEntries = resourcePackBytes
+      ? await readZipArchive(resourcePackBytes, {
+          maxEntries: 5000,
+          maxEntryBytes: 128 * 1024 * 1024,
+          maxTotalBytes: 256 * 1024 * 1024,
+        })
+      : [];
+    const resourceText = new Map(resourcePackEntries
+      .filter((entry) => !entry.isDirectory)
+      .map((entry) => [entry.path.replace(/\\\\/g, '/').toLowerCase(), decoder.decode(entry.data)]));
+    const readResourceJson = (pathName) => {
+      const raw = resourceText.get(pathName.toLowerCase());
+      if (!raw) return null;
+      try { return JSON.parse(raw); } catch { return null; }
+    };
+    const playerEntityDoc = readResourceJson('entity/player.entity.json');
+    const playerDescription = playerEntityDoc?.['minecraft:client_entity']?.description ?? null;
+    const playerGeometryMap = typeof playerDescription?.geometry === 'string'
+      ? { default: playerDescription.geometry }
+      : playerDescription?.geometry ?? {};
+    const playerDefaultGeometry = playerGeometryMap.default ?? '';
+    const vanillaPlayerGeometries = JSON.parse(VANILLA_PLAYER_GEOMETRY_JSON)['minecraft:geometry'];
+    const vanillaPlayerGeometry = vanillaPlayerGeometries.find((geometry) =>
+      geometry.description?.identifier === playerDefaultGeometry);
+    const shippedPlayerGeometry = resourcePackEntries
+      .filter((entry) => !entry.isDirectory && /^models\\/i.test(entry.path) && /\\.json$/i.test(entry.path))
+      .map((entry) => {
+        try { return JSON.parse(decoder.decode(entry.data)); } catch { return null; }
+      })
+      .filter(Boolean)
+      .flatMap((document) => document['minecraft:geometry'] ?? []);
+    const customPlayerGeometry = shippedPlayerGeometry.find((geometry) =>
+      geometry.description?.identifier === playerDefaultGeometry);
+    const effectivePlayerGeometry = customPlayerGeometry ?? vanillaPlayerGeometry;
+    const playerGeometryBones = new Set((effectivePlayerGeometry?.bones ?? []).map((bone) => bone.name));
+    const playerClipBones = new Set();
+    for (const entry of resourcePackEntries) {
+      if (entry.isDirectory || !/^animations\\//i.test(entry.path) || !/\\.animation\\.json$/i.test(entry.path)) continue;
+      const document = readResourceJson(entry.path);
+      for (const clip of Object.values(document?.animations ?? {})) {
+        for (const boneName of Object.keys(clip?.bones ?? {})) playerClipBones.add(boneName);
+      }
+    }
+    const unresolvedPlayerBoneTracks = [...playerClipBones].filter((bone) => !playerGeometryBones.has(bone));
+    const playerGeometryAudit = {
+      entityFound: Boolean(playerDescription),
+      defaultGeometry: playerDefaultGeometry,
+      capeGeometry: playerGeometryMap.cape ?? null,
+      geometryResolves: Boolean(effectivePlayerGeometry),
+      geometryBoneCount: playerGeometryBones.size,
+      animationBoneCount: playerClipBones.size,
+      unresolvedAnimationBones: unresolvedPlayerBoneTracks,
+      genericPlayerFallbackPresent: resourceText.has('models/entity/player.geo.json'),
+      skinTexture: playerDescription?.textures?.default ?? null,
+      capeTexture: playerDescription?.textures?.cape ?? null,
+      passed: Boolean(playerDescription)
+        && Boolean(effectivePlayerGeometry)
+        && playerGeometryMap.cape === 'geometry.cape'
+        && unresolvedPlayerBoneTracks.length === 0
+        && !resourceText.has('models/entity/player.geo.json')
+        && playerDescription?.textures?.default === 'textures/entity/steve'
+        && playerDescription?.textures?.cape === 'textures/entity/cape_invisible',
+    };
     const resourceManifest = fullResult.resourcePackFiles?.['manifest.json'];
     const behaviorManifest = fullResult.behaviorPackFiles?.['manifest.json'];
     const unresolvedPlayerVariables = fullResult.playerDependencyResolution?.variables?.unresolved ?? [];
@@ -291,6 +361,7 @@ try {
       { id: 'full-converter-runtime-structure-audit-passes', expected: true, actual: fullResult.animationRuntime?.passed ?? false, passed: fullResult.animationRuntime?.passed === true },
       { id: 'full-converter-retains-every-active-source-bone-track-and-excludes-unused-definition-controls', expected: { active: 46, retained: 46, inactive: 81, coverage: 100 }, actual: { active: fullResult.animationFidelity?.sourceBoneTracksActive ?? -1, retained: fullResult.animationFidelity?.sourceBoneTracksRetained ?? -1, inactive: fullResult.animationFidelity?.sourceBoneTracksInactive ?? -1, coverage: fullResult.animationFidelity?.boneTrackCoverage ?? -1 }, passed: fullResult.animationFidelity?.sourceBoneTracksActive === 46 && fullResult.animationFidelity?.sourceBoneTracksRetained === 46 && fullResult.animationFidelity?.sourceBoneTracksInactive === 81 && fullResult.animationFidelity?.boneTrackCoverage === 100 },
       { id: 'full-converter-produces-pack-archives', expected: 'at least one .mcpack', actual: mcpackEntries.map((entry) => entry.path), passed: mcpackEntries.length >= 1 },
+      { id: 'full-converter-preserves-vanilla-player-skin-rig-and-camel-case-animation-bones', expected: 'all player animation bones resolve against geometry.humanoid.custom; no generic player mob rig', actual: playerGeometryAudit, passed: playerGeometryAudit.passed },
     ];
     report.fullConversion = {
       passed: fullAssertions.every((assertion) => assertion.passed),
@@ -306,6 +377,7 @@ try {
       behaviorPackFileCount: Object.keys(fullResult.behaviorPackFiles ?? {}).length,
       mcpackEntries: mcpackEntries.map((entry) => entry.path),
       playerWiring: fullResult.playerEntityWiring ?? null,
+      playerGeometryAudit,
       playerTriggers: fullResult.playerTriggers ?? null,
       playerAnimationPort: fullResult.playerAnimationPort ?? null,
       playerDependencyResolution: fullResult.playerDependencyResolution ?? null,
