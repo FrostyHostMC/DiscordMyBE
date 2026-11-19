@@ -366,6 +366,27 @@ export function resolveUniversalVariables(
     for (const match of content.matchAll(/\bvariable\.([a-zA-Z0-9_]+)\s*=/g)) {
       assigned.add(String(match[1]).toLowerCase());
     }
+    // Bedrock's scripts.variables declares entity-scope variables without assigning a
+    // Molang expression. In particular, Mojang exposes player attachable hand transforms
+    // as "public"; treating them as missing made a correct vanilla player pack fail its
+    // dependency gate even though the complete declaration is present in player.entity.json.
+    if (filePath.toLowerCase().endsWith('.entity.json')) {
+      try {
+        const doc = JSON.parse(content) as Record<string, any>;
+        const scripts = doc?.['minecraft:client_entity']?.description?.scripts ??
+          doc?.['minecraft:entity']?.description?.scripts;
+        const declarations = scripts?.variables;
+        if (declarations && typeof declarations === 'object' && !Array.isArray(declarations)) {
+          for (const [rawName, scope] of Object.entries(declarations)) {
+            if (scope !== 'public' && scope !== 'private') continue;
+            const name = rawName.replace(/^variable\./i, '').trim().toLowerCase();
+            if (name) assigned.add(name);
+          }
+        }
+      } catch {
+        // Invalid JSON is diagnosed by the schema gate; it does not create variable declarations.
+      }
+    }
     if (assigned.size > 0) assignedVariablesByFile.set(filePath, assigned);
   }
   const assignedPlayerVariables = new Set<string>();

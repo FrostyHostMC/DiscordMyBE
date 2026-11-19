@@ -83,6 +83,11 @@ export const ENGINE_PROVIDED_MOLANG_VARIABLES = new Set<string>([
   'gliding_speed_value',
   'short_arm_offset_left',
   'short_arm_offset_right',
+  // Current Mojang player.entity.json reads these without declaring an assignment:
+  // player_x_rotation feeds map_angle; map_face_icon gates the map render controller.
+  'player_x_rotation',
+  'map_face_icon',
+  'is_first_person',
 ]);
 
 export const PLAYER_SCOPE_VARIABLE_EXPRESSIONS: Record<string, {
