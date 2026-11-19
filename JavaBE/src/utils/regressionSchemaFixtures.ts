@@ -18,7 +18,7 @@ import { inspectAnimationControllerGraphs, normalizeEmptyControllerArrays } from
 import { reconstructAnimationDependencies } from '@/utils/animationDependencyReconstructor';
 import { resolveUniversalVariables } from '@/utils/universalVariableResolver';
 import { resolvePlayerDependencies } from '@/utils/playerDependencyResolver';
-import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES } from '@/utils/vanillaPlayerBaseline';
+import { ENGINE_PROVIDED_MOLANG_VARIABLES, PLAYER_BASELINE_ENTRIES, VANILLA_PLAYER_ANIMATIONS } from '@/utils/vanillaPlayerBaseline';
 import { PLAYER_SCOPE_VARIABLE_EXPRESSIONS } from '@/utils/vanillaPlayerBaseline';
 import { translateMolangExpression } from '@/utils/molangCompatibility';
 import { isKnownVanillaPlayerAnimationReference } from '@/utils/clientEntitySchema';
@@ -2038,11 +2038,11 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const resolverAnimations = resolverPlayerEntity?.animations ?? {};
   const resolverCorrectedVanillaAliases =
     resolverAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    resolverAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    resolverAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
     resolverAnimations.first_person_base_pose === 'animation.player.first_person.base_pose';
   // Simulate a later writer regressing one vanilla alias; the final guard must restore the contract.
-  resolverAnimations.look_at_target = 'controller.animation.humanoid.look_at_target';
-  resolverAnimations.first_person_base_pose = 'animation.player.first_person.base_pose';
+  resolverAnimations.look_at_target = 'animation.humanoid.look_at_target';
+  resolverAnimations.first_person_base_pose = 'controller.animation.player.first_person_base_pose';
   files['entity/player.entity.json'] = JSON.stringify({
     format_version: '1.10.0',
     'minecraft:client_entity': {
@@ -2084,11 +2084,17 @@ export function measurePlayerMolangVariableInitialization(): RegressionFixtureRe
   const correctVanillaAliases =
     resolverCorrectedVanillaAliases &&
     finalAnimations.base_pose === 'animation.humanoid.base_pose' &&
-    finalAnimations.look_at_target === 'animation.humanoid.look_at_target' &&
+    finalAnimations.look_at_target === 'controller.animation.humanoid.look_at_target' &&
     finalAnimations.first_person_base_pose === 'animation.player.first_person.base_pose' &&
-    baselineByAlias.get('look_at_target')?.kind === 'animation';
+    baselineByAlias.get('look_at_target')?.kind === 'controller';
   const playerScoped = required.every(name => report.entries.some(entry => entry.normalizedName === name.slice('variable.'.length) && entry.contexts.includes('player') && entry.resolvedStatus === 'mapped_query'));
   const checks: RegressionAssertion[] = [{
+    label: 'the full current Mojang player animation alias map is preserved',
+    expected: 'all official player aliases including base, HUD, look-at, first-person, crossbow, shield and melee-spear entries',
+    actual: `${Object.keys(VANILLA_PLAYER_ANIMATIONS).length} aliases; ${['base_controller', 'hudplayer', 'look_at_target_ui', 'first_person_map_controller', 'crossbow_controller', 'third_person_melee_spear_controller'].filter((alias) => typeof finalAnimations[alias] === 'string').length}/6 critical aliases`,
+    passed: Object.keys(VANILLA_PLAYER_ANIMATIONS).length >= 70 &&
+      ['base_controller', 'hudplayer', 'look_at_target_ui', 'first_person_map_controller', 'crossbow_controller', 'third_person_melee_spear_controller'].every((alias) => typeof finalAnimations[alias] === 'string'),
+  }, {
     label: 'all vanilla player baseline aliases resolve to recognized Bedrock engine identifiers',
     expected: 'every baseline identifier is in the engine-provided player animation/controller registry',
     actual: PLAYER_BASELINE_ENTRIES.filter((entry) => !isKnownVanillaPlayerAnimationReference(entry.identifier)).map((entry) => `${entry.alias} -> ${entry.identifier}`).join(', ') || 'all recognized',
